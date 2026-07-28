@@ -1,0 +1,40 @@
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Node / Vite build outputs
+**/node_modules/
+**/dist/
+**/.vite/
+**/coverage/
+
+# Environment files (keep only examples)
+**/.env
+**/.env.*
+!**/.env.example
+
+# .NET build artifacts
+**/bin/
+**/obj/
+**/TestResults/
+**/artifacts/
+
+# User/solution local files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Sensitive server local config variants
+server/appsettings.json
+server/appsettings.Development.json
+server/appsettings.Alpha.json
+server/appsettings.Production.json

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <title>麻雀４</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { background: #000; overflow: hidden; }
+      #root { width: 100vw; height: 100vh; }
+      .majak-boot-loading { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.82); }
+      .majak-boot-loading__panel { width: 260px; height: 312px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(255, 255, 255, 0.94); border: 1px solid rgba(0, 0, 0, 0.24); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+      .majak-boot-loading__logo { width: 230px; height: 230px; object-fit: cover; }
+      .majak-boot-loading__bar { width: 168px; height: 8px; border: 1px solid #385c51; background: #d7ded9; padding: 1px; }
+      .majak-boot-loading__fill { width: 44%; height: 100%; background: #21765f; }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="majak-boot-loading">
+        <div class="majak-boot-loading__panel">
+          <img class="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable="false" />
+          <div class="majak-boot-loading__bar"><div class="majak-boot-loading__fill"></div></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

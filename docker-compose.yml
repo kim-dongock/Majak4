@@ -1,0 +1,33 @@
+# ============================================================
+# Majak2 開発環境 Docker Compose
+# 使用方法:
+#   docker compose up -d          # バックグラウンド起動
+#   docker compose down           # 停止
+#   docker compose down -v        # 停止 + ボリューム削除
+# ============================================================
+
+services:
+
+  # ── Redis ─────────────────────────────────────────────────
+  # AP-04 §8: 開発環境用 Redis
+  #   - チャンネルメンバーリスト (channel:{chanelId}:members)
+  #   - サーバー生存管理 (game:servers ZSET)
+  #   - サーバールーム数 (game:server:roomcounts HASH)
+  redis:
+    image: redis:7.4-alpine
+    container_name: majak4-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --loglevel warning --save ""
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  redis_data:
+    driver: local

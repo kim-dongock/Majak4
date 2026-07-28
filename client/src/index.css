@@ -1,0 +1,2265 @@
+/* ゲーム全体のベーススタイル */
+:root {
+  --game-width: 1019px;
+  --game-height: 735px;
+  --sidebar-x: 794px;
+  --sidebar-y: 31px;
+  --sidebar-w: 225px;
+  --sidebar-h: 704px;
+}
+
+/* 日本語フォント全体適用 — 画面ごとのレガシーフォント指定を妨げない */
+* {
+  font-family: 'Noto Sans JP', 'MS UI Gothic', 'Meiryo', 'MS Gothic', sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #1a1a2e;
+  color: #fff;
+  user-select: none;
+  overflow: hidden;
+}
+
+body:has(.majak-game-screen) {
+  overflow: auto;
+}
+
+.majak-room-scroll {
+  scrollbar-color: #6fb460 #305c34;
+  scrollbar-width: thin;
+}
+
+.majak-room-scroll::-webkit-scrollbar {
+  width: 13px;
+  height: 13px;
+}
+
+.majak-room-scroll::-webkit-scrollbar-track {
+  background: #305c34;
+}
+
+.majak-room-scroll::-webkit-scrollbar-thumb {
+  min-height: 14px;
+  background-color: #6fb460;
+  background-image: url('/assets/images/game/mj_chatScrlBar.png');
+  background-position: -39px 0;
+  background-repeat: repeat-y;
+  border: 0;
+}
+
+.majak-room-scroll::-webkit-scrollbar-button:vertical:start:decrement {
+  height: 14px;
+  background-image: url('/assets/images/game/mj_chatScrlBar.png');
+  background-position: 0 0;
+  background-repeat: no-repeat;
+}
+
+.majak-room-scroll::-webkit-scrollbar-button:vertical:end:increment {
+  height: 14px;
+  background-image: url('/assets/images/game/mj_chatScrlBar.png');
+  background-position: -13px 0;
+  background-repeat: no-repeat;
+}
+
+/* アウトゲーム共通 */
+#root {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100vw;
+  height: 100vh;
+}
+
+#root:has(.majak-game-screen) {
+  display: block;
+  width: max-content;
+  min-width: 100vw;
+  height: auto;
+  min-height: 100vh;
+}
+
+.majak-mobile-frame {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  color: #f7ffe9;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(219, 255, 170, 0.24), transparent 24rem),
+    linear-gradient(145deg, #10351d 0%, #1d6b31 48%, #0d2618 100%);
+  overflow: hidden;
+}
+
+.majak-mobile-frame__bar {
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px max(12px, env(safe-area-inset-right)) 8px max(12px, env(safe-area-inset-left));
+  background: rgba(8, 37, 18, 0.92);
+  border-bottom: 1px solid rgba(226, 255, 185, 0.28);
+  box-sizing: border-box;
+}
+
+.majak-mobile-frame__brand {
+  flex: 0 0 auto;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0;
+  color: #ffffff;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
+}
+
+.majak-mobile-frame__tools {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.majak-mobile-frame__tools::-webkit-scrollbar {
+  display: none;
+}
+
+.majak-mobile-frame__tools button,
+.majak-mobile-secondary,
+.majak-mobile-text-button {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid rgba(239, 255, 205, 0.42);
+  border-radius: 6px;
+  color: #f8ffe7;
+  background: rgba(17, 82, 35, 0.88);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.majak-mobile-frame__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.majak-mobile-frame:has(.majak-mobile-lobby-screen) .majak-mobile-frame__bar {
+  display: none;
+}
+
+.majak-mobile-frame--room .majak-mobile-frame__bar {
+  display: none;
+}
+
+.majak-mobile-frame__content:has(.majak-mobile-lobby-screen) {
+  overflow: hidden;
+}
+
+.majak-mobile-frame__content:has(.majak-mobile-ingame-shell) {
+  overflow: hidden;
+  background: #000;
+}
+
+.majak-mobile-ingame-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: #000;
+}
+
+.majak-mobile-ingame-scale {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform-origin: top center;
+}
+
+.majak-mobile-ingame-shell canvas {
+  image-rendering: auto !important;
+}
+
+.majak-mobile-ingame-tool-drawer {
+  position: absolute;
+  right: max(10px, calc(env(safe-area-inset-right) + 10px));
+  top: var(--majak-mobile-ingame-tool-top, max(124px, calc(env(safe-area-inset-top) + 124px)));
+  z-index: 220;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  max-height: calc(100% - 132px);
+  pointer-events: auto;
+}
+
+.majak-mobile-ingame-tool-toggle,
+.majak-mobile-ingame-chat-toggle {
+  min-width: 38px;
+  min-height: 36px;
+  border: 1px solid rgba(239, 255, 205, 0.7);
+  border-radius: 6px;
+  color: #062b12;
+  background: #d9ead1;
+  font-size: 13px;
+  font-weight: 900;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+}
+
+.majak-mobile-ingame-tool-toggle {
+  flex: 0 0 29px;
+  width: 29px;
+  min-width: 29px;
+  height: 27px;
+  min-height: 27px;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.majak-mobile-ingame-chat-toggle {
+  min-width: 82px;
+}
+
+.majak-mobile-ingame-chat-toggle.is-open {
+  color: #f8ffe7;
+  background: rgba(17, 82, 35, 0.96);
+}
+
+.majak-mobile-ingame-action-bar {
+  flex: 0 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 5px;
+  width: 104px;
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 180ms ease-out, opacity 120ms ease-out;
+}
+
+.majak-mobile-ingame-tool-drawer.is-open .majak-mobile-ingame-action-bar {
+  max-height: calc(100vh - 62px);
+  opacity: 1;
+}
+
+.majak-mobile-ingame-action-bar button {
+  flex: 0 0 auto;
+  width: 104px;
+  min-height: 32px;
+  border: 1px solid rgba(239, 255, 205, 0.52);
+  border-radius: 6px;
+  color: #f8ffe7;
+  background: rgb(17, 82, 35);
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.34);
+}
+
+.majak-mobile-ingame-action-bar button.is-active {
+  color: #062b12;
+  background: #d9ead1;
+}
+
+.majak-mobile-ingame-action-bar button:disabled {
+  opacity: 0.46;
+}
+
+.majak-mobile-ingame-chat-panel {
+  position: absolute;
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(max(10px, env(safe-area-inset-bottom)) + 44px);
+  z-index: 79;
+  width: min(350px, calc(100% - 16px));
+  max-height: calc(100% - 62px);
+  display: grid;
+  grid-template-rows: auto minmax(48px, 0.56fr) minmax(86px, 1fr) auto;
+  gap: 5px;
+  padding: 7px;
+  border: 1px solid rgba(235, 255, 204, 0.5);
+  border-radius: 7px;
+  background: rgba(8, 48, 20, 0.94);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+  box-sizing: border-box;
+}
+
+.majak-mobile-ingame-chat-panel__close {
+  justify-self: end;
+  min-height: 28px;
+}
+
+.majak-mobile-ingame-chat-panel__status,
+.majak-mobile-ingame-chat-panel__log {
+  min-height: 0;
+  padding: 5px 6px;
+  overflow: auto;
+  border: 1px solid rgba(231, 255, 189, 0.38);
+  border-radius: 5px;
+  color: #061f10;
+  background: rgba(228, 249, 176, 0.96);
+  font-family: 'Noto Sans JP', 'MS Gothic', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  box-sizing: border-box;
+}
+
+.majak-mobile-ingame-chat-panel__status > div,
+.majak-mobile-ingame-chat-panel__log > div {
+  padding: 1px 2px;
+  border-radius: 2px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.majak-mobile-ingame-chat-panel.is-tengoku-skin .majak-mobile-ingame-chat-panel__status,
+.majak-mobile-ingame-chat-panel.is-tengoku-skin .majak-mobile-ingame-chat-panel__log {
+  border-color: rgba(142, 230, 255, 0.46);
+  color: #f6fff9;
+  background: rgba(5, 19, 24, 0.92);
+}
+
+.majak-mobile-ingame-chat-panel.is-tengoku-skin .majak-mobile-ingame-chat-panel__status > div,
+.majak-mobile-ingame-chat-panel.is-tengoku-skin .majak-mobile-ingame-chat-panel__log > div {
+  background: rgba(255, 255, 255, 0.035);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 4px rgba(0, 0, 0, 0.72);
+}
+
+.majak-mobile-ingame-chat-panel__input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px;
+  gap: 5px;
+}
+
+.majak-mobile-ingame-chat-panel__input input {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 7px;
+  border: 1px solid #6c8a67;
+  border-radius: 4px;
+  color: #062b12;
+  background: #f7ffe9;
+  font-size: 13px;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+
+.majak-mobile-ingame-chat-panel__input button {
+  min-height: 30px;
+  border: 1px solid rgba(239, 255, 205, 0.42);
+  border-radius: 5px;
+  color: #f8ffe7;
+  background: rgba(17, 82, 35, 0.9);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.majak-mobile-ingame-chat-panel__input button:disabled {
+  opacity: 0.46;
+}
+
+.majak-mobile-ingame-chat-panel.is-tengoku-skin .majak-mobile-ingame-chat-panel__input input {
+  border-color: rgba(142, 230, 255, 0.58);
+  color: #ffffff;
+  background: rgba(8, 23, 29, 0.96);
+}
+
+.majak-mobile-room-waiting-screen {
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(278px, 36vw);
+  gap: 8px;
+  padding: 8px max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 24% 16%, rgba(219, 255, 170, 0.2), transparent 18rem),
+    linear-gradient(145deg, #11371e 0%, #1d6b31 52%, #0b2115 100%);
+}
+
+.majak-mobile-room-table,
+.majak-mobile-room-side {
+  min-height: 0;
+  border: 1px solid rgba(235, 255, 204, 0.36);
+  border-radius: 6px;
+  background: rgba(8, 48, 20, 0.72);
+  box-sizing: border-box;
+}
+
+.majak-mobile-room-table {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 7px;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.majak-mobile-room-table__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.majak-mobile-room-table__header h1 {
+  margin: 0;
+  color: #fff;
+  font-size: 19px;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+.majak-mobile-room-table__meta {
+  display: flex;
+  gap: 5px;
+  color: #062b12;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.majak-mobile-room-table__meta span {
+  min-height: 23px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: #d9ead1;
+}
+
+.majak-mobile-room-seats {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.majak-mobile-room-seat {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  padding: 6px;
+  border: 1px solid rgba(231, 255, 189, 0.28);
+  border-radius: 5px;
+  color: #faffef;
+  background: rgba(6, 38, 16, 0.74);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.majak-mobile-room-seat.is-ready {
+  border-color: #e7ff83;
+  background:
+    linear-gradient(90deg, rgba(235, 255, 131, 0.32) 0 5px, transparent 5px),
+    linear-gradient(135deg, rgba(87, 143, 35, 0.92), rgba(11, 68, 24, 0.86));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 222, 0.32), 0 0 12px rgba(217, 255, 138, 0.42);
+}
+
+.majak-mobile-room-seat.is-ready::after {
+  content: "OK";
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  min-width: 26px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(28, 74, 21, 0.7);
+  border-radius: 3px;
+  color: #14320d;
+  background: #e7ff83;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+}
+
+.majak-mobile-room-seat img {
+  width: 48px;
+  height: 72px;
+  object-fit: contain;
+}
+
+.majak-mobile-room-seat__info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.majak-mobile-room-seat__info strong,
+.majak-mobile-room-seat__info span,
+.majak-mobile-room-seat__info em {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.majak-mobile-room-seat__info strong {
+  color: #fff;
+  font-size: 13px;
+}
+
+.majak-mobile-room-seat__info span {
+  color: #f3ffe2;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.majak-mobile-room-seat__info em,
+.majak-mobile-room-seat__empty {
+  color: #d9ff8a;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.majak-mobile-room-seat__empty {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  border: 1px dashed rgba(231, 255, 189, 0.32);
+  border-radius: 4px;
+}
+
+.majak-mobile-room-prompt {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(310px, 62%);
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+}
+
+.majak-mobile-room-primary-actions,
+.majak-mobile-room-auto-actions {
+  display: grid;
+  gap: 5px;
+}
+
+.majak-mobile-room-primary-actions {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.majak-mobile-room-primary-actions button,
+.majak-mobile-room-auto-actions button,
+.majak-mobile-room-chat-row button {
+  position: relative;
+  min-height: 30px;
+  border: 1px solid rgba(239, 255, 205, 0.42);
+  border-radius: 5px;
+  color: #f8ffe7;
+  background: rgba(17, 82, 35, 0.9);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.majak-mobile-room-ready-button.is-attention::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 2px solid #f3ff70;
+  border-radius: 8px;
+  box-shadow: 0 0 0 2px rgba(35, 82, 16, 0.65), 0 0 14px rgba(243, 255, 112, 0.84);
+  pointer-events: none;
+  animation: majak-mobile-ready-attention 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes majak-mobile-ready-attention {
+  from {
+    opacity: 0.38;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .majak-mobile-room-ready-button.is-attention::after {
+    animation: none;
+  }
+}
+
+.majak-mobile-room-primary-actions button.is-active,
+.majak-mobile-room-auto-actions button.is-active {
+  color: #062b12;
+  background: #d9ead1;
+}
+
+.majak-mobile-room-primary-actions button:disabled,
+.majak-mobile-room-auto-actions button:disabled,
+.majak-mobile-room-chat-row button:disabled {
+  opacity: 0.46;
+}
+
+.majak-mobile-room-side {
+  display: grid;
+  grid-template-rows: minmax(64px, 0.72fr) minmax(84px, 1fr) auto auto;
+  gap: 6px;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.majak-mobile-room-log {
+  min-height: 0;
+  padding: 5px 6px;
+  overflow: auto;
+  border: 1px solid rgba(231, 255, 189, 0.28);
+  border-radius: 5px;
+  color: #061f10;
+  background: #e4f9b0;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+  box-sizing: border-box;
+}
+
+.majak-mobile-room-log > div {
+  padding: 1px 2px;
+  border-radius: 2px;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.majak-mobile-room-waiting-screen.is-tengoku-skin .majak-mobile-room-log {
+  border-color: rgba(142, 230, 255, 0.46);
+  color: #f6fff9;
+  background: rgba(5, 19, 24, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.majak-mobile-room-waiting-screen.is-tengoku-skin .majak-mobile-room-log > div {
+  background: rgba(255, 255, 255, 0.035);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95), 0 0 4px rgba(0, 0, 0, 0.72);
+}
+
+.majak-mobile-room-chat-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 54px;
+  gap: 5px;
+}
+
+.majak-mobile-room-chat-row input {
+  min-width: 0;
+  min-height: 30px;
+  padding: 0 7px;
+  border: 1px solid #6c8a67;
+  border-radius: 4px;
+  color: #062b12;
+  background: #f7ffe9;
+  font-size: 13px;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+
+.majak-mobile-room-waiting-screen.is-tengoku-skin .majak-mobile-room-chat-row input {
+  border-color: rgba(142, 230, 255, 0.58);
+  color: #ffffff;
+  background: rgba(8, 23, 29, 0.96);
+}
+
+.majak-mobile-room-auto-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.majak-mobile-rotate {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 24px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.majak-mobile-rotate__mark {
+  width: 88px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(241, 255, 207, 0.8);
+  border-radius: 8px;
+  color: #d9ff8a;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.majak-mobile-rotate h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.majak-mobile-screen {
+  min-height: 100%;
+  padding: 16px max(14px, env(safe-area-inset-right)) calc(20px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  box-sizing: border-box;
+}
+
+.majak-mobile-hero {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.majak-mobile-frame__content:has(.majak-mobile-channel-group) {
+  overflow: hidden;
+}
+
+.majak-mobile-channel-group {
+  --majak-mobile-title-gap: clamp(4px, 1.2dvh, 8px);
+  --majak-mobile-title-hero-gap: clamp(10px, 3dvh, 20px);
+  --majak-mobile-title-logo-h: clamp(58px, 22dvh, 102px);
+  --majak-mobile-sprite-h: clamp(44px, 12.8dvh, 62px);
+  --majak-mobile-sprite-w: calc(var(--majak-mobile-sprite-h) * 3.7538461538);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.majak-mobile-channel-group .majak-mobile-hero {
+  flex: 0 0 auto;
+  width: 100%;
+  gap: clamp(6px, 2vw, 14px);
+  margin-bottom: var(--majak-mobile-title-hero-gap);
+  transform: translateY(clamp(-8px, -1.3dvh, -4px));
+}
+
+.majak-mobile-hero__visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.majak-mobile-eyebrow {
+  margin-bottom: 4px;
+  color: #d9ff8a;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.majak-mobile-hero h1 {
+  margin: 0;
+  font-size: clamp(26px, 8vw, 40px);
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.majak-mobile-logo {
+  display: block;
+  width: min(430px, 72vw);
+  height: 148px;
+  object-fit: cover;
+  object-position: center 34%;
+  border-radius: 6px;
+}
+
+.majak-mobile-channel-group .majak-mobile-logo {
+  width: min(300px, 44vw, calc(var(--majak-mobile-title-logo-h) * 3.05));
+  height: var(--majak-mobile-title-logo-h);
+}
+
+.majak-mobile-member-info {
+  display: flex;
+  flex: 0 0 220px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 118px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  border: 1px solid rgba(231, 255, 189, 0.28);
+  border-radius: 8px;
+  color: #faffef;
+  background: rgba(8, 48, 20, 0.58);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.majak-mobile-member-info__id {
+  color: #d9ff8a;
+  font-size: 15px;
+}
+
+.majak-mobile-channel-group .majak-mobile-member-info {
+  flex: 0 1 clamp(132px, 28vw, 200px);
+  min-height: var(--majak-mobile-title-logo-h);
+  padding: clamp(5px, 1.6dvh, 10px) clamp(7px, 1.8vw, 12px);
+}
+
+.majak-mobile-card-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.majak-mobile-card-button {
+  width: 100%;
+  min-height: 78px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 7px;
+  padding: 14px 16px;
+  border: 1px solid rgba(231, 255, 189, 0.34);
+  border-radius: 8px;
+  color: #faffef;
+  background: rgba(8, 48, 20, 0.78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.16);
+  text-align: left;
+}
+
+.majak-mobile-card-button__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.majak-mobile-card-button__title {
+  font-size: 19px;
+  line-height: 1.15;
+  font-weight: 800;
+}
+
+.majak-mobile-card-button__detail {
+  color: #dff8c2;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.majak-mobile-sprite-list {
+  justify-items: center;
+  align-items: center;
+}
+
+.majak-mobile-channel-group .majak-mobile-card-list {
+  flex: 0 0 auto;
+  width: 100%;
+  grid-template-columns: minmax(0, min(720px, 100%));
+  justify-content: center;
+  gap: var(--majak-mobile-title-gap);
+}
+
+.majak-mobile-sprite-entry {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: clamp(6px, 1.6vw, 12px);
+  min-width: 0;
+  width: 100%;
+  padding-left: clamp(32px, 10vw, 104px);
+  box-sizing: border-box;
+}
+
+.majak-mobile-sprite-description {
+  min-width: 0;
+  max-width: none;
+  flex: 1 1 auto;
+  color: #f3ffe2;
+  font-size: clamp(12px, 2.2vw, 15px);
+  font-weight: 700;
+  line-height: 1.22;
+  text-align: left;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.majak-mobile-sprite-button {
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  background-repeat: no-repeat;
+  overflow: hidden;
+}
+
+.majak-mobile-count {
+  flex: 0 0 auto;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.majak-mobile-lobby-sprite-list {
+  justify-items: stretch;
+  align-items: center;
+  gap: clamp(6px, 1.6dvh, 10px);
+}
+
+.majak-mobile-lobby-select .majak-mobile-hero {
+  justify-content: space-between;
+  margin-bottom: 28px;
+  text-align: left;
+}
+
+.majak-mobile-lobby-select .majak-mobile-secondary {
+  margin-left: auto;
+}
+
+.majak-mobile-lobby-sprite-entry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 1.1vw, 8px);
+  width: max-content;
+  max-width: 100%;
+  justify-self: center;
+}
+
+.majak-mobile-lobby-sprite-button {
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  background-repeat: no-repeat;
+}
+
+.majak-mobile-lobby-sprite-count {
+  min-width: clamp(40px, 7vw, 48px);
+  padding: 2px clamp(4px, 1vw, 6px);
+  border-radius: 5px;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.38);
+  font-size: clamp(10px, 1.8vw, 12px);
+  font-weight: 800;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.majak-mobile-lobby-screen {
+  --majak-mobile-lobby-side-width: 300px;
+  --majak-mobile-room-cell-scale: 0.82;
+  --majak-mobile-room-action-scale: 1.22;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: 7px;
+  padding-bottom: max(8px, env(safe-area-inset-bottom));
+}
+
+.majak-mobile-lobby-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  margin-bottom: 6px;
+}
+
+.majak-mobile-lobby-toolbar h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 20px;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.majak-mobile-lobby-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.majak-mobile-lobby-header-button,
+.majak-mobile-lobby-command-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 30px;
+  border: 1px solid rgba(239, 255, 205, 0.42);
+  border-radius: 5px;
+  color: #f8ffe7;
+  background: rgba(17, 82, 35, 0.9);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.majak-mobile-lobby-header-button {
+  min-width: 70px;
+  padding: 0 10px;
+}
+
+.majak-mobile-lobby-command-button {
+  width: 100%;
+  padding: 0 8px;
+}
+
+.majak-mobile-lobby-command-button:disabled {
+  opacity: 0.45;
+}
+
+.majak-mobile-lobby-sprite-button {
+  flex: 0 0 auto;
+  display: block;
+  width: clamp(216px, 36vw, 276px);
+  aspect-ratio: 306 / 51;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: transparent;
+  background-repeat: no-repeat;
+  background-size: 400% 100%;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  image-rendering: pixelated;
+}
+
+.majak-mobile-lobby-sprite-button:disabled {
+  cursor: default;
+}
+
+.majak-mobile-lobby-notice {
+  height: 18px;
+  margin: 0 0 7px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.majak-mobile-lobby-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--majak-mobile-lobby-side-width);
+  gap: 8px;
+}
+
+.majak-mobile-lobby-side {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.majak-mobile-lobby-command-panel {
+  flex: 0 0 auto;
+  width: var(--majak-mobile-lobby-side-width);
+  padding: 4px;
+  border: 1px solid rgba(231, 255, 189, 0.36);
+  border-radius: 6px;
+  background: rgba(10, 56, 24, 0.78);
+  box-sizing: border-box;
+}
+
+.majak-mobile-lobby-command-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.majak-mobile-lobby-command-checks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 4px;
+  color: #062b12;
+  font-family: 'MS Gothic', monospace;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.majak-mobile-lobby-command-checks label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+  line-height: 1;
+  padding: 0 3px;
+  border: 1px solid #6c8a67;
+  border-radius: 3px;
+  background: #d9ead1;
+  white-space: nowrap;
+}
+
+.majak-mobile-lobby-command-checks input {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+}
+
+.majak-mobile-lobby-room-grid {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, calc(150px * var(--majak-mobile-room-cell-scale)));
+  align-content: start;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid #3b8a45;
+  background: rgb(228, 249, 176);
+}
+
+.majak-mobile-tournament-screen {
+  color: #f8ffe7;
+}
+
+.majak-mobile-tournament-layout,
+.majak-mobile-tournament-match-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.majak-mobile-tournament-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 32vw);
+}
+
+.majak-mobile-tournament-match-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(210px, 25vw);
+}
+
+.majak-mobile-tournament-list {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #3b8a45;
+  background: rgb(228, 249, 176);
+  color: #111111;
+}
+
+.majak-mobile-tournament-list__head,
+.majak-mobile-tournament-row {
+  display: grid;
+  grid-template-columns: minmax(130px, 1fr) 110px 112px;
+  align-items: center;
+}
+
+.majak-mobile-tournament-list__head {
+  flex: 0 0 24px;
+  color: #111111;
+  background: #d4d0c8;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.majak-mobile-tournament-list__head span {
+  height: 24px;
+  line-height: 24px;
+  border-right: 1px solid #808080;
+  box-sizing: border-box;
+}
+
+.majak-mobile-tournament-list__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.majak-mobile-tournament-row {
+  width: 100%;
+  min-height: 42px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid #a4b992;
+  color: #111111;
+  background: #efffc7;
+  font-family: 'MS Gothic', monospace;
+  font-size: 11px;
+  text-align: center;
+}
+
+.majak-mobile-tournament-row.is-selected {
+  background: #fff09a;
+}
+
+.majak-mobile-tournament-row.is-joined {
+  color: #0038c8;
+  font-weight: 800;
+}
+
+.majak-mobile-tournament-row span {
+  min-width: 0;
+  padding: 0 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-mobile-tournament-row__name {
+  text-align: left;
+}
+
+.majak-mobile-tournament-empty {
+  margin: 20px 8px;
+  text-align: center;
+}
+
+.majak-mobile-tournament-detail {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.majak-mobile-tournament-detail__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  border: 1px solid #899884;
+  color: #111111;
+  background: #ffffff;
+  font-family: 'MS Gothic', monospace;
+  font-size: 11px;
+  line-height: 16px;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+
+.majak-mobile-tournament-detail__content p {
+  margin: 8px 0;
+}
+
+.majak-mobile-tournament-actions {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.majak-mobile-tournament-actions button,
+.majak-mobile-tournament-match-actions button,
+.majak-tournament-entry-actions button {
+  min-height: 30px;
+  border: 1px solid #b8cf95;
+  border-radius: 4px;
+  color: #f8ffe7;
+  background: #235c2c;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.majak-mobile-tournament-actions button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.05;
+}
+
+.majak-mobile-tournament-actions button:disabled,
+.majak-mobile-tournament-match-actions button:disabled,
+.majak-tournament-entry-actions button:disabled {
+  opacity: 0.45;
+}
+
+.majak-mobile-tournament-bracket-column {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.majak-mobile-tournament-match-actions {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 96px));
+  justify-content: end;
+  gap: 4px;
+}
+
+.majak-mobile-tournament-bracket {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid #3b8a45;
+  background: #ffffff;
+}
+
+.majak-mobile-tournament-members {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.majak-mobile-tournament-members .majak-mobile-lobby-members {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.majak-tournament-entry-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.56);
+  box-sizing: border-box;
+}
+
+.majak-tournament-entry-dialog {
+  width: min(420px, 100%);
+  max-height: 100%;
+  padding: 18px;
+  overflow: auto;
+  border: 1px solid #f1f5df;
+  border-radius: 6px;
+  color: #172018;
+  background: #f2f1e9;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+.majak-tournament-entry-dialog h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.majak-tournament-entry-dialog dl {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+
+.majak-tournament-entry-dialog dl div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 5px;
+}
+
+.majak-tournament-entry-dialog dt {
+  font-weight: 800;
+}
+
+.majak-tournament-entry-dialog dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.majak-tournament-entry-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.majak-tournament-entry-dialog input {
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid #7d8979;
+  border-radius: 4px;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+.majak-tournament-entry-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.majak-mobile-tournament-regist-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 420;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px max(6px, env(safe-area-inset-right)) 6px max(6px, env(safe-area-inset-left));
+  background: rgba(0, 0, 0, 0.62);
+  box-sizing: border-box;
+}
+
+.majak-mobile-tournament-regist {
+  width: min(900px, 100%);
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #b9d2a5;
+  border-radius: 6px;
+  color: #15351a;
+  background: #e9f2dc;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.48);
+  box-sizing: border-box;
+}
+
+.majak-mobile-tournament-regist > header {
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: #ffffff;
+  background: #185b2b;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.majak-mobile-tournament-regist__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1.15fr 0.9fr 1fr;
+  gap: 6px;
+  padding: 6px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.majak-mobile-tournament-regist fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 5px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 5px;
+  border: 1px solid #8eae7f;
+  box-sizing: border-box;
+}
+
+.majak-mobile-tournament-regist legend {
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.majak-mobile-tournament-regist fieldset > label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.majak-mobile-tournament-regist__wide {
+  grid-column: 1 / -1;
+}
+
+.majak-mobile-tournament-regist input:not([type='checkbox']),
+.majak-mobile-tournament-regist select {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 2px 5px;
+  border: 1px solid #708a69;
+  border-radius: 3px;
+  color: #111111;
+  background: #ffffff;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+
+.majak-mobile-tournament-regist__checks {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.majak-mobile-tournament-regist__checks label,
+.majak-mobile-tournament-regist__password > label:first-child {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 24px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.majak-mobile-tournament-regist input[type='checkbox'] {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.majak-mobile-tournament-regist__password {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: end;
+  gap: 5px;
+}
+
+.majak-mobile-tournament-regist__password > label:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.majak-mobile-tournament-regist > footer {
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-top: 1px solid #8eae7f;
+  background: #d9e8ca;
+  box-sizing: border-box;
+}
+
+.majak-mobile-tournament-regist > footer button {
+  min-width: 112px;
+  min-height: 30px;
+  border: 1px solid #b8cf95;
+  border-radius: 4px;
+  color: #f8ffe7;
+  background: #235c2c;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.majak-mobile-dialog-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 240;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.majak-mobile-dialog-panel {
+  max-width: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 6px;
+  color: #1f1f1f;
+  background: #d4d0c8;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+
+.majak-mobile-room-create-dialog {
+  width: min(560px, calc(100vw - 16px));
+}
+
+.majak-mobile-option-dialog {
+  width: min(610px, calc(100vw - 16px));
+}
+
+.majak-mobile-config-dialog {
+  width: min(700px, calc(100vw - 16px));
+  height: min(344px, calc(100dvh - 16px));
+  display: flex;
+  flex-direction: column;
+}
+
+.majak-mobile-serial-dialog {
+  width: min(430px, calc(100vw - 16px));
+}
+
+.majak-mobile-dialog-titlebar {
+  height: 28px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(64, 64, 64, 0.52);
+  color: #ffffff;
+  background: #686f78;
+  font-size: 14px;
+  font-weight: 800;
+  box-sizing: border-box;
+}
+
+.majak-mobile-dialog-body {
+  padding: 6px 8px;
+  box-sizing: border-box;
+}
+
+.majak-mobile-room-create-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px;
+  gap: 8px;
+}
+
+.majak-mobile-dialog-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.majak-mobile-dialog-field--wide {
+  grid-column: 1 / -1;
+}
+
+.majak-mobile-dialog-field input,
+.majak-mobile-dialog-field select,
+.majak-mobile-room-title-select {
+  min-height: 30px;
+  padding: 3px 7px;
+  border: 1px solid #8b8b8b;
+  border-radius: 4px;
+  color: #161616;
+  background: #f3f3f3;
+  font-size: 13px;
+  font-weight: 700;
+  box-sizing: border-box;
+}
+
+.majak-mobile-dialog-field input:disabled {
+  opacity: 0.62;
+}
+
+.majak-mobile-serial-body {
+  padding: 12px;
+}
+
+.majak-mobile-serial-field {
+  gap: 7px;
+}
+
+.majak-mobile-serial-field span {
+  color: #1f1f1f;
+  font-size: 13px;
+}
+
+.majak-mobile-serial-field input {
+  width: 100%;
+  min-height: 36px;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+
+.majak-mobile-serial-actions {
+  justify-content: space-between;
+}
+
+.majak-mobile-serial-actions button {
+  flex: 1 1 0;
+}
+
+.majak-mobile-room-title-select {
+  width: 100%;
+}
+
+.majak-mobile-dialog-section {
+  min-width: 0;
+  margin: 0;
+  padding: 6px;
+  border: 1px solid rgba(92, 92, 92, 0.46);
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.majak-mobile-dialog-section legend {
+  padding: 0 4px;
+  color: #2f2f2f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.majak-mobile-choice-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.majak-mobile-choice-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.majak-mobile-choice-grid--one {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.majak-mobile-choice-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.majak-mobile-choice-grid--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.majak-mobile-choice-grid--four .majak-mobile-choice {
+  padding: 0 3px;
+  font-size: 10px;
+}
+
+.majak-mobile-room-create-dialog .majak-mobile-choice,
+.majak-mobile-option-dialog .majak-mobile-choice {
+  height: auto;
+  min-height: 24px;
+  align-items: flex-start;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.25;
+}
+
+.majak-mobile-room-create-dialog .majak-mobile-choice input,
+.majak-mobile-option-dialog .majak-mobile-choice input {
+  margin-top: 1px;
+}
+
+.majak-mobile-choice {
+  min-width: 0;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 5px;
+  border: 1px solid #8b8b8b;
+  border-radius: 4px;
+  color: #161616;
+  background: #e8e8e8;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+.majak-mobile-choice--wide {
+  grid-column: 1 / -1;
+}
+
+.majak-mobile-choice input {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+}
+
+.majak-mobile-choice:has(input:disabled) {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.majak-mobile-option-body {
+  max-height: calc(100dvh - 88px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  overflow: auto;
+}
+
+.majak-mobile-config-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 8px 0;
+}
+
+.majak-mobile-config-tabs button {
+  min-height: 28px;
+  padding: 0 18px;
+  border: 1px solid rgba(92, 92, 92, 0.46);
+  border-bottom-color: transparent;
+  border-radius: 5px 5px 0 0;
+  color: #ffffff;
+  background: #747a82;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.majak-mobile-config-tabs button.is-active {
+  color: #161616;
+  background: #e8e8e8;
+}
+
+.majak-mobile-config-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+  overflow: hidden;
+}
+
+.majak-mobile-config-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.majak-mobile-config-dialog .majak-mobile-choice {
+  height: auto;
+  min-height: 24px;
+  align-items: flex-start;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  white-space: normal;
+  overflow: visible;
+  line-height: 1.25;
+}
+
+.majak-mobile-config-dialog .majak-mobile-choice input {
+  margin-top: 1px;
+}
+
+.majak-mobile-config-section--wide {
+  grid-column: 1 / -1;
+}
+
+.majak-mobile-config-section--wide .majak-mobile-choice-grid--two {
+  grid-template-columns: max-content minmax(110px, 1fr);
+}
+
+.majak-mobile-config-section--wide .majak-mobile-choice {
+  align-items: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.majak-mobile-config-range {
+  width: 100%;
+  min-height: 24px;
+}
+
+.majak-mobile-config-assist {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.majak-mobile-config-assist-row {
+  min-width: 0;
+  min-height: 62px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px;
+  border: 1px solid rgba(92, 92, 92, 0.46);
+  border-radius: 5px;
+  color: #1f1f1f;
+  background: #c6c3bd;
+  box-sizing: border-box;
+}
+
+.majak-mobile-config-assist-row span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #2f2f2f;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.majak-mobile-config-assist-row input {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+}
+
+.majak-mobile-config-assist-row small {
+  color: #3d3d3d;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.majak-mobile-dialog-section--checks {
+  grid-column: 1 / -1;
+}
+
+.majak-mobile-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 6px 8px 8px;
+  border-top: 1px solid rgba(92, 92, 92, 0.34);
+  box-sizing: border-box;
+}
+
+.majak-mobile-dialog-actions button {
+  min-width: 84px;
+  min-height: 28px;
+  border: 1px solid rgba(62, 62, 62, 0.66);
+  border-radius: 5px;
+  color: #ffffff;
+  background: #686f78;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.majak-mobile-lobby-members {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 6px;
+  overflow: auto;
+  border: 1px solid rgba(231, 255, 189, 0.3);
+  border-radius: 6px;
+  background: rgba(8, 48, 20, 0.66);
+}
+
+.majak-mobile-lobby-member {
+  width: 100%;
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  padding: 3px 5px;
+  border: 1px solid rgba(231, 255, 189, 0.18);
+  border-radius: 5px;
+  color: #f8ffe7;
+  background: rgba(12, 60, 24, 0.72);
+  text-align: left;
+}
+
+.majak-mobile-lobby-member.is-selected {
+  border-color: rgba(255, 236, 132, 0.82);
+  background: rgba(72, 101, 26, 0.84);
+}
+
+.majak-mobile-lobby-member img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  object-position: center 2%;
+}
+
+.majak-mobile-lobby-member span {
+  min-width: 0;
+}
+
+.majak-mobile-lobby-member__identity {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.majak-mobile-lobby-member__name,
+.majak-mobile-lobby-member__location {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-mobile-lobby-member__name {
+  flex: 0 1 auto;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.majak-mobile-lobby-member__title {
+  flex: 0 0 auto;
+  color: #ffe884;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.majak-mobile-lobby-member__location {
+  color: #dff8c2;
+  font-size: 10px;
+}
+
+.majak-mobile-text-button {
+  width: 100%;
+  margin-top: 14px;
+}
+
+@media (orientation: landscape) and (max-height: 540px), (max-width: 767px) {
+  .majak-start-popup-overlay {
+    position: fixed !important;
+    padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left));
+    box-sizing: border-box;
+  }
+
+  .majak-start-popup {
+    transform: scale(0.72);
+    transform-origin: center;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .majak-mobile-frame__bar {
+    min-height: 44px;
+    padding-top: 5px;
+    padding-bottom: 5px;
+  }
+
+  .majak-mobile-frame__brand {
+    font-size: 18px;
+  }
+
+  .majak-mobile-frame__tools button,
+  .majak-mobile-secondary,
+  .majak-mobile-text-button {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .majak-mobile-screen {
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .majak-mobile-hero {
+    align-items: center;
+    margin-bottom: 6px;
+  }
+
+  .majak-mobile-channel-group .majak-mobile-hero {
+    margin-bottom: var(--majak-mobile-title-hero-gap);
+  }
+
+  .majak-mobile-eyebrow {
+    margin-bottom: 2px;
+    font-size: 10px;
+  }
+
+  .majak-mobile-hero h1 {
+    font-size: 30px;
+  }
+
+  .majak-mobile-logo {
+    width: min(360px, 58vw);
+    height: 118px;
+  }
+
+  .majak-mobile-member-info {
+    flex-basis: 210px;
+    min-height: 118px;
+    padding: 8px 10px;
+    gap: 5px;
+    font-size: 12px;
+  }
+
+  .majak-mobile-member-info__id {
+    font-size: 14px;
+  }
+
+  .majak-mobile-card-button {
+    min-height: 56px;
+    gap: 4px;
+    padding: 9px 12px;
+  }
+
+  .majak-mobile-lobby-select .majak-mobile-card-button {
+    min-height: 46px;
+  }
+
+
+  .majak-mobile-card-button__title {
+    font-size: 17px;
+  }
+
+  .majak-mobile-card-button__detail {
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .majak-mobile-lobby-select .majak-mobile-card-button__detail {
+    display: none;
+  }
+
+  .majak-mobile-count {
+    font-size: 12px;
+  }
+
+  .majak-mobile-lobby-screen {
+    padding-top: 8px;
+  }
+
+  .majak-mobile-lobby-toolbar {
+    margin-bottom: 6px;
+  }
+
+  .majak-mobile-lobby-toolbar h1 {
+    font-size: 22px;
+  }
+
+  .majak-mobile-lobby-body {
+    grid-template-columns: minmax(0, 1fr) var(--majak-mobile-lobby-side-width);
+    gap: 8px;
+  }
+
+  .majak-mobile-lobby-room-grid {
+    gap: 5px;
+    padding: 4px;
+  }
+
+  .majak-mobile-lobby-members {
+    gap: 4px;
+    padding: 5px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 430px) {
+  .majak-mobile-lobby-screen {
+    --majak-mobile-lobby-side-width: 258px;
+    --majak-mobile-room-cell-scale: 0.76;
+    --majak-mobile-room-action-scale: 1.14;
+    padding-top: 5px;
+  }
+
+  .majak-mobile-lobby-toolbar {
+    min-height: 30px;
+    gap: 6px;
+    margin-bottom: 4px;
+  }
+
+  .majak-mobile-lobby-toolbar h1 {
+    font-size: 18px;
+  }
+
+  .majak-mobile-lobby-actions {
+    gap: 3px;
+  }
+
+  .majak-mobile-lobby-header-button,
+  .majak-mobile-lobby-command-button {
+    min-height: 28px;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .majak-mobile-lobby-header-button {
+    min-width: 58px;
+  }
+
+  .majak-mobile-lobby-body {
+    gap: 6px;
+  }
+
+  .majak-mobile-lobby-command-grid {
+    gap: 2px;
+  }
+
+  .majak-mobile-lobby-command-checks {
+    margin-top: 3px;
+  }
+
+  .majak-mobile-lobby-room-grid {
+    gap: 4px;
+    padding: 3px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 340px) {
+  .majak-mobile-frame__bar {
+    min-height: 36px;
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+
+  .majak-mobile-frame__brand {
+    font-size: 16px;
+  }
+
+  .majak-mobile-frame__tools button {
+    min-height: 28px;
+    font-size: 12px;
+  }
+
+  .majak-mobile-screen {
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .majak-mobile-channel-group {
+    --majak-mobile-title-gap: 4px;
+    --majak-mobile-title-hero-gap: 4px;
+    --majak-mobile-title-logo-h: clamp(58px, 20dvh, 72px);
+  }
+}
+
+.majak-boot-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.majak-boot-loading__panel {
+  width: 260px;
+  height: 312px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(0, 0, 0, 0.24);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.majak-boot-loading__logo {
+  width: 230px;
+  height: 230px;
+  object-fit: cover;
+}
+
+.majak-boot-loading__bar {
+  width: 168px;
+  height: 8px;
+  border: 1px solid #385c51;
+  background: #d7ded9;
+  padding: 1px;
+}
+
+.majak-boot-loading__fill {
+  width: 44%;
+  height: 100%;
+  background: #21765f;
+}
