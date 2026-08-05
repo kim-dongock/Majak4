@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJOptDlg 相当 — ルームオプション設定ダイアログ (AP-09 §3-1-4)
  * レガシー: legacy/client/HgMajak2/MJOptDlg.h/cpp
  *
@@ -48,7 +48,7 @@ import { useState } from 'react'
 // DU→px (9pt "MS UI Gothic" @96dpi)
 const SX = (du: number) => Math.round(du * 1.5)
 const SY = (du: number) => Math.round(du * 1.625)
-const FONT   = "'MS UI Gothic', 'Meiryo', 'MS PGothic', sans-serif"
+const FONT   = 'var(--majak-font-family-ui)'
 const DLG_BG = '#d4d0c8'
 const OPT_TO_DLG_RED = [0, 2, 1] as const
 const DLG_TO_OPT_RED = [0, 2, 1] as const
@@ -118,7 +118,7 @@ function GB({ x, y, w, h, label }: { x: number; y: number; w: number; h: number;
       border: '1px solid #767676', margin: 0, padding: 0, minWidth: 0,
       pointerEvents: 'none',
     }}>
-      <legend style={{ fontFamily: FONT, fontSize: 12, color: '#000', padding: '0 3px', marginLeft: 4 }}>
+      <legend style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', padding: '0 3px', marginLeft: 4 }}>
         {label}
       </legend>
     </fieldset>
@@ -134,7 +134,7 @@ function Rad({ x, y, name, val, label, checked, disabled, onChange }: {
     <label style={{
       position: 'absolute', left: x, top: y,
       display: 'flex', alignItems: 'center', gap: 3,
-      fontFamily: FONT, fontSize: 12, color: '#000',
+      fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
       cursor: disabled ? 'default' : 'pointer',
       opacity: disabled ? 0.5 : 1, userSelect: 'none', whiteSpace: 'nowrap',
     }}>
@@ -154,7 +154,7 @@ function Chk({ x, y, label, checked, disabled, onChange }: {
     <label style={{
       position: 'absolute', left: x, top: y,
       display: 'flex', alignItems: 'center', gap: 3,
-      fontFamily: FONT, fontSize: 12, color: '#000',
+      fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
       cursor: disabled ? 'default' : 'pointer',
       opacity: disabled ? 0.5 : 1, userSelect: 'none', whiteSpace: 'nowrap',
     }}>
@@ -296,7 +296,7 @@ export default function OptDlg({ initial, mask = {}, viewerEnable = true, onOK, 
   const TITLE_H = 20
 
   const btnStyle: React.CSSProperties = {
-    position: 'absolute', fontFamily: FONT, fontSize: 12, color: '#000',
+    position: 'absolute', fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
     background: DLG_BG,
     borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
     borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
@@ -319,7 +319,7 @@ export default function OptDlg({ initial, mask = {}, viewerEnable = true, onOK, 
           background: '#f0f0f0',
           display: 'flex', alignItems: 'center', paddingLeft: 8,
         }}>
-          <span style={{ fontFamily: FONT, fontSize: 12, color: '#111' }}>
+          <span style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111' }}>
             部屋の設定
           </span>
         </div>
@@ -334,7 +334,7 @@ export default function OptDlg({ initial, mask = {}, viewerEnable = true, onOK, 
             onChange={() => undefined}
             style={{
               position: 'absolute', left: SX(5), top: SY(5), width: DLG_W - SX(10), height: SY(14),
-              fontFamily: FONT, fontSize: 12, boxSizing: 'border-box',
+              fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', boxSizing: 'border-box',
               border: '1px inset #d4d0c8', background: '#d4d0c8', color: '#808080',
             }}
           >

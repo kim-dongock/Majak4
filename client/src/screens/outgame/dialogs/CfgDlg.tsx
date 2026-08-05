@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJCfgDlgEx 相当 — クライアント設定ダイアログ (タブ付き) (AP-09 §3-1-4/5)
  * レガシー: legacy/client/HgMajak2/MJCfgDlg.h/cpp
  *
@@ -58,7 +58,7 @@ import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 const SX = (du: number) => Math.round(du * 1.5)
 const SY = (du: number) => Math.round(du * 1.625)
 
-const FONT = "'MS UI Gothic', 'Meiryo', 'MS PGothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 const DLG_BG = '#d4d0c8'   // Windows classic dialog gray
 const TITLE_BG = '#f0f0f0'
 
@@ -143,7 +143,7 @@ function GB({ x, y, w, h, label }: { x: number; y: number; w: number; h: number;
       border: '1px solid #767676', margin: 0, padding: 0, minWidth: 0,
       pointerEvents: 'none',
     }}>
-      <legend style={{ fontFamily: FONT, fontSize: 12, color: '#000', padding: '0 3px', marginLeft: 4 }}>
+      <legend style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', padding: '0 3px', marginLeft: 4 }}>
         {label}
       </legend>
     </fieldset>
@@ -159,7 +159,7 @@ function Chk({ x, y, label, checked, disabled, onChange }: {
     <label style={{
       position: 'absolute', left: x, top: y,
       display: 'flex', alignItems: 'center', gap: 4,
-      fontFamily: FONT, fontSize: 12, color: '#000',
+      fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
       cursor: disabled ? 'default' : 'pointer',
       opacity: disabled ? 0.5 : 1,
       userSelect: 'none', whiteSpace: 'nowrap',
@@ -181,7 +181,7 @@ function Rad({ x, y, name, val, label, checked, onChange }: {
     <label style={{
       position: 'absolute', left: x, top: y,
       display: 'flex', alignItems: 'center', gap: 4,
-      fontFamily: FONT, fontSize: 12, color: '#000',
+      fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
       cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
     }}>
       <input type="radio" name={name} value={val} checked={checked}
@@ -196,7 +196,7 @@ function LTxt({ x, y, w, text }: { x: number; y: number; w: number; text: string
   return (
     <div style={{
       position: 'absolute', left: x, top: y, width: w,
-      fontFamily: FONT, fontSize: 11, color: '#000',
+      fontFamily: FONT, fontSize: 'calc(11px * var(--majak-type-scale))', color: '#000',
       lineHeight: '1.3', whiteSpace: 'pre-wrap',
     }}>
       {text}
@@ -314,7 +314,7 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
           background: TITLE_BG,
           display: 'flex', alignItems: 'center', paddingLeft: 8,
         }}>
-          <span style={{ fontFamily: FONT, fontSize: 12, color: '#111' }}>設定</span>
+          <span style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111' }}>設定</span>
         </div>
 
         {/* ── クライアントエリア: 369×406px ── */}
@@ -331,7 +331,7 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
               {(['環境設定', 'アシスト'] as const).map((label, i) => (
                 <button key={i} onClick={() => setActiveTab(i)} style={{
                   padding: '2px 10px',
-                  fontFamily: FONT, fontSize: 12, color: '#000',
+                  fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
                   background: activeTab === i ? DLG_BG : '#bbb',
                   border: '1px solid #808080',
                   borderBottom: activeTab === i ? `1px solid ${DLG_BG}` : '1px solid #808080',
@@ -467,7 +467,7 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
           <button onClick={() => onOK(cfg)} style={{
             position: 'absolute', left: SX(135), top: SY(230),
             width: SX(50), height: SY(14),
-            fontFamily: FONT, fontSize: 12, color: '#000', background: DLG_BG,
+            fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', background: DLG_BG,
             borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
             borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
             cursor: 'pointer', outline: 'none',
@@ -477,7 +477,7 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
           <button onClick={() => { onModify?.(initial); onCancel() }} style={{
             position: 'absolute', left: SX(190), top: SY(230),
             width: SX(50), height: SY(14),
-            fontFamily: FONT, fontSize: 12, color: '#000', background: DLG_BG,
+            fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', background: DLG_BG,
             borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
             borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
             cursor: 'pointer', outline: 'none',

@@ -1,5 +1,5 @@
-﻿/**
- * BuyHanCoinItemDlg — CMJBuyItemDlg 相当のGEM購入確認ダイアログ (AP-09 §3-2-4)
+/**
+ * BuyHanCoinItemDlg — CMJBuyItemDlg 相当のキャッシュ購入確認ダイアログ (AP-09 §3-2-4)
  * レガシー: legacy/client/HgMajak2/MJBuyItemDlg.h/cpp
  *
  * ウィンドウ: MoveWindow(0,0,390,470) → 390×470px, CenterWindow(GetParent())
@@ -23,7 +23,7 @@
  *   (25, 320)  "購入アイテム数" (非抽選時のみ)
  *   (220,320)  "個"             (非抽選時のみ)
  *   (25, 334)  "購入合計 : {price}"
- *   DrawText right-align CRect(10,366,245,381): GEM残高
+ *   DrawText right-align CRect(10,366,245,381): キャッシュ残高
  *   DrawText right-align CRect(10,380,245,395): 商品券残高
  *
  * 数量コンボ IDC_CMB_COUNT: MoveWindow(179,317,40,180) 抽選以外のみ表示
@@ -37,13 +37,14 @@ import { showError, buyMajItemErrorMessage } from '../../../utils/msgbox'
 import HanCoinReceiptDlg from './HanCoinReceiptDlg'
 import LotSlotDlg from './LotSlotDlg'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
+import ResponsiveShopTransactionDlg from './ResponsiveShopTransactionDlg'
 
 const IMG = '/assets/images/game'
 const SHOP_RECEIPT_BUY_BTN = `${IMG}/_ShopReceiptBuyBtn.png?v=opaque`
 const DIALOG_W = 390
 const DIALOG_H = 470
 
-/** GEM購入アイテム情報 (CMajakShopItemData 相当) */
+/** キャッシュ購入アイテム情報 (CMajakShopItemData 相当) */
 export interface HanCoinShopItemData {
   itemCode: string
   sellCode: string
@@ -61,10 +62,9 @@ interface Props {
   pix: string
   memberName?: string
   hanCoin: number
-  hanCoupon: number
   onClose: () => void
   /** OnOK 後に呼ばれる購入完了コールバック */
-  onBuyOK?: () => void
+  onBuyOK?: (cashCount: number) => void
 }
 
 /** ====================================================================
@@ -118,7 +118,7 @@ function SpriteButton({
 /** ====================================================================
  * BuyHanCoinItemDlg 本体
  * ==================================================================== */
-export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanCoupon, onClose, onBuyOK }: Props) {
+export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onClose, onBuyOK }: Props) {
   /**
    * m_btnReceiptYes は初期 WS_DISABLED — 残高照会が完了してから有効化
    * (InquiryFinished 相当 : コンポーネントマウント後 500ms で有効化)
@@ -128,15 +128,13 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
   const [receipt, setReceipt]       = useState<{
     count: number
     coinBefore: number
-    couponBefore: number
     coinAfter: number
-    couponAfter: number
   } | null>(null)
   const [showLotSlot, setShowLotSlot] = useState(false)
   const [coinBalance] = useState(hanCoin)
-  const [couponBalance] = useState(hanCoupon)
   const layoutMode = useOutgameLayoutMode()
   const isMobile = layoutMode !== 'desktop'
+  const useResponsiveDialog = isMobile || layoutMode === 'desktop'
   const [dialogScale, setDialogScale] = useState(1)
 
   /**
@@ -220,15 +218,15 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
       pendingRef.current = async (data) => {
         const failCode = String(data.failCode ?? data['mjkk95e'] ?? '')
         if (failCode !== '') {
-          showError(buyMajItemErrorMessage(failCode))
+          const message = String(data.k2e ?? data.message ?? '')
+          showError(message || buyMajItemErrorMessage(failCode))
           onClose()
         } else {
-          let coinAfter = coinBalance >= 0 ? Math.max(0, coinBalance - totalPrice) : coinBalance
-          let couponAfter = couponBalance
+          const coinAfter = Number(data.cashCount ?? (coinBalance >= 0 ? Math.max(0, coinBalance - totalPrice) : coinBalance))
           if (item.isLottery && typeof item.lotteryCount === 'number' && item.lotteryCount > 0) {
             setShowLotSlot(true)
           } else {
-            setReceipt({ count, coinBefore: coinBalance, couponBefore: couponBalance, coinAfter, couponAfter })
+            setReceipt({ count, coinBefore: coinBalance, coinAfter })
           }
         }
         resolve()
@@ -244,7 +242,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
   }
 
   /**
-  * OnBtnReceiptBuy() — GEM追加購入
+  * OnBtnReceiptBuy() — キャッシュ追加購入
   * 外部購入ページへ遷移
    */
   const handleBuy = () => {
@@ -259,25 +257,52 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
   /* テキストスタイル (OnPaint: 13px MS Pゴシック, 透過背景) */
   const txt = (color = '#000') => ({
     position: 'absolute' as const,
-    fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif" as const,
-    fontSize: 13,
+    fontFamily: 'var(--majak-font-family-ui)' as const,
+    fontSize: 'calc(13px * var(--majak-type-scale))',
     color,
     whiteSpace: 'nowrap' as const,
     pointerEvents: 'none' as const,
   })
 
-  const yen = (n: number) => n < 0 ? '---' : `${Math.trunc(n)}円`
-  const moneyString = (value: number) => {
-    const sign = value < 0 ? '-' : ''
-    const digits = String(Math.abs(Math.trunc(value)))
-    const units = ['', '万', '億', '兆', '京']
-    const parts: string[] = []
-    for (let end = digits.length, unit = 0; end > 0; end -= 4, unit++) {
-      const start = Math.max(0, end - 4)
-      const part = Number(digits.slice(start, end))
-      if (part > 0) parts.unshift(`${part}${units[unit] ?? ''}`)
+  const yen = (n: number) => n < 0 ? '---' : `${Math.trunc(n).toLocaleString('ja-JP')} MP`
+  const moneyString = (value: number) => `${Math.trunc(value).toLocaleString('ja-JP')} GP`
+
+  if (useResponsiveDialog) {
+    if (receipt) {
+      return <ResponsiveShopTransactionDlg
+        title="購入完了"
+        itemName={item.itemName}
+        description={item.description}
+        imageUrl={item.imageUrl}
+        costs={[{ label: '購入合計', value: yen(totalPrice) }]}
+        balances={[{ label: '購入後のキャッシュ', value: yen(receipt.coinAfter) }]}
+        complete
+        onCancel={() => { onBuyOK?.(receipt.coinAfter); onClose() }}
+      />
     }
-    return `${sign}${parts.length > 0 ? parts.join('') : '0'}円`
+    return <ResponsiveShopTransactionDlg
+      title="購入しますか？"
+      itemName={item.itemName}
+      itemKind="便利アイテム"
+      description={item.description}
+      imageUrl={item.imageUrl}
+      costs={[{ label: '単価', value: yen(item.price) }, { label: '購入合計', value: yen(totalPrice) }]}
+      balances={[{ label: '所持キャッシュ', value: yen(coinBalance) }, { label: '購入後のキャッシュ', value: yen(Math.max(0, coinBalance - totalPrice)) }]}
+      quantity={item.isLottery ? undefined : count}
+      onQuantityChange={setCount}
+      confirmDisabled={!yesEnabled}
+      onConfirm={handleYes}
+      onCancel={handleNo}
+    >
+      {showLotSlot && item.isLottery && typeof item.lotteryCount === 'number' && item.lotteryCount > 0 && <LotSlotDlg
+        itemName={item.itemName}
+        lotteryCount={item.lotteryCount}
+        totalAmount={item.gameMoney}
+        imageUrl={item.imageUrl}
+        onResult={() => { onBuyOK?.(coinBalance); onClose() }}
+        onClose={() => { setShowLotSlot(false); setYesEnabled(true) }}
+      />}
+    </ResponsiveShopTransactionDlg>
   }
 
   return (
@@ -292,7 +317,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
             alignItems: 'center',
             justifyContent: 'center',
             background: 'transparent',
-            zIndex: 300,
+            zIndex: 400,
           }}
         >
         <div style={{ width: DIALOG_W * dialogScale, height: DIALOG_H * dialogScale }}>
@@ -424,8 +449,8 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
                 top: 317,
                 width: 40,
                 height: 22,
-                fontFamily: "'Noto Sans JP', 'Noto Sans JP', 'MS PGothic', sans-serif",
-                fontSize: 12,
+                fontFamily: 'var(--majak-font-family-ui)',
+                fontSize: 'calc(12px * var(--majak-type-scale))',
                 border: '1px solid #888',
               }}
             >
@@ -442,36 +467,20 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
           購入合計 : {moneyString(totalPrice)}
         </span>
 
-          {/* DrawText right-align CRect(10,366,245,381): GEM残高 */}
+          {/* DrawText right-align CRect(10,366,245,381): キャッシュ残高 */}
         <div
           style={{
             position: 'absolute',
             left: 10, top: 366,
             width: 235, height: 15,
-            fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-            fontSize: 13,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(13px * var(--majak-type-scale))',
             color: '#000',
             textAlign: 'right',
             pointerEvents: 'none',
           }}
         >
-          現在&quot;{memberName || pix}&quot;さんのGEM : {coinBalance.toLocaleString('ja-JP')}個
-        </div>
-
-        {/* DrawText right-align CRect(10,380,245,395): 商品券残高 */}
-        <div
-          style={{
-            position: 'absolute',
-            left: 10, top: 380,
-            width: 235, height: 15,
-            fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-            fontSize: 13,
-            color: '#000',
-            textAlign: 'right',
-            pointerEvents: 'none',
-          }}
-        >
-          商品券 : {yen(couponBalance)}
+          現在&quot;{memberName || pix}&quot;さんのキャッシュ : {coinBalance.toLocaleString('ja-JP')} MP
         </div>
 
         {/* ================================================================
@@ -483,7 +492,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
           frameW={123} frameH={20}
           x={260} y={370}
           onClick={handleBuy}
-            title="GEM購入"
+            title="キャッシュ購入"
         />
 
         {/* ================================================================
@@ -519,7 +528,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
             totalAmount={item.gameMoney}
             imageUrl={item.imageUrl}
             onResult={() => {
-              onBuyOK?.()
+              onBuyOK?.(coinBalance)
               onClose()
             }}
             onClose={() => {
@@ -541,13 +550,11 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, hanC
           price={item.price}
           count={receipt.count}
           coinBefore={receipt.coinBefore}
-          couponBefore={receipt.couponBefore}
           coinAfter={receipt.coinAfter}
-          couponAfter={receipt.couponAfter}
           gameMoney={item.gameMoney}
           imageUrl={item.imageUrl}
           onClose={() => {
-            onBuyOK?.()
+            onBuyOK?.(receipt.coinAfter)
             onClose()
           }}
         />

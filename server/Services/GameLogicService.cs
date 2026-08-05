@@ -117,6 +117,7 @@ public class GameLogicService
         room.ResetGameActions();
         room.ResetGameReportProcess();
         room.LastGameReportPayload = null;
+        PrepareTrainingNpcProfiles(room);
         if (_roomRegistry != null)
         {
             await _roomRegistry.RegisterRoomAsync(
@@ -1617,6 +1618,10 @@ public class GameLogicService
             players = Enumerable.Range(0, GameConst.PlayerMaxCount).Select(i =>
             {
                 var seat = FindSeatByEngineOrder(room, i);
+                int playerPos = engine.HanchanInfo.Player[i];
+                var npc = seat == null && room.IsTrainingChannel
+                    ? room.TrainingNpcProfiles[playerPos]
+                    : null;
                 var player = engine.Player[i];
                 int totalBal = result.TenBal[i] + result.PaoBal[i] + result.WarBal[i]
                     + result.RibBal[i] + result.RenBal[i];
@@ -1624,8 +1629,9 @@ public class GameLogicService
                 {
                     memberNo = seat?.Pix ?? string.Empty,
                     pix = seat?.Pix ?? string.Empty,
-                    name = seat?.NickName ?? string.Empty,
-                    avatarId = seat?.AvatarId ?? string.Empty,
+                    name = seat?.NickName ?? npc?.Name ?? string.Empty,
+                    avatarId = seat?.AvatarId ?? npc?.AvatarId ?? string.Empty,
+                    sex = seat?.Sex ?? npc?.Sex ?? string.Empty,
                     seatPos = i,
                     isOya = i == engine.KyokuInfo.OyaOrder,
                     point = player.GamePoint,
@@ -2568,7 +2574,10 @@ public class GameLogicService
         for (int engineOrder = 0; engineOrder < GameConst.PlayerMaxCount; engineOrder++)
         {
             if (reportedEngineOrders[engineOrder]) continue;
-            int slot = Array.FindIndex(report.Users, u => u == null);
+            int playerPos = room.Engine.HanchanInfo.Player[engineOrder];
+            int slot = playerPos >= 0 && playerPos < report.Users.Length && report.Users[playerPos] == null
+                ? playerPos
+                : Array.FindIndex(report.Users, u => u == null);
             if (slot < 0) return;
 
             var ep = room.Engine.Player[engineOrder];
@@ -3375,6 +3384,79 @@ public class GameLogicService
     }
 
 
+    private static void PrepareTrainingNpcProfiles(GameRoom room)
+    {
+        Array.Clear(room.TrainingNpcProfiles);
+        if (!room.IsTrainingChannel) return;
+
+        var avatarIndexes = Enumerable.Range(0, 32).ToList();
+        int npcNumber = 1;
+        for (int playerPos = 0; playerPos < room.Seats.Length; playerPos++)
+        {
+            if (room.Seats[playerPos] != null) continue;
+            int selectedIndex = Random.Shared.Next(avatarIndexes.Count);
+            int avatarIndex = avatarIndexes[selectedIndex];
+            avatarIndexes.RemoveAt(selectedIndex);
+            bool female = avatarIndex >= 16;
+            int characterNumber = avatarIndex % 16 + 1;
+            room.TrainingNpcProfiles[playerPos] = new TrainingNpcProfile(
+                $"NPC {npcNumber++}",
+                $"thumbnail_{characterNumber:00}{(female ? 'f' : 'm')}.png",
+                female ? "female" : "male");
+        }
+    }
+
+    private static object? BuildHanchanMemberInfo(GameRoom room, int order)
+    {
+        int playerPos = room.Engine.HanchanInfo.Player[order];
+        var player = playerPos >= 0 && playerPos < room.Seats.Length ? room.Seats[playerPos] : null;
+        if (player == null)
+        {
+            var npc = room.IsTrainingChannel && playerPos >= 0 && playerPos < room.TrainingNpcProfiles.Length
+                ? room.TrainingNpcProfiles[playerPos]
+                : null;
+            return npc == null ? null : new
+            {
+                memberNo = string.Empty,
+                pix = string.Empty,
+                name = npc.Name,
+                avatarId = npc.AvatarId,
+                sex = npc.Sex,
+                playerPos,
+                seatPos = playerPos,
+                engineOrder = order,
+                isNpc = true,
+            };
+        }
+
+        int costumeId = player.GetCustomEquip(30);
+        int costumeType = player.CustomItems.TryGetValue(costumeId, out var customItem) ? customItem.Kind : 0;
+        return new
+        {
+            memberNo = player.Pix,
+            pix = player.Pix,
+            name = player.NickName,
+            avatarId = player.AvatarId,
+            sex = player.Sex,
+            playerPos,
+            seatPos = playerPos,
+            engineOrder = order,
+            isProxy = player.IsOutPlayer,
+            mjkk46e = player.TrickTitle,
+            trickTitle = player.TrickTitle,
+            mjkk47e = player.MajakTitle,
+            majakTitle = player.MajakTitle,
+            mjkk54e = player.GetRichiEffect(),
+            richiEffect = player.GetRichiEffect(),
+            mjkk136e = costumeId,
+            customCostume = costumeId,
+            mjkk137e = costumeType,
+            customCostumeType = costumeType,
+            skillCnt = player.ActiveRecord.MatchCnt,
+            skillCount = player.ActiveRecord.MatchCnt,
+        };
+    }
+
     private static object BuildHanchanInfo(GameRoom room)
     {
         var hi = room.Engine.HanchanInfo;
@@ -3384,37 +3466,7 @@ public class GameLogicService
             chicha   = hi.Chicha,
             players  = hi.Player,
             memberInfo = Enumerable.Range(0, GameConst.PlayerMaxCount)
-                .Select(order =>
-                {
-                    int playerPos = hi.Player[order];
-                    var player = playerPos >= 0 && playerPos < room.Seats.Length ? room.Seats[playerPos] : null;
-                    int costumeId = player?.GetCustomEquip(30) ?? 0;
-                    int costumeType = player != null && player.CustomItems.TryGetValue(costumeId, out var customItem) ? customItem.Kind : 0;
-                    return player == null ? null : new
-                    {
-                        memberNo = player.Pix,
-                        pix = player.Pix,
-                        name = player.NickName,
-                        avatarId = player.AvatarId,
-                        sex = player.Sex,
-                        playerPos,
-                        seatPos = playerPos,
-                        engineOrder = order,
-                        isProxy = player.IsOutPlayer,
-                        mjkk46e = player.TrickTitle,
-                        trickTitle = player.TrickTitle,
-                        mjkk47e = player.MajakTitle,
-                        majakTitle = player.MajakTitle,
-                        mjkk54e = player.GetRichiEffect(),
-                        richiEffect = player.GetRichiEffect(),
-                        mjkk136e = costumeId,
-                        customCostume = costumeId,
-                        mjkk137e = costumeType,
-                        customCostumeType = costumeType,
-                        skillCnt = player.ActiveRecord.MatchCnt,
-                        skillCount = player.ActiveRecord.MatchCnt,
-                    };
-                })
+                .Select(order => BuildHanchanMemberInfo(room, order))
                 .ToArray(),
         };
     }
@@ -3669,6 +3721,7 @@ public class GameLogicService
                 var u = report.Users[i]!;
                 var p = _session.GetByMember(u.MemberNo);
                 var seat = room.Seats[i];
+                var npc = seat == null && room.IsTrainingChannel ? room.TrainingNpcProfiles[i] : null;
                 var avatarPlayer = seat ?? p;
                 int setBal = u.SetPoint + u.SetUma + u.SetTor + u.SetTip;
                 long currentMoney = p?.GamMoney ?? (u.PrevMoney + u.MoneyChange);
@@ -3729,11 +3782,11 @@ public class GameLogicService
                 {
                     seq,
                     seatPos      = i,
-                    memberNo     = seat?.Pix ?? string.Empty,
-                    pix          = seat?.Pix ?? string.Empty,
-                    name         = seat?.NickName ?? string.Empty,
-                    avatarId     = seat?.AvatarId ?? string.Empty,
-                    sex          = avatarPlayer?.Sex ?? string.Empty,
+                    memberNo     = seat?.Pix ?? (npc != null ? TournamentConst.NpcMemberNo : string.Empty),
+                    pix          = seat?.Pix ?? (npc != null ? TournamentConst.NpcMemberNo : string.Empty),
+                    name         = seat?.NickName ?? npc?.Name ?? string.Empty,
+                    avatarId     = seat?.AvatarId ?? npc?.AvatarId ?? string.Empty,
+                    sex          = avatarPlayer?.Sex ?? npc?.Sex ?? string.Empty,
                     charaId      = costumeId,
                     customCostume = costumeId,
                     customCostumeType = costumeType,

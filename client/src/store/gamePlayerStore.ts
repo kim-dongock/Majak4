@@ -4,6 +4,7 @@
  * channel:entered 受信時にも同データを更新して各画面から参照できるようにする。
  */
 import { create } from 'zustand'
+import { authApiUrl } from '../api/auth'
 import { gameAuthHeaders } from '../api/authHeaders'
 
 export interface GamePlayerData {
@@ -35,7 +36,7 @@ export const useGamePlayerStore = create<GamePlayerState>((set, get) => ({
     if (get().loading) return
     set({ loading: true })
     try {
-      const res = await fetch(`/api/player/profile?pix=${encodeURIComponent(pix)}`, {
+      const res = await fetch(authApiUrl(`/api/player/profile?pix=${encodeURIComponent(pix)}`), {
         headers: gameAuthHeaders(),
       })
       if (!res.ok) return

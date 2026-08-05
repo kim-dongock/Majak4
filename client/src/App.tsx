@@ -1,7 +1,7 @@
 import { MemoryRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import type { CredentialResponse } from '@react-oauth/google'
 import { GoogleLogin } from '@react-oauth/google'
+import { Capacitor } from '@capacitor/core'
 import ChannelGroupScreen from './screens/outgame/ChannelGroupScreen'
 import LobbySelectScreen from './screens/outgame/LobbySelectScreen'
 import LobbyScreen from './screens/outgame/LobbyScreen'
@@ -16,6 +16,8 @@ import { getPlayerContinueRoom } from './api/channel'
 import * as SignalR from './api/signalr'
 import { useAuthStore } from './store/authStore'
 import { useCustomSkinStore } from './store/customSkinStore'
+import { forceDuplicateConnectionLogout } from './utils/msgbox'
+import { signInWithNativeGoogle } from './utils/nativeGoogleAuth'
 
 const ROUTER_STATE_STORAGE_KEY = 'majak:last-router-state'
 
@@ -70,6 +72,20 @@ function SignalRRouteDisconnect() {
       void SignalR.disconnect().catch(() => {})
     }
   }, [location.pathname])
+
+  return null
+}
+
+function ForcedLogoutListener() {
+  useEffect(() => {
+    const handleForcedLogout = (data: Record<string, unknown>) => {
+      console.error('[SignalR] server forced logout', { payload: data })
+      forceDuplicateConnectionLogout()
+    }
+
+    SignalR.on('forcedLogout', handleForcedLogout)
+    return () => SignalR.off('forcedLogout', handleForcedLogout)
+  }, [])
 
   return null
 }
@@ -166,17 +182,50 @@ function AppLoadingScreen() {
  *
  * フロー:
  *   1. Google サインインボタン表示
- *   3. Google 認証成功 → /auth/google-login
- *      a. requiresRegistration=true → RegistrationDlg (利用規約→ニックネーム→性別/アバター)
- *      b. accountStatus=0 && termsAgreed → 承認待ち画面
- *      c. accountStatus=2 → 停止中画面
- *      d. accountStatus=1 → ゲーム本体
+ *   3. Google redirect login → /auth/google-login-redirect
+ *      a. 登録済み → refresh cookie を発行してトップへ戻る
+ *      b. 未登録 → RegistrationDlg (利用規約→ニックネーム→性別/アバター)
  */
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status, player, setLoading, setPlayer, setError } = useAuthStore()
   const [idToken, setIdToken] = useState<string | null>(null)
   const [refreshChecked, setRefreshChecked] = useState(false)
   const [registrationRequest, setRegistrationRequest] = useState<{ idToken: string; player: MajakPlayer } | null>(null)
+
+  useEffect(() => {
+    if (window.location.protocol !== 'http:' || window.location.hostname !== '127.0.0.1') return
+    const localUrl = new URL(window.location.href)
+    localUrl.hostname = 'localhost'
+    window.location.replace(localUrl.toString())
+  }, [])
+
+  const consumeGoogleRedirectResult = useCallback(async (): Promise<boolean> => {
+    const url = new URL(window.location.href)
+    const marker = url.searchParams.get('googleAuth')
+    if (!marker) return false
+
+    url.searchParams.delete('googleAuth')
+    const nextQuery = url.searchParams.toString()
+    window.history.replaceState(window.history.state, '', `${url.pathname}${nextQuery ? `?${nextQuery}` : ''}${url.hash}`)
+
+    if (marker === 'error') {
+      setError('Google サインインに失敗しました。もう一度お試しください。')
+      return true
+    }
+
+    if (marker !== 'register') return false
+
+    // The API retains the verified Google token in an HttpOnly cookie until registration completes.
+    setIdToken('')
+    setRegistrationRequest({
+      idToken: '',
+      player: {
+        pix: '', name: '', sex: '', avatarId: '', password: '', isTestEnv: false,
+        requiresRegistration: true, accountStatus: 0, termsAgreed: false,
+      },
+    })
+    return true
+  }, [setError, setLoading, setPlayer])
 
   // 1. 初回マウント: HttpOnly refresh cookie があれば Google 画面なしで pix を再発行する
   useEffect(() => {
@@ -193,10 +242,16 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     setLoading()
     let disposed = false
     void (async () => {
+      const handledRedirect = await consumeGoogleRedirectResult()
+      if (disposed || handledRedirect) {
+        if (!disposed) setRefreshChecked(true)
+        return
+      }
       try {
         const p = await refreshLogin()
         if (disposed) return
-        setPlayer(p)
+        if (p) setPlayer(p)
+        else setRefreshChecked(true)
       } catch {
         if (disposed) return
         const latest = useAuthStore.getState()
@@ -206,30 +261,22 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     })()
 
     return () => { disposed = true }
-  }, [setLoading, setPlayer])
+  }, [consumeGoogleRedirectResult, setLoading, setPlayer])
 
-  // 2. Google サインイン成功コールバック
-  const handleGoogleSuccess = useCallback(async (credRes: CredentialResponse) => {
-    const token = credRes.credential
-    if (!token) return
-    setIdToken(token)
+  const handleGoogleCredential = useCallback(async (credential: string) => {
     setLoading()
     try {
-      const p = await googleLogin(token)
-      if (p.requiresRegistration) {
-        setRegistrationRequest({ idToken: token, player: p })
+      const authenticatedPlayer = await googleLogin(credential)
+      if (authenticatedPlayer.requiresRegistration) {
+        setIdToken(credential)
+        setRegistrationRequest({ idToken: credential, player: authenticatedPlayer })
         return
       }
-      if (!p.requiresRegistration) saveRegisteredPlayerCache(p)
-      setPlayer(p)
-    } catch (err) {
-      setError(String(err))
+      setPlayer(authenticatedPlayer)
+    } catch {
+      setError('Google サインインに失敗しました。もう一度お試しください。')
     }
-  }, [setLoading, setPlayer, setError])
-
-  const handleGoogleError = useCallback(() => {
-    setError('Google サインインに失敗しました。もう一度お試しください。')
-  }, [setError])
+  }, [setError, setLoading, setPlayer])
 
   // 3. 承認待ち中は一定間隔で再照会して、承認後に自動でゲームへ進める。
   useEffect(() => {
@@ -240,9 +287,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       if (disposed) return
       void (async () => {
         try {
-          const refreshed = idToken ? await googleLogin(idToken) : await refreshLogin()
+          const refreshed = await refreshLogin()
           if (disposed) return
-          setPlayer(refreshed)
+          if (refreshed) setPlayer(refreshed)
         } catch {
           // Keep pending screen; transient errors are retried on next tick.
         }
@@ -278,7 +325,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   // Google サインイン待ち (refresh cookie が使えなかった場合、またはゲーム認証が失効した場合のみ表示)
   if ((status === 'loading' && !player && !idToken && refreshChecked) || status === 'login_required') {
-    return <GoogleSignInScreen onSuccess={handleGoogleSuccess} onError={handleGoogleError} />
+    return <GoogleSignInScreen onCredential={handleGoogleCredential} onError={() => setError('Google サインインに失敗しました。もう一度お試しください。')} />
   }
 
   // Google 認証中 / サーバー通信中
@@ -294,9 +341,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         background: '#1a1a2e',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexDirection: 'column', gap: 12,
-        fontFamily: 'sans-serif', color: '#fff',
+        fontFamily: 'var(--majak-font-family-ui)', color: '#fff',
       }}>
-        <div style={{ fontSize: 18, color: '#f44' }}>認証エラー</div>
+        <div style={{ fontSize: 'var(--majak-font-18)', color: '#f44' }}>認証エラー</div>
         <button
           type="button"
           onClick={() => { setIdToken(null); setLoading() }}
@@ -334,18 +381,34 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
 // ── Google サインイン画面 ────────────────────────────────────────────
 function GoogleSignInScreen({
-  onSuccess,
+  onCredential,
   onError,
 }: {
-  onSuccess: (res: CredentialResponse) => void
-  onError:   () => void
+  onCredential: (credential: string) => void
+  onError: () => void
 }) {
+  const isNativeApp = Capacitor.isNativePlatform()
+  const [nativeLoginPending, setNativeLoginPending] = useState(false)
+
+  const handleNativeGoogleLogin = async () => {
+    if (nativeLoginPending) return
+    setNativeLoginPending(true)
+    try {
+      onCredential(await signInWithNativeGoogle())
+    } catch (error) {
+      if (error instanceof Error && /cancel/i.test(error.message)) return
+      onError()
+    } finally {
+      setNativeLoginPending(false)
+    }
+  }
+
   return (
     <div style={{
       position: 'fixed', inset: 0,
       background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: '"MS UI Gothic", Meiryo, sans-serif',
+      fontFamily: 'var(--majak-font-family-ui)',
     }}>
       <div style={{
         background: 'rgba(255,255,255,0.05)',
@@ -362,17 +425,46 @@ function GoogleSignInScreen({
           style={{ width: 80, height: 80, borderRadius: 8 }}
           onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
         />
-        <div style={{ color: '#fff', fontSize: 22, fontWeight: 700, letterSpacing: 2 }}>
+        <div style={{ color: '#fff', fontSize: 'var(--majak-font-22)', fontWeight: 700, letterSpacing: 2 }}>
           麻雀4
         </div>
-        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 13, textAlign: 'center' }}>
+        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--majak-font-13)', textAlign: 'center' }}>
           Google アカウントでサインインしてください
         </div>
-        <GoogleLogin
-          onSuccess={onSuccess}
-          onError={onError}
-          useOneTap={false}
-        />
+        <div style={{ position: 'relative', width: 280, height: 40 }}>
+          {isNativeApp ? (
+            <button
+              type="button"
+              disabled={nativeLoginPending}
+              onClick={() => { void handleNativeGoogleLogin() }}
+              style={{
+                position: 'absolute', inset: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxSizing: 'border-box',
+                border: '1px solid #747775', borderRadius: 4,
+                background: '#fff', color: '#1f1f1f',
+                fontSize: 14, fontWeight: 500, cursor: nativeLoginPending ? 'default' : 'pointer',
+              }}
+            >
+              <img src="/assets/images/common/google-g.svg" alt="" draggable={false} style={{ position: 'absolute', left: 12, width: 18, height: 18 }} />
+              {nativeLoginPending ? 'ログイン中...' : 'Google でログイン'}
+            </button>
+          ) : (
+            <>
+              <GoogleLogin
+                onSuccess={response => {
+                  if (response.credential) onCredential(response.credential)
+                  else onError()
+                }}
+                onError={onError}
+                useOneTap={false}
+                width="280"
+                containerProps={{ style: { position: 'absolute', inset: 0, width: '100%' } }}
+              />
+              <img src="/assets/images/common/google-g.svg" alt="" draggable={false} style={{ position: 'absolute', left: 12, top: 11, zIndex: 1, width: 18, height: 18, pointerEvents: 'none' }} />
+            </>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -385,7 +477,7 @@ function PendingApprovalScreen() {
       position: 'fixed', inset: 0,
       background: '#1a1a2e',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: '"MS UI Gothic", Meiryo, sans-serif', color: '#fff',
+      fontFamily: 'var(--majak-font-family-ui)', color: '#fff',
     }}>
       <div style={{
         background: 'rgba(255,255,255,0.05)',
@@ -394,8 +486,8 @@ function PendingApprovalScreen() {
         padding: '36px 48px',
         textAlign: 'center', maxWidth: 400,
       }}>
-        <div style={{ fontSize: 20, marginBottom: 16 }}>⏳ 承認待ち</div>
-        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.8 }}>
+        <div style={{ fontSize: 'var(--majak-font-20)', marginBottom: 16 }}>⏳ 承認待ち</div>
+        <div style={{ fontSize: 'var(--majak-font-14)', color: 'rgba(255,255,255,0.75)', lineHeight: 1.8 }}>
           会員登録が完了しました。<br />
           管理者によるアカウント承認をお待ちください。<br />
           承認後にゲームをプレイできます。
@@ -412,7 +504,7 @@ function SuspendedScreen() {
       position: 'fixed', inset: 0,
       background: '#1a1a2e',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: '"MS UI Gothic", Meiryo, sans-serif', color: '#fff',
+      fontFamily: 'var(--majak-font-family-ui)', color: '#fff',
     }}>
       <div style={{
         background: 'rgba(255,0,0,0.1)',
@@ -421,8 +513,8 @@ function SuspendedScreen() {
         padding: '36px 48px',
         textAlign: 'center', maxWidth: 400,
       }}>
-        <div style={{ fontSize: 20, marginBottom: 16, color: '#f66' }}>🚫 アカウント停止</div>
-        <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', lineHeight: 1.8 }}>
+        <div style={{ fontSize: 'var(--majak-font-20)', marginBottom: 16, color: '#f66' }}>🚫 アカウント停止</div>
+        <div style={{ fontSize: 'var(--majak-font-14)', color: 'rgba(255,255,255,0.75)', lineHeight: 1.8 }}>
           このアカウントは停止されています。<br />
           詳細については運営までお問い合わせください。
         </div>
@@ -441,6 +533,7 @@ export default function App() {
         <MemoryRouter initialEntries={[initialRoute]}>
           <RouterStatePersistence />
           <SignalRRouteDisconnect />
+          <ForcedLogoutListener />
           <ContinueRoomBootstrap />
           <Routes>
             {/* アウトゲーム (CMajakFrame タイトルバー付き) */}

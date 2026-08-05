@@ -9,6 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { getAvatarUrl, getDefaultAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
+import { ResponsiveKyoResult } from './ResponsiveResultOverlay'
 
 const IMG = '/assets/images/game'
 const RYUKYOKU_AVATAR_W = 52
@@ -245,8 +246,8 @@ function HoraPlayerPanel({ player, selected, onSelect, pinType, isWareme, displa
       <KyoResultButton btn={btn} selected={selected} enabled={enabled} onClick={onSelect} title={player.name || player.pix} />
       <Sprite src="mj_myfan_0.png" x={ptFon[loc].x} y={ptFon[loc].y} w={25} h={25} frame={4 + loc} z={31} />
       {isWareme && <img src={`${IMG}/mj_wareme00.png`} alt="" draggable={false} style={{ position: 'absolute', left: ptWarMrk[loc].x, top: ptWarMrk[loc].y, zIndex: 31, imageRendering: 'pixelated' }} />}
-      <img src={getShortAvatarUrl(player.avatarId ?? null)} alt="" draggable={false} style={{ position: 'absolute', left: ptAvt[loc].x, top: ptAvt[loc].y, width: 22, height: 32, objectFit: 'cover', zIndex: 31 }} onError={e => { e.currentTarget.src = getDefaultAvatarUrl('male') }} />
-      <div style={{ position: 'absolute', left: ptNam[loc].x, top: ptNam[loc].y, width: 60, height: 12, overflow: 'hidden', whiteSpace: 'nowrap', font: '12px MS Gothic, monospace', color: '#000', zIndex: 32 }}>{player.name}</div>
+      <img src={getShortAvatarUrl(player.avatarId ?? null)} alt="" draggable={false} style={{ position: 'absolute', left: ptAvt[loc].x, top: ptAvt[loc].y, width: 22, height: 32, objectFit: 'cover', imageRendering: 'auto', zIndex: 31 }} onError={e => { e.currentTarget.src = getDefaultAvatarUrl('male') }} />
+      <div style={{ position: 'absolute', left: ptNam[loc].x, top: ptNam[loc].y, width: 60, height: 12, overflow: 'hidden', whiteSpace: 'nowrap', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', zIndex: 32 }}>{player.name}</div>
       <Sprite src="mj_ptResult_oyako.png" x={ptOya[loc].x} y={ptOya[loc].y} w={24} h={24} frame={player.isOya ? 0 : 1} z={32} />
       <Tip value={player.tipBal} x={ptTip[loc].x} y={ptTip[loc].y} />
       {statusFrame >= 0 && <Sprite src="mj_ptResult_status.png" x={ptStatus[loc].x} y={ptStatus[loc].y} w={122} h={48} frame={statusFrame} z={33} />}
@@ -287,7 +288,7 @@ function YakuPane({ data, selectedOdr }: { data: KyoResData; selectedOdr: number
             {code != null ? (
               <img src={`${IMG}/${yaku.isYakuman ? 'mj_yakuman' : 'mj_yaku'}_${String(code).padStart(2, '0')}.png`} alt={yaku.name} draggable={false} style={{ imageRendering: 'pixelated' }} />
             ) : (
-              <span style={{ font: '12px MS Gothic, monospace', color: '#111', whiteSpace: 'nowrap' }}>{yaku.name}</span>
+              <span style={{ fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111', whiteSpace: 'nowrap' }}>{yaku.name}</span>
             )}
             {yaku.isYakuman ? (
               !data.isDaniChannel && <Sprite src="mj_fntYakuman.png" x={124} y={32} w={69} h={23} frame={Math.max(0, yaku.fan - 1)} z={41} />
@@ -333,7 +334,7 @@ function RyukyokuView({ data, myOdr }: { data: KyoResData; myOdr: number }) {
         return (
           <div key={p.pix || odr}>
             <Sprite src="mj_ryukyoku_hukidasi.png" x={ptRyuBall[loc].x} y={ptRyuBall[loc].y} w={243} h={158} frame={loc} />
-            <img src={getAvatarUrl(p.avatarId ?? null)} alt="" draggable={false} style={{ position: 'absolute', left: ptRyuAvt[loc].x + RYUKYOKU_AVATAR_OFFSET_X, top: ptRyuAvt[loc].y + RYUKYOKU_AVATAR_OFFSET_Y, width: RYUKYOKU_AVATAR_W, height: RYUKYOKU_AVATAR_H, objectFit: 'contain', zIndex: 25 }} onError={e => { e.currentTarget.src = getDefaultAvatarUrl('male') }} />
+            <img src={getAvatarUrl(p.avatarId ?? null)} alt="" draggable={false} style={{ position: 'absolute', left: ptRyuAvt[loc].x + RYUKYOKU_AVATAR_OFFSET_X, top: ptRyuAvt[loc].y + RYUKYOKU_AVATAR_OFFSET_Y, width: RYUKYOKU_AVATAR_W, height: RYUKYOKU_AVATAR_H, objectFit: 'contain', imageRendering: 'auto', zIndex: 25 }} onError={e => { e.currentTarget.src = getDefaultAvatarUrl('male') }} />
             {call >= 0 && <Sprite src="mj_ryukyoku_hukidasiIn.png" x={ptRyuCall[loc].x} y={ptRyuCall[loc].y} w={104} h={29} frame={call} />}
             <SpriteNumber value={p.tenBal} x={ptRyuBal[loc].x} y={ptRyuBal[loc].y} />
           </div>
@@ -343,7 +344,7 @@ function RyukyokuView({ data, myOdr }: { data: KyoResData; myOdr: number }) {
   )
 }
 
-export default function KyoRes({ data, myOdr = 0, canContinue = true, onClose }: Props) {
+export function LegacyKyoRes({ data, myOdr = 0, canContinue = true, onClose }: Props) {
   const rootRef = useRef<HTMLDivElement>(null)
   const winnerIndexes = useMemo(() => data.players.map((p, i) => p.isHora ? i : -1).filter(i => i >= 0), [data.players])
   const initialSelectedOdr = data.selectedOdr !== undefined && winnerIndexes.includes(data.selectedOdr)
@@ -411,4 +412,8 @@ export default function KyoRes({ data, myOdr = 0, canContinue = true, onClose }:
       </div>
     </div>
   )
+}
+
+export default function KyoRes({ data, canContinue = true, onClose }: Props) {
+  return <ResponsiveKyoResult data={data} canContinue={canContinue} onClose={onClose} />
 }

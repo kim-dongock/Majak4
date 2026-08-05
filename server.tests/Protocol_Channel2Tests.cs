@@ -476,6 +476,24 @@ public class PushOkButtonCommandTests
         _gameLogicMock.Verify(svc => svc.StartGameLogicAsync(It.IsAny<GameRoom>(), It.IsAny<CommandContext>()), Times.Never);
     }
 
+    [Fact]
+    public async Task Execute_SoloTrainingHostAfterReport_StartsGameWithoutReadyToggle()
+    {
+        var (room, player) = SetupRoom2(money: 1000);
+        room.SubId = "00T5A";
+        room.State = GameRoomState.Waiting;
+        room.LimitCnt = GameConst.PlayerMaxCount;
+        Assert.All(room.OkButtonStates, Assert.False);
+        var cmd = new PushOkButtonCommand(_session, _gameLogicMock.Object, new RatingService());
+        var (ctx, _) = CommandTestHelper.MakeContext(player);
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.All(room.OkButtonStates, Assert.False);
+        Assert.Equal(GameRoomState.Playing, room.State);
+        _gameLogicMock.Verify(svc => svc.StartGameLogicAsync(room, ctx), Times.Once);
+    }
+
     // シナリオ4: player=null
     [Fact]
     public async Task Execute_NullPlayer_NothingSent()

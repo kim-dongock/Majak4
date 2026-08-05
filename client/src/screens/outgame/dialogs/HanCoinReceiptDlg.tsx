@@ -1,5 +1,5 @@
-﻿/**
- * HanCoinReceiptDlg — CMJReceiptDlg 相当のGEM購入レシート (AP-09 §3-2-8)
+/**
+ * HanCoinReceiptDlg — CMJReceiptDlg 相当のキャッシュ購入レシート (AP-09 §3-2-8)
  * レガシー: legacy/client/HgMajak2/MJReceiptDlg.h/cpp
  *
  * ウィンドウ: MoveWindow(0,0,390,470) → 390×470px, CenterWindow(GetParent())
@@ -24,10 +24,10 @@
  * ── テキスト (OnPaint — 13px bold MS Pゴシック, 透過背景) ─────────────────
  *   m_strMessage[0]  TextOut(15, 50)       購入者名
  *   itemName         CRect(198,165,372,182) DT_CENTER  アイテム名
- *   m_strMessage[1]  CRect(198,185,372,202) DT_RIGHT   購入前GEM
+ *   m_strMessage[1]  CRect(198,185,372,202) DT_RIGHT   購入前キャッシュ
  *   m_strMessage[2]  CRect(198,205,372,222) DT_RIGHT   購入前商品券
  *   m_strMessage[3]  CRect(198,225,372,242) DT_RIGHT   価格×数量
- *   m_strMessage[4]  CRect(198,245,372,262) DT_RIGHT   購入後GEM
+ *   m_strMessage[4]  CRect(198,245,372,262) DT_RIGHT   購入後キャッシュ
  *   m_strMessage[5]  CRect(198,265,372,282) DT_RIGHT   購入後商品券
  *   m_strMessage[6]  TextOut(17, 288)       購入完了メッセージ
  *   m_strMessage[7]  TextOut(17, 302)       コイン補充メッセージ
@@ -39,7 +39,7 @@ import { useRef, useEffect, useState } from 'react'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 const IMG = '/assets/images/game'
-const FONT = "'MS PGothic', 'MS UI Gothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 const DIALOG_W = 390
 const DIALOG_H = 470
 
@@ -51,9 +51,7 @@ interface Props {
   price: number          // m_nHancoinPrice
   count: number
   coinBefore: number     // nHanCoinBefore
-  couponBefore: number   // nHanCoinCouponBefore
   coinAfter: number      // nHanCoinAfter
-  couponAfter: number    // nHanCoinCouponAfter
   gameMoney: number      // m_llGameMoney (コイン補充額)
   imageUrl?: string
   onClose: () => void
@@ -99,7 +97,7 @@ function SpriteButton({
  * ==================================================================== */
 export default function HanCoinReceiptDlg({
   pix, memberName, itemName, sellCode, price, count,
-  coinBefore, couponBefore, coinAfter, couponAfter,
+  coinBefore, coinAfter,
   gameMoney, imageUrl, onClose,
 }: Props) {
   /* ドラッグ移動 */
@@ -149,38 +147,25 @@ export default function HanCoinReceiptDlg({
     ? `${IMG}/_ShopReceiptMain2.png`    /* コインアイテム */
     : `${IMG}/_ShopReceiptMain2b.png`   /* 便利アイテム */
 
-  const yen = (n: number) => `${Math.trunc(n)}円`
-  const moneyString = (value: number) => {
-    const sign = value < 0 ? '-' : ''
-    const digits = String(Math.abs(Math.trunc(value)))
-    const units = ['', '万', '億', '兆', '京']
-    const parts: string[] = []
-    for (let end = digits.length, unit = 0; end > 0; end -= 4, unit++) {
-      const start = Math.max(0, end - 4)
-      const part = Number(digits.slice(start, end))
-      if (part > 0) parts.unshift(`${part}${units[unit] ?? ''}`)
-    }
-    return `${sign}${parts.length > 0 ? parts.join('') : '0'}円`
-  }
+  const yen = (n: number) => `${Math.trunc(n).toLocaleString('ja-JP')} MP`
+  const moneyString = (value: number) => `${Math.trunc(value).toLocaleString('ja-JP')} GP`
   const isConvenience = sellCode !== ''
 
   /* メッセージ生成 (コンストラクタの m_strMessage[] 相当) */
   const msg0 = `"${memberName || pix}"さんが購入したアイテム`
   const msg1 = yen(coinBefore)
-  const msg2 = yen(couponBefore)
-  const msg3 = `(${yen(price)}×${count})${Math.trunc(price * count)}`
+  const msg3 = `(${yen(price)}×${count})${Math.trunc(price * count).toLocaleString('ja-JP')} MP`
   const msg4 = yen(coinAfter)
-  const msg5 = yen(couponAfter)
   const msg6 = isConvenience
     ? `${itemName}を${count}個購入しました`
     : `${itemName}を${count}個購入して`
-  const msg7 = `麻雀コイン${moneyString(gameMoney * count)}が補充されました。`
+  const msg7 = `${moneyString(gameMoney * count)}が補充されました。`
 
   /* テキストスタイル */
   const textBase = {
     position: 'absolute' as const,
     fontFamily: FONT,
-    fontSize: 13,
+    fontSize: 'calc(13px * var(--majak-type-scale))',
     fontWeight: 'bold' as const,
     pointerEvents: 'none' as const,
     whiteSpace: 'nowrap' as const,
@@ -264,17 +249,11 @@ export default function HanCoinReceiptDlg({
           {/* m_strMessage[1] CRect(198,185,372,202) DT_RIGHT — 購入前GEM */}
         <div style={rightBox(198, 185, 174, 17)}>{msg1}</div>
 
-        {/* m_strMessage[2] CRect(198,205,372,222) DT_RIGHT — 購入前商品券 */}
-        <div style={rightBox(198, 205, 174, 17)}>{msg2}</div>
-
         {/* m_strMessage[3] CRect(198,225,372,242) DT_RIGHT — 価格×数量 */}
         <div style={rightBox(198, 225, 174, 17)}>{msg3}</div>
 
           {/* m_strMessage[4] CRect(198,245,372,262) DT_RIGHT — 購入後GEM */}
         <div style={rightBox(198, 245, 174, 17)}>{msg4}</div>
-
-        {/* m_strMessage[5] CRect(198,265,372,282) DT_RIGHT — 購入後商品券 */}
-        <div style={rightBox(198, 265, 174, 17)}>{msg5}</div>
 
         {/* m_strMessage[6] TextOut(17, 288) — 購入完了 */}
         <span style={{ ...textBase, left: 17, top: 288, color: '#000' }}>{msg6}</span>

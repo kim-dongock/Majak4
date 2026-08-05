@@ -314,6 +314,35 @@ public class RoomEnterRoomCommandTests
     }
 
     [Fact]
+    public async Task Execute_PlayingTrainingRoomReconnectsHumanWithoutFillingAiSeats()
+    {
+        var session = new PlayerSessionService();
+        var disconnectedPlayer = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1", EngineOrder = 0 };
+        session.Register(disconnectedPlayer);
+        var room = session.CreateRoom("ch1", disconnectedPlayer, "", 1, 0, 0, false, subId: "00T5A");
+        room.Engine.InitHanchan(new MajakServer.Engine.RuleInfo { Kuitan = true, Contest = 0 });
+        room.State = GameRoomState.Playing;
+        disconnectedPlayer.ConnectionId = "";
+        disconnectedPlayer.IsOutPlayer = true;
+
+        var reconnectPlayer = new MajakPlayer { ConnectionId = "c2", MemberNo = "u1", ChannelId = "ch1" };
+        session.Register(reconnectPlayer);
+        var cmd = new RoomEnterRoomCommand(session, new FakeGameLogicService());
+        var (ctx, sent) = CommandTestHelper.MakeContext(reconnectPlayer,
+            new Dictionary<string, object?> { [GKey.RoomId] = room.RoomId });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.True(room.IsTrainingChannel);
+        Assert.False(room.Seats[0]!.IsOutPlayer);
+        Assert.Equal("c2", room.Seats[0]!.ConnectionId);
+        Assert.All(room.Seats.Skip(1), seat => Assert.Null(seat));
+        Assert.Contains(sent, s => s.method == Cmd.EnterRoomCmd);
+        Assert.Contains(sent, s => s.method == Cmd.PaiInfoList);
+        Assert.DoesNotContain(sent, s => s.method == Cmd.ConnectTypeError);
+    }
+
+    [Fact]
     public async Task Execute_PlayingRoomRefreshesOutPlayerAndBroadcastsAddMember()
     {
         var session = new PlayerSessionService();

@@ -6,6 +6,7 @@ using MajakServer.Hubs;
 using MajakServer.Infrastructure;
 using MajakServer.Repositories.MySQL;
 using MajakServer.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Options;
 using System.Net;
 using System.Text;
@@ -36,6 +37,10 @@ builder.Services.Configure<AdminSettings>(
     builder.Configuration.GetSection(AdminSettings.SectionName));
 builder.Services.Configure<GameAuthSettings>(
     builder.Configuration.GetSection(GameAuthSettings.SectionName));
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+});
 
 // ─── DB Contexts ─────────────────────────────────────────────
 builder.Services.AddSingleton<IParameterStoreService, ParameterStoreService>();
@@ -60,6 +65,7 @@ builder.Services.AddSingleton<PrimaryLeaderService>(sp =>
         sp.GetRequiredService<RedisService>(),
         sp.GetRequiredService<IOptions<ChannelServerSettings>>().Value));
 builder.Services.AddSingleton<PlayerSessionService>();
+builder.Services.AddSingleton<LobbySessionLeaseService>();
 builder.Services.AddSingleton<AuthRefreshSessionService>();
 builder.Services.AddSingleton<GameAuthTokenService>();
 builder.Services.AddSingleton<AdminIdService>();
@@ -171,7 +177,7 @@ builder.Services.AddCors(opt =>
     {
         policy.WithOrigins(
                 builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
-                ?? new[] { "http://localhost:5173" })
+                ?? new[] { "http://localhost:3000" })
             .AllowAnyMethod()
             .AllowAnyHeader()
             .AllowCredentials();
@@ -225,34 +231,52 @@ using (var scope = app.Services.CreateScope())
     await tournamentService.InitAsync();
 }
 
+app.UseForwardedHeaders();
 app.UseCors();
 app.MapHub<MajakGameHub>("/hubs/majak");
 app.MapGet("/health", () => Results.Ok(new { status = "ok", time = DateTime.UtcNow }));
+
+const string PendingGoogleIdTokenCookieName = "mj_pending_google_id_token";
 
 static async Task<bool> IssueRefreshCookieAsync(HttpContext ctx, AuthRefreshSessionService refreshSessions, string memberNo)
 {
     var token = await refreshSessions.IssueAsync(memberNo, ctx);
     if (string.IsNullOrWhiteSpace(token)) return false;
 
-    ctx.Response.Cookies.Append(AuthRefreshSessionService.CookieName, token, new CookieOptions
-    {
-        HttpOnly = true,
-        Secure = ctx.Request.IsHttps,
-        SameSite = SameSiteMode.Lax,
-        Expires = DateTimeOffset.UtcNow.Add(refreshSessions.Ttl),
-        Path = "/auth",
-    });
+    ctx.Response.Cookies.Append(
+        AuthRefreshSessionService.CookieName,
+        token,
+        AuthCookiePolicy.CreateRefreshCookieOptions(ctx.Request, refreshSessions.Ttl));
     return true;
 }
 
 static void ClearRefreshCookie(HttpContext ctx)
 {
-    ctx.Response.Cookies.Delete(AuthRefreshSessionService.CookieName, new CookieOptions
+    ctx.Response.Cookies.Delete(
+        AuthRefreshSessionService.CookieName,
+        AuthCookiePolicy.CreateRefreshCookieDeleteOptions(ctx.Request));
+}
+
+static void SetPendingGoogleIdTokenCookie(HttpContext ctx, string idToken)
+{
+    ctx.Response.Cookies.Append(PendingGoogleIdTokenCookieName, idToken, new CookieOptions
     {
         HttpOnly = true,
         Secure = ctx.Request.IsHttps,
         SameSite = SameSiteMode.Lax,
-        Path = "/auth",
+        Expires = DateTimeOffset.UtcNow.AddMinutes(5),
+        Path = "/",
+    });
+}
+
+static void ClearPendingGoogleIdTokenCookie(HttpContext ctx)
+{
+    ctx.Response.Cookies.Delete(PendingGoogleIdTokenCookieName, new CookieOptions
+    {
+        HttpOnly = false,
+        Secure = ctx.Request.IsHttps,
+        SameSite = SameSiteMode.Lax,
+        Path = "/",
     });
 }
 
@@ -298,8 +322,10 @@ static IResult? RequireAdminAuth(HttpContext ctx, AdminAuthService auth,
 
     if (requiredRole is not null)
     {
-        var role = principal.FindFirst("role")?.Value;
-        if (role != requiredRole && role != "super_admin")
+        var role = principal.FindFirst("role")?.Value
+            ?? principal.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+        if (!string.Equals(role, requiredRole, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(role, "super_admin", StringComparison.OrdinalIgnoreCase))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
     }
     return null; // OK
@@ -369,79 +395,96 @@ app.MapGet("/api/admin/users/{memberNo}", async (
     return player is null ? Results.NotFound() : Results.Ok(player);
 }).RequireCors("AdminPolicy");
 
-// ── POST /api/admin/gem/adjust  (Super Admin のみ) ───────────────────────
-app.MapPost("/api/admin/gem/adjust", async (
+// ── POST /api/admin/cash/adjust  (Operator 以上) ──────────────────────────
+app.MapPost("/api/admin/cash/adjust", async (
     HttpContext ctx,
     AdminAuthService adminAuth,
     AdminRepository adminRepo,
     LogDbContext logDb) =>
 {
-    if (RequireAdminAuth(ctx, adminAuth, "super_admin") is { } err) return err;
+    if (RequireAdminAuth(ctx, adminAuth, "operator") is { } err) return err;
 
-    var body = await ctx.Request.ReadFromJsonAsync<GemAdjustRequest>();
+    var body = await ctx.Request.ReadFromJsonAsync<CashAdjustRequest>();
     if (body is null || body.MemberNo == 0 || body.Amount == 0)
         return Results.BadRequest(new { error = "memberNo and non-zero amount required" });
     if (string.IsNullOrWhiteSpace(body.Memo))
-        return Results.BadRequest(new { error = "memo required for admin GEM adjustment" });
+        return Results.BadRequest(new { error = "memo required for admin Majak Cash adjustment" });
 
     // 残高取得 (調整前)
     var player = await adminRepo.GetPlayerDetailAsync(body.MemberNo);
     if (player is null) return Results.NotFound(new { error = "player not found" });
 
-    var (before, after) = await adminRepo.AdjustGemAsync(body.MemberNo, body.Amount);
+    var adjustment = await adminRepo.AdjustCashAsync(body.MemberNo, body.Amount);
 
-    // gem_transaction_log (Log DB に書く)
+    // cash_transaction_log (Log DB に書く)
     var operatorNo = GetAdminNoClaim(ctx, adminAuth);
     if (operatorNo is null) return Results.Unauthorized();
 
     await using var logConn = await logDb.CreateConnectionAsync();
     await using var logCmd  = new MySqlConnector.MySqlCommand(@"
-        INSERT INTO gem_transaction_log
+        INSERT INTO cash_transaction_log
             (member_no, event_type, amount, balance_before, balance_after,
+             paid_amount, free_amount, paid_before, paid_after, free_before, free_after,
              ref_id, memo, operator_no, client_ip, occurred_at)
         VALUES
             (@memberNo, @eventType, @amount, @before, @after,
+             @paidAmount, @freeAmount, @paidBefore, @paidAfter, @freeBefore, @freeAfter,
              NULL, @memo, @opNo, @ip, CURRENT_TIMESTAMP(3))", logConn);
     logCmd.Parameters.AddWithValue("@memberNo",  body.MemberNo);
-    logCmd.Parameters.AddWithValue("@eventType", body.Amount > 0 ? "ADMIN_GRANT" : "ADMIN_DEDUCT");
+    logCmd.Parameters.AddWithValue("@eventType", body.Amount > 0 ? "ADMIN_GRANT_FREE" : "ADMIN_DEDUCT");
     logCmd.Parameters.AddWithValue("@amount",    body.Amount);
-    logCmd.Parameters.AddWithValue("@before",    before);
-    logCmd.Parameters.AddWithValue("@after",     after);
+    logCmd.Parameters.AddWithValue("@before",    adjustment.TotalBefore);
+    logCmd.Parameters.AddWithValue("@after",     adjustment.TotalAfter);
+    logCmd.Parameters.AddWithValue("@paidAmount", adjustment.PaidAfter - adjustment.PaidBefore);
+    logCmd.Parameters.AddWithValue("@freeAmount", adjustment.FreeAfter - adjustment.FreeBefore);
+    logCmd.Parameters.AddWithValue("@paidBefore", adjustment.PaidBefore);
+    logCmd.Parameters.AddWithValue("@paidAfter",  adjustment.PaidAfter);
+    logCmd.Parameters.AddWithValue("@freeBefore", adjustment.FreeBefore);
+    logCmd.Parameters.AddWithValue("@freeAfter",  adjustment.FreeAfter);
     logCmd.Parameters.AddWithValue("@memo",      body.Memo);
     logCmd.Parameters.AddWithValue("@opNo",      operatorNo.Value);
     logCmd.Parameters.AddWithValue("@ip",        (object?)ctx.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value);
     await logCmd.ExecuteNonQueryAsync();
 
-    return Results.Ok(new { memberNo = body.MemberNo, balanceBefore = before, balanceAfter = after });
+    return Results.Ok(new
+    {
+        memberNo = body.MemberNo,
+        balanceBefore = adjustment.TotalBefore,
+        balanceAfter = adjustment.TotalAfter,
+        paidCashBefore = adjustment.PaidBefore,
+        paidCashAfter = adjustment.PaidAfter,
+        freeCashBefore = adjustment.FreeBefore,
+        freeCashAfter = adjustment.FreeAfter,
+    });
 }).RequireCors("AdminPolicy");
 
 // ── GET /api/admin/gem/products ─────────────────────────────────────────
-app.MapGet("/api/admin/gem/products", async (
+app.MapGet("/api/admin/cash/products", async (
     HttpContext ctx,
     AdminAuthService adminAuth,
     AdminRepository adminRepo) =>
 {
     if (RequireAdminAuth(ctx, adminAuth) is { } err) return err;
-    return Results.Ok(await adminRepo.GetGemProductsAsync());
+    return Results.Ok(await adminRepo.GetCashProductsAsync());
 }).RequireCors("AdminPolicy");
 
 // ── PUT /api/admin/gem/products/{productId} (Super Admin のみ) ──────────
-app.MapPut("/api/admin/gem/products/{productId}", async (
+app.MapPut("/api/admin/cash/products/{productId}", async (
     string productId,
     HttpContext ctx,
     AdminAuthService adminAuth,
     AdminRepository adminRepo) =>
 {
     if (RequireAdminAuth(ctx, adminAuth, "super_admin") is { } err) return err;
-    var body = await ctx.Request.ReadFromJsonAsync<GemProduct>();
+    var body = await ctx.Request.ReadFromJsonAsync<CashProduct>();
     if (body is null || body.ProductId != productId)
         return Results.BadRequest(new { error = "productId mismatch" });
-    await adminRepo.UpdateGemProductAsync(body);
+    await adminRepo.UpdateCashProductAsync(body);
     return Results.Ok(new { updated = true });
 }).RequireCors("AdminPolicy");
 
 // ── GET /api/admin/gem/revenue?days=30 ──────────────────────────────────
-app.MapGet("/api/admin/gem/revenue", async (
+app.MapGet("/api/admin/cash/revenue", async (
     HttpContext ctx,
     AdminAuthService adminAuth,
     AdminRepository adminRepo,
@@ -889,7 +932,32 @@ app.MapGet("/api/player/profile", async (HttpContext ctx, string? memberNo, Play
         trickTitle = player.TrickTitle,
         majakTitle = player.MajakTitle,
         gemCount   = player.GemCount,
+        cashCount  = player.CashCount,
     });
+});
+
+// GET /api/shop/cash-products
+// キャッシュ購入画面向け。ゲーム認証済みユーザーに有効な Web 商品だけを公開する。
+app.MapGet("/api/shop/cash-products", async (HttpContext ctx, AdminRepository adminRepo, GameAuthTokenService gameAuth) =>
+{
+    if (RequireGameAuth(ctx, gameAuth) is null) return Results.Unauthorized();
+
+    var products = await adminRepo.GetActiveWebCashProductsAsync();
+    return Results.Ok(products.Select(product => new
+    {
+        productId = product.ProductId,
+        displayName = product.DisplayName,
+        cashAmount = product.CashAmount,
+        priceJpy = product.PriceJpy,
+    }));
+});
+
+// GET /api/shop/convenience-items
+// billing_item_master の販売中アイテムをキャッシュショップに公開する。
+app.MapGet("/api/shop/convenience-items", async (HttpContext ctx, ItemRepository itemRepo, GameAuthTokenService gameAuth) =>
+{
+    if (RequireGameAuth(ctx, gameAuth) is null) return Results.Unauthorized();
+    return Results.Ok(await itemRepo.GetActiveBillingShopItemsAsync());
 });
 
 // GET /api/player/continue-room?memberNo={id}
@@ -943,6 +1011,69 @@ app.MapGet("/api/channels", async (MasterCacheService masterCache, ChannelMember
 });
 
 // ─── Google 認証 REST API ──────────────────────────────────────────
+// POST /auth/google-login-redirect (Google GIS redirect mode)
+// Google Sign-In redirect mode から送信される form credential を受け取り、
+// 既存会員は refresh cookie 発行後にトップへ戻し、未登録会員は登録フローへ戻す。
+app.MapPost("/auth/google-login-redirect", async Task<IResult> (
+    HttpContext ctx,
+    GamePlayerRepository gamePlayers,
+    PlayerRepository playerRepo,
+    LogRepository logRepo,
+    IConfiguration config,
+    ILogger<Program> logger,
+    PlayerSessionService sessions,
+    AuthRefreshSessionService refreshSessions) =>
+{
+    var clientAppUrl = config["ClientAppUrl"]?.TrimEnd('/') ?? $"{ctx.Request.Scheme}://{ctx.Request.Host}";
+    var form = await ctx.Request.ReadFormAsync();
+    var idToken = form["credential"].ToString();
+
+    if (string.IsNullOrWhiteSpace(idToken))
+    {
+        logger.LogWarning("Google redirect login rejected because the credential was missing.");
+        ClearPendingGoogleIdTokenCookie(ctx);
+        return Results.Redirect($"{clientAppUrl}/?googleAuth=error");
+    }
+
+    var clientId = config["AdminSettings:GoogleClientId"];
+    if (string.IsNullOrWhiteSpace(clientId))
+    {
+        logger.LogError("Google redirect login failed: Google client ID not configured.");
+        ClearPendingGoogleIdTokenCookie(ctx);
+        return Results.Redirect($"{clientAppUrl}/?googleAuth=error");
+    }
+
+    GoogleJsonWebSignature.Payload payload;
+    try
+    {
+        payload = await GoogleJsonWebSignature.ValidateAsync(idToken,
+            new GoogleJsonWebSignature.ValidationSettings { Audience = [clientId] });
+    }
+    catch (InvalidJwtException ex)
+    {
+        logger.LogWarning("Google redirect token validation failed: {Msg}", ex.Message);
+        ClearPendingGoogleIdTokenCookie(ctx);
+        return Results.Redirect($"{clientAppUrl}/?googleAuth=error");
+    }
+
+    var account = await gamePlayers.GetAccountByGoogleSubAsync(payload.Subject);
+    if (account is null)
+    {
+        SetPendingGoogleIdTokenCookie(ctx, idToken);
+        return Results.Redirect($"{clientAppUrl}/?googleAuth=register");
+    }
+
+    await gamePlayers.RefreshLoginAsync(account.MemberNo, account.DisplayName, false);
+    await playerRepo.SetDailyMissionAsync(account.MemberNo, conditionType: 1, progressIncrement: 1);
+    sessions.IssuePix(account.MemberNo);
+    if (await IssueRefreshCookieAsync(ctx, refreshSessions, account.MemberNo))
+    {
+        await InsertLoginLogOnceAsync(ctx, logRepo, account.MemberNo, 0);
+    }
+    ClearPendingGoogleIdTokenCookie(ctx);
+    return Results.Redirect($"{clientAppUrl}/");
+});
+
 // POST /auth/google-login  { idToken: string }
 // Google ID トークンを検証し、プレイヤー情報を返す。
 // 未登録の場合 requiresRegistration=true を返す (memberNo は空文字)。
@@ -962,10 +1093,15 @@ app.MapPost("/auth/google-login", async Task<IResult> (
     if (string.IsNullOrWhiteSpace(clientId))
         return Results.Problem("Google client ID not configured.");
 
+    var idToken = string.IsNullOrWhiteSpace(body.IdToken)
+        ? ctx.Request.Cookies[PendingGoogleIdTokenCookieName]
+        : body.IdToken;
+    if (string.IsNullOrWhiteSpace(idToken)) return Results.Unauthorized();
+
     GoogleJsonWebSignature.Payload payload;
     try
     {
-        payload = await GoogleJsonWebSignature.ValidateAsync(body.IdToken,
+        payload = await GoogleJsonWebSignature.ValidateAsync(idToken,
             new GoogleJsonWebSignature.ValidationSettings { Audience = [clientId] });
     }
     catch (InvalidJwtException ex)
@@ -980,6 +1116,7 @@ app.MapPost("/auth/google-login", async Task<IResult> (
     if (account is null)
     {
         // 未登録 → フロントで会員登録フォームを表示させる
+        SetPendingGoogleIdTokenCookie(ctx, idToken);
         return Results.Ok(new
         {
             memberNo             = string.Empty,
@@ -998,6 +1135,7 @@ app.MapPost("/auth/google-login", async Task<IResult> (
     {
         await InsertLoginLogOnceAsync(ctx, logRepo, account.MemberNo, 0);
     }
+    ClearPendingGoogleIdTokenCookie(ctx);
 
     return Results.Ok(new
     {
@@ -1028,7 +1166,8 @@ app.MapPost("/auth/refresh", async Task<IResult> (
     var memberNo = await refreshSessions.ValidateAsync(currentToken, ctx);
     if (string.IsNullOrWhiteSpace(memberNo))
     {
-        return Results.Unauthorized();
+        ClearRefreshCookie(ctx);
+        return Results.NoContent();
     }
 
     var account = await gamePlayers.GetAccountAsync(memberNo);
@@ -1036,7 +1175,7 @@ app.MapPost("/auth/refresh", async Task<IResult> (
     {
         await refreshSessions.RevokeAsync(currentToken);
         ClearRefreshCookie(ctx);
-        return Results.Unauthorized();
+        return Results.NoContent();
     }
 
     await refreshSessions.RevokeAsync(currentToken);
@@ -1090,10 +1229,15 @@ app.MapPost("/auth/google-register", async Task<IResult> (
     if (string.IsNullOrWhiteSpace(clientId))
         return Results.Problem("Google client ID not configured.");
 
+    var idToken = string.IsNullOrWhiteSpace(body.IdToken)
+        ? ctx.Request.Cookies[PendingGoogleIdTokenCookieName]
+        : body.IdToken;
+    if (string.IsNullOrWhiteSpace(idToken)) return Results.Unauthorized();
+
     GoogleJsonWebSignature.Payload payload;
     try
     {
-        payload = await GoogleJsonWebSignature.ValidateAsync(body.IdToken,
+        payload = await GoogleJsonWebSignature.ValidateAsync(idToken,
             new GoogleJsonWebSignature.ValidationSettings { Audience = [clientId] });
     }
     catch (InvalidJwtException ex)
@@ -1154,6 +1298,7 @@ app.MapPost("/auth/google-register", async Task<IResult> (
     }
 
     logger.LogInformation("Google registration: memberNo={MemberNo}", memberNo);
+    ClearPendingGoogleIdTokenCookie(ctx);
 
     return Results.Ok(new
     {
@@ -1241,8 +1386,8 @@ internal sealed record NoticeRequest(
     [property: System.Text.Json.Serialization.JsonPropertyName("color")]
     int Color = 0);
 
-/// <summary>POST /api/admin/gem/adjust のリクエストボディ</summary>
-internal sealed record GemAdjustRequest(ulong MemberNo, int Amount, string Memo);
+/// <summary>POST /api/admin/cash/adjust のリクエストボディ</summary>
+internal sealed record CashAdjustRequest(ulong MemberNo, int Amount, string Memo);
 internal sealed record SuspendRequest(string? Reason);
 
 /// <summary>POST /api/admin/accounts のリクエストボディ</summary>

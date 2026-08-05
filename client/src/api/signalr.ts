@@ -15,7 +15,9 @@ import {
   HubConnectionState,
   LogLevel,
 } from '@microsoft/signalr'
+import { refreshLogin } from './auth'
 import { getGameAccessToken } from './authHeaders'
+import { useAuthStore } from '../store/authStore'
 
 export type MessageHandler = (data: Record<string, unknown>) => void
 export type ConnectionLostHandler = (error?: Error) => void
@@ -34,6 +36,7 @@ const MAX_CONSECUTIVE_HANDLER_FAILURES = 3
 const STOCKED_COMMANDS = new Set(['playing', 'smmc4e', 'history', 'hc1e', 'mjkc24e'])
 const PRECONNECTED_COMMANDS = new Set([...STOCKED_COMMANDS, 'c1e'])
 const MAX_STOCKED_MESSAGES = 96
+const ACCESS_TOKEN_REFRESH_SKEW_MS = 60_000
 
 /** ユーザー登録ハンドラー (cmd → handlers[]) */
 const handlers = new Map<string, MessageHandler[]>()
@@ -59,6 +62,36 @@ async function stopConnectionSilently(conn: HubConnection): Promise<void> {
 
 function isDebugCommand(cmd: string): boolean {
   return cmd === 'playing' || cmd === 'smmc4e' || cmd === 'smmc1e' || cmd === 'smmc2e' || cmd === 'mjkc4e' || cmd === 'history' || cmd === 'hc1e' || cmd === 'mjkc24e'
+}
+
+function isAccessTokenExpiringSoon(token: string): boolean {
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return true
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '='))
+    const exp = JSON.parse(decoded).exp
+    return typeof exp !== 'number' || exp * 1000 <= Date.now() + ACCESS_TOKEN_REFRESH_SKEW_MS
+  } catch {
+    return true
+  }
+}
+
+async function getHubAccessToken(): Promise<string> {
+  const currentToken = getGameAccessToken()
+  if (currentToken && !isAccessTokenExpiringSoon(currentToken)) return currentToken
+
+  try {
+    const refreshedPlayer = await refreshLogin()
+    if (refreshedPlayer?.accessToken) {
+      useAuthStore.getState().setPlayer(refreshedPlayer)
+      return refreshedPlayer.accessToken
+    }
+  } catch {
+    // The caller rejects the connection without sending an unauthenticated hub request.
+  }
+
+  return ''
 }
 
 function stockMessage(cmd: string, data: Record<string, unknown>): void {
@@ -167,11 +200,13 @@ export async function connect(hubUrl = '/hubs/majak'): Promise<void> {
     currentHubUrl = null
   }
 
+  const accessToken = await getHubAccessToken()
+  if (!accessToken) throw new Error('SignalR connection requires an authenticated game session.')
+
   currentHubUrl = hubUrl
-  const accessToken = getGameAccessToken()
   connection = new HubConnectionBuilder()
     .withUrl(hubUrl, {
-      accessTokenFactory: () => getGameAccessToken() || accessToken,
+      accessTokenFactory: getHubAccessToken,
     })
     .withAutomaticReconnect()
     .configureLogging(LogLevel.Warning)

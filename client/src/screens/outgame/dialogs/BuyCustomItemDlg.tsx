@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJBuyCustomItemDlg 相当 — カスタムアイテム購入確認 (AP-09 §3-2-6)
  * レガシー: legacy/client/HgMajak2/MJBuyCustomItemDlg.h/cpp
  *
@@ -19,7 +19,7 @@
  * No ボタン (4フレーム 85×29):
  *   mj_shp_btn_no.png   at (206, 458)  IDCANCEL
  *
- * 「GEMで購入」ボタン (4フレーム 123×20):
+ * 「キャッシュで購入」ボタン (4フレーム 123×20):
  *   _ShopReceiptBuyBtn.png  at (235, 377)  IDC_BTN_HANCOINBUY
  *   → 追加購入ページを外部ブラウザで開く
  *
@@ -30,7 +30,7 @@
  *   アイテム説明    CRect(150,216,351,259) DT_WORDBREAK
  *   価格            CRect(167,271,351,281) DT_RIGHT
  *   保有者名        CRect(57,305,333,316)  DT_RIGHT
- *   GEM残高  CRect(167,328,351,339) DT_RIGHT
+ *   キャッシュ残高  CRect(167,328,351,339) DT_RIGHT
  *   クーポン残高    CRect(167,351,351,362) DT_RIGHT
  *
  * OnOK():
@@ -43,6 +43,7 @@ import * as SignalR from '../../../api/signalr'
 import { showError } from '../../../utils/msgbox'
 import CustomReceiptDlg from './CustomReceiptDlg'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
+import ResponsiveShopTransactionDlg from './ResponsiveShopTransactionDlg'
 
 const IMG      = '/assets/images/game'
 const IMG_ITEM = '/assets/images/game/items/custom'
@@ -52,7 +53,7 @@ const DIALOG_H = 500
 
 /** エラーコード (CUSTOM_ERROR_CODE_*) */
 const ERROR_CODE: Record<number, string> = {
-  1:  'GEMが足りません',
+  1:  'キャッシュが足りません',
   2:  '既に所持しているアイテムです',
   11: 'IDが不正です',
   12: '接続エラー',
@@ -64,7 +65,7 @@ export interface CustomShopItem {
   itemName: string
   itemType: string
   itemDesc: string
-  /** 価格 (円) */
+  /** 価格 (キャッシュ) */
   price:    number
   shopNo:   number
   gameMoney: number
@@ -75,9 +76,8 @@ interface Props {
   pix:        string
   memberName?: string
   hanCoin:    number
-  hanCoupon:  number
   onClose:    () => void
-  onBuyOK?:   () => void
+  onBuyOK?:   (cashCount: number) => void
 }
 
 /** ====================================================================
@@ -119,19 +119,17 @@ function SpriteButton({
  * CMJBuyCustomItemDlg 本体
  * ==================================================================== */
 export default function BuyCustomItemDlg({
-  item, pix, memberName, hanCoin, hanCoupon, onClose, onBuyOK,
+  item, pix, memberName, hanCoin, onClose, onBuyOK,
 }: Props) {
   const [yesDis, setYesDis] = useState(false)
   const [coinBalance] = useState(hanCoin)
-  const [couponBalance] = useState(hanCoupon)
   const layoutMode = useOutgameLayoutMode()
   const isMobile = layoutMode !== 'desktop'
+  const useResponsiveDialog = isMobile || layoutMode === 'desktop'
   const [dialogScale, setDialogScale] = useState(1)
   const [receipt, setReceipt] = useState<{
     coinBefore: number
-    couponBefore: number
     coinAfter: number
-    couponAfter: number
   } | null>(null)
 
   /** mjkc42e レスポンスハンドラを useEffect で登録 */
@@ -211,14 +209,10 @@ export default function BuyCustomItemDlg({
           }
         } else {
           const coinBefore = coinBalance
-          const couponBefore = couponBalance
-          const coinAfter = coinBalance >= 0 ? Math.max(0, coinBalance - item.price) : coinBalance
-          const couponAfter = couponBalance
+          const coinAfter = Number(data.cashCount ?? Math.max(0, coinBalance - item.price))
           setReceipt({
             coinBefore,
-            couponBefore,
             coinAfter,
-            couponAfter,
           })
         }
         resolve()
@@ -240,12 +234,39 @@ export default function BuyCustomItemDlg({
   }
 
   const textStyle = {
-    fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif" as const,
-    fontSize: 12, fontWeight: 'bold' as const,
+    fontFamily: 'var(--majak-font-family-ui)' as const,
+    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold' as const,
     color: '#000', pointerEvents: 'none' as const,
     overflow: 'hidden' as const, whiteSpace: 'nowrap' as const,
   }
-  const yen = (value: number) => value >= 0 ? `${Math.trunc(value)}円` : '---'
+  const yen = (value: number) => value >= 0 ? `${Math.trunc(value).toLocaleString('ja-JP')} MP` : '---'
+
+  if (useResponsiveDialog) {
+    if (receipt) {
+      return <ResponsiveShopTransactionDlg
+        title="購入完了"
+        itemName={item.itemName}
+        itemKind={item.itemType}
+        imageUrl={`${IMG_ITEM}/mj_custom_${String(item.itemId).padStart(2, '0')}.png`}
+        costs={[{ label: '購入価格', value: yen(item.price) }]}
+        balances={[{ label: '購入後のキャッシュ', value: yen(receipt.coinAfter) }]}
+        complete
+        onCancel={() => { onBuyOK?.(receipt.coinAfter); onClose() }}
+      />
+    }
+    return <ResponsiveShopTransactionDlg
+      title="購入しますか？"
+      itemName={item.itemName}
+      itemKind={item.itemType}
+      description={[item.itemDesc]}
+      imageUrl={`${IMG_ITEM}/mj_custom_${String(item.itemId).padStart(2, '0')}.png`}
+      costs={[{ label: '価格', value: yen(item.price) }]}
+      balances={[{ label: '所持キャッシュ', value: yen(coinBalance) }, { label: '購入後のキャッシュ', value: yen(Math.max(0, coinBalance - item.price)) }]}
+      confirmDisabled={yesDis}
+      onConfirm={handleYes}
+      onCancel={onClose}
+    />
+  }
 
   return (
     <>
@@ -254,7 +275,7 @@ export default function BuyCustomItemDlg({
         <div style={{
           position: isMobile ? 'fixed' : 'absolute', inset: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'transparent', zIndex: 250,
+          background: 'transparent', zIndex: 400,
         }}>
       <div style={{ width: DIALOG_W * dialogScale, height: DIALOG_H * dialogScale }}>
       {/* CMJBuyCustomItemDlg クライアント領域: 389×500px */}
@@ -321,23 +342,18 @@ export default function BuyCustomItemDlg({
           &quot;{memberName || pix}&quot;さんの保有状況
         </div>
 
-        {/* ── GEM残高 CRect(167,328,351,339) DT_RIGHT ── */}
+        {/* ── キャッシュ残高 CRect(167,328,351,339) DT_RIGHT ── */}
         <div style={{ ...textStyle, position: 'absolute', left: 167, top: 328, width: 184, textAlign: 'right' }}>
           {yen(coinBalance)}
         </div>
 
-        {/* ── クーポン残高 CRect(167,351,351,362) DT_RIGHT ── */}
-        <div style={{ ...textStyle, position: 'absolute', left: 167, top: 351, width: 184, textAlign: 'right' }}>
-          {yen(couponBalance)}
-        </div>
-
-        {/* ── GEMで購入ボタン _ShopReceiptBuyBtn.png (492×20, 4フレーム 123×20) at (235, 377) ── */}
+        {/* ── キャッシュで購入ボタン _ShopReceiptBuyBtn.png (492×20, 4フレーム 123×20) at (235, 377) ── */}
         <SpriteButton
           src={SHOP_RECEIPT_BUY_BTN}
           frameW={123} frameH={20}
           x={235} y={377}
           onClick={handleBuy}
-          title="GEMで購入"
+          title="キャッシュで購入"
         />
 
         {/* ── Yes ボタン mj_shp_btn_yes.png (340×29, 4フレーム 85×29) at (99, 458) ── */}
@@ -371,11 +387,9 @@ export default function BuyCustomItemDlg({
           price={item.price}
           gameMoney={item.gameMoney}
           coinBefore={receipt.coinBefore}
-          couponBefore={receipt.couponBefore}
           coinAfter={receipt.coinAfter}
-          couponAfter={receipt.couponAfter}
           onClose={() => {
-            onBuyOK?.()
+            onBuyOK?.(receipt.coinAfter)
             onClose()
           }}
         />

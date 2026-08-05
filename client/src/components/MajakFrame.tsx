@@ -20,6 +20,7 @@
  *     → m_MajakGame.OnGameConf() → CMJCfgDlg::DoModal()
  */
 import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { useLocation } from 'react-router-dom'
 import CfgDlg, { loadMajakConfig, saveMajakConfig, type MJConfig } from '../screens/outgame/dialogs/CfgDlg'
 import { configureMajakSound } from '../utils/majakSound'
@@ -39,6 +40,11 @@ const MAJAK3 = '/assets/images/game'
 const HOWTOPLAY_URL = 'http://redirect.hange.jp/majak2/help/guide/?m=guide'
 export const MAJAK_ACCUSE_EVENT = 'majak:accuse-click'
 export const MAJAK_EXIT_REQUEST_EVENT = 'majak:exit-request'
+const IS_NATIVE_APP = Capacitor.isNativePlatform()
+
+type LockableScreenOrientation = ScreenOrientation & {
+  lock?: (orientation: 'landscape') => Promise<void>
+}
 
 // ── スプライトボタン (4フレーム: normal/disabled/hover/pressed) ──────
 function TitleBtn({
@@ -134,12 +140,19 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
     window.blur()
   }
 
+  const enterFullscreen = () => {
+    if (document.fullscreenElement || !document.fullscreenEnabled) return
+    void document.documentElement.requestFullscreen()
+      .then(() => (window.screen.orientation as LockableScreenOrientation | undefined)?.lock?.('landscape'))
+      .catch(() => {})
+  }
+
   const handleMaximize = () => {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {})
       return
     }
-    document.documentElement.requestFullscreen().catch(() => {})
+    enterFullscreen()
   }
 
   const handleClose = () => {
@@ -178,6 +191,7 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
           <header className="majak-mobile-frame__bar">
             <div className="majak-mobile-frame__brand">麻雀4</div>
             <div className="majak-mobile-frame__tools">
+              {!IS_NATIVE_APP && <button type="button" onClick={enterFullscreen} title="全画面表示">全画面</button>}
               <button type="button" onClick={() => window.open(HOWTOPLAY_URL, '_blank', 'noopener,noreferrer')}>遊び方</button>
               <button type="button" onClick={handleOpenSettings}>設定</button>
               {showMobileExit && <button type="button" onClick={handleClose}>終了</button>}
@@ -256,14 +270,16 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
           title="最小化"
         />
 
-        <TitleBtn
-          src={roomSkinSrc(isFullScreen ? 'mj_rstbox' : 'mj_maxbox')}
-          fallbackSrc={roomSkinFallbackSrc(isFullScreen ? 'mj_rstbox' : 'mj_maxbox')}
-          frameW={21} frameH={23}
-          x={970} y={4}
-          onClick={handleMaximize}
-          title="最大化"
-        />
+        {!IS_NATIVE_APP && (
+          <TitleBtn
+            src={roomSkinSrc(isFullScreen ? 'mj_rstbox' : 'mj_maxbox')}
+            fallbackSrc={roomSkinFallbackSrc(isFullScreen ? 'mj_rstbox' : 'mj_maxbox')}
+            frameW={21} frameH={23}
+            x={970} y={4}
+            onClick={handleMaximize}
+            title="最大化"
+          />
+        )}
 
         <TitleBtn
           src={roomSkinSrc('mj_clsbox')}

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * BuyExchangeItemDlg — CMJBuyItemDlg2 相当の龍宝石/麻雀コイン交換確認 (AP-09 §3-2-5)
  * レガシー: legacy/client/HgMajak2/MJBuyItemDlg2.h/cpp
  *
@@ -43,6 +43,7 @@ import * as SignalR from '../../../api/signalr'
 import { showError, buyMajItemErrorMessage } from '../../../utils/msgbox'
 import ExchangeItemReceiptDlg from './ExchangeItemReceiptDlg'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
+import ResponsiveShopTransactionDlg from './ResponsiveShopTransactionDlg'
 
 const IMG = '/assets/images/game'
 const DIALOG_W = 389
@@ -117,6 +118,7 @@ export default function BuyExchangeItemDlg({
   const [receipt, setReceipt] = useState<{ userGem: number; userMoney: number } | null>(null)
   const layoutMode = useOutgameLayoutMode()
   const isMobile = layoutMode !== 'desktop'
+  const useResponsiveDialog = isMobile || layoutMode === 'desktop'
   const [dialogScale, setDialogScale] = useState(1)
 
   /** mjkc20e レスポンスハンドラを useEffect で登録 */
@@ -180,7 +182,7 @@ export default function BuyExchangeItemDlg({
    */
   const handleYes = async () => {
     if (userGem < item.costGem || userMoney < item.costMoney) {
-      showError('龍珠もしくは麻雀コインが足りないため交換できません 。')
+      showError('龍珠またはGPが足りないため交換できません。')
       return
     }
     setYesDis(true)
@@ -218,19 +220,8 @@ export default function BuyExchangeItemDlg({
     if (closeAfterResponse) onClose()
   }
 
-  const makeMoneyStr = (n: number) => {
-    const sign = n < 0 ? '-' : ''
-    const digits = String(Math.abs(Math.trunc(n)))
-    const units = ['', '万', '億', '兆', '京']
-    const parts: string[] = []
-    for (let end = digits.length, unit = 0; end > 0; end -= 4, unit++) {
-      const start = Math.max(0, end - 4)
-      const part = Number(digits.slice(start, end))
-      if (part > 0) parts.unshift(`${part}${units[unit] ?? ''}`)
-    }
-    return `${sign}${parts.length > 0 ? parts.join('') : '0'}円`
-  }
-  const gemStr       = (n: number) => `${n}個`
+  const makeMoneyStr = (n: number) => `${Math.trunc(n).toLocaleString('ja-JP')} GP`
+  const gemStr       = (n: number) => `${Math.trunc(n).toLocaleString('ja-JP')}個`
 
   /* 利用可能期間テキスト (setItemInfo 相当) */
   const periodStr = item.limitDays < 0
@@ -243,8 +234,8 @@ export default function BuyExchangeItemDlg({
   const right = (left: number, top: number, width: number, height: number) => ({
     position: 'absolute' as const,
     left, top, width, height,
-    fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif" as const,
-    fontSize: 12, fontWeight: 'bold' as const,
+    fontFamily: 'var(--majak-font-family-ui)' as const,
+    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold' as const,
     color: '#000', textAlign: 'right' as const,
     pointerEvents: 'none' as const,
     overflow: 'hidden' as const, whiteSpace: 'nowrap' as const,
@@ -252,12 +243,42 @@ export default function BuyExchangeItemDlg({
   const center = (left: number, top: number, width: number, height: number) => ({
     position: 'absolute' as const,
     left, top, width, height,
-    fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif" as const,
-    fontSize: 12, fontWeight: 'bold' as const,
+    fontFamily: 'var(--majak-font-family-ui)' as const,
+    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold' as const,
     color: '#000', textAlign: 'center' as const,
     pointerEvents: 'none' as const,
     overflow: 'hidden' as const, whiteSpace: 'nowrap' as const,
   })
+
+  if (useResponsiveDialog) {
+    const period = item.limitDays < 0 ? (item.quantity <= 0 ? '永久' : `${item.quantity}回`) : `${item.limitDays}日間`
+    if (receipt) {
+      return <ResponsiveShopTransactionDlg
+        title="交換完了"
+        itemName={item.itemName}
+        itemKind={item.itemKind}
+        description={[item.itemGuid1, item.itemGuid2].filter(Boolean)}
+        imageUrl={item.imageUrl}
+        costs={[{ label: '使用した龍珠', value: gemStr(item.costGem) }, { label: '使用したGP', value: makeMoneyStr(item.costMoney) }, { label: '利用期間', value: period }]}
+        balances={[{ label: '残り龍珠', value: gemStr(receipt.userGem) }, { label: '残りGP', value: makeMoneyStr(receipt.userMoney) }]}
+        complete
+        onCancel={onClose}
+      />
+    }
+    return <ResponsiveShopTransactionDlg
+      title="交換しますか？"
+      itemName={item.itemName}
+      itemKind={item.itemKind}
+      description={[item.itemGuid1, item.itemGuid2].filter(Boolean)}
+      imageUrl={item.imageUrl}
+      costs={[{ label: '必要な龍珠', value: gemStr(item.costGem) }, { label: '必要なGP', value: makeMoneyStr(item.costMoney) }, { label: '利用期間', value: period }]}
+      balances={[{ label: '所持龍珠', value: gemStr(userGem) }, { label: '所持GP', value: makeMoneyStr(userMoney) }]}
+      confirmLabel="交換する"
+      confirmDisabled={yesDis}
+      onConfirm={handleYes}
+      onCancel={onClose}
+    />
+  }
 
   return (
     <>
@@ -266,7 +287,7 @@ export default function BuyExchangeItemDlg({
         <div style={{
           position: isMobile ? 'fixed' : 'absolute', inset: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'transparent', zIndex: 300,
+          background: 'transparent', zIndex: 400,
         }}>
       <div style={{ width: DIALOG_W * dialogScale, height: DIALOG_H * dialogScale }}>
       {/* BuyExchangeItemDlg クライアント領域: 389×500px */}

@@ -326,11 +326,7 @@ export default function PaifWnd() {
   const playDisabled = !hasPaifu || (isPlaying ? !naviEnabled : !canNext)
 
   return (
-    <div style={{
-      width: '100vw', height: '100vh',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: '#000', overflow: 'hidden',
-    }}>
+    <div className="majak-ingame-viewport" style={{ background: '#000' }}>
 
       {/* CMJGameWnd / AP-09 §5 インゲーム解像度: 1019×735 */}
       <div style={{ position: 'relative', width: 1019, height: 735, flex: '0 0 auto', transform: desktopScale === 1 ? undefined : `scale(${desktopScale})`, transformOrigin: 'center center' }} onWheel={handleWheel}>

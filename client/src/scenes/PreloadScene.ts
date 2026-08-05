@@ -221,15 +221,9 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.spritesheet('mj_recPaeSd', `${IMG}/mj_recPaeSd.png`, { frameWidth: 28, frameHeight: 22 })
     this.load.spritesheet('mj_recPaeSm', `${IMG}/mj_recPaeSm.png`, { frameWidth: 13, frameHeight: 19 })
     this.load.image('mj_recPaeBk', `${IMG}/mj_recPaeBk.png`)
-    this.load.image('mj_recArrow', `${IMG}/mj_recArrow.png`)
-    this.load.image('mj_recArrowS', `${IMG}/mj_recArrowS.png`)
     this.load.spritesheet('mj_recNotesIcn', `${IMG}/mj_recNotesIcn.png`, { frameWidth: 20, frameHeight: 14 })
     this.load.image('mj_recReachBar', `${IMG}/mj_recReachBar.png`)
-    this.load.image('mj_recRyukyokuIcn', `${IMG}/mj_recRyukyokuIcn.png`)
-    this.load.spritesheet('mj_recAgari', `${IMG}/mj_recAgari.png`, { frameWidth: 55, frameHeight: 16 })
     this.load.spritesheet('mj_num_rh', `${IMG}/mj_num_rh.png`, { frameWidth: 10, frameHeight: 14 })
-    this.load.spritesheet('mj_recPntNum', `${IMG}/mj_recPntNum.png`, { frameWidth: 11, frameHeight: 14 })
-    this.load.spritesheet('mj_recPntNumMns', `${IMG}/mj_recPntNumMns.png`, { frameWidth: 11, frameHeight: 14 })
     this.load.spritesheet('mj_opt_0', `${IMG}/mj_opt_0.png`, { frameWidth: 17, frameHeight: 17 })
     this.load.spritesheet('mj_opt_1', `${IMG}/mj_opt_1.png`, { frameWidth: 17, frameHeight: 17 })
     this.load.spritesheet('mj_opt_2', `${IMG}/mj_opt_2.png`, { frameWidth: 17, frameHeight: 17 })
@@ -248,10 +242,7 @@ export default class PreloadScene extends Phaser.Scene {
     for (const key of ['mj_recPaeBk']) {
       loadBgSkinImage(key)
     }
-    loadBgSkinSheet('mj_recAgari', { frameWidth: 55, frameHeight: 16 })
     loadBgSkinSheet('mj_num_rh', { frameWidth: 10, frameHeight: 14 })
-    loadBgSkinSheet('mj_recPntNum', { frameWidth: 11, frameHeight: 14 })
-    loadBgSkinSheet('mj_recPntNumMns', { frameWidth: 11, frameHeight: 14 })
 
     /* ── 操作ボタン (4フレーム スプライト) ── */
     this.load.spritesheet('btn_ron',   `${IMG}/mj_btRon.png`,   { frameWidth: 66, frameHeight: 40 })
@@ -289,17 +280,6 @@ export default class PreloadScene extends Phaser.Scene {
     for (const [key, file] of btns) {
       this.load.image(key, `${IMG}/${file}`)
     }
-
-    /* ── 効果音 ── */
-    this.load.audio('se_throw', '/assets/sounds/game/Sounds/mjkthrow.wav')
-    this.load.audio('se_draw',  '/assets/sounds/game/Sounds/mjkdraw.wav')
-    this.load.audio('se_reach', '/assets/sounds/game/Sounds/mjkfreach.wav')
-    this.load.audio('se_ron',   '/assets/sounds/game/Sounds/mjkfrong.wav')
-    this.load.audio('se_tsumo', '/assets/sounds/game/Sounds/mjkfsumo.wav')
-    this.load.audio('se_pon',   '/assets/sounds/game/Sounds/mjkfpong.wav')
-    this.load.audio('se_chi',   '/assets/sounds/game/Sounds/mjkfchi.wav')
-    this.load.audio('se_kan',   '/assets/sounds/game/Sounds/mjkfkang.wav')
-    this.load.audio('se_hua',   '/assets/sounds/game/Sounds/mjkhua.wav')
 
     for (const prefix of ['ron', 'tumo', 'kan', 'reach', 'pon', 'chi']) {
       for (let frame = 1; frame <= 14; frame++) {

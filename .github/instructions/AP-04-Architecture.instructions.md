@@ -77,6 +77,10 @@ GameId (SVCID):  MAJAK4
   "RoomChargeDefault":  200,   // 通常チャンネルの室料
   "RoomChargeGrade":    100    // 段位チャンネルの室料
 },
+"ChannelServerSettings": {
+  "ServerUrl": "http://localhost:5000",
+  "LobbySessionLeaseSeconds": 90
+},
 "RuntimeFlag": {
   "SecureLaunching": true,
   "Hangame2005":     false,

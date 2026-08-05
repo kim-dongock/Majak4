@@ -50,8 +50,11 @@ export default function UserDetailPage() {
           <Descriptions.Item label="ゲームマネー">
             {player.gameMoney.toLocaleString()} G
           </Descriptions.Item>
-          <Descriptions.Item label="GEM">
-            <Tag color="purple">{player.gemCount.toLocaleString()} GEM</Tag>
+          <Descriptions.Item label="龍珠">
+            <Tag color="purple">{player.gemCount.toLocaleString()} 個</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="キャッシュ">
+            <Tag color="blue">{player.cashCount.toLocaleString()} (有償 {player.paidCashCount.toLocaleString()} / 無償 {player.freeCashCount.toLocaleString()})</Tag>
           </Descriptions.Item>
           <Descriptions.Item label="レーティング">{player.commonRating}</Descriptions.Item>
           <Descriptions.Item label="経験値">{player.experience.toLocaleString()}</Descriptions.Item>
@@ -69,8 +72,8 @@ export default function UserDetailPage() {
       </Card>
 
       <Space style={{ marginTop: 16 }}>
-        <Button onClick={() => navigate(`/gem/adjust?memberNo=${player.memberNo}`)}>
-          GEM 支給・調整
+        <Button onClick={() => navigate(`/cash/adjust?memberNo=${player.memberNo}`)}>
+          キャッシュ 支給・調整
         </Button>
       </Space>
     </>

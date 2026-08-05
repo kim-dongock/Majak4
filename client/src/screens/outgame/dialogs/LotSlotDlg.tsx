@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJLotSlotDlg 相当 — 抽選スロットダイアログ (AP-09 §3-2-11)
  * レガシー: legacy/client/HgMajak2/MJLotSlotDlg.h/cpp
  *
@@ -84,16 +84,7 @@ interface Props {
 }
 
 function moneyString(value: number): string {
-  const sign = value < 0 ? '-' : ''
-  const digits = String(Math.abs(Math.trunc(value)))
-  const units = ['', '万', '億', '兆', '京']
-  const parts: string[] = []
-  for (let end = digits.length, unit = 0; end > 0; end -= 4, unit++) {
-    const start = Math.max(0, end - 4)
-    const part = Number(digits.slice(start, end))
-    if (part > 0) parts.unshift(`${part}${units[unit] ?? ''}`)
-  }
-  return `${sign}${parts.length > 0 ? parts.join('') : '0'}`
+  return Math.trunc(value).toLocaleString('ja-JP')
 }
 
 function createLotValues(totalAmount: number, count: number): number[] {
@@ -302,27 +293,27 @@ export default function LotSlotDlg({
         )}
 
         <div style={{ position: 'absolute', left: 41, top: 53, width: 51, height: 13,
-          fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif", fontSize: 13,
+          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
           fontWeight: 'bold', color: 'rgb(6,65,2)', lineHeight: '13px', textAlign: 'center', overflow: 'hidden', pointerEvents: 'none' }}>
           {itemName}
         </div>
         <div style={{ position: 'absolute', left: 220, top: 28, width: 51, height: 13,
-          fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif", fontSize: 13,
+          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
           fontWeight: 'bold', color: 'rgb(6,65,2)', lineHeight: '13px', textAlign: 'right', pointerEvents: 'none' }}>
           {moneyString(totalAmount)}
         </div>
         <div style={{ position: 'absolute', left: 53, top: 116, width: 43, height: 15,
-          fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif", fontSize: 13,
+          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
           fontWeight: 'bold', color: '#fff', lineHeight: '15px', textAlign: 'right', pointerEvents: 'none' }}>
           {lotteryCount}回
         </div>
         <div style={{ position: 'absolute', left: 35, top: 184, width: 51, height: 13,
-          fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif", fontSize: 13,
+          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
           fontWeight: 'bold', color: 'rgb(6,65,2)', lineHeight: '13px', textAlign: 'right', pointerEvents: 'none' }}>
           {remaining}
         </div>
         <div style={{ position: 'absolute', left: 221, top: 184, width: 142, height: 13,
-          fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif", fontSize: 13,
+          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
           fontWeight: 'bold', color: 'rgb(6,65,2)', lineHeight: '13px', textAlign: 'right', pointerEvents: 'none' }}>
           {moneyString(amount)}
         </div>

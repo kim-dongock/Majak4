@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
   // public/ フォルダは既存の assets が入っているためそのまま使用
   publicDir: 'public',
   server: {
-    port: 3000,
+    port: 5173,
     host: true,
     allowedHosts: [
       'localhost',

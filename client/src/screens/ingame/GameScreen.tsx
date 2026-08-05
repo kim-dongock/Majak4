@@ -22,6 +22,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useCustomSkinStore } from '../../store/customSkinStore'
 import { getAvatarUrl, getDefaultAvatarUrl } from '../../utils/resources'
 import { getChannelServerUrl } from '../../api/channel'
+import { getTabSessionId } from '../../utils/tabSession'
 import { playMajakChat, playMajakSfx, playMajakSid, SID_DRAW, SID_EXIT, SID_JOIN, stopMajakBgm } from '../../utils/majakSound'
 import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 import { useDesktopScreenScale } from '../../hooks/useDesktopScreenScale'
@@ -430,6 +431,7 @@ function buildEnterChannelPayload(channelId: string, player: ReturnType<typeof u
     avatarId,
     k7e: avatarId,
     password: player?.password ?? '',
+    tabId: getTabSessionId(),
   }
 }
 
@@ -627,7 +629,7 @@ function CallAvatarPopup({ item }: { item: ActiveCallAvatar }) {
         width: item.w,
         height: item.h,
         objectFit: 'contain',
-        imageRendering: 'pixelated',
+        imageRendering: 'auto',
       }}
     />
   )
@@ -652,9 +654,9 @@ function TournamentTotalResultDialog({ items, players, onClose }: {
               {isNpc ? (
                 <img src={`${IMG}/mj_aiAvtrL.png`} alt="" draggable={false} style={{ position: 'absolute', left: 41 + offX, top: 63, width: 45, height: 64, objectFit: 'cover' }} />
               ) : (
-                <img src={getAvatarUrl(player?.avatarId ?? null)} alt="" draggable={false} style={{ position: 'absolute', left: 41 + offX, top: 63, width: 45, height: 64, objectFit: 'cover' }} onError={e => { e.currentTarget.src = getDefaultAvatarUrl('male') }} />
+                <img src={getAvatarUrl(player?.avatarId ?? null)} alt="" draggable={false} style={{ position: 'absolute', left: 41 + offX, top: 63, width: 45, height: 64, objectFit: 'cover', imageRendering: 'auto' }} onError={e => { e.currentTarget.src = getDefaultAvatarUrl('male') }} />
               )}
-              <div style={{ position: 'absolute', left: 13 + offX, top: 127, width: 100, height: 20, color: isNpc ? '#f00' : '#fff', font: 'bold 14px MS Gothic, monospace', lineHeight: '20px', textAlign: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              <div style={{ position: 'absolute', left: 13 + offX, top: 127, width: 100, height: 20, color: isNpc ? '#f00' : '#fff', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(14px * var(--majak-type-scale))', fontWeight: 'bold', lineHeight: '20px', textAlign: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                 {isNpc ? '<トントン>' : displayName}
               </div>
               <span style={{ position: 'absolute', left: 44 + offX, top: 155, width: 39, height: 25, backgroundImage: `url(${IMG}/mj_ranking_L.png)`, backgroundPosition: `${-idx * 39}px 0`, backgroundRepeat: 'no-repeat', imageRendering: 'pixelated' }} />
@@ -879,35 +881,14 @@ export default function GameScreen() {
       setSyncLoadingVisible(Boolean(detail.active))
     }
     const onConnectionLost = () => setSyncLoadingVisible(true)
-    const onReconnected = async () => {
-      setSyncLoadingVisible(true)
-      const channelId = gameState?.channelId
-      const numericRoomId = Number(roomId ?? 0)
-      if (!channelId || !Number.isFinite(numericRoomId) || numericRoomId <= 0) return
-      try {
-        await SignalR.send('c1e', buildEnterChannelPayload(channelId, useAuthStore.getState().player))
-        const isViewer = Boolean(gameState?.isViewer)
-        await SignalR.send(isViewer ? 'c18e' : 'c14e', {
-          roomId: numericRoomId,
-          k42e: numericRoomId,
-          roomPassword: '',
-          k67e: '',
-          ...(isViewer ? { playerType: 'v5e', k57e: 'v5e' } : {}),
-        })
-      } catch (error) {
-        console.error('[GameScreen] reconnect room registration failed', error)
-      }
-    }
     window.addEventListener(GAME_SYNC_EVENT, onSync)
     SignalR.onConnectionLost(onConnectionLost)
-    SignalR.onReconnected(onReconnected)
     return () => {
       window.removeEventListener(GAME_SYNC_EVENT, onSync)
       SignalR.offConnectionLost(onConnectionLost)
-      SignalR.offReconnected(onReconnected)
       if (syncLoadingOffTimerRef.current !== null) window.clearTimeout(syncLoadingOffTimerRef.current)
     }
-  }, [gameState?.channelId, gameState?.isViewer, roomId])
+  }, [])
 
   useEffect(() => {
     const onCallAvatar = (event: Event) => {
@@ -1313,6 +1294,32 @@ export default function GameScreen() {
         prevNlevel: u.prevNlevel !== undefined ? Number(u.prevNlevel) : undefined,
         nlevel:    u.nlevel !== undefined ? Number(u.nlevel) : undefined,
         levelName: String(u.slevel ?? ''),
+        rating: u.rating !== undefined ? Number(u.rating) : undefined,
+        ratingChange: u.ratingChange !== undefined ? Number(u.ratingChange) : undefined,
+        matchCnt: u.matchCnt !== undefined ? Number(u.matchCnt) : undefined,
+        winCnt: u.winCnt !== undefined ? Number(u.winCnt) : undefined,
+        defeatCnt: u.defeatCnt !== undefined ? Number(u.defeatCnt) : undefined,
+        drawCnt: u.drawCnt !== undefined ? Number(u.drawCnt) : undefined,
+        gameMoney: u.gammoney !== undefined ? Number(u.gammoney) : undefined,
+        moneyChange: u.moneyChange !== undefined ? Number(u.moneyChange) : undefined,
+        dealerFee: u.dealerFee !== undefined ? Number(u.dealerFee) : undefined,
+        gemCount: u.gemCount !== undefined ? Number(u.gemCount) : undefined,
+        experience: u.experience !== undefined ? Number(u.experience) : undefined,
+        expGain: u.expGain !== undefined ? Number(u.expGain) : undefined,
+        horaCnt: u.horaCnt !== undefined ? Number(u.horaCnt) : undefined,
+        horaPoint: u.horaPoint !== undefined ? Number(u.horaPoint) : undefined,
+        hojuCnt: u.hojuCnt !== undefined ? Number(u.hojuCnt) : undefined,
+        richiCnt: u.richiCnt !== undefined ? Number(u.richiCnt) : undefined,
+        furoCnt: u.furoCnt !== undefined ? Number(u.furoCnt) : undefined,
+        doraCnt: u.doraCnt !== undefined ? Number(u.doraCnt) : undefined,
+        richiHoraCnt: u.richiHoraCnt !== undefined ? Number(u.richiHoraCnt) : undefined,
+        prevGradeLevel: u.prevGradeLevel !== undefined ? Number(u.prevGradeLevel) : undefined,
+        gradeLevel: u.gradeLevel !== undefined ? Number(u.gradeLevel) : undefined,
+        prevGradePoint: u.prevGradePoint !== undefined ? Number(u.prevGradePoint) : undefined,
+        gradePoint: u.gradePoint !== undefined ? Number(u.gradePoint) : undefined,
+        gradeAddPoint: u.gradeAddPoint !== undefined ? Number(u.gradeAddPoint) : undefined,
+        gradeNextPoint: u.gradeNextPoint !== undefined ? Number(u.gradeNextPoint) : undefined,
+        gradeUpDown: u.gradeUpDown !== undefined ? Number(u.gradeUpDown) : undefined,
         isMe:      String(u.pix ?? u.k3e ?? '') === myPix,
       }))
       const mySetBal = players.find(player => player.isMe)?.setBal ?? 0
@@ -1744,7 +1751,7 @@ export default function GameScreen() {
   }
 
   return (
-    <div style={{ width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+    <div className="majak-ingame-viewport">
     <div className="majak-game-screen" style={{ position: 'relative', width: GAME_WIDTH, height: GAME_HEIGHT, flex: '0 0 auto', overflow: 'hidden', background: '#000', transform: desktopScale === 1 ? undefined : `scale(${desktopScale})`, transformOrigin: 'center center' }}>
       {/* Phaser マウントコンテナ */}
       <div
@@ -1768,8 +1775,8 @@ export default function GameScreen() {
             top: 49,
             width: 126,
             height: 14,
-            fontFamily: "'MS PGothic', 'MS Gothic', sans-serif",
-            fontSize: 12,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(12px * var(--majak-type-scale))',
             lineHeight: '14px',
             color: legacyPalette.roomTitle,
             overflow: 'hidden',
@@ -1813,8 +1820,8 @@ export default function GameScreen() {
             height: 130,
             overflowY: 'auto',
             overflowX: 'hidden',
-            fontFamily: "'MS Gothic', monospace",
-            fontSize: 11,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(11px * var(--majak-type-scale))',
             color: '#000',
             background: 'transparent',
             pointerEvents: 'none',
@@ -1837,8 +1844,8 @@ export default function GameScreen() {
             height: 258,
             overflowY: 'auto',
             overflowX: 'hidden',
-            fontFamily: "'MS Gothic', monospace",
-            fontSize: 11,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(11px * var(--majak-type-scale))',
             color: '#000',
             background: 'transparent',
           }}
@@ -1873,8 +1880,8 @@ export default function GameScreen() {
             top: 624,
             width: 201,
             height: 16,
-            fontFamily: "'MS Gothic', monospace",
-            fontSize: 11,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(11px * var(--majak-type-scale))',
             background: legacyPalette.chatEditBack,
             color: legacyPalette.chatEditText,
             border: 'none',

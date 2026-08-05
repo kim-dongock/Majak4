@@ -40,6 +40,7 @@
 import { useEffect, useRef, useState } from 'react'
 import * as SignalR from '../../../api/signalr'
 import { showError, showMessage } from '../../../utils/msgbox'
+import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 const IMG = '/assets/images/game'
 const MISSION_W = 697
@@ -47,6 +48,22 @@ const MISSION_H = 527
 
 /** 週間報酬 必要ポイント */
 const WEEKLY_THRESHOLDS = [50, 100, 150, 200, 300, 400, 500, 600]
+
+const DAILY_MISSION_NAMES = [
+  'ログインする',
+  '東風2回 / 半荘1回プレイ',
+  '東風4回 / 半荘2回プレイ',
+  '東風6回 / 半荘3回プレイ',
+  '東風8回 / 半荘4回プレイ',
+  '東風10回 / 半荘5回プレイ',
+  '1位を1回取る',
+  '1位を2回取る',
+  '龍珠交換をする',
+  '龍珠を麻雀で獲得する',
+  'コイン / 便利アイテム購入',
+]
+
+const DAILY_MISSION_POINTS = [5, 5, 5, 5, 5, 10, 5, 10, 10, 20, 20]
 
 interface MissionData {
   pointDayOwn:   number
@@ -104,6 +121,133 @@ function SpriteButton({
       }}
     />
   )
+}
+
+function ResponsiveMissionDialog({
+  data,
+  onReceive,
+  onRefresh,
+  onClose,
+}: {
+  data: MissionData
+  onReceive: (rewardId: number) => void
+  onRefresh: () => void
+  onClose: () => void
+}) {
+  const layoutMode = useOutgameLayoutMode()
+  const modeClass = layoutMode === 'desktop' ? '' : ` mission-dialog--${layoutMode}`
+  const dailyProgress = data.pointDayMax > 0 ? Math.min(100, data.pointDayOwn / data.pointDayMax * 100) : 0
+  const weeklyProgress = data.pointWeekMax > 0 ? Math.min(100, data.pointWeekOwn / data.pointWeekMax * 100) : 0
+
+  return <div className={`mission-dialog-overlay${modeClass}`} role="dialog" aria-modal="true" aria-label="ミッション">
+    <section className={`mission-dialog${modeClass}`}>
+      <header className="mission-dialog__header">
+        <div><p>MAJAK4 MISSION</p><h2>ミッション</h2></div>
+        <div className="mission-dialog__header-actions">
+          <button type="button" onClick={onRefresh}>更新</button>
+          <button type="button" onClick={onClose} aria-label="閉じる">x</button>
+        </div>
+      </header>
+      <div className="mission-dialog__summary">
+        <div><span>本日の達成</span><strong>{data.pointDayOwn} / {data.pointDayMax}</strong><i><b style={{ width: `${dailyProgress}%` }} /></i></div>
+        <div><span>今週のポイント</span><strong>{data.pointWeekOwn} / {data.pointWeekMax}</strong><i><b style={{ width: `${weeklyProgress}%` }} /></i></div>
+      </div>
+      <main className="mission-dialog__content">
+        <section className="mission-dialog__daily">
+          <h3>デイリーミッション</h3>
+          <ol>
+            {DAILY_MISSION_NAMES.map((name, index) => {
+              const completed = data.dailyMissions[index] === 1
+              return <li key={name} className={completed ? 'is-complete' : ''}>
+                <span className="mission-dialog__check">{completed ? '✓' : ''}</span>
+                <span>{name}</span><b>{DAILY_MISSION_POINTS[index]} P</b>
+              </li>
+            })}
+          </ol>
+        </section>
+        <section className="mission-dialog__weekly">
+          <h3>ウィークリー報酬</h3>
+          <div className="mission-dialog__reward-grid">
+            {WEEKLY_THRESHOLDS.map((threshold, index) => {
+              const available = data.weeklyRewards[index] === 0
+              const reached = data.pointWeekOwn >= threshold
+              const label = available ? '受け取る' : reached ? '受取済' : `あと ${threshold - data.pointWeekOwn} P`
+              return <article key={threshold} className={available ? 'is-available' : ''}>
+                <span>{threshold} P</span>
+                <strong>週間報酬 {index + 1}</strong>
+                <button type="button" disabled={!available} onClick={() => onReceive(index + 1)}>{label}</button>
+              </article>
+            })}
+          </div>
+        </section>
+      </main>
+      <footer><button type="button" onClick={onClose}>閉じる</button></footer>
+    </section>
+    <style>{`
+      .mission-dialog-overlay { position: absolute; inset: 0; z-index: 250; display: grid; place-items: center; padding: 20px; overflow: hidden; background: rgba(8,16,20,.7); box-sizing: border-box; font-family: var(--majak-font-family-ui); }
+      .mission-dialog { width: min(1050px, 100%); height: min(650px, 100%); min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: #172323; background: #f5f2e9; border: 1px solid #7d8e80; box-shadow: 0 24px 72px rgba(0,0,0,.42); }
+      .mission-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 24px; color: #fff; background: #174b43; }
+      .mission-dialog__header p { margin: 0; color: #d7b95d; font: 700 calc(10px * var(--majak-type-scale))/1 var(--majak-font-family-ui); letter-spacing: 1px; }
+      .mission-dialog__header h2 { margin: 2px 0 0; font-size: calc(25px * var(--majak-type-scale)); font-weight: 700; letter-spacing: 0; }
+      .mission-dialog__header-actions { display: flex; gap: 8px; }
+      .mission-dialog__header button { min-width: 36px; height: 36px; border: 1px solid rgba(255,255,255,.7); border-radius: 0; padding: 0 10px; color: #fff; background: transparent; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+      .mission-dialog__header-actions button:last-child { font-size: calc(22px * var(--majak-type-scale)); }
+      .mission-dialog__summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #c1cbc0; border-bottom: 1px solid #c1cbc0; }
+      .mission-dialog__summary > div { min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; padding: 11px 18px; background: #f7faf4; }
+      .mission-dialog__summary span { color: #607069; font: 700 calc(11px * var(--majak-type-scale))/1 var(--majak-font-family-ui); }
+      .mission-dialog__summary strong { color: #1f4d42; font: 700 calc(17px * var(--majak-type-scale))/1.1 var(--majak-font-family-ui); text-align: right; }
+      .mission-dialog__summary i { grid-column: 1 / -1; height: 6px; overflow: hidden; background: #d8e0d5; }
+      .mission-dialog__summary b { display: block; height: 100%; background: #b84228; }
+      .mission-dialog__content { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 18px; padding: 18px 24px; overflow: auto; }
+      .mission-dialog__content section { min-width: 0; }
+      .mission-dialog__content h3 { margin: 0 0 10px; color: #31473f; font-size: calc(16px * var(--majak-type-scale)); font-weight: 700; }
+      .mission-dialog__daily h3 { font-size: var(--majak-font-17); }
+      .mission-dialog__daily ol { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+      .mission-dialog__daily li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 9px; align-items: center; min-height: 34px; padding: 7px 10px; border: 1px solid #d2dacf; background: #fffdf8; color: #52645d; font: var(--majak-font-13)/1.3 var(--majak-font-family-ui); }
+      .mission-dialog__daily li.is-complete { color: #1f4d42; border-color: #aebfab; background: #edf3e8; }
+      .mission-dialog__check { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid #aeb8ae; color: #fff; background: #fff; font: 700 var(--majak-font-15)/1 var(--majak-font-family-ui); }
+      .mission-dialog__daily .is-complete .mission-dialog__check { border-color: #1c5a4d; background: #1c5a4d; }
+      .mission-dialog__daily b { color: #a06425; font: 700 var(--majak-font-12)/1 var(--majak-font-family-ui); white-space: nowrap; }
+      .mission-dialog__weekly h3 { font-size: var(--majak-font-15); }
+      .mission-dialog__reward-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .mission-dialog__reward-grid article { min-width: 0; min-height: 105px; display: flex; flex-direction: column; gap: 7px; padding: 11px; border: 1px solid #c8d0c2; background: #fffdf8; }
+      .mission-dialog__reward-grid article.is-available { border-top: 4px solid #d19f35; background: #ecf0e4; }
+      .mission-dialog__reward-grid span { color: #a06425; font: 700 var(--majak-font-10)/1 var(--majak-font-family-ui); }
+      .mission-dialog__reward-grid strong { color: #1f302b; font-size: var(--majak-font-15); font-weight: 400; }
+      .mission-dialog__reward-grid button, .mission-dialog footer button { margin-top: auto; border: 0; border-radius: 3px; padding: 9px 13px; color: #fff; background: #1c5a4d; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+      .mission-dialog__reward-grid button { font-size: var(--majak-font-12); }
+      .mission-dialog__reward-grid button:disabled { color: #87918c; background: #d7ddd5; cursor: not-allowed; }
+      .mission-dialog footer { display: flex; justify-content: flex-end; padding: 12px 24px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
+      .mission-dialog footer button { margin: 0; color: #32453e; border: 1px solid #839087; background: transparent; }
+      .mission-dialog--mobileLandscape, .mission-dialog--mobilePortrait { width: 100%; height: 100%; }
+      .mission-dialog-overlay--mobileLandscape, .mission-dialog-overlay--mobilePortrait { padding: 0; }
+      .mission-dialog--mobileLandscape .mission-dialog__header, .mission-dialog--mobilePortrait .mission-dialog__header { padding: 8px 10px; }
+      .mission-dialog--mobileLandscape .mission-dialog__header p, .mission-dialog--mobilePortrait .mission-dialog__header p { display: none; }
+      .mission-dialog--mobileLandscape .mission-dialog__header h2, .mission-dialog--mobilePortrait .mission-dialog__header h2 { margin: 0; font-size: calc(17px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__header button, .mission-dialog--mobilePortrait .mission-dialog__header button { min-width: 28px; height: 28px; padding: 0 7px; font-size: calc(11px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__header-actions button:last-child, .mission-dialog--mobilePortrait .mission-dialog__header-actions button:last-child { font-size: calc(18px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__summary, .mission-dialog--mobilePortrait .mission-dialog__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .mission-dialog--mobileLandscape .mission-dialog__summary > div, .mission-dialog--mobilePortrait .mission-dialog__summary > div { gap: 4px; padding: 7px 8px; }
+      .mission-dialog--mobileLandscape .mission-dialog__summary span, .mission-dialog--mobilePortrait .mission-dialog__summary span { font-size: calc(10px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__summary strong, .mission-dialog--mobilePortrait .mission-dialog__summary strong { font-size: calc(16px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__content, .mission-dialog--mobilePortrait .mission-dialog__content { gap: 10px; padding: 9px; }
+      .mission-dialog--mobileLandscape .mission-dialog__content h3, .mission-dialog--mobilePortrait .mission-dialog__content h3 { margin-bottom: 6px; font-size: calc(13px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__daily h3, .mission-dialog--mobilePortrait .mission-dialog__daily h3 { font-size: var(--majak-font-14); }
+      .mission-dialog--mobileLandscape .mission-dialog__daily ol, .mission-dialog--mobilePortrait .mission-dialog__daily ol { gap: 3px; }
+      .mission-dialog--mobileLandscape .mission-dialog__daily li, .mission-dialog--mobilePortrait .mission-dialog__daily li { grid-template-columns: 16px minmax(0, 1fr) auto; gap: 4px; min-height: 25px; padding: 4px; font-size: var(--majak-font-11); }
+      .mission-dialog--mobileLandscape .mission-dialog__check, .mission-dialog--mobilePortrait .mission-dialog__check { width: 14px; height: 14px; font-size: var(--majak-font-11); }
+      .mission-dialog--mobileLandscape .mission-dialog__daily b, .mission-dialog--mobilePortrait .mission-dialog__daily b { font-size: var(--majak-font-11); }
+      .mission-dialog--mobileLandscape .mission-dialog__weekly h3, .mission-dialog--mobilePortrait .mission-dialog__weekly h3 { font-size: var(--majak-font-12); }
+      .mission-dialog--mobileLandscape .mission-dialog__reward-grid, .mission-dialog--mobilePortrait .mission-dialog__reward-grid { gap: 6px; }
+      .mission-dialog--mobileLandscape .mission-dialog__reward-grid article, .mission-dialog--mobilePortrait .mission-dialog__reward-grid article { min-height: 75px; gap: 4px; padding: 6px; }
+      .mission-dialog--mobileLandscape .mission-dialog__reward-grid strong, .mission-dialog--mobilePortrait .mission-dialog__reward-grid strong { font-size: var(--majak-font-10); }
+      .mission-dialog--mobileLandscape .mission-dialog__reward-grid span, .mission-dialog--mobilePortrait .mission-dialog__reward-grid span { font-size: var(--majak-font-9); }
+      .mission-dialog--mobileLandscape .mission-dialog__reward-grid button, .mission-dialog--mobilePortrait .mission-dialog__reward-grid button, .mission-dialog--mobileLandscape .mission-dialog footer button, .mission-dialog--mobilePortrait .mission-dialog footer button { padding: 7px; font-size: calc(11px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__reward-grid button, .mission-dialog--mobilePortrait .mission-dialog__reward-grid button { font-size: var(--majak-font-10); }
+      .mission-dialog--mobileLandscape .mission-dialog footer, .mission-dialog--mobilePortrait .mission-dialog footer { padding: 9px; }
+      .mission-dialog--mobilePortrait .mission-dialog__content { grid-template-columns: 1fr; overflow: auto; }
+    `}</style>
+  </div>
 }
 
 export default function MissionDlg({ onClose, onMoneyUpdate, onGemUpdate }: Props) {
@@ -227,6 +371,16 @@ export default function MissionDlg({ onClose, onMoneyUpdate, onGemUpdate }: Prop
   const REWARD_COL_X = [319, 409, 499, 589]
   const REWARD_ROW_Y = [277, 407]
 
+  const useResponsiveMission = true
+  if (useResponsiveMission) {
+    return <ResponsiveMissionDialog
+      data={data}
+      onReceive={handleReceive}
+      onRefresh={() => { SignalR.send('mjkc32e', {}).catch(() => {}) }}
+      onClose={onClose}
+    />
+  }
+
   return (
     <div style={{
       position: dialogScale < 1 ? 'fixed' : 'absolute', inset: 0, zIndex: 250,
@@ -282,8 +436,8 @@ export default function MissionDlg({ onClose, onMoneyUpdate, onGemUpdate }: Prop
              フォント: -18px Bold 白 */}
         <div style={{
           position: 'absolute', left: 475, top: 75, width: 195, height: 18,
-          fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-          fontSize: 18, fontWeight: 'bold', color: '#fff',
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(18px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           pointerEvents: 'none',
         }}>
@@ -294,8 +448,8 @@ export default function MissionDlg({ onClose, onMoneyUpdate, onGemUpdate }: Prop
              PaintDailyMission: DrawText(str, CRect(475,125,670,143), DT_CENTER) */}
         <div style={{
           position: 'absolute', left: 475, top: 125, width: 195, height: 18,
-          fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-          fontSize: 18, fontWeight: 'bold', color: '#fff',
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(18px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           pointerEvents: 'none',
         }}>

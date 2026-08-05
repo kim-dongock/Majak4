@@ -48,9 +48,14 @@ export default function UserSearchPage() {
       render: (v: number) => v.toLocaleString(),
     },
     {
-      title: 'GEM',
+      title: '龍珠',
       dataIndex: 'gemCount',
       render: (v: number) => <Tag color="purple">{v.toLocaleString()}</Tag>,
+    },
+    {
+      title: 'キャッシュ',
+      dataIndex: 'cashCount',
+      render: (v: number) => <Tag color="blue">{v.toLocaleString()}</Tag>,
     },
     {
       title: '最終ログイン',

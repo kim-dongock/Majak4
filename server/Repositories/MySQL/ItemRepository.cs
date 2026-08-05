@@ -15,6 +15,7 @@ public class ItemRepository
     private readonly GameDataContextFactory? _gameDb;
     private readonly LogRepository? _log;
     private readonly ILogger<ItemRepository>? _logger;
+    private static readonly DateTime QuantityLimitedEndDate = new(2037, 1, 1);
 
     private static ulong ParseMemberNo(string memberNo)
         => MemberNoIds.Parse(memberNo);
@@ -39,6 +40,19 @@ public class ItemRepository
             }
         });
     }
+
+    private static Task<int> TrySpendCashAsync(
+        GameDataContext db, ulong memberNo, int amount, DateTime now)
+        => db.PlayerWallets
+            .Where(wallet => wallet.MemberNo == memberNo && wallet.CashCount >= amount)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(wallet => wallet.FreeCashCount,
+                    wallet => wallet.FreeCashCount >= amount ? wallet.FreeCashCount - amount : 0)
+                .SetProperty(wallet => wallet.PaidCashCount,
+                    wallet => wallet.PaidCashCount - (wallet.FreeCashCount >= amount ? 0 : amount - wallet.FreeCashCount))
+                .SetProperty(wallet => wallet.CashCount, wallet => wallet.CashCount - amount)
+                .SetProperty(wallet => wallet.RowVersion, wallet => wallet.RowVersion + 1)
+                .SetProperty(wallet => wallet.UpdatedAt, now));
 
     public ItemRepository()
     {
@@ -133,6 +147,24 @@ public class ItemRepository
             .Where(item => item.IsValid)
             .Select(item => new ValueTuple<int, int, string, long>(
                 checked((int)item.CustomId), item.Kind, item.ItemName, 0L))
+            .ToListAsync();
+    }
+
+    public virtual async Task<List<BillingShopItemInfo>> GetActiveBillingShopItemsAsync()
+    {
+        await using var db = await RequireGameDb().CreateAsync();
+        return await db.BillingItemMasters.AsNoTracking()
+            .Where(item => item.IsOnSale && item.IsUsable && item.IsExposed == true)
+            .OrderBy(item => item.ItemCode)
+            .ThenBy(item => item.SubCode)
+            .Select(item => new BillingShopItemInfo
+            {
+                ItemCode = item.ItemCode,
+                SellCode = item.SubCode,
+                ItemName = item.ItemName,
+                CashPrice = checked((int)(item.UnitMoney ?? 0)),
+                Description = item.ItemDescription ?? item.InternalComment ?? string.Empty,
+            })
             .ToListAsync();
     }
 
@@ -261,13 +293,11 @@ public class ItemRepository
             }
 
             int gemPrice = checked((int)product.Shop.HcPrice);
-            var wallet = await db.PlayerWallets.SingleOrDefaultAsync(item => item.MemberNo == memberNoValue);
-            if (wallet is null)
-                return (-1102, "item info error-1");
-            if (wallet.GemCount < gemPrice)
-                return (-1101, "GEM Not Enough");
-            wallet.GemCount -= gemPrice;
-            wallet.UpdatedAt = now;
+            int spent = await TrySpendCashAsync(db, memberNoValue, gemPrice, now);
+            if (spent == 0)
+                return (-1101, "Majak Cash Not Enough");
+
+            var wallet = await db.PlayerWallets.SingleAsync(item => item.MemberNo == memberNoValue);
 
             var ownedItems = await db.PlayerCustomItems
                 .Where(item => item.MemberNo == memberNoValue && grantIds.Contains(item.CustomId))
@@ -357,7 +387,8 @@ public class ItemRepository
         string subCode,
         int validDays,
         string userIp,
-        int buyCate)
+        int buyCate,
+        int quantity = 0)
     {
         try
         {
@@ -370,15 +401,12 @@ public class ItemRepository
                 return (-1102, "item info error-1");
 
             int gemPrice = checked((int)master.UnitMoney.Value);
-            var wallet = await db.PlayerWallets.SingleOrDefaultAsync(item => item.MemberNo == memberNoValue);
-            if (wallet is null)
-                return (-1102, "item info error-1");
-            if (wallet.GemCount < gemPrice)
-                return (-1101, "GEM Not Enough");
-            wallet.GemCount -= gemPrice;
-            wallet.UpdatedAt = DateTime.Now;
+            int spent = await TrySpendCashAsync(db, memberNoValue, gemPrice, DateTime.Now);
+            if (spent == 0)
+                return (-1101, "Majak Cash Not Enough");
 
             var now = DateTime.Now;
+            bool isQuantityLimited = validDays == 0 && quantity > 0;
             var owned = await db.PlayerFunctionItems
                 .SingleOrDefaultAsync(item => item.MemberNo == memberNoValue && item.ItemCode == itemCode);
             if (owned is null)
@@ -387,9 +415,9 @@ public class ItemRepository
                 {
                     MemberNo = memberNoValue,
                     ItemCode = itemCode,
-                    Quantity = 1,
+                    Quantity = checked((uint)(isQuantityLimited ? quantity : 1)),
                     BoughtAt = now,
-                    ExpiresAt = now.AddDays(validDays),
+                    ExpiresAt = isQuantityLimited ? QuantityLimitedEndDate : now.AddDays(validDays),
                     IsEquipped = true,
                     CreatedAt = now,
                     UpdatedAt = now,
@@ -397,12 +425,20 @@ public class ItemRepository
             }
             else
             {
-                DateTime extensionBase = owned.ExpiresAt is not null && owned.ExpiresAt > now
-                    ? owned.ExpiresAt.Value
-                    : now;
-                if (owned.ExpiresAt is null || owned.ExpiresAt <= now)
-                    owned.BoughtAt = now;
-                owned.ExpiresAt = extensionBase.AddDays(validDays);
+                if (isQuantityLimited)
+                {
+                    owned.Quantity = checked(owned.Quantity + (uint)quantity);
+                    owned.ExpiresAt = QuantityLimitedEndDate;
+                }
+                else
+                {
+                    DateTime extensionBase = owned.ExpiresAt is not null && owned.ExpiresAt > now
+                        ? owned.ExpiresAt.Value
+                        : now;
+                    if (owned.ExpiresAt is null || owned.ExpiresAt <= now)
+                        owned.BoughtAt = now;
+                    owned.ExpiresAt = extensionBase.AddDays(validDays);
+                }
                 owned.IsEquipped = true;
                 owned.UpdatedAt = now;
             }
@@ -451,6 +487,16 @@ public class ItemRepository
         return item is null
             ? (null, null, 0)
             : (item.BoughtAt, item.ExpiresAt, checked((int)item.Quantity));
+    }
+
+    public virtual async Task<int> GetCashCountAsync(string memberNo)
+    {
+        var memberNoValue = ParseMemberNo(memberNo);
+        await using var db = await RequireGameDb().CreateAsync();
+        return await db.PlayerWallets.AsNoTracking()
+            .Where(wallet => wallet.MemberNo == memberNoValue)
+            .Select(wallet => (int?)wallet.CashCount)
+            .SingleOrDefaultAsync() ?? 0;
     }
 
     /// <summary>
@@ -730,4 +776,13 @@ public record MajItemInfo
     public int      Qty      { get; init; }
     public bool     UseFlag  { get; init; }
     public bool     IsValid  => UseFlag && EndDt > DateTime.Now;
+}
+
+public sealed class BillingShopItemInfo
+{
+    public string ItemCode { get; init; } = string.Empty;
+    public string SellCode { get; init; } = string.Empty;
+    public string ItemName { get; init; } = string.Empty;
+    public int CashPrice { get; init; }
+    public string Description { get; init; } = string.Empty;
 }

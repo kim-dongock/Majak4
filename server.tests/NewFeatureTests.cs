@@ -2,6 +2,7 @@ using MajakServer.Models.Game;
 using MajakServer.Models.Player;
 using MajakServer.Models.Protocol;
 using MajakServer.Repositories.MySQL;
+using MajakServer.Repositories.MySQL.Entities;
 
 namespace MajakServer.Tests;
 
@@ -214,5 +215,42 @@ public class BanishInfoTests
 
         Assert.True(room.BanishInfo.ReserveBanishing);
         Assert.Equal("user01", room.BanishInfo.ReserveMemberNo);
+    }
+}
+
+public class CashBalanceTests
+{
+    [Fact]
+    public void SpendCash_UsesFreeBalanceBeforePaidBalance()
+    {
+        var wallet = new PlayerWalletEntity
+        {
+            CashCount = 150,
+            PaidCashCount = 100,
+            FreeCashCount = 50,
+        };
+
+        wallet.SpendCash(40);
+
+        Assert.Equal(110, wallet.CashCount);
+        Assert.Equal(100, wallet.PaidCashCount);
+        Assert.Equal(10, wallet.FreeCashCount);
+    }
+
+    [Fact]
+    public void SpendCash_UsesPaidBalanceAfterFreeBalanceIsExhausted()
+    {
+        var wallet = new PlayerWalletEntity
+        {
+            CashCount = 150,
+            PaidCashCount = 100,
+            FreeCashCount = 50,
+        };
+
+        wallet.SpendCash(70);
+
+        Assert.Equal(80, wallet.CashCount);
+        Assert.Equal(80, wallet.PaidCashCount);
+        Assert.Equal(0, wallet.FreeCashCount);
     }
 }

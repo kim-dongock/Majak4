@@ -29,11 +29,11 @@ export default function App() {
               <Route path="users" element={<UserSearchPage />} />
               <Route path="users/pending" element={<PendingApprovalPage />} />
               <Route path="users/:memberNo" element={<UserDetailPage />} />
-              {/* GEM */}
-              <Route path="gem/adjust" element={<GemAdjustPage />} />
-              <Route path="gem/stats" element={<GemStatsPage />} />
+              {/* キャッシュ */}
+              <Route path="cash/adjust" element={<GemAdjustPage />} />
+              <Route path="cash/stats" element={<GemStatsPage />} />
               {/* マスターデータ */}
-              <Route path="master/gem-products" element={<GemProductPage />} />
+              <Route path="master/cash-products" element={<GemProductPage />} />
               <Route path="master/channels" element={<ChannelListPage />} />
               {/* 運営ツール */}
               <Route path="operations/notice" element={<NoticePage />} />

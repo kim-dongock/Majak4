@@ -585,6 +585,44 @@ public class AutoEnterRoomCommandTests
         Assert.DoesNotContain(sent, s => s.method == Cmd.History);
     }
 
+    [Fact]
+    public async Task Execute_ReconnectsOutPlayerToPlayingAutoMatchRoomAndSendsState()
+    {
+        var (hub, _) = BuildHubMock();
+        var disconnectedPlayer = new MajakPlayer { ConnectionId = "old-connection", MemberNo = "u1", ChannelId = "ch1", EngineOrder = 0 };
+        _session.Register(disconnectedPlayer);
+        var room = _session.CreateRoom("ch1", disconnectedPlayer, "", 1, 0, 0, false);
+        room.Engine.InitHanchan(new MajakServer.Engine.RuleInfo { Kuitan = true, Contest = 0 });
+        room.State = GameRoomState.Playing;
+        room.PlayHistory.Add(new { test = "resume" });
+        disconnectedPlayer.ConnectionId = "";
+        disconnectedPlayer.IsOutPlayer = true;
+
+        var reconnectPlayer = new MajakPlayer { ConnectionId = "new-connection", MemberNo = "u1", ChannelId = "ch1" };
+        _session.Register(reconnectPlayer);
+        var cmd = new AutoEnterRoomCommand(_session, hub.Object, new FakeGameLogicService());
+        var (ctx, sent) = CommandTestHelper.MakeContext(reconnectPlayer,
+            new Dictionary<string, object?>
+            {
+                [GKey.RoomId] = room.RoomId,
+                [GKey.Pix] = "u1",
+                [GKey.ConnectFor] = GKey.ValueConnectForGameJoin,
+                [GKey.PlayerType] = GKey.ValuePlayer,
+            });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.False(room.Seats[0]!.IsOutPlayer);
+        Assert.Equal("new-connection", room.Seats[0]!.ConnectionId);
+        Assert.Equal(room.RoomId, reconnectPlayer.RoomId);
+        Assert.Contains(sent, s => s.method == Cmd.AutoEnterRoom);
+        var autoEnterPacket = CommandTestHelper.ToDict(sent.First(s => s.method == Cmd.AutoEnterRoom).packet);
+        Assert.Equal((int)GameRoomState.Playing, ((JsonElement)autoEnterPacket["state"]!).GetInt32());
+        Assert.Contains(sent, s => s.method == Cmd.PaiInfoList);
+        Assert.Contains(sent, s => s.method == Cmd.History);
+        Assert.DoesNotContain(sent, s => s.method == Cmd.ConnectTypeError);
+    }
+
     // シナリオ7: 4人全員揃った → AutoStart ブロードキャスト
     [Fact]
     public async Task Execute_AllPlayersEntered_SendsAutoStart()

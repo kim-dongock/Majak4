@@ -22,8 +22,10 @@
  */
 import Phaser from 'phaser'
 import { getIngameLayout, type IngameLayoutMode } from '../game/ingameLayout'
+import MobileAvatarLayer from '../game/MobileAvatarLayer'
 import { mobileCenterHudOffset, mobileVisibleWorldBounds } from '../game/mobileIngameViewport'
-import { isTengokuBoardSkin } from '../utils/legacySkinPalette'
+import { getLegacyFullUiSkinId, isTengokuBoardSkin } from '../utils/legacySkinPalette'
+import { getUiFontFamily, getUiFontSize, getUiFontSizePx } from '../utils/typography'
 
 interface HudPoint { x: number; y: number }
 interface OdrBoxPos {
@@ -60,6 +62,11 @@ interface LegacyNumber {
   gap: number
 }
 
+interface CallAvatarHandle {
+  sprite?: Phaser.GameObjects.Image
+  destroy: () => void
+}
+
 const TURN_MARK_EVENT = 'majak:turn-mark'
 const UI_FLOW_TRACE_PREFIX = '[UIFlow]'
 const DEBUG_UI_FLOW = import.meta.env.VITE_DEBUG_GAME === '1'
@@ -68,23 +75,22 @@ const BOARD_X = 5
 const BOARD_Y = 31
 const CUSTOM_DEFAULT_ID_COSTUME = 100011
 const AVAILABLE_COSTUME_IDS = new Set([9, 10, 11])
-const HUD_TEXT_FONT_FAMILY = "'Meiryo', 'Yu Gothic', 'Malgun Gothic', 'MS PGothic', 'MS Gothic', sans-serif"
 const HUD_TEXT_RESOLUTION = typeof window === 'undefined'
   ? 1
   : Math.min(2, Math.max(1, window.devicePixelRatio || 1))
-const MOBILE_HUD_TEXT_GAP = 8
+const MOBILE_HUD_TEXT_GAP = 2
 const MOBILE_HUD_INFO_TOP_OFFSET = 10
-const MOBILE_HUD_INFO_WIDTH = 54
+const MOBILE_HUD_INFO_WIDTH = 46
 const MOBILE_HUD_INFO_ROW_HEIGHT = 17
 const MOBILE_HUD_NAME_WIDTH = 98
 const MOBILE_HUD_NAME_GAP = 3
-const MOBILE_HUD_PANEL_PADDING_X = 6
+const MOBILE_HUD_PANEL_PADDING_X = 2
 const MOBILE_HUD_PANEL_PADDING_Y = 6
 const MOBILE_HUD_COMPACT_AVATAR_PADDING = 3
-const MOBILE_HUD_ICON_WIDTH = 38
-const MOBILE_HUD_ICON_HEIGHT = 68
-const MOBILE_HUD_FULL_AVATAR_WIDTH = 46
-const MOBILE_HUD_FULL_AVATAR_HEIGHT = 80
+const MOBILE_HUD_ICON_WIDTH = 44
+const MOBILE_HUD_ICON_HEIGHT = 66
+const MOBILE_HUD_FULL_AVATAR_WIDTH = 60
+const MOBILE_HUD_FULL_AVATAR_HEIGHT = 90
 const HUD_NAME_MIN_FONT_SIZE = 8
 const DESKTOP_HUD_INFO_Y_SHIFT = -24
 
@@ -95,11 +101,12 @@ function cssPx(value: string): number {
 
 function measureHudTextWidth(text: string, fontSize: number): number {
   if (!text) return 0
-  if (typeof document === 'undefined') return text.length * fontSize
+  const scaledFontSize = getUiFontSizePx(fontSize)
+  if (typeof document === 'undefined') return text.length * scaledFontSize
   const canvas = document.createElement('canvas')
   const context = canvas.getContext('2d')
-  if (!context) return text.length * fontSize
-  context.font = `bold ${fontSize}px ${HUD_TEXT_FONT_FAMILY}`
+  if (!context) return text.length * scaledFontSize
+  context.font = `bold ${scaledFontSize}px ${getUiFontFamily()}`
   return context.measureText(text).width
 }
 
@@ -351,6 +358,7 @@ export default class UIScene extends Phaser.Scene {
   private diceRollDelay?: Phaser.Time.TimerEvent
   private diceRollTimer?: Phaser.Time.TimerEvent
   private callSprites: Phaser.GameObjects.Image[] = []
+  private mobileAvatarLayer?: MobileAvatarLayer
 
   /* タイマー */
   private timerMaxMs = 0
@@ -386,16 +394,27 @@ export default class UIScene extends Phaser.Scene {
   }
 
   create() {
+    if (this.layoutMode === 'mobileLandscape' && this.game.canvas.parentElement instanceof HTMLElement) {
+      this.mobileAvatarLayer = new MobileAvatarLayer(
+        this.game.canvas.parentElement,
+        (loc: number) => this.toggleMobileHudInfo(loc),
+      )
+      this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        this.mobileAvatarLayer?.destroy()
+        this.mobileAvatarLayer = undefined
+      })
+    }
+
     /* ── フォントスタイル ── */
     const scoreStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontFamily: HUD_TEXT_FONT_FAMILY,
-      fontSize:   HUD_METRICS.infoFontSize,
+      fontFamily: getUiFontFamily(),
+      fontSize:   getUiFontSize(cssPx(HUD_METRICS.infoFontSize)),
       color:      this.layoutMode === 'mobileLandscape' ? '#fff9cf' : '#ffffff',
       resolution: HUD_TEXT_RESOLUTION,
     }
     const nameStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontFamily: HUD_TEXT_FONT_FAMILY,
-      fontSize:   HUD_METRICS.nameFontSize,
+      fontFamily: getUiFontFamily(),
+      fontSize:   getUiFontSize(cssPx(HUD_METRICS.nameFontSize)),
       color:      '#ffffff',
       resolution: HUD_TEXT_RESOLUTION,
     }
@@ -566,7 +585,7 @@ export default class UIScene extends Phaser.Scene {
       this.updateReachTexts()
     })
 
-    gs.events.on('callAction', (data: { odr: number; frame: number; avatarUrl: string }) => {
+    gs.events.on('callAction', (data: { odr: number; frame: number; avatarUrl: string; fallbackAvatarUrl: string }) => {
       this.showCallAction(data)
     })
 
@@ -596,20 +615,20 @@ export default class UIScene extends Phaser.Scene {
     return this.textures.exists(candidate) ? candidate : key
   }
 
-  private showCallAction(data: { odr: number; frame: number; avatarUrl: string }) {
+  private showCallAction(data: { odr: number; frame: number; avatarUrl: string; fallbackAvatarUrl: string }) {
     if (data.odr < 0 || data.odr >= 4) return
     const loc = this.odrToLoc(data.odr)
     const point = this.callActionPoint(loc)
     const balloon = this.add.image(point.x, point.y, this.resolveSkinTextureKey(`mj_baloon_${loc}`), data.frame)
       .setOrigin(0, 0)
       .setDepth(Z_CALL_BALLOON)
-    const avatar = this.showCallAvatar(data.odr, loc, point, data.avatarUrl)
+    const avatar = this.showCallAvatar(data.odr, loc, point, data.avatarUrl, data.fallbackAvatarUrl)
     this.callSprites.push(balloon)
-    if (avatar) this.callSprites.push(avatar)
+    if (avatar.sprite) this.callSprites.push(avatar.sprite)
     this.time.delayedCall(1100, () => {
       balloon.destroy()
-      avatar?.destroy()
-      this.callSprites = this.callSprites.filter(item => item !== balloon && item !== avatar)
+      avatar.destroy()
+      this.callSprites = this.callSprites.filter(item => item !== balloon && item !== avatar.sprite)
     })
   }
 
@@ -643,24 +662,39 @@ export default class UIScene extends Phaser.Scene {
     return centerHudPoint({ x: Math.round(x), y: Math.round(y) })
   }
 
-  private showCallAvatar(_odr: number, loc: number, point: HudPoint, avatarUrl: string) {
+  private showCallAvatar(_odr: number, loc: number, point: HudPoint, avatarUrl: string, fallbackAvatarUrl: string): CallAvatarHandle {
     const offset = CALL_AVATAR_POS[loc]
+    const x = point.x + offset.x
+    const y = point.y + offset.y
+    if (this.layoutMode === 'mobileLandscape' && this.mobileAvatarLayer) {
+      return {
+        destroy: this.mobileAvatarLayer.showCallAvatar({
+          url: avatarUrl,
+          fallbackUrl: fallbackAvatarUrl,
+          x,
+          y,
+          width: CALL_AVATAR_SIZE.w,
+          height: CALL_AVATAR_SIZE.h,
+        }),
+      }
+    }
     const key = this.avatarTextureKey(avatarUrl)
-    const avatar = this.add.image(point.x + offset.x, point.y + offset.y, this.resolveSkinTextureKey('mj_aiAvtrW'))
+    const avatar = this.add.image(x, y, this.resolveSkinTextureKey('mj_aiAvtrW'))
       .setOrigin(0, 0)
       .setDepth(Z_CALL_AVATAR)
     this.setDynamicImage(
       avatar,
       key,
       avatarUrl,
-      point.x + offset.x,
-      point.y + offset.y,
+      x,
+      y,
       Z_CALL_AVATAR,
       'mj_aiAvtrW',
       true,
       { width: CALL_AVATAR_SIZE.w, height: CALL_AVATAR_SIZE.h },
+      true,
     )
-    return avatar
+    return { sprite: avatar, destroy: () => avatar.destroy() }
   }
 
   /* ======================================================================
@@ -677,11 +711,23 @@ export default class UIScene extends Phaser.Scene {
       : baseAvt
     const isKnownUser = Boolean(this.players[activeOdr]?.pix)
     const turnPoint = this.turnMarkPoint(loc, avt, isKnownUser)
+    const turnTextureKey = this.resolveSkinTextureKey(isKnownUser ? 'mj_myTurn' : 'mj_aiTurn')
     this.traceUiFlow('turnMark update', { activeOdr, myOdr: this.myOdr, loc, x: turnPoint.x, y: turnPoint.y, isKnownUser })
     this.turnMark
-      .setTexture(this.resolveSkinTextureKey(isKnownUser ? 'mj_myTurn' : 'mj_aiTurn'))
+      .setTexture(turnTextureKey)
       .setPosition(turnPoint.x, turnPoint.y)
-      .setVisible(true)
+      .setVisible(this.layoutMode !== 'mobileLandscape')
+    if (this.layoutMode === 'mobileLandscape' && this.mobileAvatarLayer) {
+      const source = this.textures.get(turnTextureKey).getSourceImage() as HTMLImageElement
+      this.mobileAvatarLayer.updateTurnMark({
+        url: this.turnMarkUrl(isKnownUser ? 'mj_myTurn' : 'mj_aiTurn'),
+        x: turnPoint.x,
+        y: turnPoint.y,
+        width: source.naturalWidth || source.width,
+        height: source.naturalHeight || source.height,
+        visible: true,
+      })
+    }
     this.updateWindMarkers()
     window.dispatchEvent(new CustomEvent(TURN_MARK_EVENT, { detail: { activeOdr, viewOdr: this.myOdr } }))
 
@@ -690,6 +736,12 @@ export default class UIScene extends Phaser.Scene {
       this.stopTimer()
     }
     if (this.players.length > 0) this.updatePlayerTexts(this.players)
+  }
+
+  private turnMarkUrl(key: 'mj_myTurn' | 'mj_aiTurn'): string {
+    const skinId = getLegacyFullUiSkinId(this.customBgId, this.customBoardType)
+    if (skinId === undefined) return `${IMG}/${key}.png`
+    return `${IMG}/skin/${skinId}/${key}_${String(skinId).padStart(2, '0')}.png`
   }
 
   private turnMarkPoint(_loc: number, avatarPoint: HudPoint, isKnownUser: boolean): HudPoint {
@@ -764,7 +816,7 @@ export default class UIScene extends Phaser.Scene {
     let fontSize = cssPx(HUD_METRICS.nameFontSize)
     let measuredWidth = measureHudTextWidth(text, fontSize)
     if (this.layoutMode !== 'mobileLandscape') {
-      return { x, width: baseWidth, fontSize: `${fontSize}px` }
+      return { x, width: baseWidth, fontSize: getUiFontSize(fontSize) }
     }
     while (measuredWidth > baseWidth - 4 && fontSize > HUD_NAME_MIN_FONT_SIZE) {
       fontSize -= 1
@@ -773,7 +825,7 @@ export default class UIScene extends Phaser.Scene {
     return {
       x,
       width: baseWidth,
-      fontSize: `${fontSize}px`,
+      fontSize: getUiFontSize(fontSize),
     }
   }
 
@@ -858,7 +910,21 @@ export default class UIScene extends Phaser.Scene {
       this.diffTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight * 2 : infoRowHeight * 3)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatDiffText(players, odr)).setVisible(mobileInfoVisible)
       this.updateMobileHudPanel(loc, avt, avatarSize, nameLayout.x, nameY, nameLayout.width, textBounds.left, textY, textBounds.width, compactInfo ? 3 : 4, infoRowHeight)
       const avatarUrl = this.costumeAvatarUrl(p) || p.avatarUrl || p.fallbackAvatarUrl || ''
-      this.setDynamicImage(this.avatarSprites[loc], this.avatarKey(odr, p), avatarUrl, avt.x, avt.y, 10, 'mj_aiAvtrL', true, avatarSize)
+      if (this.mobileAvatarLayer) {
+        this.avatarSprites[loc].setVisible(false)
+        this.mobileAvatarLayer.update(loc, {
+          url: avatarUrl || `${IMG}/mj_aiAvtrL.png`,
+          fallbackUrl: p.fallbackAvatarUrl || `${IMG}/mj_aiAvtrL.png`,
+          x: avt.x,
+          y: avt.y,
+          width: avatarSize.width,
+          height: avatarSize.height,
+          visible: true,
+          alt: displayName,
+        })
+      } else {
+        this.setDynamicImage(this.avatarSprites[loc], this.avatarKey(odr, p), avatarUrl, avt.x, avt.y, 10, 'mj_aiAvtrL', true, avatarSize)
+      }
       const majakTitleDepth = this.layoutMode === 'mobileLandscape' ? 9 : 2
       const trickTitleDepth = this.layoutMode === 'mobileLandscape' ? 8 : 1
       this.setDynamicImage(this.majakTitleSprites[loc], this.majakTitleKey(p.majakTitle), this.majakTitleUrl(p.majakTitle), this.layoutMode === 'mobileLandscape' ? textBounds.left : ttl.x, this.layoutMode === 'mobileLandscape' ? avt.y : ttl.y, majakTitleDepth, undefined, mobileInfoVisible)
@@ -1010,12 +1076,29 @@ export default class UIScene extends Phaser.Scene {
     return value.replace(/[^a-z0-9_]/gi, '_').slice(-80)
   }
 
-  private setDynamicImage(sprite: Phaser.GameObjects.Image, key: string, url: string, x: number, y: number, depth: number, fallbackKey?: string, visible = true, displaySize?: { width: number; height: number }) {
+  private setDynamicImage(sprite: Phaser.GameObjects.Image, key: string, url: string, x: number, y: number, depth: number, fallbackKey?: string, visible = true, displaySize?: { width: number; height: number }, preserveAspectRatio = false) {
     sprite.setPosition(x, y).setDepth(depth)
     const dynamicSize = displaySize ?? (this.avatarSprites.includes(sprite) ? HUD_METRICS.avatar : null)
     const showTexture = (textureKey: string) => {
+      if (dynamicSize) {
+        this.textures.get(textureKey).setFilter(Phaser.Textures.FilterMode.LINEAR)
+      }
       sprite.setTexture(textureKey)
-      if (dynamicSize) sprite.setDisplaySize(dynamicSize.width, dynamicSize.height)
+      if (dynamicSize && preserveAspectRatio) {
+        const source = this.textures.get(textureKey).getSourceImage() as { width?: number; height?: number }
+        const sourceWidth = Number(source.width ?? 0)
+        const sourceHeight = Number(source.height ?? 0)
+        const scale = sourceWidth > 0 && sourceHeight > 0
+          ? Math.min(dynamicSize.width / sourceWidth, dynamicSize.height / sourceHeight)
+          : 1
+        const width = sourceWidth > 0 ? sourceWidth * scale : dynamicSize.width
+        const height = sourceHeight > 0 ? sourceHeight * scale : dynamicSize.height
+        sprite
+          .setPosition(x + (dynamicSize.width - width) / 2, y + (dynamicSize.height - height) / 2)
+          .setDisplaySize(width, height)
+      } else if (dynamicSize) {
+        sprite.setPosition(x, y).setDisplaySize(dynamicSize.width, dynamicSize.height)
+      }
       sprite.setVisible(visible)
     }
     sprite.setData('dynamicImageKey', key)
@@ -1106,6 +1189,7 @@ export default class UIScene extends Phaser.Scene {
     this.reachedOdr.clear()
     if (!preserveTurnMark) {
       this.turnMark?.setVisible(false)
+      this.mobileAvatarLayer?.hideTurnMark()
       window.dispatchEvent(new CustomEvent(TURN_MARK_EVENT, { detail: { activeOdr: null, viewOdr: this.myOdr } }))
     }
     this.updateReachTexts()

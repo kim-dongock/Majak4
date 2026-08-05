@@ -141,6 +141,9 @@ public class PlayerRepository
         player.AllinCnt = checked((int)state.Profile.AllInCount);
         player.LastAllinDt = state.Profile.LastAllInAt;
         player.GemCount = state.Wallet.GemCount;
+        player.CashCount = state.Wallet.CashCount;
+        player.PaidCashCount = state.Wallet.PaidCashCount;
+        player.FreeCashCount = state.Wallet.FreeCashCount;
         player.TrickTitle = state.Profile.TrickTitleCode ?? string.Empty;
         player.MajakTitle = state.Profile.MajakTitleCode ?? string.Empty;
         UpdateMoneyLevel(player);

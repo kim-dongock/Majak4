@@ -43,7 +43,11 @@ public class BuyMajItemCommand : ICommand
     public async Task ExecuteAsync(CommandContext ctx)
     {
         var player   = ctx.Player;
-        if (player == null) return;
+        if (player == null)
+        {
+            await SendFailureAsync(ctx, EItemDbError, "チャンネル接続が完了していません。ロビーへ入り直してください。");
+            return;
+        }
 
         string sellCode = ctx.GetString(Key.SellCode);   // mjkk57e
         BuyMajItemResult result;
@@ -70,6 +74,7 @@ public class BuyMajItemCommand : ICommand
         {
             [Key.GemCount]       = result.GemCount,    // mjkk55e
             [GKey.GamMoney]      = result.GamMoney,    // k34e
+            ["cashCount"]       = result.CashCount,
             ["result"]           = 0,
             [GKey.Result]        = "v1e",             // G::valueSuccess
         };

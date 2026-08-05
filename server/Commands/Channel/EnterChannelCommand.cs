@@ -33,6 +33,7 @@ public class EnterChannelCommand : ICommand
     private readonly AdminIdService                  _adminIdService;
     private readonly MenteTimeService                _menteTime;
     private readonly ILogger<EnterChannelCommand>    _logger;
+    private readonly LobbySessionLeaseService?       _lobbySessions;
 
     public EnterChannelCommand(
         PlayerSessionService            session,
@@ -49,7 +50,8 @@ public class EnterChannelCommand : ICommand
         MasterCacheService              masterCache,
         AdminIdService                  adminIdService,
         MenteTimeService                menteTime,
-        ILogger<EnterChannelCommand>    logger)
+        ILogger<EnterChannelCommand>    logger,
+        LobbySessionLeaseService?       lobbySessions = null)
     {
         _session          = session;
         _playerRepo       = playerRepo;
@@ -66,6 +68,7 @@ public class EnterChannelCommand : ICommand
         _adminIdService   = adminIdService;
         _menteTime        = menteTime;
         _logger           = logger;
+        _lobbySessions    = lobbySessions;
     }
 
     public async Task ExecuteAsync(CommandContext ctx)
@@ -75,11 +78,11 @@ public class EnterChannelCommand : ICommand
         string memberNo  = !string.IsNullOrWhiteSpace(ctx.AuthMemberNo)
             ? ctx.AuthMemberNo
             : _session.ResolveMemberNo(pix);
+        using var memberEntryLease = await _session.AcquireMemberEntryLockAsync(memberNo);
         string nickname  = First(ctx.GetString(GKey.Name), ctx.GetString("name"), ctx.GetString("nickname"));
         string avatarId  = First(ctx.GetString(GKey.AvatarId), ctx.GetString("avatarId"));
         string password  = ctx.GetString("password");
-        int abandonRoomId = ctx.GetInt("abandonRoomId", ctx.GetInt("exitRoomId"));
-        bool abandonPreviousRoom = ctx.GetBool("abandonPreviousRoom") || abandonRoomId > 0;
+        string tabId     = ctx.GetString("tabId");
 
         _logger.LogInformation(
             "EnterChannel requested. channelId={ChannelId} subId={SubId} memberNo={MemberNo} connectionId={ConnectionId}",
@@ -96,6 +99,27 @@ public class EnterChannelCommand : ICommand
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(tabId))
+        {
+            await ctx.Caller.SendAsync(Cmd.EnterChannel,
+                FailPayload("INVALID_TAB_SESSION", "接続情報を確認できません。画面を再読み込みしてください。", channelId, memberNo));
+            return;
+        }
+
+        LobbySessionLeaseHandle? lobbyLease = null;
+        if (_lobbySessions != null)
+        {
+            var leaseAttempt = await _lobbySessions.TryAcquireAsync(memberNo, ctx.ConnectionId, tabId);
+            if (leaseAttempt.Status == LobbySessionLeaseStatus.Denied)
+            {
+                await ctx.Caller.SendAsync(Cmd.EnterChannel,
+                    FailPayload("USER_MULTI_LOGIN", "同じIDで既に接続しています。", channelId, memberNo));
+                return;
+            }
+            lobbyLease = leaseAttempt.Lease;
+        }
+        await using var pendingLobbyLease = lobbyLease;
+
         var current = _session.GetByConn(ctx.ConnectionId);
         bool sameConnectionSameChannel = current != null && current.MemberNo == memberNo && current.ChannelId == channelId;
         if (sameConnectionSameChannel)
@@ -103,8 +127,10 @@ public class EnterChannelCommand : ICommand
             current!.NickName = nickname;
             current.AvatarId = avatarId;
             current.Password = password;
+            current.TabId = tabId;
             current.IpAddress = ctx.RemoteIpAddress;
             await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, $"chanel_{channelId}");
+            lobbyLease?.Commit();
             _logger.LogInformation(
                 "EnterChannel ignored: same connection is already in channel. channelId={ChannelId} subId={SubId} memberNo={MemberNo} connectionId={ConnectionId}",
                 channelId, ExtractSubId(channelId), memberNo, ctx.ConnectionId);
@@ -114,36 +140,39 @@ public class EnterChannelCommand : ICommand
         var existing = _session.GetByMember(memberNo);
         if (existing != null && existing.ConnectionId != ctx.ConnectionId)
         {
-            if (abandonPreviousRoom && await TryAbandonPreviousPlayingConnectionAsync(existing, channelId, abandonRoomId))
-            {
-                existing = null;
-            }
-        }
-
-        if (existing != null && existing.ConnectionId != ctx.ConnectionId)
-        {
+            bool isSameTab = existing.TabId == tabId;
             bool isContinuePlayer = false;
-            if (existing.RoomId != null)
+            if (existing.RoomId is int existingRoomId)
             {
-                var existingRoom = _session.GetRoom(existing.RoomId.Value);
-                isContinuePlayer = existingRoom?.State == Models.Game.GameRoomState.Playing
-                    && existingRoom.Seats.Any(seat => seat?.MemberNo == memberNo && seat.IsOutPlayer) == true;
-                if (!isContinuePlayer)
+                var existingRoom = _session.GetRoom(existingRoomId);
+                if (existingRoom?.State == Models.Game.GameRoomState.Playing)
                 {
-                    await ctx.Caller.SendAsync(Cmd.EnterChannel,
-                        FailPayload("USER_MULTI_LOGIN", "同じIDで既にゲームに参加しています。", channelId, memberNo));
-                    return;
+                    isContinuePlayer = existingRoom.Seats.Any(
+                        seat => seat?.MemberNo == memberNo && seat.IsOutPlayer);
+                    if (!isContinuePlayer)
+                    {
+                        await ctx.Caller.SendAsync(Cmd.EnterChannel,
+                            FailPayload("USER_MULTI_LOGIN", "同じIDで既にゲームに参加しています。", channelId, memberNo));
+                        return;
+                    }
                 }
             }
 
-            if (!isContinuePlayer)
+            if (!isSameTab)
             {
-                await ctx.Clients.Client(existing.ConnectionId).SendAsync(Cmd.EnterChannel,
-                    FailPayload("USER_MULTI_LOGIN", "同じIDで別の接続が入場したため切断されました。", channelId, memberNo));
+                await ctx.Caller.SendAsync(Cmd.EnterChannel,
+                    FailPayload("USER_MULTI_LOGIN", "同じIDで既に接続しています。", channelId, memberNo));
+                return;
             }
-            if (!string.IsNullOrEmpty(existing.ChannelId))
-                await ctx.Groups.RemoveFromGroupAsync(existing.ConnectionId, $"chanel_{existing.ChannelId}");
-            _session.Remove(existing.ConnectionId);
+
+            await RemoveSameTabPreviousSessionAsync(ctx, existing, isContinuePlayer);
+
+            if (isContinuePlayer)
+            {
+                _logger.LogInformation(
+                    "EnterChannel continuing disconnected game player. memberNo={MemberNo} previousConnectionId={PreviousConnectionId}",
+                    memberNo, existing.ConnectionId);
+            }
         }
 
         var player = sameConnectionSameChannel
@@ -155,6 +184,7 @@ public class EnterChannelCommand : ICommand
                 Pix          = _session.GetPixByMemberNo(memberNo) ?? pix,
                 NickName     = nickname,
                 AvatarId     = avatarId,
+                TabId        = tabId,
                 ChannelId    = channelId,
                 Password     = password,
                 IpAddress    = ctx.RemoteIpAddress,
@@ -337,7 +367,7 @@ public class EnterChannelCommand : ICommand
         if (isGradeChannel && !_ratingService.CheckEnterGradeMode(player.GradeRecord.Grade, player.GamMoney, subId))
         {
             await ctx.Caller.SendAsync(Cmd.EnterChannel,
-                FailPayload("GRADE_LIMIT", "このグレードチャンネルには入場できません。必要コインまたは段位条件を満たしていません。", channelId, memberNo));
+                FailPayload("GRADE_LIMIT", "このグレードチャンネルには入場できません。必要マネーまたは段位条件を満たしていません。", channelId, memberNo));
             return;
         }
 
@@ -376,6 +406,7 @@ public class EnterChannelCommand : ICommand
 
         _ratingService.UpdatePlayerLevel(player);
         _session.Register(player);
+        lobbyLease?.Commit();
 
         await _playerRepo.SetDailyMissionAsync(memberNo, conditionType: 1, progressIncrement: 1);
         await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, $"chanel_{channelId}");
@@ -550,6 +581,7 @@ public class EnterChannelCommand : ICommand
             k32e        = player.SLevel,
             gemcount    = player.GemCount,
             mjkk55e     = player.GemCount,
+            cashCount   = player.CashCount,
             experience  = player.Experience,
             mjkk36e     = player.Experience,
             lentMoney   = 0,
@@ -630,39 +662,72 @@ public class EnterChannelCommand : ICommand
         }
     }
 
-    private async Task<bool> TryAbandonPreviousPlayingConnectionAsync(MajakPlayer existing, string channelId, int abandonRoomId)
-    {
-        if (existing.RoomId is not int roomId) return false;
-        if (abandonRoomId > 0 && abandonRoomId != roomId) return false;
-
-        var room = _session.GetRoom(roomId);
-        if (room == null || room.ChannelId != channelId || room.State != Models.Game.GameRoomState.Playing)
-            return false;
-
-        var seat = room.Seats.FirstOrDefault(s => s?.MemberNo == existing.MemberNo);
-        if (seat == null) return false;
-
-        seat.IsOutPlayer = true;
-        existing.IsOutPlayer = true;
-        room.LimitCnt = room.Seats.Count(s => s != null && !s.IsOutPlayer);
-        _session.DisconnectFromRoom(existing);
-        if (_roomRegistry != null)
-        {
-            await _roomRegistry.SetContinueRoomAsync(existing.MemberNo, room);
-            if (room.HasNoActiveMembers)
-            {
-                await _roomRegistry.UpdateMemberCountAsync(roomId, channelId, room.ActivePlayerCount);
-            }
-            else
-            {
-                await _roomRegistry.UpdateMemberCountAsync(roomId, channelId, room.ActivePlayerCount);
-            }
-        }
-        return true;
-    }
-
     private static string First(params string[] values)
         => values.FirstOrDefault(value => !string.IsNullOrEmpty(value)) ?? "";
+
+    private async Task RemoveSameTabPreviousSessionAsync(
+        CommandContext ctx,
+        MajakPlayer existing,
+        bool isContinuePlayer)
+    {
+        if (!isContinuePlayer && existing.RoomId is int roomId)
+        {
+            var room = _session.GetRoom(roomId);
+            if (room != null)
+            {
+                int seatPos = (int)existing.SeatPos;
+                string roomHost = room.Seats
+                    .Where(seat => seat != null && seat.MemberNo != existing.MemberNo)
+                    .Select(seat => seat!.MemberNo)
+                    .FirstOrDefault() ?? "";
+
+                _session.RemovePendingMatchMember(roomId, existing.MemberNo);
+                _session.LeaveRoom(existing);
+                await ctx.Clients.Group($"room_{roomId}")
+                    .SendAsync(Cmd.DeleteMember, Commands.Room.RoomGetMembersCommand.BuildDeleteMemberPayload(
+                        roomHost, existing, existing.IsViewer ? GKey.ValueViewer : GKey.ValuePlayer, seatPos));
+
+                if (room.State == Models.Game.GameRoomState.Waiting
+                    && seatPos >= 0 && seatPos < GameConst.PlayerMaxCount)
+                {
+                    room.OkButtonStates[seatPos] = false;
+                    var okPayload = new Dictionary<string, object>();
+                    for (int index = 0; index < GameConst.PlayerMaxCount; index++)
+                        okPayload[$"{Key.OkButton}{index}"] = room.OkButtonStates[index] ? 1 : 0;
+                    await ctx.Clients.Group($"room_{roomId}").SendAsync(Cmd.SendOkButton, okPayload);
+                }
+
+                await ctx.Groups.RemoveFromGroupAsync(existing.ConnectionId, $"room_{roomId}");
+                var updatedRoom = _session.GetRoom(roomId);
+                if (updatedRoom == null)
+                {
+                    _session.ExpirePendingMatch(roomId);
+                    await _roomRegistry.RemoveRoomAsync(roomId, existing.ChannelId);
+                    await ctx.Clients.Group($"chanel_{existing.ChannelId}")
+                        .SendAsync(Cmd.RoomState, RoomStatePayload.BuildEmpty(roomId, "left"));
+                }
+                else
+                {
+                    await _roomRegistry.UpdateMemberCountAsync(roomId, existing.ChannelId, updatedRoom.ActivePlayerCount);
+                    await ctx.Clients.Group($"chanel_{existing.ChannelId}")
+                        .SendAsync(Cmd.RoomState, RoomStatePayload.Build(updatedRoom, "left"));
+                }
+            }
+        }
+
+        if (!string.IsNullOrEmpty(existing.ChannelId))
+        {
+            await ctx.Groups.RemoveFromGroupAsync(existing.ConnectionId, $"chanel_{existing.ChannelId}");
+            await ctx.Clients.Group($"chanel_{existing.ChannelId}").SendAsync(Cmd.DeleteMember, new
+            {
+                memberNo = existing.Pix,
+                pix = existing.Pix,
+                k3e = existing.Pix,
+            });
+            await _channelMemberSvc.LeaveAsync(existing.ChannelId, existing.MemberNo);
+        }
+        _session.Remove(existing.ConnectionId);
+    }
 
     private object FailPayload(string error, string message, string channelId, string memberNo)
     {
@@ -716,14 +781,14 @@ public class EnterChannelCommand : ICommand
 
     private static string BuildPresentMessage(int kbn, long num, string titleId) => kbn switch
     {
-        1 => $"麻雀コイン獲得\tおめでとうございます！\nトーナメント大会開催により麻雀コイン{num}枚を獲得しました。",
-        2 => $"麻雀コイン獲得\tおめでとうございます！\nトーナメント大会入賞により麻雀コイン{num}枚を獲得しました。",
-        3 => $"大会中止のお知らせ\t登録したトーナメント大会は参加人数不足により開催できませんでした。\n麻雀コイン{num}枚を返却いたします。",
-        4 => $"大会中止のお知らせ\t参加登録したトーナメント大会は参加人数不足により開催できませんでした。\n麻雀コイン{num}枚を返却いたします。",
-        5 => $"大会中止のお知らせ\t登録したトーナメント大会はメンテナンスにより開催できませんでした。\n麻雀コイン{num}枚を返却いたします。",
-        6 => $"大会中止のお知らせ\t参加登録したトーナメント大会はメンテナンスにより開催できませんでした。\n麻雀コイン{num}枚を返却いたします。",
+        1 => $"マネー獲得\tおめでとうございます！\nトーナメント大会開催によりマネー{num}円を獲得しました。",
+        2 => $"マネー獲得\tおめでとうございます！\nトーナメント大会入賞によりマネー{num}円を獲得しました。",
+        3 => $"大会中止のお知らせ\t登録したトーナメント大会は参加人数不足により開催できませんでした。\nマネー{num}円を返却いたします。",
+        4 => $"大会中止のお知らせ\t参加登録したトーナメント大会は参加人数不足により開催できませんでした。\nマネー{num}円を返却いたします。",
+        5 => $"大会中止のお知らせ\t登録したトーナメント大会はメンテナンスにより開催できませんでした。\nマネー{num}円を返却いたします。",
+        6 => $"大会中止のお知らせ\t参加登録したトーナメント大会はメンテナンスにより開催できませんでした。\nマネー{num}円を返却いたします。",
         7 => $"麻雀称号獲得\tおめでとうございます！\nトーナメント大会の開催数が特定条件を満たしたため、麻雀称号【{titleId}】を獲得しました。",
-        8 => $"おしらせ\t対局中に問題があったため、参加していたトーナメント大会から棄権しました。大会参加費として麻雀コイン{num}枚をお返しさせていただきます。",
+        8 => $"おしらせ\t対局中に問題があったため、参加していたトーナメント大会から棄権しました。大会参加費としてマネー{num}円をお返しさせていただきます。",
         _ => $"おしらせ\t{num}",
     };
 }

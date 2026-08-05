@@ -30,7 +30,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", `
 Write-Host ""
 Write-Host "All windows opened:" -ForegroundColor Green
 Write-Host "  Server : http://localhost:5246" -ForegroundColor Cyan
-Write-Host "  Client : http://localhost:3000" -ForegroundColor Cyan
+Write-Host "  Client : http://localhost:5173" -ForegroundColor Cyan
 Write-Host "  Admin  : http://localhost:5174" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Close those windows to stop. To stop Redis run: docker compose down" -ForegroundColor Gray

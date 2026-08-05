@@ -414,7 +414,7 @@ public class MajItemServiceTests
         var buyDt = DateTime.Now.AddHours(-1);
         var endDt = DateTime.Now.AddDays(1);
         _itemRepoMock.Setup(s => s.BuyBillingItemAsync(
-            "u1", "", "MJ21", "MJ2101", 1, "127.0.0.1", 2))
+            "u1", "", "MJ21", "MJ2101", 1, "127.0.0.1", 2, 0))
             .ReturnsAsync((1, "OK"));
         _itemRepoMock.Setup(r => r.GetAllItemsAsync("u1"))
             .ReturnsAsync(new List<MajItemInfo>
@@ -438,7 +438,7 @@ public class MajItemServiceTests
     {
         _itemRepoMock.Setup(s => s.BuyBillingItemAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(),
-            It.IsAny<string>(), It.IsAny<int>()))
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync((1, "OK"));
         _itemRepoMock.Setup(r => r.GetAllItemsAsync("u1"))
             .ReturnsAsync(new List<MajItemInfo>());

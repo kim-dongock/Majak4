@@ -1,11 +1,13 @@
 # Majak4 Frontend Deployment
 # Usage:
-#   .\deploy-front-majak4.ps1 [-CloudFrontId <distribution-id>]
+#   .\deploy-front-majak4.ps1 [-CloudFrontId <distribution-id>] [-AssetUploadMode auto|always|never]
 # Prerequisites: AWS CLI configured (aws configure)
 
 param(
     [string]$S3Bucket = "majak4-front",
-    [string]$CloudFrontId = "ES3BNFE78O2FR"
+    [string]$CloudFrontId = "ES3BNFE78O2FR",
+    [ValidateSet("auto", "always", "never")]
+    [string]$AssetUploadMode = "auto"
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,6 +20,7 @@ $SITE_URL      = "https://majak4.studio35app.net"
 $API_URL       = "https://app-majak4.studio35app.net"
 $S3_REGION     = "ap-northeast-1"
 $DIST_PATH     = Join-Path $PROJECT_DIR "dist"
+$ASSETS_PATH   = Join-Path $DIST_PATH "assets"
 
 Write-Host "=== Majak4 Frontend Deployment ===" -ForegroundColor Yellow
 
@@ -40,11 +43,58 @@ if (-not (Test-Path $DIST_PATH)) {
 # ─── 2. S3 Sync ──────────────────────────────────────────────────
 Write-Host "`n[2/3] Syncing to s3://$S3_BUCKET ..." -ForegroundColor Yellow
 
+# Non-HTML files except assets (assets are handled separately below)
 aws s3 sync $DIST_PATH "s3://$S3_BUCKET" `
     --region $S3_REGION `
     --delete `
     --exclude "*.html" `
+    --exclude "assets/*" `
     --cache-control "public,max-age=31536000,immutable"
+
+$shouldSyncAssets = $false
+switch ($AssetUploadMode) {
+    "always" {
+        $shouldSyncAssets = $true
+    }
+    "never" {
+        $shouldSyncAssets = $false
+        Write-Host "    [assets] skipped by option (-AssetUploadMode never)." -ForegroundColor DarkYellow
+    }
+    default {
+        if (-not (Test-Path $ASSETS_PATH)) {
+            Write-Host "    [assets] dist/assets not found, skipping." -ForegroundColor DarkYellow
+            $shouldSyncAssets = $false
+        } else {
+            Write-Host "    [assets] checking changes with dry-run..." -ForegroundColor Gray
+            $dryRunOutput = aws s3 sync $ASSETS_PATH "s3://$S3_BUCKET/assets" `
+                --region $S3_REGION `
+                --delete `
+                --dryrun 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "    [assets] dry-run failed." -ForegroundColor Red
+                Write-Host $dryRunOutput
+                exit 1
+            }
+            # AWS CLI dry-run lines can look like:
+            #   (dryrun) upload: ...
+            #   (dryrun) copy: ...
+            #   (dryrun) delete: ...
+            $assetHasChanges = ($dryRunOutput | Where-Object { $_ -match "(^|\s)(\(dryrun\)\s+)?(upload|copy|delete):" }).Count -gt 0
+            $shouldSyncAssets = $assetHasChanges
+            if (-not $assetHasChanges) {
+                Write-Host "    [assets] no changes detected; upload skipped." -ForegroundColor Green
+            }
+        }
+    }
+}
+
+if ($shouldSyncAssets) {
+    Write-Host "    [assets] syncing to s3://$S3_BUCKET/assets ..." -ForegroundColor Yellow
+    aws s3 sync $ASSETS_PATH "s3://$S3_BUCKET/assets" `
+        --region $S3_REGION `
+        --delete `
+        --cache-control "public,max-age=31536000,immutable"
+}
 
 aws s3 sync $DIST_PATH "s3://$S3_BUCKET" `
     --region $S3_REGION `

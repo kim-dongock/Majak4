@@ -9,7 +9,10 @@
  *   HgMessageBox(parent, msg, "ミッション賞",   MB_OK) → showMessage(msg, 'ミッション賞')
  */
 
+import { logout } from '../api/auth'
+import * as SignalR from '../api/signalr'
 import { useAuthStore } from '../store/authStore'
+import { useGamePlayerStore } from '../store/gamePlayerStore'
 
 export type MessageBoxKind = 'message' | 'confirm'
 
@@ -72,6 +75,32 @@ export function resolveMessageBox(id: number, value: boolean): void {
 /** サーバー result 値: 整数 1 or 文字列 "success" = 成功 */
 export const RESULT_OK = 1
 
+const DUPLICATE_CONNECTION_MESSAGE = '同じIDで別の接続が入場したため切断されました。'
+let duplicateConnectionLogoutInFlight = false
+
+function isDuplicateConnectionMessage(message: unknown): boolean {
+  return typeof message === 'string' && message.includes(DUPLICATE_CONNECTION_MESSAGE)
+}
+
+export function forceDuplicateConnectionLogout(): void {
+  if (duplicateConnectionLogoutInFlight) return
+  duplicateConnectionLogoutInFlight = true
+
+  void (async () => {
+    try {
+      await logout()
+    } catch (error) {
+      console.error('[Auth] server logout failed during forced logout', error)
+    } finally {
+      await SignalR.disconnect().catch(() => {})
+      useGamePlayerStore.getState().clearData()
+      useAuthStore.getState().requireLogin()
+    }
+  })().finally(() => {
+    duplicateConnectionLogoutInFlight = false
+  })
+}
+
 /**
  * result フィールドが成功値かどうかを判定する
  * サーバーは命令によって整数 (1=成功, 0=失敗) と
@@ -127,7 +156,16 @@ export function checkResult(
     const rawMessage = data.k2e ?? data.message ?? data.error
     const failCode = data.failCode ?? data.failcode ?? data.errorCode ?? data.code
     const errorCode = data.error ?? failCode
+    if (errorCode === 'AUTH_REQUIRED') {
+      useAuthStore.getState().requireLogin()
+      return false
+    }
     const rawText = typeof rawMessage === 'string' ? rawMessage.trim() : ''
+    if (isDuplicateConnectionMessage(rawText)) {
+      console.error('[MessageBox] duplicate connection detected; forcing logout', { result, failCode, payload: data })
+      forceDuplicateConnectionLogout()
+      return false
+    }
     const msg = rawText && rawText !== 'エラー'
       ? rawText
       : failCode != null
@@ -135,7 +173,6 @@ export function checkResult(
         : errorMsg ?? 'サーバーエラーが発生しました'
     console.error('[MessageBox] checkResult failed', { result, failCode, message: rawMessage, payload: data })
     showError(msg)
-      if (errorCode === 'AUTH_REQUIRED') useAuthStore.getState().requireLogin()
     return false
   }
   return true
@@ -151,7 +188,7 @@ export function checkResult(
 export function buyMajItemErrorMessage(failCode: string): string {
   const map: Record<string, string> = {
     '0': '龍珠が足りません',
-    '1': '麻雀コインが足りません',
+    '1': 'GPが足りません',
     '2': 'DBエラー',
     '3': '未登録のSELLCODEです',
     '7': '内部エラー',
@@ -160,7 +197,7 @@ export function buyMajItemErrorMessage(failCode: string): string {
     'SELL_CODE_NOT_FOUND':    '販売コードが見つかりません',
     'REQUIRED_TITLE_NOT_MET': '必要な称号を所持していません',
     'GEM_NOT_ENOUGH':         '龍珠が不足しています',
-    'MONEY_NOT_ENOUGH':       '麻雀コインが不足しています',
+    'MONEY_NOT_ENOUGH':       'GPが不足しています',
     'UNKNOWN_CATEGORY':       'アイテムカテゴリが不明です',
   }
   if (failCode.startsWith('AVATAR_BUY_ERROR'))
@@ -208,7 +245,7 @@ export function tournamentErrorMessage(failCode: number, cmd: 'join' | 'cancel' 
   }
   const map: Record<number, string> = {
     1001: 'ゲームルールの設定が不正です',
-    1002: '参加費は0～10,000コイン、各順位の賞金は0～100,000コインで設定してください',
+    1002: '参加費は0～10,000 GP、各順位の賞金は0～100,000 GPで設定してください',
     1003: '大会名はShift-JIS換算で8～30バイト（全角4～15文字）にしてください',
     1004: '開催日時は現在から1時間10分後～8日以内に設定してください',
     1005: 'パスワードは8文字以内にしてください',
@@ -216,7 +253,7 @@ export function tournamentErrorMessage(failCode: number, cmd: 'join' | 'cancel' 
     1007: '既に他の大会を主催中です',
     1008: 'ルーム数の上限に達しています',
     1009: 'メンテナンスなどの開催禁止時間帯と重なっています',
-    1010: '大会賞金と開催手数料を支払うためのコインが不足しています',
+    1010: '大会賞金と開催手数料を支払うためのGPが不足しています',
     9999: 'データベースへの登録に失敗しました',
   }
   return map[failCode] ?? `登録に失敗しました (code: ${failCode})`

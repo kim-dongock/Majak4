@@ -11,7 +11,7 @@ import { gameAuthHeaders } from './authHeaders'
 // Vite がビルド時に VITE_API_BASE_URL を文字列リテラルに置換する。
 // 開発時は Vite dev server プロキシを使うため空文字でよい。
 declare const __API_BASE__: string | undefined
-const API_BASE: string = (typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '') ?? ''
+const API_BASE: string = ((typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '') ?? '').replace(/\/$/, '')
 
 // ── 内部ヘルパー ──────────────────────────────────────────────
 async function apiPost(path: string, body: unknown): Promise<void> {

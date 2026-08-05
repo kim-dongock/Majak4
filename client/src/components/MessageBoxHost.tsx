@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { resolveMessageBox, subscribeMessageBox, type MessageBoxRequest } from '../utils/msgbox'
 
-const FONT = "'Noto Sans JP', 'Meiryo', 'MS PGothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 
 export default function MessageBoxHost() {
   const [requests, setRequests] = useState<MessageBoxRequest[]>([])
@@ -43,7 +43,7 @@ export default function MessageBoxHost() {
     height: 36,
     padding: '0 18px',
     fontFamily: FONT,
-    fontSize: 13,
+    fontSize: 'var(--majak-font-13)',
     fontWeight: 700,
     color: '#fff',
     background: '#1f6f5b',
@@ -109,7 +109,7 @@ export default function MessageBoxHost() {
             textAlign: 'center',
             lineHeight: '44px',
             fontWeight: 700,
-            fontSize: 24,
+            fontSize: 'var(--majak-font-24)',
           }}>
             {isConfirm ? '?' : '!'}
           </div>
@@ -119,7 +119,7 @@ export default function MessageBoxHost() {
               style={{
                 marginBottom: 8,
                 color: '#18231f',
-                fontSize: 16,
+                fontSize: 'var(--majak-font-16)',
                 lineHeight: '22px',
                 fontWeight: 700,
                 overflowWrap: 'anywhere',
@@ -129,7 +129,7 @@ export default function MessageBoxHost() {
             </div>
             <div style={{
               color: '#44514d',
-              fontSize: 13,
+              fontSize: 'var(--majak-font-13)',
               lineHeight: '20px',
               whiteSpace: 'pre-wrap',
               overflowWrap: 'anywhere',

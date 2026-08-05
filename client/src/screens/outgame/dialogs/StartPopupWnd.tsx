@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJStartPopupWnd 相当 — スタートポップアップ (AP-09 §3-1-1)
  * レガシー: legacy/client/HgMajak2/MJStartPopupWnd.h/cpp
  *
@@ -99,7 +99,7 @@ function ChkBtn({
       }} />
       <span style={{
         marginLeft: 4,
-        fontFamily: "'Noto Sans JP', 'Noto Sans JP', 'MS Gothic', monospace", fontSize: 11,
+        fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(11px * var(--majak-type-scale))',
         color: '#000', whiteSpace: 'nowrap',
       }}>
         {label}

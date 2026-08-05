@@ -2,9 +2,9 @@ export interface DashboardStats {
   totalPlayers: number
   activePlayersToday: number
   pendingApproval: number
-  gemChargedToday: number
+  cashChargedToday: number
   revenueJpyToday: number
-  gemChargedThisMonth: number
+  cashChargedThisMonth: number
   revenueJpyThisMonth: number
 }
 
@@ -17,6 +17,9 @@ export interface PlayerSummary {
   lastLoginAt: string
   gameMoney: number
   gemCount: number
+  cashCount: number
+  paidCashCount: number
+  freeCashCount: number
 }
 
 export interface PlayerDetail extends PlayerSummary {
@@ -28,10 +31,10 @@ export interface PlayerDetail extends PlayerSummary {
   lastPlayedAt: string | null
 }
 
-export interface GemProduct {
+export interface CashProduct {
   productId: string
   displayName: string
-  gemAmount: number
+  cashAmount: number
   priceJpy: number
   platform: 'web' | 'ios' | 'android' | 'all'
   storeProductId: string | null
@@ -43,7 +46,7 @@ export interface DailyRevenue {
   revenueDate: string
   platform: string
   orderCount: number
-  totalGem: number
+  totalCash: number
   totalJpy: number
 }
 

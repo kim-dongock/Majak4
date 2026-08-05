@@ -87,6 +87,7 @@ applyTo: "server/**,client/**,scripts/**"
 | commandAgariRec | `horarec` | 和了記録 |
 | commandHistory | `history` | 履歴参照 |
 | commandReplayNavi | `repnavi` | リプレイナビ |
+| Web forced logout | `forcedLogout` | Web 版のサーバー主導ログアウト通知 |
 
 ---
 

@@ -138,34 +138,43 @@ public class BuyCustomItemCommand : ICommand
     public async Task ExecuteAsync(CommandContext ctx)
     {
         var player = ctx.Player;
-        if (player == null) return;
+        if (player == null)
+        {
+            await SendResultAsync(ctx, Val.CustomDbError);
+            return;
+        }
 
         int shopNo = ctx.GetInt(Key.ShopNo, 0);
         if (shopNo <= 0 && int.TryParse(ctx.GetString(Key.ShopNo), out int parsedShopNo))
             shopNo = parsedShopNo;
 
         int resultCode;
+        int cashCount = player.CashCount;
         try
         {
             var result = await _itemService.BuyCustomItemAsync(player, 0, shopNo);
             resultCode = result.ResultCode;
+            cashCount = player.CashCount;
         }
         catch
         {
             resultCode = Val.CustomDbError;
         }
 
-        await SendResultAsync(ctx, resultCode);
+        await SendResultAsync(ctx, resultCode, cashCount);
     }
 
-    private static Task SendResultAsync(CommandContext ctx, int resultCode)
+    private static Task SendResultAsync(CommandContext ctx, int resultCode, int? cashCount = null)
     {
         string message = resultCode == Val.CustomSuccess ? "" : CustomItemErrorMessage(resultCode);
-        return ctx.Caller.SendAsync(Cmd.BuyCustomItemResponse, new Dictionary<string, object>
+        var packet = new Dictionary<string, object>
         {
             [GKey.Result] = resultCode,
             [GKey.Message] = message,
-        });
+        };
+        if (cashCount.HasValue)
+            packet["cashCount"] = cashCount.Value;
+        return ctx.Caller.SendAsync(Cmd.BuyCustomItemResponse, packet);
     }
 
     private static string CustomItemErrorMessage(int resultCode) => resultCode switch

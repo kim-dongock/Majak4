@@ -92,6 +92,9 @@ public sealed class GameDataContext : DbContext
             entity.Property(x => x.EarnedGameMoney).HasColumnName("earned_game_money");
             entity.Property(x => x.LoanedGameMoney).HasColumnName("loaned_game_money");
             entity.Property(x => x.GemCount).HasColumnName("gem_count");
+            entity.Property(x => x.CashCount).HasColumnName("cash_count");
+            entity.Property(x => x.PaidCashCount).HasColumnName("paid_cash_count");
+            entity.Property(x => x.FreeCashCount).HasColumnName("free_cash_count");
             entity.Property(x => x.RowVersion).HasColumnName("row_version").IsConcurrencyToken();
             entity.Property(x => x.CreatedAt).HasColumnName("created_at");
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");

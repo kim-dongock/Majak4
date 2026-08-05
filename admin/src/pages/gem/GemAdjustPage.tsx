@@ -1,41 +1,59 @@
 import { useState } from 'react'
 import {
-  Card, Form, Input, InputNumber, Button, Alert, Typography, Space, Divider,
+  Card, Form, Input, InputNumber, Button, Alert, Typography, Space, Divider, List, Tag,
 } from 'antd'
 import { useSearchParams } from 'react-router-dom'
-import { gemApi, userApi } from '../../api/admin'
-import type { PlayerDetail } from '../../api/types'
+import { cashApi, userApi } from '../../api/admin'
+import type { PlayerSummary } from '../../api/types'
 import { useAuthStore } from '../../store/authStore'
 
 const { Title, Text } = Typography
 
 export default function GemAdjustPage() {
-  const isSuperAdmin = useAuthStore((s: { isSuperAdmin: () => boolean }) => s.isSuperAdmin())
+  const canManageGem = useAuthStore((s: { canManageGem: () => boolean }) => s.canManageGem())
   const [searchParams] = useSearchParams()
   const [form] = Form.useForm()
 
   const [searching, setSearching] = useState(false)
-  const [player, setPlayer]     = useState<PlayerDetail | null>(null)
+  const [searchKeyword, setSearchKeyword] = useState(searchParams.get('memberNo') ?? '')
+  const [searchResults, setSearchResults] = useState<PlayerSummary[]>([])
+  const [player, setPlayer]     = useState<PlayerSummary | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [result, setResult]     = useState<{ balanceBefore: number; balanceAfter: number } | null>(null)
+  const [result, setResult]     = useState<{
+    balanceBefore: number
+    balanceAfter: number
+    paidCashAfter: number
+    freeCashAfter: number
+  } | null>(null)
   const [error, setError]       = useState<string | null>(null)
 
   const defaultMemberNo = searchParams.get('memberNo') ?? ''
 
-  const lookupPlayer = async (memberNo: string) => {
-    if (!memberNo.trim()) return
+  const searchPlayers = async () => {
+    const keyword = searchKeyword.trim()
+    if (!keyword) return
     setSearching(true)
     setPlayer(null)
+    setSearchResults([])
+    form.setFieldValue('memberNo', undefined)
     setResult(null)
     setError(null)
     try {
-      const p = await userApi.getDetail(memberNo.trim())
-      setPlayer(p)
+      const players = await userApi.search(keyword, 0, 20)
+      setSearchResults(players)
+      if (players.length === 0) setError('プレイヤーが見つかりません')
     } catch {
-      setError('プレイヤーが見つかりません')
+      setError('プレイヤーの検索に失敗しました')
     } finally {
       setSearching(false)
     }
+  }
+
+  const selectPlayer = (selectedPlayer: PlayerSummary) => {
+    setPlayer(selectedPlayer)
+    form.setFieldValue('memberNo', String(selectedPlayer.memberNo))
+    setResult(null)
+    setError(null)
   }
 
   const handleSubmit = async (values: { memberNo: string; amount: number; memo: string }) => {
@@ -43,9 +61,14 @@ export default function GemAdjustPage() {
     setResult(null)
     setError(null)
     try {
-      const res = await gemApi.adjust(Number(values.memberNo), values.amount, values.memo)
+      const res = await cashApi.adjust(Number(values.memberNo), values.amount, values.memo)
       setResult(res)
-    setPlayer(prev => prev ? { ...prev, gemCount: res.balanceAfter } : prev)
+      setPlayer(prev => prev ? {
+        ...prev,
+        cashCount: res.balanceAfter,
+        paidCashCount: res.paidCashAfter,
+        freeCashCount: res.freeCashAfter,
+      } : prev)
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -53,30 +76,63 @@ export default function GemAdjustPage() {
     }
   }
 
-  if (!isSuperAdmin) {
-    return <Alert type="error" message="この操作は Super Admin のみ実行できます" />
+  if (!canManageGem) {
+    return <Alert type="error" message="この操作は Operator 以上のみ実行できます" />
   }
 
   return (
     <>
-      <Title level={4}>GEM 支給・調整</Title>
+      <Title level={4}>キャッシュ 支給・調整</Title>
       <Card style={{ maxWidth: 560 }}>
+        <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
+          <Input
+            placeholder="会員番号 または 表示名"
+            value={searchKeyword}
+            onChange={(event) => setSearchKeyword(event.target.value)}
+            onPressEnter={searchPlayers}
+          />
+          <Button type="primary" loading={searching} onClick={searchPlayers}>
+            検索
+          </Button>
+        </Space.Compact>
+
+        {searchResults.length > 0 && (
+          <List
+            size="small"
+            bordered
+            dataSource={searchResults}
+            style={{ marginBottom: 16 }}
+            renderItem={(candidate) => (
+              <List.Item
+                actions={[
+                  <Button
+                    key={candidate.memberNo}
+                    size="small"
+                    type={player?.memberNo === candidate.memberNo ? 'primary' : 'default'}
+                    onClick={() => selectPlayer(candidate)}
+                  >
+                    選択
+                  </Button>,
+                ]}
+              >
+                <Space>
+                  <Text strong>{candidate.displayName}</Text>
+                  <Text type="secondary">#{candidate.memberNo}</Text>
+                  <Tag color="blue">有償 {candidate.paidCashCount.toLocaleString()} MP / 無償 {candidate.freeCashCount.toLocaleString()} MP</Tag>
+                </Space>
+              </List.Item>
+            )}
+          />
+        )}
+
         <Form
           form={form}
           layout="vertical"
           initialValues={{ memberNo: defaultMemberNo, amount: 0 }}
           onFinish={handleSubmit}
         >
-          <Form.Item label="会員番号" name="memberNo" rules={[{ required: true }]}>
-            <Space.Compact style={{ width: '100%' }}>
-              <Input placeholder="会員番号" style={{ flex: 1 }} />
-              <Button
-                loading={searching}
-                onClick={() => lookupPlayer(form.getFieldValue('memberNo'))}
-              >
-                検索
-              </Button>
-            </Space.Compact>
+          <Form.Item name="memberNo" rules={[{ required: true, message: 'プレイヤーを選択してください' }]} hidden>
+            <Input />
           </Form.Item>
 
           {player && (
@@ -84,8 +140,9 @@ export default function GemAdjustPage() {
               <Space>
                 <Text strong>{player.displayName}</Text>
                 <Text type="secondary">#{player.memberNo}</Text>
-                <Text>現在 GEM: </Text>
-                <Text strong style={{ color: '#722ed1' }}>{player.gemCount.toLocaleString()}</Text>
+                <Text>現在キャッシュ: </Text>
+                <Text strong style={{ color: '#1677ff' }}>{player.cashCount.toLocaleString()} MP</Text>
+                <Text type="secondary">(有償 {player.paidCashCount.toLocaleString()} MP / 無償 {player.freeCashCount.toLocaleString()} MP)</Text>
               </Space>
             </Card>
           )}
@@ -126,7 +183,7 @@ export default function GemAdjustPage() {
           <Alert
             style={{ marginTop: 16 }}
             type="success"
-            message={`完了: ${result.balanceBefore.toLocaleString()} → ${result.balanceAfter.toLocaleString()} GEM`}
+            message={`完了: ${result.balanceBefore.toLocaleString()} MP → ${result.balanceAfter.toLocaleString()} MP (有償 ${result.paidCashAfter.toLocaleString()} MP / 無償 ${result.freeCashAfter.toLocaleString()} MP)`}
           />
         )}
         {error && (

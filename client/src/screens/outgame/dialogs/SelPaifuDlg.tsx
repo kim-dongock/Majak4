@@ -11,7 +11,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const IMG = '/assets/images/game'
-const FONT = "'MS PGothic', 'ＭＳ Ｐゴシック', 'MS UI Gothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 const DLG_BG = '#d4d0c8'
 const SX = (du: number) => Math.round(du * 1.5)
 const SY = (du: number) => Math.round(du * 1.625)
@@ -222,9 +222,9 @@ export default function SelPaifuDlg({ entries = EMPTY_PAIFU_ENTRIES, onSelect, o
     })
   }
 
-  const labelStyle: CSSProperties = { fontFamily: FONT, fontSize: 12, color: '#000', lineHeight: '14px' }
-  const inputStyle: CSSProperties = { fontFamily: FONT, fontSize: 12, height: '100%', boxSizing: 'border-box', border: '1px solid #808080', background: '#fff', padding: '1px 3px' }
-  const buttonStyle: CSSProperties = { fontFamily: FONT, fontSize: 12, height: '100%', padding: 0, background: DLG_BG, border: '2px outset #d4d0c8', boxSizing: 'border-box' }
+  const labelStyle: CSSProperties = { fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', lineHeight: '14px' }
+  const inputStyle: CSSProperties = { fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', height: '100%', boxSizing: 'border-box', border: '1px solid #808080', background: '#fff', padding: '1px 3px' }
+  const buttonStyle: CSSProperties = { fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', height: '100%', padding: 0, background: DLG_BG, border: '2px outset #d4d0c8', boxSizing: 'border-box' }
   const smallButtonStyle = (active: boolean): CSSProperties => ({
     position: 'absolute', width: SX(14), height: SY(16), padding: 0,
     border: active ? '2px inset #d4d0c8' : '2px outset #d4d0c8',
@@ -241,7 +241,7 @@ export default function SelPaifuDlg({ entries = EMPTY_PAIFU_ENTRIES, onSelect, o
     />
   )
 
-  const tableFont: CSSProperties = { fontFamily: FONT, fontSize: 12, lineHeight: '16px' }
+  const tableFont: CSSProperties = { fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '16px' }
 
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.45)', zIndex: 400 }}>

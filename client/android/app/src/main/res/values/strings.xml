@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Majak4</string>
+    <string name="title_activity_main">Majak4</string>
+    <string name="package_name">jp.studio35.majak4</string>
+    <string name="custom_url_scheme">jp.studio35.majak4</string>
+</resources>

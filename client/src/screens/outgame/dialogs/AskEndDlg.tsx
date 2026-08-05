@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJAskEndDlg 相当 — あがりやめ確認 (AP-09 §3-3-1)
  * レガシー: legacy/client/HgMajak2/MJAskEndDlg.h/cpp
  *
@@ -66,14 +66,14 @@ export default function AskEndDlg({ onYes, onNo }: Props) {
   // DU→px: 1DU_x=1.5px, 1DU_y=1.625px
   const SX = (du: number) => Math.round(du * 1.5)
   const SY = (du: number) => Math.round(du * 1.625)
-  const FONT    = "'MS PGothic', 'MS UI Gothic', 'Meiryo', sans-serif"
+  const FONT    = 'var(--majak-font-family-ui)'
   const DLG_BG  = '#d4d0c8'
   const DLG_W   = SX(127)  // 190
   const DLG_H   = SY(65)   // 105
   const TITLE_H = 22
 
   const btnStyle: React.CSSProperties = {
-    position: 'absolute', fontFamily: FONT, fontSize: 12, color: '#000',
+    position: 'absolute', fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
     background: DLG_BG,
     borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
     borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
@@ -97,7 +97,7 @@ export default function AskEndDlg({ onYes, onNo }: Props) {
           background: 'linear-gradient(to right, #000080, #1060d0)',
           display: 'flex', alignItems: 'center', paddingLeft: 8,
         }}>
-          <span style={{ fontFamily: FONT, fontSize: 12, color: '#fff', fontWeight: 'bold' }}>あがりやめ</span>
+          <span style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#fff', fontWeight: 'bold' }}>あがりやめ</span>
         </div>
 
         {/* クライアントエリア: 190×105px */}
@@ -106,7 +106,7 @@ export default function AskEndDlg({ onYes, onNo }: Props) {
           {/* LTEXT "あがりやめせずに対局を続けますか？" (7,7,113,8) */}
           <div style={{
             position: 'absolute', left: SX(7), top: SY(7), width: SX(113),
-            fontFamily: FONT, fontSize: 12, color: '#000',
+            fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
           }}>
             あがりやめせずに対局を続けますか？
           </div>

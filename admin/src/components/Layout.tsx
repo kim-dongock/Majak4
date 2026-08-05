@@ -50,12 +50,12 @@ export default function AdminLayout() {
       ],
     },
     {
-      key: 'gem',
+      key: 'cash',
       icon: <GiftOutlined />,
-      label: 'GEM管理',
+      label: 'キャッシュ管理',
       children: [
-        { key: '/gem/adjust', label: 'GEM 支給・調整' },
-        { key: '/gem/stats',  label: 'GEM 統計・売上' },
+        { key: '/cash/adjust', label: 'キャッシュ 支給・調整' },
+        { key: '/cash/stats',  label: 'キャッシュ 統計・売上' },
       ],
     },
     {
@@ -63,7 +63,7 @@ export default function AdminLayout() {
       icon: <DatabaseOutlined />,
       label: 'マスターデータ',
       children: [
-        { key: '/master/gem-products', label: 'GEM商品マスター' },
+        { key: '/master/cash-products', label: 'キャッシュ商品マスター' },
         { key: '/master/channels',     label: 'チャンネル一覧' },
       ],
     },
@@ -113,7 +113,7 @@ export default function AdminLayout() {
           theme="dark"
           mode="inline"
           selectedKeys={[location.pathname]}
-          defaultOpenKeys={['users', 'gem', 'master', 'operations', 'settings']}
+          defaultOpenKeys={['users', 'cash', 'master', 'operations', 'settings']}
           items={menuItems}
           onClick={({ key }) => navigate(key)}
           style={{ marginTop: 8 }}

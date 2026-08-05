@@ -15,6 +15,7 @@ public class MajakPlayer
     public string NickName     { get; set; } = "";
     public string AvatarId     { get; set; } = "";
     public string Sex          { get; set; } = "";
+    public string TabId        { get; set; } = "";
     public string ChannelId    { get; set; } = "";
     public int?   RoomId       { get; set; }
 
@@ -36,10 +37,24 @@ public class MajakPlayer
     public int    AllinCnt       { get; set; }
     public DateTime? LastAllinDt { get; set; }
     public int    GemCount       { get; set; }
+    public int    CashCount      { get; set; }
+    public int    PaidCashCount  { get; set; }
+    public int    FreeCashCount  { get; set; }
     public int    MemorialShop   { get; set; }   // ビットマスク: bit0=役満, bit1=リーチ一発ツモ
     public string TrickTitle     { get; set; } = "";
     public string MajakTitle     { get; set; } = "";
     public string LastGameDate   { get; set; } = "";
+
+    public void SpendCash(int amount)
+    {
+        if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
+        if (CashCount < amount) throw new InvalidOperationException("Majak Cash balance is insufficient.");
+
+        int freeSpent = Math.Min(FreeCashCount, amount);
+        FreeCashCount -= freeSpent;
+        PaidCashCount -= amount - freeSpent;
+        CashCount -= amount;
+    }
 
     // ─── チャンネル種別レーティングレコード ───
     public RatingRecord RegularRecord  { get; set; } = new();   // MJKHANGERAT

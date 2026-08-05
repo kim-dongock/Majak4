@@ -22,6 +22,8 @@ public static class CommandTestHelper
     public static (CommandContext ctx, List<(string method, object packet)> sent)
         MakeContext(MajakPlayer player, Dictionary<string, object?>? payload = null, Action<string>? onAbort = null)
     {
+        payload ??= new();
+        payload.TryAdd("tabId", "test-tab");
         var sent     = new List<(string, object)>();
         var callerMock  = new Mock<IClientProxy>();
         var clientsMock = new Mock<IHubCallerClients>();
@@ -63,7 +65,7 @@ public static class CommandTestHelper
             Clients      = clientsMock.Object,
             Groups       = groupsMock.Object,
             AbortConnectionWithReason = reason => onAbort?.Invoke(reason),
-            Payload      = payload ?? new(),
+            Payload      = payload,
         };
 
         return (ctx, sent);

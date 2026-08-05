@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJCustomReceiptDlg 相当 — カスタムアイテム購入レシート (AP-09 §3-2-10)
  * レガシー: legacy/client/HgMajak2/MJCustomReceiptDlg.h/cpp
  *
@@ -24,10 +24,10 @@
  * ── テキスト (OnPaint — 13px bold MS Pゴシック, 透過背景) ─────────────────
  *   m_strMessage[0]  TextOut(15, 50)        購入者名
  *   itemName         CRect(198,170,372,207) DT_CENTER  アイテム名
- *   m_strMessage[1]  CRect(198,205,372,222) DT_RIGHT   購入前GEM
+ *   m_strMessage[1]  CRect(198,205,372,222) DT_RIGHT   購入前キャッシュ
  *   m_strMessage[2]  CRect(198,225,372,242) DT_RIGHT   購入前商品券
  *   m_strMessage[3]  CRect(198,245,372,262) DT_RIGHT   購入価格
- *   m_strMessage[4]  CRect(198,265,372,282) DT_RIGHT   購入後GEM
+ *   m_strMessage[4]  CRect(198,265,372,282) DT_RIGHT   購入後キャッシュ
  *   m_strMessage[5]  CRect(198,285,372,302) DT_RIGHT   購入後商品券
  *   m_strMessage[6]  TextOut(17, 308)       購入完了
  *   m_strMessage[7]  TextOut(17, 322)       コイン補充
@@ -51,9 +51,7 @@ interface Props {
   price: number            // CMajakShopCustomItem.Price
   gameMoney: number        // CMajakShopCustomItem.GameMoney (コイン補充額)
   coinBefore: number       // nHanCoinBefore
-  couponBefore: number     // nHanCoinCouponBefore
   coinAfter: number        // nHanCoinAfter
-  couponAfter: number      // nHanCoinCouponAfter
   onClose: () => void
 }
 
@@ -97,7 +95,7 @@ function SpriteButton({
  * ==================================================================== */
 export default function CustomReceiptDlg({
   pix, memberName, itemId, itemName, price, gameMoney,
-  coinBefore, couponBefore, coinAfter, couponAfter,
+  coinBefore, coinAfter,
   onClose,
 }: Props) {
   /* ドラッグ移動 (OnNcHitTest: pt.y < 41 → HTCAPTION) */
@@ -147,33 +145,20 @@ export default function CustomReceiptDlg({
   const itemImageSrc = `${IMG_ITEM}/mj_custom_${String(itemId).padStart(2, '0')}.png`
 
   /* メッセージ生成 (コンストラクタ相当) */
-  const yen  = (n: number) => `${n}円`
-  const moneyString = (value: number) => {
-    const sign = value < 0 ? '-' : ''
-    const digits = String(Math.abs(Math.trunc(value)))
-    const units = ['', '万', '億', '兆', '京']
-    const parts: string[] = []
-    for (let end = digits.length, unit = 0; end > 0; end -= 4, unit++) {
-      const start = Math.max(0, end - 4)
-      const part = Number(digits.slice(start, end))
-      if (part > 0) parts.unshift(`${part}${units[unit] ?? ''}`)
-    }
-    return `${sign}${parts.length > 0 ? parts.join('') : '0'}円`
-  }
+  const yen  = (n: number) => `${Math.trunc(n).toLocaleString('ja-JP')} MP`
+  const moneyString = (value: number) => `${Math.trunc(value).toLocaleString('ja-JP')} GP`
   const msg0 = `"${memberName || pix}"さんが購入したアイテム`
   const msg1 = yen(coinBefore)
-  const msg2 = yen(couponBefore)
   const msg3 = yen(price)
   const msg4 = yen(coinAfter)
-  const msg5 = yen(couponAfter)
   const msg6 = `${itemName}を購入しました`
-  const msg7 = `麻雀コイン${moneyString(gameMoney)}が補充されました。`
+  const msg7 = `${moneyString(gameMoney)}が補充されました。`
 
   /* テキストスタイル */
   const tBase = {
     position: 'absolute' as const,
-    fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif" as const,
-    fontSize: 13,
+    fontFamily: 'var(--majak-font-family-ui)' as const,
+    fontSize: 'calc(13px * var(--majak-type-scale))',
     fontWeight: 'bold' as const,
     color: '#000' as const,
     pointerEvents: 'none' as const,
@@ -247,17 +232,11 @@ export default function CustomReceiptDlg({
           {/* msg1 CRect(198,205,372,222) DT_RIGHT — 購入前GEM */}
         <div style={right(198, 205, 174, 17)}>{msg1}</div>
 
-        {/* msg2 CRect(198,225,372,242) DT_RIGHT — 購入前商品券 */}
-        <div style={right(198, 225, 174, 17)}>{msg2}</div>
-
         {/* msg3 CRect(198,245,372,262) DT_RIGHT — 購入価格 */}
         <div style={right(198, 245, 174, 17)}>{msg3}</div>
 
           {/* msg4 CRect(198,265,372,282) DT_RIGHT — 購入後GEM */}
         <div style={right(198, 265, 174, 17)}>{msg4}</div>
-
-        {/* msg5 CRect(198,285,372,302) DT_RIGHT — 購入後商品券 */}
-        <div style={right(198, 285, 174, 17)}>{msg5}</div>
 
         {/* msg6 TextOut(17, 308) */}
         <span style={{ ...tBase, left: 17, top: 308 }}>{msg6}</span>

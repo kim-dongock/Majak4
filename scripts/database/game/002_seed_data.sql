@@ -4,25 +4,25 @@
 -- レガシーCSVの全マスターデータをMySQL形式へ変換した初期値
 -- CHANELWT.csv は運用時ランタイムスナップショットのため投入しない
 
--- 初期データ: gem_product_master
-INSERT INTO gem_product_master
-    (product_id,        display_name,     gem_amount, price_jpy, platform,  store_product_id, is_active, sort_order)
+-- 初期データ: cash_product_master
+INSERT INTO cash_product_master
+    (product_id,         display_name,                  cash_amount, price_jpy, platform,  store_product_id, is_active, sort_order)
 VALUES
-    ('GEM_100_WEB',     '100 GEM',              100,       100,   'web',     NULL,              TRUE,  10),
-    ('GEM_300_WEB',     '300 GEM',              300,       300,   'web',     NULL,              TRUE,  20),
-    ('GEM_500_WEB',     '500 GEM (+50 bonus)',   550,       500,   'web',     NULL,              TRUE,  30),
-    ('GEM_1000_WEB',    '1000 GEM (+150 bonus)', 1150,     1000,   'web',     NULL,              TRUE,  40),
-    ('GEM_3000_WEB',    '3000 GEM (+600 bonus)', 3600,     3000,   'web',     NULL,              TRUE,  50),
-    ('GEM_100_IOS',     '100 GEM',              100,       120,   'ios',     'jp.majak2.gem100',  TRUE,  10),
-    ('GEM_300_IOS',     '300 GEM',              300,       360,   'ios',     'jp.majak2.gem300',  TRUE,  20),
-    ('GEM_500_IOS',     '500 GEM (+50 bonus)',   550,       600,   'ios',     'jp.majak2.gem500',  TRUE,  30),
-    ('GEM_1000_IOS',    '1000 GEM (+150 bonus)', 1150,     1200,   'ios',     'jp.majak2.gem1000', TRUE,  40),
-    ('GEM_3000_IOS',    '3000 GEM (+600 bonus)', 3600,     3600,   'ios',     'jp.majak2.gem3000', TRUE,  50),
-    ('GEM_100_AND',     '100 GEM',              100,       120,   'android', 'jp.majak2.gem100',  TRUE,  10),
-    ('GEM_300_AND',     '300 GEM',              300,       360,   'android', 'jp.majak2.gem300',  TRUE,  20),
-    ('GEM_500_AND',     '500 GEM (+50 bonus)',   550,       600,   'android', 'jp.majak2.gem500',  TRUE,  30),
-    ('GEM_1000_AND',    '1000 GEM (+150 bonus)', 1150,     1200,   'android', 'jp.majak2.gem1000', TRUE,  40),
-    ('GEM_3000_AND',    '3000 GEM (+600 bonus)', 3600,     3600,   'android', 'jp.majak2.gem3000', TRUE,  50);
+    ('CASH_100_WEB',    '100 MP',              100,       100,   'web',     NULL,               TRUE,  10),
+    ('CASH_300_WEB',    '300 MP',              300,       300,   'web',     NULL,               TRUE,  20),
+    ('CASH_500_WEB',    '550 MP (+50 bonus)',  550,       500,   'web',     NULL,               TRUE,  30),
+    ('CASH_1000_WEB',   '1150 MP (+150 bonus)',1150,     1000,   'web',     NULL,               TRUE,  40),
+    ('CASH_3000_WEB',   '3600 MP (+600 bonus)',3600,     3000,   'web',     NULL,               TRUE,  50),
+    ('CASH_100_IOS',    '100 MP',              100,       120,   'ios',     'jp.majak2.cash100',  TRUE,  10),
+    ('CASH_300_IOS',    '300 MP',              300,       360,   'ios',     'jp.majak2.cash300',  TRUE,  20),
+    ('CASH_500_IOS',    '550 MP (+50 bonus)',  550,       600,   'ios',     'jp.majak2.cash500',  TRUE,  30),
+    ('CASH_1000_IOS',   '1150 MP (+150 bonus)',1150,     1200,   'ios',     'jp.majak2.cash1000', TRUE,  40),
+    ('CASH_3000_IOS',   '3600 MP (+600 bonus)',3600,     3600,   'ios',     'jp.majak2.cash3000', TRUE,  50),
+    ('CASH_100_AND',    '100 MP',              100,       120,   'android', 'jp.majak2.cash100',  TRUE,  10),
+    ('CASH_300_AND',    '300 MP',              300,       360,   'android', 'jp.majak2.cash300',  TRUE,  20),
+    ('CASH_500_AND',    '550 MP (+50 bonus)',  550,       600,   'android', 'jp.majak2.cash500',  TRUE,  30),
+    ('CASH_1000_AND',   '1150 MP (+150 bonus)',1150,     1200,   'android', 'jp.majak2.cash1000', TRUE,  40),
+    ('CASH_3000_AND',   '3600 MP (+600 bonus)',3600,     3600,   'android', 'jp.majak2.cash3000', TRUE,  50);
 
 -- 初期データ: transaction_code_master
 INSERT INTO transaction_code_master

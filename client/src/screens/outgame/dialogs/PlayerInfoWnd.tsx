@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJPlayerInfo 相当 — プレイヤー情報ウィンドウ (AP-09 §1-8)
  * レガシー: legacy/client/HgMajak2/MJPlayerInfo.h/cpp
  *
@@ -110,7 +110,7 @@ const TABS = [
   { img: 'mj_sen_tab04.png', label: '段位戦',   x: 233 },
 ]
 
-const FONT = "'MS PGothic', 'MS UI Gothic', 'Meiryo', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 
 function padTitleId(id: number) {
   return String(Math.trunc(id)).padStart(3, '0')
@@ -278,7 +278,7 @@ function TabButton({
 
 function StatLine({ label, value, x, y, w = 140 }: { label: string; value: string; x: number; y: number; w?: number }) {
   return (
-    <div style={{ position: 'absolute', left: x, top: y, width: w, height: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, fontFamily: FONT, fontSize: 12, lineHeight: '12px', color: '#000' }}>
+    <div style={{ position: 'absolute', left: x, top: y, width: w, height: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '12px', color: '#000' }}>
       <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>{label}</span>
       <span style={{ flex: '0 0 auto', whiteSpace: 'nowrap', textAlign: 'right' }}>{value}</span>
     </div>
@@ -339,7 +339,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
   const fallbackRecord = emptyRecordFromPlayer(player)
   const tabRecord = detail
     ? activeTab === 0
-      ? mergeRecord(detail.regular, detail.hiClass)
+      ? mergeRecord(mergeRecord(detail.regular, detail.hiClass), detail.gradeMode)
       : activeTab === 1
         ? detail.hiClass
         : detail.gradeMode
@@ -355,6 +355,104 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
   const trickTitle = detail?.trickTitle ?? player.trickTitle ?? 0
   const majakTitle = detail?.majakTitle ?? player.majakTitle ?? 0
   const avatarId = detail?.avatarId ?? player.avatarId
+  const titleText = player.slevel || (majakTitle > 0 ? `実績称号 ${majakTitle}` : '資産なし')
+  const averageTip = tabRecord.tipMatchCnt > 0 ? `${(tabRecord.tipPoint / tabRecord.tipMatchCnt).toFixed(2)}` : '---.--'
+
+  return (
+    <div className="majak-player-profile-overlay" role="presentation">
+      <section className="majak-player-profile" role="dialog" aria-modal="true" aria-labelledby="majak-player-profile-name">
+        <button type="button" className="majak-player-profile__close" onClick={onClose} aria-label="閉じる">×</button>
+        <header className="majak-player-profile__hero">
+          <div className="majak-player-profile__avatar">
+            <img
+              src={getAvatarUrl(avatarId ?? null)}
+              alt=""
+              onError={event => { event.currentTarget.src = getDefaultAvatarUrl(avatarSex) }}
+            />
+          </div>
+          <div className="majak-player-profile__identity">
+            <div className="majak-player-profile__eyebrow">PLAYER PROFILE</div>
+            <h2 id="majak-player-profile-name">{detail?.name ?? player.name}</h2>
+            <div className="majak-player-profile__badges">
+              <span>{titleText}</span>
+              {trickTitle > 0 && <span>演出 {trickTitle}</span>}
+              {player.location && <span>{player.location}</span>}
+            </div>
+          </div>
+          <div className="majak-player-profile__rating">
+            <span>RATING</span>
+            <strong>{(player.rating ?? 0).toLocaleString()}</strong>
+            <small>{sexText}</small>
+          </div>
+        </header>
+
+        <div className="majak-player-profile__tabs" role="tablist" aria-label="戦績区分">
+          {TABS.map((tab, index) => (
+            <button
+              key={tab.label}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === index}
+              className={activeTab === index ? 'is-active' : ''}
+              onClick={() => handleTabChange(index)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="majak-player-profile__summary">
+          <div><span>対局数</span><strong>{matchCnt.toLocaleString()}</strong></div>
+          <div><span>平均順位</span><strong>{averageRank}</strong></div>
+          <div><span>平均収支</span><strong>{averageSet}</strong></div>
+          <div><span>順位構成</span><strong>{tabRecord.grade1} / {tabRecord.grade2} / {tabRecord.grade3} / {tabRecord.grade4}</strong></div>
+        </div>
+
+        <div className="majak-player-profile__metrics">
+          <section>
+            <h3>順位・収支</h3>
+            <dl>
+              <div><dt>1位率</dt><dd>{percent(tabRecord.grade1, rankCnt)}</dd></div>
+              <div><dt>2位率</dt><dd>{percent(tabRecord.grade2, rankCnt)}</dd></div>
+              <div><dt>3位率</dt><dd>{percent(tabRecord.grade3, rankCnt)}</dd></div>
+              <div><dt>4位率</dt><dd>{percent(tabRecord.grade4, rankCnt)}</dd></div>
+              <div><dt>飛び率</dt><dd>{percent(tabRecord.tobiCnt, rankCnt)}</dd></div>
+              <div><dt>飛ばし率</dt><dd>{percent(tabRecord.tobashiCnt, rankCnt)}</dd></div>
+            </dl>
+          </section>
+          <section>
+            <h3>対局内容</h3>
+            <dl>
+              <div><dt>和了率</dt><dd>{percent(tabRecord.horaCnt, tabRecord.kyokuCnt)}</dd></div>
+              <div><dt>放銃率</dt><dd>{percent(tabRecord.hojuCnt, tabRecord.kyokuCnt)}</dd></div>
+              <div><dt>平均和了点</dt><dd>{tabRecord.horaCnt > 0 ? `${Math.trunc(tabRecord.horaPoint / tabRecord.horaCnt)}点` : '---点'}</dd></div>
+              <div><dt>平均放銃点</dt><dd>{tabRecord.hojuCnt > 0 ? `${Math.trunc(tabRecord.hojuPoint / tabRecord.hojuCnt)}点` : '---点'}</dd></div>
+              <div><dt>立直率</dt><dd>{percent(tabRecord.richiCnt, tabRecord.kyokuCnt)}</dd></div>
+              <div><dt>副露率</dt><dd>{percent(tabRecord.furoCnt, tabRecord.kyokuCnt)}</dd></div>
+            </dl>
+          </section>
+          <section>
+            <h3>牌・チップ</h3>
+            <dl>
+              <div><dt>平均ドラ</dt><dd>{tabRecord.horaCnt > 0 ? `${(tabRecord.doraCnt / tabRecord.horaCnt).toFixed(2)}枚` : '--.--枚'}</dd></div>
+              <div><dt>平均裏ドラ</dt><dd>{tabRecord.richiHoraCnt > 0 ? `${(tabRecord.uraDoraCnt / tabRecord.richiHoraCnt).toFixed(2)}枚` : '--.--枚'}</dd></div>
+              <div><dt>平均チップ</dt><dd>{activeTab === 2 ? '--.--' : averageTip}</dd></div>
+              <div><dt>勝</dt><dd>{tabRecord.winCnt.toLocaleString()}</dd></div>
+              <div><dt>敗</dt><dd>{tabRecord.defeatCnt.toLocaleString()}</dd></div>
+              <div><dt>分</dt><dd>{tabRecord.drawCnt.toLocaleString()}</dd></div>
+            </dl>
+          </section>
+        </div>
+
+        <footer className="majak-player-profile__footer">
+          <p>{activeTab === 0 ? '全ての対局戦績を表示しています。' : activeTab === 1 ? '交流広場の対局戦績を表示しています。' : '段位戦の対局戦績を表示しています。'}</p>
+          <div>
+            <button type="button" className="majak-player-profile__done" onClick={onClose}>閉じる</button>
+          </div>
+        </footer>
+      </section>
+    </div>
+  )
 
   return (
     /* モーダルオーバーレイ */
@@ -423,17 +521,17 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
         )}
 
         {/* 基本情報: レガシー OnPaint pt_member/pt_gender/pt_region/pt_rating */}
-        <div style={{ position: 'absolute', left: 193, top: 53, width: 144, height: 12, fontFamily: FONT, fontSize: 12, fontWeight: 'bold', color: 'rgb(0,114,188)', textAlign: 'center' }}>
+        <div style={{ position: 'absolute', left: 193, top: 53, width: 144, height: 12, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: 'rgb(0,114,188)', textAlign: 'center' }}>
           {detail?.name ?? player.name}
         </div>
-        <div style={{ position: 'absolute', left: 193, top: 74, fontFamily: FONT, fontSize: 12, color: '#000' }}>性別</div>
-        <div style={{ position: 'absolute', left: 240, top: 74, fontFamily: FONT, fontSize: 12, color: '#000' }}>{` : ${sexText}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 90, fontFamily: FONT, fontSize: 12, color: '#000' }}>地域</div>
-        <div style={{ position: 'absolute', left: 240, top: 90, fontFamily: FONT, fontSize: 12, color: '#000' }}>{` : ${player.location ?? '-'}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 106, fontFamily: FONT, fontSize: 12, color: '#000' }}>称号</div>
-        <div style={{ position: 'absolute', left: 240, top: 106, fontFamily: FONT, fontSize: 12, color: '#000' }}>{` : ${player.slevel ?? '-'}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 122, fontFamily: FONT, fontSize: 12, color: '#000' }}>戦績</div>
-        <div style={{ position: 'absolute', left: 240, top: 122, fontFamily: FONT, fontSize: 12, color: '#000' }}>{` : R${player.rating ?? '-'}`}</div>
+        <div style={{ position: 'absolute', left: 193, top: 74, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>性別</div>
+        <div style={{ position: 'absolute', left: 240, top: 74, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>{` : ${sexText}`}</div>
+        <div style={{ position: 'absolute', left: 193, top: 90, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>地域</div>
+        <div style={{ position: 'absolute', left: 240, top: 90, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>{` : ${player.location ?? '-'}`}</div>
+        <div style={{ position: 'absolute', left: 193, top: 106, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>資産</div>
+        <div style={{ position: 'absolute', left: 240, top: 106, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>{` : ${player.slevel ?? '-'}`}</div>
+        <div style={{ position: 'absolute', left: 193, top: 122, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>戦績</div>
+        <div style={{ position: 'absolute', left: 240, top: 122, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>{` : R${player.rating ?? '-'}`}</div>
 
         {TABS.map((tab, i) => (
           <TabButton
@@ -447,7 +545,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
         ))}
 
         {/* 戦績概要: CRect(15,251,337,265) DT_CENTER */}
-        <div style={{ position: 'absolute', left: 15, top: 251, width: 322, height: 14, fontFamily: FONT, fontSize: 12, lineHeight: '14px', color: '#000', textAlign: 'center' }}>
+        <div style={{ position: 'absolute', left: 15, top: 251, width: 322, height: 14, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '14px', color: '#000', textAlign: 'center' }}>
           {`戦績 : ${matchCnt}戦 ${tabRecord.winCnt}勝 ${tabRecord.defeatCnt}敗 ${tabRecord.drawCnt}分`}
         </div>
 
@@ -472,9 +570,9 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
         <StatLine label="平均ドラ枚数" value={tabRecord.horaCnt > 0 ? `${(tabRecord.doraCnt / tabRecord.horaCnt).toFixed(2)}枚` : '--.--枚'} x={185} y={436} />
         <StatLine label="平均裏ドラ枚数" value={tabRecord.richiHoraCnt > 0 ? `${(tabRecord.uraDoraCnt / tabRecord.richiHoraCnt).toFixed(2)}枚` : '--.--枚'} x={185} y={456} />
 
-        <div style={{ position: 'absolute', left: 20, top: 522, width: 314, height: 23, fontFamily: FONT, fontSize: 12, lineHeight: '12px', color: '#000', whiteSpace: 'pre-line' }}>
+        <div style={{ position: 'absolute', left: 20, top: 522, width: 314, height: 23, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '12px', color: '#000', whiteSpace: 'pre-line' }}>
           {activeTab === 0
-            ? '段位戦・練習広場以外の全ての戦績です。\n最近の一般広場の戦績を含みます。'
+            ? '一般広場・ハイクラス・段位戦の合計戦績です。'
             : activeTab === 1
               ? '交流広場の戦績です。\n最近の対戦の戦績を含みます。'
               : '段位戦だけの戦績です。'}

@@ -6,7 +6,7 @@
  *
  * 座標 (1014×704 canvas 内の絶対位置):
  *   strName (nickname): DT_CENTER CRect(838,37,977,52)  blue bold 12px
- *   i=0: "コイン" CRect(842,58,890,73) / value CRect(890,58,986,73)
+ *   i=0: "マネー" CRect(842,58,890,73) / value CRect(890,58,986,73)
  *   i=1: "称号"   CRect(842,74,890,89) / value CRect(890,74,986,89)
  *   i=2: ""       CRect(842,90,890,105)/ value CRect(890,90,986,105)
  *
@@ -23,7 +23,7 @@ export default function DrawMemberInfo() {
     ? gpData.gamMoney.toLocaleString('ja-JP')
     : ''
 
-  /** DrawMemberInfo 相当: チャンネル未入室状態でのコイン・称号取得 */
+  /** DrawMemberInfo 相当: チャンネル未入室状態でのマネー・称号取得 */
   useEffect(() => {
     if (player?.pix && gpData === null) {
       fetchProfile(player.pix)
@@ -42,7 +42,7 @@ export default function DrawMemberInfo() {
           width: 139, height: 15,
           textAlign: 'center',
           display: 'inline-block',
-          fontSize: 12,
+          fontSize: 'calc(12px * var(--majak-type-scale))',
           fontWeight: 'bold',
           color: 'rgb(0,114,188)',
           overflow: 'hidden',
@@ -53,14 +53,14 @@ export default function DrawMemberInfo() {
         {player.name}
       </span>
 
-      {/* i=0: "コイン" / " : {GamMoney}" */}
-      <span style={labelStyle(842, 58)}>コイン</span>
+      {/* i=0: "GP" / " : {GamMoney} GP" */}
+      <span style={labelStyle(842, 58)}>GP</span>
       <span style={valueStyle(890, 58)}>
-        {gameMoneyText ? ` : ${gameMoneyText}` : ''}
+        {gameMoneyText ? ` : ${gameMoneyText} GP` : ''}
       </span>
 
-      {/* i=1: "称号" / " : {SLevel}" */}
-      <span style={labelStyle(842, 74)}>称号</span>
+      {/* i=1: "資産" / " : {SLevel}" */}
+      <span style={labelStyle(842, 74)}>資産</span>
       <span style={valueStyle(890, 74)}>
         {gpData ? ` : ${gpData.slevel}` : ''}
       </span>
@@ -79,7 +79,7 @@ function labelStyle(left: number, top: number): React.CSSProperties {
     position: 'absolute',
     left, top,
     width: 48, height: 15,
-    fontSize: 12, fontWeight: 'normal',
+    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'normal',
     color: '#000000',
     overflow: 'hidden', whiteSpace: 'nowrap',
     pointerEvents: 'none', textAlign: 'left',
@@ -91,7 +91,7 @@ function valueStyle(left: number, top: number): React.CSSProperties {
     position: 'absolute',
     left, top,
     width: 96, height: 15,
-    fontSize: 12, fontWeight: 'normal',
+    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'normal',
     color: '#000000',
     overflow: 'hidden', whiteSpace: 'nowrap',
     pointerEvents: 'none', textAlign: 'left',

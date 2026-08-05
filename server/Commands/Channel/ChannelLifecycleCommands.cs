@@ -378,11 +378,16 @@ public class ExitChannelCommand : ICommand
 {
     private readonly PlayerSessionService _session;
     private readonly RoomRegistryService? _roomRegistry;
+    private readonly LobbySessionLeaseService? _lobbySessions;
 
-    public ExitChannelCommand(PlayerSessionService session, RoomRegistryService? roomRegistry = null)
+    public ExitChannelCommand(
+        PlayerSessionService session,
+        RoomRegistryService? roomRegistry = null,
+        LobbySessionLeaseService? lobbySessions = null)
     {
         _session = session;
         _roomRegistry = roomRegistry;
+        _lobbySessions = lobbySessions;
     }
 
     public async Task ExecuteAsync(CommandContext ctx)
@@ -433,6 +438,8 @@ public class ExitChannelCommand : ICommand
         // チャンネルから削除
         await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, $"chanel_{channelId}");
         _session.Remove(ctx.ConnectionId);
+        if (_lobbySessions != null)
+            await _lobbySessions.ReleaseAsync(ctx.ConnectionId);
 
 
         await ctx.Clients.Group($"chanel_{channelId}")

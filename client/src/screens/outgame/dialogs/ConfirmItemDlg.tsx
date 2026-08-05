@@ -357,6 +357,7 @@ export default function ConfirmItemDlg({ onClose, majItems, onMajItemsChange }: 
   const [pending, setPending] = useState<number | null>(null)  // 装備リクエスト中 index
   const layoutMode = useOutgameLayoutMode()
   const isMobile = layoutMode !== 'desktop'
+  const useResponsiveOwnedItemsDialog = ['desktop', 'mobileLandscape', 'mobilePortrait'].includes(layoutMode)
   const [dialogScale, setDialogScale] = useState(1)
 
   /* ─── ドラッグ移動 (OnNcHitTest: pt.y < 41 → HTCAPTION) ─── */
@@ -397,6 +398,34 @@ export default function ConfirmItemDlg({ onClose, majItems, onMajItemsChange }: 
     window.addEventListener('resize', updateScale)
     return () => window.removeEventListener('resize', updateScale)
   }, [isMobile])
+
+  /* ─── GetMajItemList (mjkc43e): モーダルを開くたびに最新の所持品を取得 ─── */
+  useEffect(() => {
+    const handler = (data: Record<string, unknown>) => {
+      if (isFailureResult(resultValue(data))) {
+        logConfirmItemDebug('mjkc43e failed', { keys: Object.keys(data), data })
+        return
+      }
+
+      const count = readCount(data)
+      const nextItems = Array.from({ length: count }, (_, index) => normalizeRawMajItem({
+        itemCode: readIndexed(data, 'mjkk58e', index),
+        buyDt: readIndexed(data, 'mjkk59e', index),
+        endDt: readIndexed(data, 'mjkk60e', index),
+        qty: readIndexed(data, 'mjkk140e', index),
+        useFlag: readIndexed(data, 'mjkk61e', index),
+      })).filter(item => item.itemCode !== '')
+
+      logConfirmItemDebug('mjkc43e received', { count, items: nextItems })
+      onMajItemsChange?.(nextItems)
+    }
+
+    SignalR.on('mjkc43e', handler)
+    SignalR.send('mjkc43e', {}).catch(() => {
+      logConfirmItemDebug('mjkc43e send failed', {})
+    })
+    return () => SignalR.off('mjkc43e', handler)
+  }, [onMajItemsChange])
 
   useEffect(() => {
     const nextSlots = classifyItems(majItems)
@@ -489,6 +518,81 @@ export default function ConfirmItemDlg({ onClose, majItems, onMajItemsChange }: 
   const canPageDown   = hasOverflow && topIdx + DRAW_MAX < slots.length  // 下方向にまだある
   const canPageUp     = hasOverflow && topIdx > 0                        // 上方向にまだある
 
+  if (useResponsiveOwnedItemsDialog) {
+    return (
+      <div className="responsive-owned-items-overlay" role="dialog" aria-modal="true" aria-label="所持アイテム">
+        <section className="responsive-owned-items">
+          <header className="responsive-owned-items__header">
+            <div>
+              <p>MAJAK4 STORE</p>
+              <h2>所持アイテム</h2>
+            </div>
+            <button type="button" onClick={onClose} aria-label="閉じる">x</button>
+          </header>
+          <main className="responsive-owned-items__content">
+            {slots.length === 0 ? (
+              <p className="responsive-owned-items__empty">所持アイテムはありません。</p>
+            ) : slots.map((slot, index) => {
+              const imageUrl = itemImageSrc(slot, sexIdx)
+              const equip = equipBtnState(slot)
+              return (
+                <article className="responsive-owned-items__row" key={`${slot.raw.itemCode}-${index}`}>
+                  <div className="responsive-owned-items__image">
+                    {imageUrl && <img src={imageUrl} alt="" />}
+                  </div>
+                  <div className="responsive-owned-items__detail">
+                    <div className="responsive-owned-items__title">
+                      <h3>{itemDisplayName(slot)}</h3>
+                      <span className={slot.useFlag ? 'is-equipped' : ''}>{slot.useFlag ? '使用中' : '所持中'}</span>
+                    </div>
+                    <p>{formatTerm(slot.raw)}</p>
+                  </div>
+                  {equip.visible && (
+                    <button
+                      className="responsive-owned-items__equip"
+                      type="button"
+                      disabled={!equip.enabled || pending === index}
+                      onClick={() => onEquip(index, slot)}
+                    >
+                      装備
+                    </button>
+                  )}
+                </article>
+              )
+            })}
+          </main>
+          <footer className="responsive-owned-items__footer">
+            <button type="button" onClick={onClose}>閉じる</button>
+          </footer>
+        </section>
+        <style>{`
+          .responsive-owned-items-overlay { position: absolute; inset: 0; z-index: 400; display: grid; place-items: center; padding: 12px; overflow: hidden; background: rgba(8,16,20,.76); box-sizing: border-box; font-family: var(--majak-font-family-ui); }
+          .responsive-owned-items { width: min(720px, 100%); height: min(100%, 560px); min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: #18312b; background: #f8f5ec; border: 1px solid #829287; box-shadow: 0 18px 54px rgba(0,0,0,.42); }
+          .responsive-owned-items__header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; color: #fff; background: #174b43; }
+          .responsive-owned-items__header p { display: none; }
+          .responsive-owned-items__header h2 { margin: 0; font-size: calc(18px * var(--majak-type-scale)); line-height: 1; }
+          .responsive-owned-items__header button { width: 29px; height: 29px; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: calc(18px * var(--majak-type-scale)); cursor: pointer; }
+          .responsive-owned-items__content { min-height: 0; flex: 1; padding: 10px; overflow: auto; overscroll-behavior: contain; }
+          .responsive-owned-items__row { display: grid; grid-template-columns: 52px minmax(0,1fr) auto; gap: 10px; align-items: center; min-height: 62px; padding: 7px; border-bottom: 1px solid #d5ddd2; background: #fffdf8; }
+          .responsive-owned-items__row:nth-child(even) { background: #f0f4ea; }
+          .responsive-owned-items__image { width: 52px; height: 52px; display: grid; place-items: center; background: #e6ece1; }
+          .responsive-owned-items__image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+          .responsive-owned-items__detail { min-width: 0; }
+          .responsive-owned-items__title { display: flex; gap: 7px; align-items: center; }
+          .responsive-owned-items__title h3 { min-width: 0; margin: 0; overflow: hidden; color: #1f302b; font: 700 calc(14px * var(--majak-type-scale))/1.2 var(--majak-font-family-ui); text-overflow: ellipsis; white-space: nowrap; }
+          .responsive-owned-items__title span { flex: none; padding: 3px 5px; color: #607069; background: #e3e9df; font: 700 calc(10px * var(--majak-type-scale))/1 var(--majak-font-family-ui); }
+          .responsive-owned-items__title span.is-equipped { color: #fff; background: #b84228; }
+          .responsive-owned-items__detail p { margin: 5px 0 0; overflow: hidden; color: #5b6d66; font: calc(11px * var(--majak-type-scale))/1.25 var(--majak-font-family-ui); text-overflow: ellipsis; white-space: nowrap; }
+          .responsive-owned-items__equip, .responsive-owned-items__footer button { border: 0; border-radius: 3px; padding: 8px 11px; color: #fff; background: #1b5b4d; font: 700 calc(12px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+          .responsive-owned-items__equip:disabled { color: #84908a; background: #d6ddd5; cursor: not-allowed; }
+          .responsive-owned-items__empty { margin: 0; padding: 34px 10px; color: #647069; text-align: center; font: calc(13px * var(--majak-type-scale)) var(--majak-font-family-ui); }
+          .responsive-owned-items__footer { display: flex; justify-content: flex-end; padding: 9px 14px; border-top: 1px solid #c8d0c2; background: #e7ede4; }
+          @media (max-width: 420px) { .responsive-owned-items-overlay { padding: 0; } .responsive-owned-items { width: 100%; height: 100%; } .responsive-owned-items__content { padding: 8px; } .responsive-owned-items__row { grid-template-columns: 44px minmax(0,1fr) auto; gap: 7px; min-height: 54px; padding: 6px; } .responsive-owned-items__image { width: 44px; height: 44px; } .responsive-owned-items__title h3 { font-size: calc(12px * var(--majak-type-scale)); } .responsive-owned-items__detail p { font-size: calc(10px * var(--majak-type-scale)); } .responsive-owned-items__equip { padding: 7px 8px; font-size: calc(11px * var(--majak-type-scale)); } }
+        `}</style>
+      </div>
+    )
+  }
+
   return (
     /* モーダルオーバーレイ */
     <div style={{
@@ -563,8 +667,8 @@ export default function ConfirmItemDlg({ onClose, majItems, onMajItemsChange }: 
                     position: 'absolute',
                     left: 97, top: 109 + 79 * i,
                     width: 147, height: 11,
-                    fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-                    fontSize: 12, fontWeight: 'bold', color: '#000',
+                    fontFamily: 'var(--majak-font-family-ui)',
+                    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
                     lineHeight: '11px',
                     textAlign: 'left',
                     overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
@@ -578,8 +682,8 @@ export default function ConfirmItemDlg({ onClose, majItems, onMajItemsChange }: 
                     position: 'absolute',
                     left: 257, top: 109 + 79 * i,
                     width: 363, height: 11,
-                    fontFamily: "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-                    fontSize: 12, fontWeight: 'bold', color: '#000',
+                    fontFamily: 'var(--majak-font-family-ui)',
+                    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
                     lineHeight: '11px',
                     textAlign: 'left',
                     overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',

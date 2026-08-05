@@ -71,7 +71,7 @@ export default function EndingPopupWnd({
           color: '#21332a',
           background: '#fbfcf7',
           boxShadow: '0 24px 64px rgba(0, 0, 0, 0.42)',
-          fontFamily: "'Noto Sans JP', 'Meiryo', 'MS PGothic', sans-serif",
+          fontFamily: 'var(--majak-font-family-ui)',
         }}
       >
         <div style={{ height: 6, background: '#2d7b49' }} />
@@ -87,7 +87,7 @@ export default function EndingPopupWnd({
                 borderRadius: 8,
                 color: '#1d6e41',
                 background: '#e3f2e7',
-                fontSize: 26,
+                fontSize: 'var(--majak-font-26)',
                 fontWeight: 700,
                 lineHeight: 1,
                 userSelect: 'none',
@@ -96,10 +96,10 @@ export default function EndingPopupWnd({
               ?
             </div>
             <div style={{ minWidth: 0, paddingTop: 2 }}>
-              <div id="majak-logout-confirm-title" style={{ marginBottom: 7, color: '#1c3024', fontSize: 18, fontWeight: 700, lineHeight: '24px' }}>
+              <div id="majak-logout-confirm-title" style={{ marginBottom: 7, color: '#1c3024', fontSize: 'var(--majak-font-18)', fontWeight: 700, lineHeight: '24px' }}>
                 ログアウト
               </div>
-              <div style={{ color: '#52635a', fontSize: 13, lineHeight: '20px', overflowWrap: 'anywhere' }}>
+              <div style={{ color: '#52635a', fontSize: 'var(--majak-font-13)', lineHeight: '20px', overflowWrap: 'anywhere' }}>
                 {message}
               </div>
             </div>
@@ -138,7 +138,7 @@ export default function EndingPopupWnd({
                 color: '#34443b',
                 background: '#f4f7f3',
                 font: 'inherit',
-                fontSize: 13,
+                fontSize: 'var(--majak-font-13)',
                 fontWeight: 700,
                 cursor: 'pointer',
               }}
@@ -160,7 +160,7 @@ export default function EndingPopupWnd({
                 background: '#267544',
                 boxShadow: '0 7px 16px rgba(30, 96, 55, 0.22)',
                 font: 'inherit',
-                fontSize: 13,
+                fontSize: 'var(--majak-font-13)',
                 fontWeight: 700,
                 cursor: 'pointer',
               }}

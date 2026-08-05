@@ -17,6 +17,7 @@ public class MajakGameHub : Hub
     private readonly PlayerSessionService               _session;
     private readonly RoomRegistryService                _roomRegistry;
     private readonly ChannelMemberService               _channelMemberSvc;
+    private readonly LobbySessionLeaseService           _lobbySessions;
     private readonly GameAuthTokenService               _gameAuth;
     private readonly IServiceProvider                   _sp;
 
@@ -24,12 +25,14 @@ public class MajakGameHub : Hub
         PlayerSessionService               session,
         RoomRegistryService                roomRegistry,
         ChannelMemberService               channelMemberSvc,
+        LobbySessionLeaseService           lobbySessions,
         GameAuthTokenService               gameAuth,
         IServiceProvider                   sp)
     {
         _session          = session;
         _roomRegistry     = roomRegistry;
         _channelMemberSvc = channelMemberSvc;
+        _lobbySessions    = lobbySessions;
         _gameAuth         = gameAuth;
         _sp               = sp;
     }
@@ -64,9 +67,11 @@ public class MajakGameHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        var player = _session.GetByConn(Context.ConnectionId);
-        var disconnectReason = _session.PeekDisconnectReason(Context.ConnectionId);
-        _sp.GetService<ILogger<MajakGameHub>>()?.LogWarning(exception,
+        try
+        {
+            var player = _session.GetByConn(Context.ConnectionId);
+            var disconnectReason = _session.PeekDisconnectReason(Context.ConnectionId);
+            _sp.GetService<ILogger<MajakGameHub>>()?.LogWarning(exception,
             "SignalR disconnected. connectionId={ConnectionId} memberNo={MemberNo} channelId={ChannelId} roomId={RoomId} seatPos={SeatPos} isViewer={IsViewer} isOutPlayer={IsOutPlayer} serverInitiated={ServerInitiated} reasonSource={ReasonSource} reason={Reason} reasonAt={ReasonAt:o} exceptionType={ExceptionType} exceptionMessage={ExceptionMessage} remoteIp={RemoteIpAddress}",
             Context.ConnectionId,
             player?.MemberNo ?? "",
@@ -82,27 +87,32 @@ public class MajakGameHub : Hub
             exception?.GetType().Name ?? "",
             exception?.Message ?? "",
             Context.GetHttpContext()?.Connection.RemoteIpAddress?.ToString() ?? "");
-        if (player != null)
-        {
-            if (player.RoomId != null)
+            if (player != null)
             {
-                await HandleRoomDisconnectAsync(player);
+                if (player.RoomId != null)
+                {
+                    await HandleRoomDisconnectAsync(player);
+                }
+                if (!string.IsNullOrEmpty(player.ChannelId))
+                {
+                    await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"chanel_{player.ChannelId}");
+                    await Clients.Group($"chanel_{player.ChannelId}")
+                        .SendAsync(Cmd.DeleteMember, new
+                        {
+                            memberNo = player.Pix,
+                            pix      = player.Pix,
+                            k3e      = player.Pix,
+                        });
+                    await _channelMemberSvc.LeaveAsync(player.ChannelId, player.MemberNo);
+                }
+                _session.Remove(Context.ConnectionId);
             }
-            if (!string.IsNullOrEmpty(player.ChannelId))
-            {
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"chanel_{player.ChannelId}");
-                await Clients.Group($"chanel_{player.ChannelId}")
-                    .SendAsync(Cmd.DeleteMember, new
-                    {
-                        memberNo = player.Pix,
-                        pix      = player.Pix,
-                        k3e      = player.Pix,
-                    });
-                await _channelMemberSvc.LeaveAsync(player.ChannelId, player.MemberNo);
-            }
-            _session.Remove(Context.ConnectionId);
         }
-        await base.OnDisconnectedAsync(exception);
+        finally
+        {
+            await _lobbySessions.ReleaseAsync(Context.ConnectionId);
+            await base.OnDisconnectedAsync(exception);
+        }
     }
 
     /// <summary>

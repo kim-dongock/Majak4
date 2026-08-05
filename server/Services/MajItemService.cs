@@ -195,7 +195,7 @@ public class MajItemService
         if (mast.CostGem > 0 && player.GemCount < mast.CostGem)
             return BuyMajItemResult.Fail("GEM_NOT_ENOUGH", EItemGemShort, "龍珠が足りません");
         if (mast.CostMoney > 0 && player.GamMoney < mast.CostMoney)
-            return BuyMajItemResult.Fail("MONEY_NOT_ENOUGH", EItemMoneyShort, "麻雀コインが足りません");
+            return BuyMajItemResult.Fail("MONEY_NOT_ENOUGH", EItemMoneyShort, "マネーが足りません");
 
         // 3. 必要称号チェック (前提条件)
         if (!string.IsNullOrEmpty(mast.RequiredTitle))
@@ -242,6 +242,10 @@ public class MajItemService
 
             player.GemCount -= mast.CostGem;
             player.GamMoney = Math.Max(0, player.GamMoney - mast.CostMoney);
+            if (mast.Category == CatBilling)
+                player.CashCount = await _itemRepo.GetCashCountAsync(player.MemberNo);
+
+            result = result with { CashCount = player.CashCount };
 
             int conditionType = mast.Category == CatBilling
                 ? MissionConditionBuyBillingItem
@@ -341,7 +345,8 @@ public class MajItemService
             subCode:  mast.SubCode ?? mast.ItemCode,
             validDays: mast.ValidDays,
             userIp:   player.IpAddress,
-            buyCate:  2);
+            buyCate:  2,
+            quantity: mast.Quantity);
 
         if (rtnVal != 1)
             return BuyMajItemResult.Fail($"BILLING_BUY_ERROR:{rtnVal}:{rtnMsg}", EItemDbError, string.IsNullOrEmpty(rtnMsg) ? "DBエラー" : rtnMsg);
@@ -474,6 +479,7 @@ public record BuyMajItemResult
     public int      Qty      { get; init; }
     public long     GamMoney { get; init; }
     public int      GemCount { get; init; }
+    public int      CashCount { get; init; }
 
     public static BuyMajItemResult Fail(string err, int errorCode = -1, string errorMessage = "") => new()
     {

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJSelGroupWnd 相当 — チャンネルグループ選択画面 (AP-09 §1-3)
  * レガシー: legacy/client/HgMajak2/MJSelGroupWnd.h/cpp
  *
@@ -168,8 +168,8 @@ export default function ChannelGroupScreen() {
           {player && (
             <div className="majak-mobile-member-info">
               <span className="majak-mobile-member-info__id">{player.name}</span>
-              <span>コイン : {gameMoneyText}</span>
-              <span>称号 : {gpData ? gpData.slevel : ''}</span>
+              <span>GP : {gameMoneyText} GP</span>
+              <span>資産 : {gpData ? gpData.slevel : ''}</span>
             </div>
           )}
         </section>
@@ -208,8 +208,8 @@ export default function ChannelGroupScreen() {
             position: 'absolute',
             left: tx,
             top: ty,
-            fontFamily: "'MS UI Gothic', 'Meiryo', 'MS Gothic', sans-serif",
-            fontSize: 18,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(18px * var(--majak-type-scale))',
             fontWeight: 'bold',
             color: '#ffffff',
             whiteSpace: 'nowrap',

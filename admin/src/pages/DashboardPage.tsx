@@ -50,9 +50,9 @@ export default function DashboardPage() {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="本日 GEM 充電"
-              value={stats?.gemChargedToday ?? 0}
-              suffix="GEM"
+              title="本日 キャッシュ 充電"
+              value={stats?.cashChargedToday ?? 0}
+              suffix="MP"
               prefix={<GiftOutlined />}
               valueStyle={{ color: '#722ed1' }}
             />
@@ -75,9 +75,9 @@ export default function DashboardPage() {
         <Col xs={24} sm={12}>
           <Card>
             <Statistic
-              title="今月 GEM 充電合計"
-              value={stats?.gemChargedThisMonth ?? 0}
-              suffix="GEM"
+              title="今月 キャッシュ 充電合計"
+              value={stats?.cashChargedThisMonth ?? 0}
+              suffix="MP"
               prefix={<GiftOutlined />}
             />
           </Card>

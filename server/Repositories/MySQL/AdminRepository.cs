@@ -172,16 +172,16 @@ public class AdminRepository
                 (SELECT COUNT(*) FROM player_account
                     WHERE account_status = 0
                       AND terms_agreed_at IS NOT NULL)                          AS pending_approval,
-                (SELECT COALESCE(SUM(gem_amount),0) FROM gem_charge_order
+                (SELECT COALESCE(SUM(cash_amount),0) FROM cash_charge_order
                     WHERE status = 'completed'
-                    AND completed_at >= CURDATE())                               AS gem_today,
-                (SELECT COALESCE(SUM(price_jpy),0) FROM gem_charge_order
+                    AND completed_at >= CURDATE())                               AS cash_today,
+                (SELECT COALESCE(SUM(price_jpy),0) FROM cash_charge_order
                     WHERE status = 'completed'
                     AND completed_at >= CURDATE())                               AS revenue_today,
-                (SELECT COALESCE(SUM(gem_amount),0) FROM gem_charge_order
+                (SELECT COALESCE(SUM(cash_amount),0) FROM cash_charge_order
                     WHERE status = 'completed'
-                    AND completed_at >= DATE_FORMAT(NOW(),'%Y-%m-01'))           AS gem_month,
-                (SELECT COALESCE(SUM(price_jpy),0) FROM gem_charge_order
+                    AND completed_at >= DATE_FORMAT(NOW(),'%Y-%m-01'))           AS cash_month,
+                (SELECT COALESCE(SUM(price_jpy),0) FROM cash_charge_order
                     WHERE status = 'completed'
                     AND completed_at >= DATE_FORMAT(NOW(),'%Y-%m-01'))           AS revenue_month";
 
@@ -192,8 +192,8 @@ public class AdminRepository
         return new DashboardStats(
             r.GetInt64("total_players"),  r.GetInt64("active_today"),
             r.GetInt64("pending_approval"),
-            r.GetInt64("gem_today"),      r.GetInt64("revenue_today"),
-            r.GetInt64("gem_month"),      r.GetInt64("revenue_month"));
+            r.GetInt64("cash_today"),     r.GetInt64("revenue_today"),
+            r.GetInt64("cash_month"),     r.GetInt64("revenue_month"));
     }
 
     // ─── プレイヤー検索 ────────────────────────────────────────────────────
@@ -202,7 +202,7 @@ public class AdminRepository
     {
         const string sql = @"
              SELECT a.member_no, a.display_name, a.sex_code, a.avatar_id, a.account_status, a.last_login_at,
-                   w.game_money, w.gem_count
+                   w.game_money, w.gem_count, w.cash_count, w.paid_cash_count, w.free_cash_count
             FROM player_account a
              JOIN player_wallet w ON w.member_no = a.member_no
             WHERE (@kw IS NULL
@@ -222,7 +222,8 @@ public class AdminRepository
             list.Add(new PlayerSummary(
                 r.GetUInt64("member_no"), r.GetString("display_name"), r.GetString("sex_code"), r.GetString("avatar_id"),
                 r.GetInt32("account_status"), r.GetDateTime("last_login_at"),
-                r.GetInt64("game_money"), r.GetInt32("gem_count")));
+                r.GetInt64("game_money"), r.GetInt32("gem_count"), r.GetInt32("cash_count"),
+                r.GetInt32("paid_cash_count"), r.GetInt32("free_cash_count")));
         return list;
     }
 
@@ -231,7 +232,7 @@ public class AdminRepository
         const string sql = @"
             SELECT a.member_no, a.display_name, a.sex_code, a.avatar_id, a.account_status,
                    a.first_login_at, a.last_login_at,
-                   w.game_money, w.gem_count,
+                   w.game_money, w.gem_count, w.cash_count, w.paid_cash_count, w.free_cash_count,
                    p.common_rating, p.experience, p.weekly_point, p.last_played_at
             FROM player_account a
             JOIN player_wallet  w ON w.member_no = a.member_no
@@ -247,47 +248,65 @@ public class AdminRepository
         return new PlayerDetail(
             r.GetUInt64("member_no"), r.GetString("display_name"), r.GetString("sex_code"), r.GetString("avatar_id"),
             r.GetInt32("account_status"), r.GetDateTime("first_login_at"), r.GetDateTime("last_login_at"),
-            r.GetInt64("game_money"), r.GetInt32("gem_count"),
+            r.GetInt64("game_money"), r.GetInt32("gem_count"), r.GetInt32("cash_count"),
+            r.GetInt32("paid_cash_count"), r.GetInt32("free_cash_count"),
             r.GetInt32("common_rating"), r.GetInt32("experience"), r.GetInt32("weekly_point"),
             r.IsDBNull(lpOrd) ? null : r.GetDateTime(lpOrd));
     }
 
-    // ─── GEM 残高調整 ─────────────────────────────────────────────────────
+    // ─── キャッシュ残高調整 ────────────────────────────────────────────
     /// <summary>
-    /// player_wallet.gem_count を楽観ロック付きで更新する。
-    /// 返り値は (変更前残高, 変更後残高)。
+    /// 管理者調整で無償キャッシュを加算、または無償優先で回収する。
     /// </summary>
-    public async Task<(int Before, int After)> AdjustGemAsync(ulong memberNo, int amount)
+    public async Task<CashBalanceAdjustment> AdjustCashAsync(ulong memberNo, int amount)
     {
         await using var conn = await _db.CreateConnectionAsync();
         await using var tx   = await conn.BeginTransactionAsync();
         try
         {
             await using var selCmd = new MySqlCommand(
-                "SELECT gem_count, row_version FROM player_wallet " +
+                "SELECT cash_count, paid_cash_count, free_cash_count, row_version FROM player_wallet " +
                 "WHERE member_no = @m FOR UPDATE", conn, tx);
             selCmd.Parameters.AddWithValue("@m", memberNo);
             await using var r = await selCmd.ExecuteReaderAsync();
             if (!await r.ReadAsync()) throw new InvalidOperationException("player_wallet not found");
-            int before      = r.GetInt32("gem_count");
-            long rowVersion  = r.GetInt64("row_version");
+            int before = r.GetInt32("cash_count");
+            int paidBefore = r.GetInt32("paid_cash_count");
+            int freeBefore = r.GetInt32("free_cash_count");
+            long rowVersion = r.GetInt64("row_version");
             await r.CloseAsync();
 
-            int after = before + amount;
+            int after = checked(before + amount);
             if (after < 0)
-                throw new InvalidOperationException($"GEM balance would go negative: {before} + {amount}");
+                throw new InvalidOperationException($"Majak Cash balance would go negative: {before} + {amount}");
+
+            int paidAfter = paidBefore;
+            int freeAfter = freeBefore;
+            if (amount > 0)
+            {
+                freeAfter = checked(freeBefore + amount);
+            }
+            else
+            {
+                int deduction = -amount;
+                int freeDeduction = Math.Min(freeBefore, deduction);
+                freeAfter -= freeDeduction;
+                paidAfter -= deduction - freeDeduction;
+            }
 
             await using var updCmd = new MySqlCommand(
-                "UPDATE player_wallet SET gem_count = @after, " +
+                "UPDATE player_wallet SET cash_count = @after, paid_cash_count = @paidAfter, free_cash_count = @freeAfter, " +
                 "row_version = row_version + 1, updated_at = CURRENT_TIMESTAMP(3) " +
                 "WHERE member_no = @m AND row_version = @rv", conn, tx);
             updCmd.Parameters.AddWithValue("@after", after);
+            updCmd.Parameters.AddWithValue("@paidAfter", paidAfter);
+            updCmd.Parameters.AddWithValue("@freeAfter", freeAfter);
             updCmd.Parameters.AddWithValue("@m",     memberNo);
             updCmd.Parameters.AddWithValue("@rv",    rowVersion);
             await updCmd.ExecuteNonQueryAsync();
 
             await tx.CommitAsync();
-            return (before, after);
+            return new CashBalanceAdjustment(before, after, paidBefore, paidAfter, freeBefore, freeAfter);
         }
         catch
         {
@@ -296,25 +315,25 @@ public class AdminRepository
         }
     }
 
-    // ─── GEM 商品マスター ─────────────────────────────────────────────────
-    public async Task<IReadOnlyList<GemProduct>> GetGemProductsAsync()
+    // ─── キャッシュ商品マスター ────────────────────────────────────────
+    public async Task<IReadOnlyList<CashProduct>> GetCashProductsAsync()
     {
         const string sql =
-            "SELECT product_id, display_name, gem_amount, price_jpy, platform, " +
+            "SELECT product_id, display_name, cash_amount, price_jpy, platform, " +
             "store_product_id, is_active, sort_order " +
-            "FROM gem_product_master ORDER BY platform, sort_order";
+            "FROM cash_product_master ORDER BY platform, sort_order";
 
         await using var conn = await _db.CreateConnectionAsync();
         await using var cmd  = new MySqlCommand(sql, conn);
         await using var r    = await cmd.ExecuteReaderAsync();
-        var list = new List<GemProduct>();
+        var list = new List<CashProduct>();
         int spOrd = -1;
         while (await r.ReadAsync())
         {
             if (spOrd < 0) spOrd = r.GetOrdinal("store_product_id");
-            list.Add(new GemProduct(
+            list.Add(new CashProduct(
                 r.GetString("product_id"), r.GetString("display_name"),
-                r.GetInt32("gem_amount"),  r.GetInt32("price_jpy"),
+                r.GetInt32("cash_amount"), r.GetInt32("price_jpy"),
                 r.GetString("platform"),
                 r.IsDBNull(spOrd) ? null : r.GetString(spOrd),
                 r.GetBoolean("is_active"), r.GetInt32("sort_order")));
@@ -322,18 +341,45 @@ public class AdminRepository
         return list;
     }
 
-    public async Task UpdateGemProductAsync(GemProduct p)
+    public async Task<IReadOnlyList<CashProduct>> GetActiveWebCashProductsAsync()
     {
         const string sql =
-            "UPDATE gem_product_master SET " +
-            "display_name=@dn, gem_amount=@ga, price_jpy=@pj, " +
+            "SELECT product_id, display_name, cash_amount, price_jpy, platform, " +
+            "store_product_id, is_active, sort_order " +
+            "FROM cash_product_master " +
+            "WHERE platform = 'web' AND is_active = TRUE " +
+            "ORDER BY sort_order";
+
+        await using var conn = await _db.CreateConnectionAsync();
+        await using var cmd = new MySqlCommand(sql, conn);
+        await using var r = await cmd.ExecuteReaderAsync();
+        var list = new List<CashProduct>();
+        int spOrd = -1;
+        while (await r.ReadAsync())
+        {
+            if (spOrd < 0) spOrd = r.GetOrdinal("store_product_id");
+            list.Add(new CashProduct(
+                r.GetString("product_id"), r.GetString("display_name"),
+                r.GetInt32("cash_amount"), r.GetInt32("price_jpy"),
+                r.GetString("platform"),
+                r.IsDBNull(spOrd) ? null : r.GetString(spOrd),
+                r.GetBoolean("is_active"), r.GetInt32("sort_order")));
+        }
+        return list;
+    }
+
+    public async Task UpdateCashProductAsync(CashProduct p)
+    {
+        const string sql =
+            "UPDATE cash_product_master SET " +
+            "display_name=@dn, cash_amount=@ca, price_jpy=@pj, " +
             "store_product_id=@sp, is_active=@ia, sort_order=@so, " +
             "updated_at=CURRENT_TIMESTAMP(3) WHERE product_id=@id";
 
         await using var conn = await _db.CreateConnectionAsync();
         await using var cmd  = new MySqlCommand(sql, conn);
         cmd.Parameters.AddWithValue("@dn", p.DisplayName);
-        cmd.Parameters.AddWithValue("@ga", p.GemAmount);
+        cmd.Parameters.AddWithValue("@ca", p.CashAmount);
         cmd.Parameters.AddWithValue("@pj", p.PriceJpy);
         cmd.Parameters.AddWithValue("@sp", (object?)p.StoreProductId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("@ia", p.IsActive);
@@ -342,15 +388,15 @@ public class AdminRepository
         await cmd.ExecuteNonQueryAsync();
     }
 
-    // ─── GEM 売上統計 ─────────────────────────────────────────────────────
+    // ─── キャッシュ売上統計 ────────────────────────────────────────────
     public async Task<IReadOnlyList<DailyRevenue>> GetDailyRevenueAsync(int days)
     {
         const string sql = @"
             SELECT DATE(completed_at) AS revenue_date, platform,
                    COUNT(*)           AS order_count,
-                   SUM(gem_amount)    AS total_gem,
+                   SUM(cash_amount)   AS total_cash,
                    SUM(price_jpy)     AS total_jpy
-            FROM gem_charge_order
+            FROM cash_charge_order
             WHERE status = 'completed'
               AND completed_at >= DATE_SUB(CURDATE(), INTERVAL @days DAY)
             GROUP BY DATE(completed_at), platform
@@ -366,7 +412,7 @@ public class AdminRepository
                 DateOnly.FromDateTime(r.GetDateTime("revenue_date")),
                 r.GetString("platform"),
                 r.GetInt32("order_count"),
-                r.GetInt64("total_gem"),
+                r.GetInt64("total_cash"),
                 r.GetInt64("total_jpy")));
         return list;
     }
@@ -378,8 +424,8 @@ public record AdminAccount(ulong AdminNo, string Email, string Role, bool IsActi
 public record DashboardStats(
     long TotalPlayers, long ActivePlayersToday,
     long PendingApproval,
-    long GemChargedToday, long RevenueJpyToday,
-    long GemChargedThisMonth, long RevenueJpyThisMonth);
+    long CashChargedToday, long RevenueJpyToday,
+    long CashChargedThisMonth, long RevenueJpyThisMonth);
 
 public record PendingPlayer(
     ulong MemberNo, string DisplayName, string SexCode, string AvatarId,
@@ -388,19 +434,24 @@ public record PendingPlayer(
 public record PlayerSummary(
     ulong MemberNo, string DisplayName, string SexCode, string AvatarId,
     int AccountStatus, DateTime LastLoginAt,
-    long GameMoney, int GemCount);
+    long GameMoney, int GemCount, int CashCount, int PaidCashCount, int FreeCashCount);
 
 public record PlayerDetail(
     ulong MemberNo, string DisplayName, string SexCode, string AvatarId,
     int AccountStatus, DateTime FirstLoginAt, DateTime LastLoginAt,
-    long GameMoney, int GemCount,
+    long GameMoney, int GemCount, int CashCount, int PaidCashCount, int FreeCashCount,
     int CommonRating, int Experience, int WeeklyPoint, DateTime? LastPlayedAt);
 
-public record GemProduct(
-    string ProductId, string DisplayName, int GemAmount,
+public record CashBalanceAdjustment(
+    int TotalBefore, int TotalAfter,
+    int PaidBefore, int PaidAfter,
+    int FreeBefore, int FreeAfter);
+
+public record CashProduct(
+    string ProductId, string DisplayName, int CashAmount,
     int PriceJpy, string Platform, string? StoreProductId,
     bool IsActive, int SortOrder);
 
 public record DailyRevenue(
     DateOnly RevenueDate, string Platform,
-    int OrderCount, long TotalGem, long TotalJpy);
+    int OrderCount, long TotalCash, long TotalJpy);

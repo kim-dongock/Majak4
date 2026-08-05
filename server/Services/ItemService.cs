@@ -177,6 +177,7 @@ public class ItemService
 
         // 原典: 購入成功時は GetUserCustomItem で所持リストを再ロードする。
         await EnsureDefaultItemsAsync(player);
+        player.CashCount = await _itemRepo.GetCashCountAsync(player.MemberNo);
         return (Val.CustomSuccess, 1);
     }
 

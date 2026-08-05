@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMajakCustomDlg 相当 — カスタムショップ (AP-09 §3-2-3)
  * レガシー: legacy/client/HgMajak2/MajakCustomDlg.h/cpp
  *
@@ -54,6 +54,7 @@ import { useRef, useEffect, useState } from 'react'
 import * as SignalR from '../../../api/signalr'
 import { showError } from '../../../utils/msgbox'
 import { useAuthStore } from '../../../store/authStore'
+import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 const IMG      = '/assets/images/game'
 const IMG_ITEM = '/assets/images/game/items/custom'
@@ -172,6 +173,119 @@ function PageNum({ n, x, y }: { n: number; x: number; y: number }) {
   )
 }
 
+function ResponsiveCustomInventory({
+  tab,
+  setTab,
+  page,
+  totalPages,
+  pageItems,
+  currentId,
+  onSetItem,
+  onPreviousPage,
+  onNextPage,
+  onOpenShop,
+  onClose,
+}: {
+  tab: number
+  setTab: (tab: number) => void
+  page: number
+  totalPages: number
+  pageItems: CustomItem[]
+  currentId: number
+  onSetItem: (item: CustomItem) => void
+  onPreviousPage: () => void
+  onNextPage: () => void
+  onOpenShop: () => void
+  onClose: () => void
+}) {
+  const layoutMode = useOutgameLayoutMode()
+  const mobileClass = layoutMode === 'desktop' ? '' : ` custom-inventory--${layoutMode}`
+  const tabs = [
+    { value: TAB_CHARA, label: 'キャラ' },
+    { value: TAB_HAI, label: '牌' },
+    { value: TAB_BG, label: '背景' },
+    { value: TAB_OTHER, label: 'その他' },
+  ]
+
+  return <div className={`custom-inventory-overlay${mobileClass}`} role="dialog" aria-modal="true" aria-label="所持品">
+    <section className={`custom-inventory${mobileClass}`}>
+      <header className="custom-inventory__header">
+        <div><p>MAJAK4 COLLECTION</p><h2>所持品</h2></div>
+        <button type="button" onClick={onClose} aria-label="閉じる">x</button>
+      </header>
+      <nav className="custom-inventory__tabs" aria-label="所持品の種類">
+        {tabs.map(item => <button key={item.value} type="button" className={tab === item.value ? 'is-active' : ''} onClick={() => setTab(item.value)}>{item.label}</button>)}
+      </nav>
+      <main className="custom-inventory__content">
+        {pageItems.length === 0
+          ? <p className="custom-inventory__empty">所持しているアイテムはありません。</p>
+          : <div className="custom-inventory__grid">
+              {pageItems.map(item => {
+                const equipped = tab === TAB_OTHER || item.equipped || item.itemId === currentId
+                return <article className="custom-inventory__item" key={item.itemId}>
+                  <div className="custom-inventory__image"><img src={`${IMG_ITEM}/${item.imageFile}`} alt="" onError={event => { event.currentTarget.style.visibility = 'hidden' }} /></div>
+                  <h3>{item.itemName}</h3>
+                  {tab !== TAB_OTHER && <button type="button" disabled={equipped} onClick={() => onSetItem(item)}>{equipped ? '装備中' : '装備する'}</button>}
+                </article>
+              })}
+            </div>}
+      </main>
+      <footer className="custom-inventory__footer">
+        <button type="button" className="custom-inventory__shop" onClick={onOpenShop}>カスタムショップ</button>
+        <div className="custom-inventory__pager">
+          <button type="button" onClick={onPreviousPage} disabled={totalPages <= 1} aria-label="前のページ">←</button>
+          <span>{page} / {totalPages}</span>
+          <button type="button" onClick={onNextPage} disabled={totalPages <= 1} aria-label="次のページ">→</button>
+        </div>
+        <button type="button" className="custom-inventory__close" onClick={onClose}>閉じる</button>
+      </footer>
+    </section>
+    <style>{`
+      .custom-inventory-overlay { position: absolute; inset: 0; z-index: 300; display: grid; place-items: center; padding: 20px; overflow: hidden; background: rgba(8,16,20,.72); box-sizing: border-box; font-family: var(--majak-font-family-ui); }
+      .custom-inventory { width: min(1050px, 100%); height: min(650px, 100%); min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: #1d302b; border: 1px solid #748a7c; background: #f5f2e9; box-shadow: 0 24px 72px rgba(0,0,0,.42); }
+      .custom-inventory__header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; color: #fff; background: #174b43; }
+      .custom-inventory__header p { margin: 0; color: #d9bc62; font: 700 calc(10px * var(--majak-type-scale))/1 var(--majak-font-family-ui); letter-spacing: 1px; }
+      .custom-inventory__header h2 { margin: 2px 0 0; font-size: calc(25px * var(--majak-type-scale)); font-weight: 700; letter-spacing: 0; }
+      .custom-inventory__header button { width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: calc(22px * var(--majak-type-scale)); cursor: pointer; }
+      .custom-inventory__tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #a5afa5; background: #dbe0d7; }
+      .custom-inventory__tabs button { min-height: 48px; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 calc(14px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+      .custom-inventory__tabs button.is-active { color: #fff; background: #b84228; }
+      .custom-inventory__content { min-height: 0; flex: 1; padding: 18px; overflow: auto; }
+      .custom-inventory__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+      .custom-inventory__item { min-width: 0; min-height: 210px; display: flex; flex-direction: column; align-items: stretch; padding: 12px; border: 1px solid #c8d0c2; border-radius: 4px; background: #fffdf8; box-shadow: 0 2px 0 rgba(47,79,64,.08); }
+      .custom-inventory__image { height: 124px; display: grid; place-items: center; background: #f1eee4; }
+      .custom-inventory__image img { max-width: 100%; max-height: 100%; object-fit: contain; }
+      .custom-inventory__item h3 { margin: 10px 0; overflow: hidden; color: #1f302b; font-size: calc(16px * var(--majak-type-scale)); line-height: 1.35; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+      .custom-inventory__item button { margin-top: auto; border: 0; border-radius: 3px; padding: 9px; color: #fff; background: #1c5a4d; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+      .custom-inventory__item button:disabled { color: #718078; background: #d7ddd5; cursor: default; }
+      .custom-inventory__empty { padding: 48px; color: #647069; text-align: center; font: calc(14px * var(--majak-type-scale)) var(--majak-font-family-ui); }
+      .custom-inventory__footer { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; padding: 12px 18px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
+      .custom-inventory__footer button { border: 0; border-radius: 3px; padding: 10px 14px; color: #fff; background: #1c5a4d; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+      .custom-inventory__pager { display: flex; gap: 8px; align-items: center; justify-content: center; color: #385047; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); }
+      .custom-inventory__pager button { width: 34px; padding-inline: 0; }
+      .custom-inventory__pager button:disabled { color: #87918c; background: #d7ddd5; cursor: default; }
+      .custom-inventory__close { justify-self: end; color: #32453e !important; border: 1px solid #839087 !important; background: transparent !important; }
+      .custom-inventory--mobileLandscape, .custom-inventory--mobilePortrait { width: 100%; height: 100%; }
+      .custom-inventory-overlay--mobileLandscape, .custom-inventory-overlay--mobilePortrait { padding: 0; }
+      .custom-inventory--mobileLandscape .custom-inventory__header, .custom-inventory--mobilePortrait .custom-inventory__header { padding: 8px 10px; }
+      .custom-inventory--mobileLandscape .custom-inventory__header p, .custom-inventory--mobilePortrait .custom-inventory__header p { display: none; }
+      .custom-inventory--mobileLandscape .custom-inventory__header h2, .custom-inventory--mobilePortrait .custom-inventory__header h2 { margin: 0; font-size: calc(17px * var(--majak-type-scale)); }
+      .custom-inventory--mobileLandscape .custom-inventory__header button, .custom-inventory--mobilePortrait .custom-inventory__header button { width: 28px; height: 28px; font-size: calc(18px * var(--majak-type-scale)); }
+      .custom-inventory--mobileLandscape .custom-inventory__tabs button, .custom-inventory--mobilePortrait .custom-inventory__tabs button { min-height: 38px; font-size: calc(11px * var(--majak-type-scale)); }
+      .custom-inventory--mobileLandscape .custom-inventory__content, .custom-inventory--mobilePortrait .custom-inventory__content { padding: 8px; }
+      .custom-inventory--mobileLandscape .custom-inventory__grid, .custom-inventory--mobilePortrait .custom-inventory__grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+      .custom-inventory--mobileLandscape .custom-inventory__item, .custom-inventory--mobilePortrait .custom-inventory__item { min-height: 150px; padding: 8px; }
+      .custom-inventory--mobileLandscape .custom-inventory__image, .custom-inventory--mobilePortrait .custom-inventory__image { height: 76px; }
+      .custom-inventory--mobileLandscape .custom-inventory__item h3, .custom-inventory--mobilePortrait .custom-inventory__item h3 { margin: 5px 0; font-size: calc(13px * var(--majak-type-scale)); }
+      .custom-inventory--mobileLandscape .custom-inventory__item button, .custom-inventory--mobilePortrait .custom-inventory__item button { padding: 7px 5px; font-size: calc(11px * var(--majak-type-scale)); }
+      .custom-inventory--mobileLandscape .custom-inventory__footer, .custom-inventory--mobilePortrait .custom-inventory__footer { gap: 7px; padding: 8px; }
+      .custom-inventory--mobileLandscape .custom-inventory__footer button, .custom-inventory--mobilePortrait .custom-inventory__footer button { padding: 8px; font-size: calc(11px * var(--majak-type-scale)); }
+      .custom-inventory--mobilePortrait .custom-inventory__item { min-height: 178px; }
+      .custom-inventory--mobilePortrait .custom-inventory__image { height: 100px; }
+    `}</style>
+  </div>
+}
+
 /** ====================================================================
  * CMajakCustomDlg 本体
  * ==================================================================== */
@@ -191,7 +305,7 @@ export default function CustomDlg({
   const [items, setItems] = useState<CustomItem[]>([])
   const [page,  setPage]  = useState(1)
   const [dialogScale, setDialogScale] = useState(1)
-  const ITEMS_PER_PAGE = 8
+  const ITEMS_PER_PAGE = 10
 
   useEffect(() => {
     const updateScale = () => {
@@ -331,6 +445,23 @@ export default function CustomDlg({
     { src: `${IMG}/mj_shp_tab_09.png`, x: 449, tab: TAB_OTHER, label: 'その他' },
   ]
 
+  const useResponsiveInventory = true
+  if (useResponsiveInventory) {
+    return <ResponsiveCustomInventory
+      tab={tab}
+      setTab={setTab}
+      page={page}
+      totalPages={totalPages}
+      pageItems={pageItems}
+      currentId={currentId}
+      onSetItem={onSetItem}
+      onPreviousPage={() => setPage(current => current <= 1 ? totalPages : current - 1)}
+      onNextPage={() => setPage(current => current >= totalPages ? 1 : current + 1)}
+      onOpenShop={handleOpenShop}
+      onClose={onClose}
+    />
+  }
+
   return (
     /* モーダルオーバーレイ */
     <div
@@ -380,8 +511,8 @@ export default function CustomDlg({
           style={{
             position: 'absolute',
             left: 218, top: 7, width: 227, height: 15,
-            fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-            fontSize: 15, fontWeight: 'bold', color: '#fff',
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(15px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
             textAlign: 'center', pointerEvents: 'none',
           }}
         >
@@ -480,8 +611,8 @@ export default function CustomDlg({
                   top: 100 + oy(i),
                   width: 132,
                   height: 24,
-                  fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-                  fontSize: 12, fontWeight: 'bold', color: '#000',
+                  fontFamily: 'var(--majak-font-family-ui)',
+                  fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
                   textAlign: 'center',
                   overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                   pointerEvents: 'none',
@@ -560,8 +691,8 @@ export default function CustomDlg({
           style={{
             position: 'absolute',
             left: 150, top: 453, width: 85, height: 11,
-            fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-            fontSize: 12, fontWeight: 'bold', color: '#000',
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
             textAlign: 'right', pointerEvents: 'none',
           }}
         >
@@ -571,8 +702,8 @@ export default function CustomDlg({
           style={{
             position: 'absolute',
             left: 150, top: 480, width: 85, height: 11,
-            fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif",
-            fontSize: 12, fontWeight: 'bold', color: '#000',
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
             textAlign: 'right', pointerEvents: 'none',
           }}
         >

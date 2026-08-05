@@ -8,6 +8,7 @@ interface AuthState {
   setAuth: (token: string, email: string, role: string) => void
   clearAuth: () => void
   isSuperAdmin: () => boolean
+  canManageGem: () => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -19,6 +20,7 @@ export const useAuthStore = create<AuthState>()(
       setAuth: (token, email, role) => set({ token, email, role }),
       clearAuth: () => set({ token: null, email: null, role: null }),
       isSuperAdmin: () => get().role === 'super_admin',
+      canManageGem: () => get().role === 'super_admin' || get().role === 'operator',
     }),
     { name: 'majak2-admin-auth' },
   ),

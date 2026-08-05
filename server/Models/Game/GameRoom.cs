@@ -5,6 +5,8 @@ using MajakServer.Models.Protocol;
 
 namespace MajakServer.Models.Game;
 
+public sealed record TrainingNpcProfile(string Name, string AvatarId, string Sex);
+
 /// <summary>
 /// ゲームルーム状態 (メモリ専用) — 原典: HMajRoomServer
 /// </summary>
@@ -111,6 +113,9 @@ public class GameRoom
 
     // 席 (0-3), null = 空席
     public MajakPlayer?[] Seats { get; } = new MajakPlayer?[4];
+
+    // 練習場の空席 NPC 表示情報。対局開始ごとに再生成し、終局結果まで同じ値を使う。
+    public TrainingNpcProfile?[] TrainingNpcProfiles { get; } = new TrainingNpcProfile?[4];
 
     // OKボタン状態配列 (原典: m_bReadyToPlay[PLAYER_MAX_COUNT])
     public bool[] OkButtonStates { get; } = new bool[4];

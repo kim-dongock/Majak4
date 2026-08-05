@@ -435,7 +435,7 @@ public class RoomGetMembersCommand : ICommand
             skillCount = member.ActiveRecord.MatchCnt,
             trickTitle = member.TrickTitle,
             majakTitle = member.MajakTitle,
-            isHost = member.MemberNo == hostId,
+            isHost = member.Pix == hostId,
             isViewer = playerType == GKey.ValueViewer,
         });
     }

@@ -114,12 +114,12 @@ public class MissionService
         if (weeklyPoint < mastInfo.MustPoint)
             return (false, player.GamMoney, player.GemCount, "ポイントが足りません。");
 
-        // 4. 報酬付与 (REWARDTYPE: 1=コイン, 2=ジェム)
+        // 4. 報酬付与 (REWARDTYPE: 1=マネー, 2=ジェム)
         string rewardName;
         switch (mastInfo.RewardType)
         {
             case 1: // MSN_RT_COIN
-                rewardName = "無料コイン";
+                rewardName = "無料マネー";
                 player.GamMoney = Math.Max(0, player.GamMoney + mastInfo.RewardCnt);
                 _ratingService.UpdatePlayerLevel(player);
                 break;

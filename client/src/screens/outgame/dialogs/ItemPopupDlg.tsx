@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CItemPopupDlg 相当 — アイテムポップアップ (AP-09 §3-2-2)
  * レガシー: legacy/client/HgMajak2/ItemPopupDlg.h/cpp
  *
@@ -48,7 +48,7 @@ import { SHOP_ITEM_DATA_BUY } from './shopItemData'
 import { playMajakSfx } from '../../../utils/majakSound'
 
 const IMG = '/assets/images/game'
-const FONT = "'MS PGothic', 'MS UI Gothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 
 /** itemPopupReason 相当 */
 export const POPUP_REASON = {
@@ -155,7 +155,7 @@ function getTitle(reason: PopupReason): string {
 function getMessage(reason: PopupReason, gamMoney = 0, callerMessage = ''): string {
   switch (reason) {
     case POPUP_REASON.FREE:
-      return `無料補充で${Math.trunc(gamMoney)}円になりました。\n1日の最大 自動補充回数を全部使いました。`
+      return `無料補充で${Math.trunc(gamMoney).toLocaleString('ja-JP')} GPになりました。\n1日の最大 自動補充回数を全部使いました。`
     case POPUP_REASON.USEDUP:
       return '1日の最大自動補充回数を全部使いました。\n（自動補充回数の回復は朝6時ごろです）'
     case POPUP_REASON.CANTSTAY1:
@@ -163,9 +163,9 @@ function getMessage(reason: PopupReason, gamMoney = 0, callerMessage = ''): stri
     case POPUP_REASON.CANTSTAY3:
       return callerMessage
     case POPUP_REASON.EVENTENTRY:
-      return '大会に対局するためにはコインアイテムの購入が必要になります。'
+      return '大会に対局するためにはGPアイテムの購入が必要になります。'
     case POPUP_REASON.EVENTENTRY2:
-      return '予選（無料）の予選通過条件を満たしていない場合は、\nGEMでコインアイテムを購入する必要があります'
+      return '予選（無料）の予選通過条件を満たしていない場合は、\nキャッシュでGPアイテムを購入する必要があります'
     default:
       return ''
   }
@@ -188,15 +188,7 @@ function getMsgRect(reason: PopupReason): { left: number; top: number; width: nu
 }
 
 function makeMoneyString(value: number): string {
-  const digits = String(Math.abs(Math.trunc(value)))
-  const units = ['', '万', '億', '兆', '京']
-  const parts: string[] = []
-  for (let end = digits.length, unit = 0; end > 0; end -= 4, unit++) {
-    const start = Math.max(0, end - 4)
-    const part = Number(digits.slice(start, end))
-    if (part > 0) parts.unshift(`${part}${units[unit] ?? ''}`)
-  }
-  return `${value < 0 ? '-' : ''}${parts.length > 0 ? parts.join('') : '0'}円`
+  return `${Math.trunc(value).toLocaleString('ja-JP')} GP`
 }
 
 function getBuyDialogDescription(item: PopupItemData): string[] {
@@ -205,7 +197,7 @@ function getBuyDialogDescription(item: PopupItemData): string[] {
       `${item.itemNameSub}の間、獲得できる龍珠が${item.itemNameSub2}になります。`,
       '※対局終了時にアイテムの効果が有効である必要があります。',
       '※龍珠2倍と龍珠3倍が同時に有効な場合は龍珠4倍となります。',
-      `※オマケとして麻雀コイン${makeMoneyString(item.gameMoney ?? 0)}が付いてきます。`,
+      `※オマケとして${makeMoneyString(item.gameMoney ?? 0)}が付いてきます。`,
     ]
   }
   return [
@@ -213,7 +205,7 @@ function getBuyDialogDescription(item: PopupItemData): string[] {
     '無料になります。',
     '※ハイ卓は対象外となります。',
     '※対局終了時に効果が有効である必要があります。',
-    `※オマケとして麻雀コイン${makeMoneyString(item.gameMoney ?? 0)}が付いてきます。`,
+    `※オマケとして${makeMoneyString(item.gameMoney ?? 0)}が付いてきます。`,
   ]
 }
 
@@ -229,7 +221,7 @@ export default function ItemPopupDlg({
   pix = '',
   memberName = '',
   hanCoin = -1,
-  hanCoinCoupon = -1,
+  hanCoinCoupon: _hanCoinCoupon = -1,
   onClose,
   onBuyItem,
 }: Props) {
@@ -319,7 +311,7 @@ export default function ItemPopupDlg({
             position: 'absolute',
             left: 148, top: 7, width: 216, height: 15,  /* 364-148=216, 22-7=15 */
             fontFamily: FONT,
-            fontSize: 15, fontWeight: 'bold', color: '#fff',
+            fontSize: 'calc(15px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
             textAlign: 'center', pointerEvents: 'none',
           }}
         >
@@ -341,7 +333,7 @@ export default function ItemPopupDlg({
             width: msgRect.width,
             height: msgRect.height,
             fontFamily: FONT,
-            fontSize: 12, fontWeight: 'bold', color: '#000',
+            fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
             textAlign: 'center',
             whiteSpace: 'pre-line',
             pointerEvents: 'none',
@@ -410,7 +402,7 @@ export default function ItemPopupDlg({
                 width: 130,  /* 170-40=130 */
                 height: 11,  /* 198-187=11 */
                 fontFamily: FONT,
-                fontSize: 12, fontWeight: 'bold', color: '#000',
+                fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
                 textAlign: 'center',
                 overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                 pointerEvents: 'none',
@@ -428,7 +420,7 @@ export default function ItemPopupDlg({
                 width: 130,
                 height: 11,  /* 210-199=11 */
                 fontFamily: FONT,
-                fontSize: 12, fontWeight: 'bold', color: 'rgb(40,160,100)',
+                fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: 'rgb(40,160,100)',
                 textAlign: 'center',
                 overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                 pointerEvents: 'none',
@@ -446,7 +438,7 @@ export default function ItemPopupDlg({
                 width: 62,   /* 108-46=62 */
                 height: 11,  /* 323-312=11 */
                 fontFamily: FONT,
-                fontSize: 12, fontWeight: 'bold', color: '#000',
+                fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
                 textAlign: 'right',
                 pointerEvents: 'none',
               }}
@@ -493,7 +485,6 @@ export default function ItemPopupDlg({
           pix={pix}
           memberName={memberName || pix}
           hanCoin={hanCoin}
-          hanCoupon={hanCoinCoupon}
           onClose={() => setBuyTarget(null)}
           onBuyOK={() => {
             onBuyItem?.(buyTarget)

@@ -430,7 +430,14 @@ public class AutoEnterRoomCommand : ICommand
                 await _roomRegistry.UpdateMemberCountAsync(roomId, player.ChannelId, room.ActivePlayerCount);
         }
 
-        await ctx.Caller.SendAsync(Cmd.AutoEnterRoom, new { result = 1, roomId });
+        // The Web client needs the authoritative state to distinguish a reserved
+        // tournament room from a playing-room reconnect before mounting the table.
+        await ctx.Caller.SendAsync(Cmd.AutoEnterRoom, new
+        {
+            result = 1,
+            roomId,
+            state = (int)room.State,
+        });
 
 
 

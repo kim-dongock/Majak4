@@ -89,7 +89,7 @@ export default function ViewerListWnd({ viewers, x = X_VIEWER_WINDOW, y = Y_VIEW
               alt={viewer.name || viewer.pix}
               draggable={false}
               onError={e => { e.currentTarget.src = getDefaultAvatarUrl(sex) }}
-              style={{ width: W_VIEWAVA, height: H_VIEWAVA, objectFit: 'cover', imageRendering: 'pixelated' }}
+              style={{ width: W_VIEWAVA, height: H_VIEWAVA, objectFit: 'cover', imageRendering: 'auto' }}
             />
           </div>
         )

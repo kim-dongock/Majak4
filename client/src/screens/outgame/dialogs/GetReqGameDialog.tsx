@@ -37,7 +37,7 @@ const SX = (du: number) => Math.round(du * 1.5)
 const SY = (du: number) => Math.round(du * 1.625)
 const DLG_W = SX(166)
 const DLG_H = SY(225)
-const FONT = "'MS PGothic', 'ＭＳ Ｐゴシック', 'MS UI Gothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 const DLG_BG = '#d4d0c8'
 
 interface Props {
@@ -183,7 +183,7 @@ export default function GetReqGameDialog({
   const controlBase: CSSProperties = {
     position: 'absolute',
     fontFamily: FONT,
-    fontSize: 12,
+    fontSize: 'calc(12px * var(--majak-type-scale))',
     color: '#000',
     boxSizing: 'border-box',
   }
@@ -255,7 +255,7 @@ export default function GetReqGameDialog({
     >
       <div style={{ width: DLG_W * dialogScale, height: (DLG_H + TITLE_H) * dialogScale }}>
       <div style={{ position: 'relative', width: DLG_W, height: DLG_H + TITLE_H, transform: `scale(${dialogScale})`, transformOrigin: 'top left', boxShadow: '3px 3px 8px rgba(0,0,0,0.6)' }}>
-        <div style={{ height: TITLE_H, background: 'linear-gradient(to right, #000080, #1060d0)', display: 'flex', alignItems: 'center', paddingLeft: 8, boxSizing: 'border-box', fontFamily: FONT, fontSize: 12, fontWeight: 'bold', color: '#fff', userSelect: 'none' }}>
+        <div style={{ height: TITLE_H, background: 'linear-gradient(to right, #000080, #1060d0)', display: 'flex', alignItems: 'center', paddingLeft: 8, boxSizing: 'border-box', fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff', userSelect: 'none' }}>
           ゲームの申し込み
         </div>
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJHanRes 相当 — 半荘/東風 最終結果画面 (AP-09 §2-8)
  * レガシー: legacy/client/HgMajak2/MJHanRes.h/cpp
  *
@@ -27,6 +27,7 @@
  */
 import { useEffect, useState, type CSSProperties } from 'react'
 import { getAvatarUrl, getDefaultAvatarUrl } from '../../utils/resources'
+import { ResponsiveHanResult } from './ResponsiveResultOverlay'
 
 const IMG = '/assets/images/game'
 const CUSTOM_DEFAULT_ID_COSTUME = 100011
@@ -110,6 +111,32 @@ export interface HanResPlayer {
   prevNlevel?: number
   nlevel?: number
   levelName?: string
+  rating?: number
+  ratingChange?: number
+  matchCnt?: number
+  winCnt?: number
+  defeatCnt?: number
+  drawCnt?: number
+  gameMoney?: number
+  moneyChange?: number
+  dealerFee?: number
+  gemCount?: number
+  experience?: number
+  expGain?: number
+  horaCnt?: number
+  horaPoint?: number
+  hojuCnt?: number
+  richiCnt?: number
+  furoCnt?: number
+  doraCnt?: number
+  richiHoraCnt?: number
+  prevGradeLevel?: number
+  gradeLevel?: number
+  prevGradePoint?: number
+  gradePoint?: number
+  gradeAddPoint?: number
+  gradeNextPoint?: number
+  gradeUpDown?: number
   /** 自分自身フラグ */
   isMe?:     boolean
 }
@@ -148,7 +175,9 @@ function isDummyPlayer(player: HanResPlayer): boolean {
 }
 
 function getHanResAvatarUrl(player: HanResPlayer): string {
-  if (isDummyPlayer(player)) return `${IMG}/mj_aiAvtrL.png`
+  if (isDummyPlayer(player)) {
+    return player.avatarId ? getAvatarUrl(player.avatarId) : `${IMG}/mj_aiAvtrL.png`
+  }
   const charaId = player.charaId ?? 0
   if (charaId !== 0 && charaId !== CUSTOM_DEFAULT_ID_COSTUME) {
     const skinId = String(charaId).padStart(2, '0')
@@ -303,7 +332,7 @@ function HanCommandButton({ src, x, y, frameW, frameH, onClick }: {
 /** ====================================================================
  * CMJHanRes 本体
  * ==================================================================== */
-export default function HanRes({ players, hasTor, hasTip, isViewer, isTournament, displayScale = 1, displayOffsetY = 0, backdrop = false, onClose }: HanResProps) {
+export function LegacyHanRes({ players, hasTor, hasTip, isViewer, isTournament, displayScale = 1, displayOffsetY = 0, backdrop = false, onClose }: HanResProps) {
   const me = players.find(p => p.isMe)
   const shouldShowLevelDown = !isViewer && !isTournament && !!me && me.nlevel !== undefined && me.prevNlevel !== undefined && me.nlevel < me.prevNlevel
   const [showLevelDown, setShowLevelDown] = useState(false)
@@ -367,9 +396,14 @@ export default function HanRes({ players, hasTor, hasTip, isViewer, isTournament
                 <img
                   src={getHanResAvatarUrl(p)}
                   alt={getHanResDisplayName(p)}
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'auto' }}
                   onError={e => {
-                    if (isDummyPlayer(p)) return
+                    if (isDummyPlayer(p)) {
+                      if (!e.currentTarget.src.endsWith('/mj_aiAvtrL.png')) {
+                        e.currentTarget.src = `${IMG}/mj_aiAvtrL.png`
+                      }
+                      return
+                    }
                     (e.currentTarget as HTMLImageElement).src =
                       getDefaultAvatarUrl(getSexFallback(p.sex))
                   }}
@@ -383,8 +417,8 @@ export default function HanRes({ players, hasTor, hasTip, isViewer, isTournament
                 top: Y_PIX,
                 width: 105,
                 height: 14,
-                fontFamily: "'Noto Sans JP', 'Noto Sans JP', 'MS Gothic', monospace",
-                fontSize: 14,
+                fontFamily: 'var(--majak-font-family-ui)',
+                fontSize: 'calc(14px * var(--majak-type-scale))',
                 color: isDummyPlayer(p) ? '#e00000' : '#fff',
                 fontWeight: 'bold',
                 lineHeight: '14px',
@@ -451,7 +485,7 @@ export default function HanRes({ players, hasTor, hasTip, isViewer, isTournament
           return (
             <>
               <img src={`${IMG}/mj_endResultBoard_dn.png`} alt="" draggable={false} style={{ position: 'absolute', left: X_LEVEL, top: Y_LEVEL, imageRendering: 'pixelated', zIndex: 30 }} />
-              <div style={{ position: 'absolute', left: X_LVLDN, top: Y_LVLDN, width: 90, height: 30, zIndex: 31, color: '#fff', font: 'bold 30px MS Gothic, monospace', lineHeight: '30px', textAlign: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+              <div style={{ position: 'absolute', left: X_LVLDN, top: Y_LVLDN, width: 90, height: 30, zIndex: 31, color: '#fff', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(30px * var(--majak-type-scale))', fontWeight: 'bold', lineHeight: '30px', textAlign: 'center', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
                 {me.levelName ?? ''}
               </div>
             </>
@@ -463,4 +497,8 @@ export default function HanRes({ players, hasTor, hasTip, isViewer, isTournament
       </div>
     </div>
   )
+}
+
+export default function HanRes({ players, hasTor, hasTip, isViewer, isTournament, onClose }: HanResProps) {
+  return <ResponsiveHanResult players={players} hasTor={hasTor} hasTip={hasTip} isViewer={isViewer} isTournament={isTournament} onClose={onClose} />
 }

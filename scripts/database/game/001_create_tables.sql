@@ -24,11 +24,7 @@ CREATE TABLE player_account (
                                       ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (member_no),
     UNIQUE KEY idx_player_account_google_sub (google_sub),
-    INDEX idx_player_account_status_created (account_status, created_at),
-    CONSTRAINT chk_player_account_sex
-        CHECK (sex_code IN ('M', 'F', 'U')),
-    CONSTRAINT chk_player_account_status
-        CHECK (account_status IN (0, 1, 2))
+    INDEX idx_player_account_status_created (account_status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: player_wallet
@@ -39,13 +35,14 @@ CREATE TABLE player_wallet (
     earned_game_money  BIGINT      NOT NULL DEFAULT 0,
     loaned_game_money  BIGINT      NOT NULL DEFAULT 0,
     gem_count          INT         NOT NULL DEFAULT 0,
+    cash_count         INT         NOT NULL DEFAULT 0,
+    paid_cash_count    INT         NOT NULL DEFAULT 0,
+    free_cash_count    INT         NOT NULL DEFAULT 0,
     row_version        BIGINT UNSIGNED NOT NULL DEFAULT 0,
     created_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                    ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (member_no),
-    CONSTRAINT chk_player_wallet_game_money CHECK (game_money >= 0),
-    CONSTRAINT chk_player_wallet_gem_count CHECK (gem_count >= 0)
+    PRIMARY KEY (member_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: player_profile
@@ -68,9 +65,7 @@ CREATE TABLE player_profile (
     created_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                    ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (member_no),
-    CONSTRAINT chk_player_profile_experience CHECK (experience >= 0),
-    CONSTRAINT chk_player_profile_all_in_count CHECK (all_in_count >= 0)
+    PRIMARY KEY (member_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: player_mode_stats
@@ -113,9 +108,7 @@ CREATE TABLE player_mode_stats (
     created_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at         DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                    ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (member_no, mode_code),
-    CONSTRAINT chk_player_mode_stats_mode
-        CHECK (mode_code IN ('regular', 'compete', 'high_class', 'grade', 'agari', 'hgdp'))
+    PRIMARY KEY (member_no, mode_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: player_high_class_summary
@@ -144,11 +137,11 @@ CREATE TABLE player_high_class_yaku (
     PRIMARY KEY (member_no, yaku_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- テーブル: gem_product_master
-CREATE TABLE gem_product_master (
+-- テーブル: cash_product_master
+CREATE TABLE cash_product_master (
     product_id       VARCHAR(50)    NOT NULL,
     display_name     VARCHAR(100)   NOT NULL,
-    gem_amount       INT UNSIGNED   NOT NULL,
+    cash_amount      INT UNSIGNED   NOT NULL,
     price_jpy        INT UNSIGNED   NOT NULL,
     platform         ENUM('web','ios','android','all')
                                     NOT NULL DEFAULT 'all',
@@ -158,18 +151,16 @@ CREATE TABLE gem_product_master (
     created_at       DATETIME(3)    NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at       DATETIME(3)    NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                     ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (product_id),
-    CONSTRAINT chk_gem_product_gem_amount CHECK (gem_amount > 0),
-    CONSTRAINT chk_gem_product_price_jpy  CHECK (price_jpy > 0)
+    PRIMARY KEY (product_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- テーブル: gem_charge_order
-CREATE TABLE gem_charge_order (
+-- テーブル: cash_charge_order
+CREATE TABLE cash_charge_order (
     order_id         VARCHAR(64)    NOT NULL,
     member_no          BIGINT UNSIGNED NOT NULL,
     product_id       VARCHAR(50)    NOT NULL,
     platform         ENUM('web','ios','android') NOT NULL,
-    gem_amount       INT UNSIGNED   NOT NULL,
+    cash_amount      INT UNSIGNED   NOT NULL,
     price_jpy        INT UNSIGNED   NOT NULL,
     status           ENUM('pending','completed','failed','refunded')
                                     NOT NULL DEFAULT 'pending',
@@ -179,11 +170,9 @@ CREATE TABLE gem_charge_order (
     created_at       DATETIME(3)    NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     completed_at     DATETIME(3)    NULL,
     PRIMARY KEY (order_id),
-    INDEX idx_gem_order_member   (member_no),
-    INDEX idx_gem_order_status   (status, created_at),
-    INDEX idx_gem_order_pg_txn   (pg_txn_id),
-    CONSTRAINT chk_gem_order_gem_amount CHECK (gem_amount > 0),
-    CONSTRAINT chk_gem_order_price_jpy  CHECK (price_jpy > 0)
+    INDEX idx_cash_order_member  (member_no),
+    INDEX idx_cash_order_status  (status, created_at),
+    INDEX idx_cash_order_pg_txn  (pg_txn_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: gem_item_price
@@ -198,9 +187,7 @@ CREATE TABLE gem_item_price (
     created_at       DATETIME(3)    NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at       DATETIME(3)    NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                     ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (item_key, item_type),
-    CONSTRAINT chk_gem_item_price_gem      CHECK (gem_price >= 0),
-    CONSTRAINT chk_gem_item_price_money    CHECK (game_money_price >= 0)
+    PRIMARY KEY (item_key, item_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: admin_account
@@ -302,8 +289,7 @@ CREATE TABLE weekly_reward_master (
 
     reward_count    INT UNSIGNED    NOT NULL DEFAULT 0,
     required_point  SMALLINT UNSIGNED NOT NULL DEFAULT 0,
-    PRIMARY KEY (reward_id),
-    CONSTRAINT chk_weekly_reward_type CHECK (reward_type IN (1, 2))
+    PRIMARY KEY (reward_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: function_item_master
@@ -476,9 +462,7 @@ CREATE TABLE player_daily_mission (
     created_at      DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at      DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                     ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (member_no, mission_id),
-    CONSTRAINT chk_player_daily_mission_state
-        CHECK (mission_state IN (0, 1, 2))
+    PRIMARY KEY (member_no, mission_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: player_weekly_reward
@@ -491,9 +475,7 @@ CREATE TABLE player_weekly_reward (
     created_at      DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     updated_at      DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
                                     ON UPDATE CURRENT_TIMESTAMP(3),
-    PRIMARY KEY (member_no, reward_week, reward_id),
-    CONSTRAINT chk_player_weekly_reward_status
-        CHECK (receive_status IN (0, 1, 2))
+    PRIMARY KEY (member_no, reward_week, reward_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: player_title
@@ -546,9 +528,7 @@ CREATE TABLE player_present (
     sent_at         DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     received_at     DATETIME(3)     NULL,
     PRIMARY KEY (present_id),
-    INDEX idx_player_present_member_status (member_no, receive_status),
-    CONSTRAINT chk_player_present_status
-        CHECK (receive_status IN (0, 1, 2))
+    INDEX idx_player_present_member_status (member_no, receive_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: player_grade_rank
@@ -865,9 +845,7 @@ CREATE TABLE player_avatar_inventory (
     acquired_at    DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     PRIMARY KEY (inventory_id),
     INDEX idx_player_avatar_inventory_member (member_no, acquired_at),
-    INDEX idx_player_avatar_inventory_code (member_no, avatar_code),
-    CONSTRAINT chk_player_avatar_inventory_cost
-        CHECK (cost_money >= 0 AND cost_gem >= 0)
+    INDEX idx_player_avatar_inventory_code (member_no, avatar_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: player_daily_mission_history

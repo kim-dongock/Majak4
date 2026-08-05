@@ -167,8 +167,8 @@ function LegacyText({
   return (
     <div style={{
       position: 'absolute', left: x, top: y, width: w, height: h,
-      fontFamily: "'MS PGothic', 'MS UI Gothic', sans-serif",
-      fontSize: bold ? 20 : 12,
+      fontFamily: 'var(--majak-font-family-ui)',
+      fontSize: bold ? 'calc(20px * var(--majak-type-scale))' : 'calc(12px * var(--majak-type-scale))',
       fontWeight: bold ? 'bold' : 'normal',
       color: '#000', lineHeight: `${h}px`, textAlign: 'center',
       whiteSpace: 'pre-line', overflow: 'hidden', pointerEvents: 'none',

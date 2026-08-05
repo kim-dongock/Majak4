@@ -25,9 +25,9 @@ import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 import { showConfirm } from '../../utils/msgbox'
 
 const IMG = '/assets/images/game'
-const TRAINING_GUIDE = '４人に足りない分はＡＩが参加するので１人でも遊べます。\nコインが増減せず戦績も残りませんので練習にどうぞ。'
+const TRAINING_GUIDE = '４人に足りない分はＡＩが参加するので１人でも遊べます。\nGPが増減せず戦績も残りませんので練習にどうぞ。'
 const TRAINING_ENTRY_TITLE = '練習広場入場'
-const TRAINING_ENTRY_MESSAGE = 'ここは練習広場です。\n4人がそろわなくても対戦ができますが\n対戦した後の戦績や麻雀コインはゲーム終了時に元に戻ります。\n練習広場に入りますか？'
+const TRAINING_ENTRY_MESSAGE = 'ここは練習広場です。\n4人がそろわなくても対戦ができますが\n対戦した後の戦績やGPはゲーム終了時に元に戻ります。\n練習広場に入りますか？'
 
 /** ====================================================================
  * CMJBmpButton 相当 — AP-06 §2 4フレームスプライトボタン
@@ -123,16 +123,16 @@ function MobileLobbySpriteButton({
  * 14px Bold MS Gothic 白, 等幅
  * ==================================================================== */
 const INFO_KOURYU = [
-  '基本卓（場代   500円、レート  20、龍珠 1位:0 2位:0）',
-  'ハイ卓（場代 3,000円、レート 100、龍珠 1位:5 2位:2）',
+  '基本卓（場代   500 GP、レート  20、龍珠 1位:0 2位:0）',
+  'ハイ卓（場代 3,000 GP、レート 100、龍珠 1位:5 2位:2）',
   '練習卓（戦績が記録されない卓、レート・場代など全て0）',
 ]
 
 const INFO_DANI = [
-  '通常卓　（場代 500円、レート 20、龍珠 1位:1 2位:0、10級～初段）',
-  '段位卓　（場代 500円、レート 20、龍珠 1位:2 2位:0、初段～四段）',
-  '高段位卓（場代 500円、レート 20、龍珠 1位:3 2位:1、二段～九段）',
-  '十段位卓（場代 500円、レート 20、龍珠 1位:4 2位:2、四段～九段）',
+  '通常卓　（場代 500 GP、レート 20、龍珠 1位:1 2位:0、10級～初段）',
+  '段位卓　（場代 500 GP、レート 20、龍珠 1位:2 2位:0、初段～四段）',
+  '高段位卓（場代 500 GP、レート 20、龍珠 1位:3 2位:1、二段～九段）',
+  '十段位卓（場代 500 GP、レート 20、龍珠 1位:4 2位:2、四段～九段）',
 ]
 
 /** ====================================================================
@@ -389,8 +389,8 @@ function cntStyle(x: number, y: number): React.CSSProperties {
     position: 'absolute',
     left: x,
     top: y,
-    fontFamily: "'MS Gothic', 'MS UI Gothic', 'Meiryo', monospace",
-    fontSize: 18,
+    fontFamily: 'var(--majak-font-family-ui)',
+    fontSize: 'calc(18px * var(--majak-type-scale))',
     lineHeight: '18px',
     fontWeight: 'bold',
     color: '#ffffff',
@@ -405,8 +405,8 @@ function infoStyle(x: number, y: number): React.CSSProperties {
     position: 'absolute',
     left: x,
     top: y,
-    fontFamily: "'MS Gothic', 'MS UI Gothic', monospace",
-    fontSize: 14,
+    fontFamily: 'var(--majak-font-family-ui)',
+    fontSize: 'calc(14px * var(--majak-type-scale))',
     lineHeight: '14px',
     fontWeight: 'bold',
     color: '#ffffff',

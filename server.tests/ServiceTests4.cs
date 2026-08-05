@@ -1547,6 +1547,21 @@ public class GameLogicHelperTests
     }
 
     [Fact]
+    public void BuildMemberListPayload_MarksHostByPixInStructuredMembers()
+    {
+        var host = new MajakPlayer { MemberNo = "host-member-no", Pix = "host-pix", NickName = "Host", SeatPos = 0 };
+        var room = new GameRoom { CreatorNo = host.MemberNo };
+        room.Seats[0] = host;
+
+        var payload = MajakServer.Commands.Room.RoomGetMembersCommand.BuildMemberListPayload(room);
+        var members = Assert.IsAssignableFrom<IEnumerable<object>>(payload["members"]);
+        var hostMember = JsonSerializer.SerializeToElement(Assert.Single(members));
+
+        Assert.Equal("host-pix", payload[GKey.RoomHost]);
+        Assert.True(hostMember.GetProperty("isHost").GetBoolean());
+    }
+
+    [Fact]
     public void BuildAddMemberPayload_IncludesLegacyRoomExtensionFields()
     {
         var player = new MajakPlayer
@@ -1618,6 +1633,22 @@ public class GameLogicHelperTests
             .GetMethod("BuildHanchanInfo",
                 BindingFlags.NonPublic | BindingFlags.Static)!;
         return CommandTestHelper.ToDict(method.Invoke(null, new object[] { room })!);
+    }
+
+    private static void InvokePrepareTrainingNpcProfiles(GameRoom room)
+    {
+        var method = typeof(GameLogicService)
+            .GetMethod("PrepareTrainingNpcProfiles",
+                BindingFlags.NonPublic | BindingFlags.Static)!;
+        method.Invoke(null, new object[] { room });
+    }
+
+    private static Dictionary<string, object?> InvokeBuildGameResultPayload(GameRoom room, GameReport report)
+    {
+        var method = typeof(GameLogicService)
+            .GetMethod("BuildGameResultPayload",
+                BindingFlags.NonPublic | BindingFlags.Instance)!;
+        return CommandTestHelper.ToDict(method.Invoke(BuildService(), new object[] { room, report })!);
     }
 
     private static async Task<List<Dictionary<string, object?>>> InvokeSendPaiInfoToAll(GameRoom room)
@@ -1763,6 +1794,44 @@ public class GameLogicHelperTests
         Assert.Equal("seat0", memberInfo[1].GetProperty("memberNo").GetString());
         Assert.Equal(0, memberInfo[1].GetProperty("playerPos").GetInt32());
         Assert.Equal(1, memberInfo[1].GetProperty("engineOrder").GetInt32());
+    }
+
+    [Fact]
+    public void TrainingNpcProfile_IsStableAcrossHanchanAndGameResultPayloads()
+    {
+        var room = new GameRoom { RoomId = 11, SubId = "00T5A", RoomOption = "120000001000000" };
+        room.AddPlayer(new MajakPlayer { MemberNo = "host", Pix = "host-pix", NickName = "Host", ConnectionId = "c0" }, 0);
+        room.Engine.InitHanchan(new RuleInfo());
+        room.Engine.HanchanInfo = new Engine.HanchanInfo
+        {
+            Player = new[] { 0, 1, 2, 3 },
+        };
+        InvokePrepareTrainingNpcProfiles(room);
+
+        var npcProfiles = room.TrainingNpcProfiles.Where(profile => profile != null).Select(profile => profile!).ToArray();
+        Assert.Equal(new[] { "NPC 1", "NPC 2", "NPC 3" }, npcProfiles.Select(profile => profile.Name).ToArray());
+        Assert.Equal(3, npcProfiles.Select(profile => profile.AvatarId).Distinct().Count());
+        Assert.All(npcProfiles, profile =>
+        {
+            Assert.StartsWith("thumbnail_", profile.AvatarId);
+            Assert.EndsWith(".png", profile.AvatarId);
+        });
+
+        var hanchanPayload = InvokeBuildHanchanInfo(room);
+        var memberInfo = ((JsonElement)hanchanPayload["memberInfo"]!).EnumerateArray().ToArray();
+        Assert.Equal("NPC 1", memberInfo[1].GetProperty("name").GetString());
+        Assert.Equal(npcProfiles[0].AvatarId, memberInfo[1].GetProperty("avatarId").GetString());
+
+        var report = new GameReport();
+        report.Users[0] = new GameReport.UserResult { MemberNo = "host", Ranking = 1 };
+        for (int seat = 1; seat < GameConst.PlayerMaxCount; seat++)
+            report.Users[seat] = new GameReport.UserResult { MemberNo = TournamentConst.NpcMemberNo, Ranking = seat + 1 };
+        var resultPayload = InvokeBuildGameResultPayload(room, report);
+        var users = ((JsonElement)resultPayload["users"]!).EnumerateArray().ToArray();
+
+        Assert.Equal("NPC 1", users[1].GetProperty("name").GetString());
+        Assert.Equal(memberInfo[1].GetProperty("avatarId").GetString(), users[1].GetProperty("avatarId").GetString());
+        Assert.Equal(TournamentConst.NpcMemberNo, users[1].GetProperty("pix").GetString());
     }
 
     [Fact]
@@ -1917,6 +1986,7 @@ public class GameLogicHelperTests
             ConnectionId = "c0",
         }, 0);
         room.Engine.InitHanchan(new RuleInfo { Yakitori = true, Tip = true });
+        room.Engine.HanchanInfo = new Engine.HanchanInfo { Player = new[] { 0, 1, 2, 3 } };
         Array.Fill(room.SeatToEngineOrder, -1);
         room.SeatToEngineOrder[0] = 0;
 

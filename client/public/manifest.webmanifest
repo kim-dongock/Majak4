@@ -1,0 +1,16 @@
+{
+  "name": "麻雀4",
+  "short_name": "麻雀4",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#073218",
+  "icons": [
+    {
+      "src": "/assets/images/common/ico_big_majak2.jpg",
+      "sizes": "any",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

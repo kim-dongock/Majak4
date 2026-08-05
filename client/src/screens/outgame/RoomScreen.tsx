@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJRoomWnd 相当 — ルーム待機画面 (AP-09 §1-12)
  * レガシー: legacy/client/HgMajak2/MJRoomWnd1.cpp / MJRoomWnd.h
  *
@@ -24,6 +24,7 @@ import { useCustomSkinStore } from '../../store/customSkinStore'
 import { isOk, showError, showMessage } from '../../utils/msgbox'
 import { readNoticePayload, type NoticeDisplay } from '../../utils/notice'
 import { sendAccuseComplaint } from '../../utils/accuse'
+import { getTabSessionId } from '../../utils/tabSession'
 import { MAJAK_ACCUSE_EVENT } from '../../components/MajakFrame'
 import CfgDlg, { loadMajakConfig, saveMajakConfig, type MJConfig } from './dialogs/CfgDlg'
 import AccuseDlg from './dialogs/AccuseDlg'
@@ -98,7 +99,11 @@ function buildGetMemberListPayload(channelId: string) {
   }
 }
 
-function buildEnterChannelPayload(channelId: string, player: ReturnType<typeof useAuthStore.getState>['player']) {
+function buildEnterChannelPayload(
+  channelId: string,
+  player: ReturnType<typeof useAuthStore.getState>['player'],
+  isContinue = false,
+) {
   const subId = extractSubId(channelId)
   const pix = player?.pix ?? ''
   const avatarId = player?.avatarId ?? ''
@@ -118,6 +123,8 @@ function buildEnterChannelPayload(channelId: string, player: ReturnType<typeof u
     avatarId,
     k7e: avatarId,
     password: player?.password ?? '',
+    tabId: getTabSessionId(),
+    mjkk33e: isContinue,
   }
 }
 
@@ -440,6 +447,32 @@ function readHanResPlayers(data: Record<string, unknown>, myPix: string): HanRes
     prevNlevel: user.prevNlevel !== undefined ? asNumber(user.prevNlevel, 0) : undefined,
     nlevel: user.nlevel !== undefined ? asNumber(user.nlevel, 0) : undefined,
     levelName: String(user.slevel ?? ''),
+    rating: user.rating !== undefined ? asNumber(user.rating, 0) : undefined,
+    ratingChange: user.ratingChange !== undefined ? asNumber(user.ratingChange, 0) : undefined,
+    matchCnt: user.matchCnt !== undefined ? asNumber(user.matchCnt, 0) : undefined,
+    winCnt: user.winCnt !== undefined ? asNumber(user.winCnt, 0) : undefined,
+    defeatCnt: user.defeatCnt !== undefined ? asNumber(user.defeatCnt, 0) : undefined,
+    drawCnt: user.drawCnt !== undefined ? asNumber(user.drawCnt, 0) : undefined,
+    gameMoney: user.gammoney !== undefined ? asNumber(user.gammoney, 0) : undefined,
+    moneyChange: user.moneyChange !== undefined ? asNumber(user.moneyChange, 0) : undefined,
+    dealerFee: user.dealerFee !== undefined ? asNumber(user.dealerFee, 0) : undefined,
+    gemCount: user.gemCount !== undefined ? asNumber(user.gemCount, 0) : undefined,
+    experience: user.experience !== undefined ? asNumber(user.experience, 0) : undefined,
+    expGain: user.expGain !== undefined ? asNumber(user.expGain, 0) : undefined,
+    horaCnt: user.horaCnt !== undefined ? asNumber(user.horaCnt, 0) : undefined,
+    horaPoint: user.horaPoint !== undefined ? asNumber(user.horaPoint, 0) : undefined,
+    hojuCnt: user.hojuCnt !== undefined ? asNumber(user.hojuCnt, 0) : undefined,
+    richiCnt: user.richiCnt !== undefined ? asNumber(user.richiCnt, 0) : undefined,
+    furoCnt: user.furoCnt !== undefined ? asNumber(user.furoCnt, 0) : undefined,
+    doraCnt: user.doraCnt !== undefined ? asNumber(user.doraCnt, 0) : undefined,
+    richiHoraCnt: user.richiHoraCnt !== undefined ? asNumber(user.richiHoraCnt, 0) : undefined,
+    prevGradeLevel: user.prevGradeLevel !== undefined ? asNumber(user.prevGradeLevel, 0) : undefined,
+    gradeLevel: user.gradeLevel !== undefined ? asNumber(user.gradeLevel, 0) : undefined,
+    prevGradePoint: user.prevGradePoint !== undefined ? asNumber(user.prevGradePoint, 0) : undefined,
+    gradePoint: user.gradePoint !== undefined ? asNumber(user.gradePoint, 0) : undefined,
+    gradeAddPoint: user.gradeAddPoint !== undefined ? asNumber(user.gradeAddPoint, 0) : undefined,
+    gradeNextPoint: user.gradeNextPoint !== undefined ? asNumber(user.gradeNextPoint, 0) : undefined,
+    gradeUpDown: user.gradeUpDown !== undefined ? asNumber(user.gradeUpDown, 0) : undefined,
     isMe: String(user.pix ?? user.k3e ?? user['member' + 'Id'] ?? '') === myPix,
   }))
 }
@@ -1591,7 +1624,9 @@ export default function RoomScreen() {
       if (typeof nextRoomTitle === 'string') setRoomTitle(nextRoomTitle)
       const nextRoomOption = data.k46e ?? data.roomOption
       if (typeof nextRoomOption === 'string') setCurrentRoomOption(nextRoomOption)
-      if (locState.resumePlaying) navigateToGame()
+      // Tournament reservation recovery can enter a waiting room. Only a
+      // server-confirmed playing room has resync packets to reconstruct.
+      if (locState.resumePlaying && Number(data.state ?? -1) === 2) navigateToGame()
     }
     SignalR.on('mjkc6e', onAutoEnterRoom)
 
@@ -1630,7 +1665,7 @@ export default function RoomScreen() {
       if (!mounted) return
       const lackMoney = Number(data.smmk3e ?? data.lackMoney ?? 0)
       if (lackMoney > 0) {
-        showError(`コインが不足しています。不足金額: ${lackMoney.toLocaleString()}円`)
+        showError(`GPが不足しています。不足金額: ${lackMoney.toLocaleString()} GP`)
         void exitRoomToLobby(me?.pos)
       }
     }
@@ -1716,8 +1751,9 @@ export default function RoomScreen() {
       if (!mounted) return
       logRejoinProbe('SignalR connected in setup', { forceRejoin, hubUrl })
       if (forceRejoin || !locState.skipEnterChannel) {
-        logRejoinProbe('send c1e enter channel', { forceRejoin })
-        await SignalR.send('c1e', buildEnterChannelPayload(channelId ?? '', player))
+        const isContinue = Boolean(locState.resumePlaying) || getDocumentNavigationType() === 'reload'
+        logRejoinProbe('send c1e enter channel', { forceRejoin, isContinue })
+        await SignalR.send('c1e', buildEnterChannelPayload(channelId ?? '', player, isContinue))
       }
       if (!mounted) return
       const roomActionKey = `${channelId ?? ''}:${roomId ?? ''}:${locState.mode ?? 'enter'}:${serverUrl}`
@@ -2322,8 +2358,8 @@ export default function RoomScreen() {
                 left: 815,
                 top: 18,
                 width: 126,
-                fontFamily: "'MS PGothic', 'MS Gothic', sans-serif",
-                fontSize: 12,
+                fontFamily: 'var(--majak-font-family-ui)',
+                fontSize: 'calc(12px * var(--majak-type-scale))',
                 lineHeight: '14px',
                 color: legacyPalette.roomTitle,
                 overflow: 'hidden',
@@ -2356,8 +2392,8 @@ export default function RoomScreen() {
             paddingRight: 9,
             overflowY: 'auto',
             overflowX: 'hidden',
-            fontFamily: "'Noto Sans JP', 'MS Gothic', monospace",
-            fontSize: 11,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(11px * var(--majak-type-scale))',
             color: legacyPalette.roomTitle,
             zIndex: 21,
             pointerEvents: 'auto',
@@ -2389,8 +2425,8 @@ export default function RoomScreen() {
             top: 294,
             width: 200,
             height: 12,
-            fontFamily: "'Noto Sans JP', 'MS Gothic', monospace",
-            fontSize: 10,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(10px * var(--majak-type-scale))',
             color: notice?.color ?? 'rgb(254,225,225)',
             overflow: 'hidden',
             whiteSpace: 'nowrap',
@@ -2417,8 +2453,8 @@ export default function RoomScreen() {
             paddingRight: 9,
             overflowY: 'auto',
             overflowX: 'hidden',
-            fontFamily: "'Noto Sans JP', 'MS Gothic', monospace",
-            fontSize: 11,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(11px * var(--majak-type-scale))',
             color: '#000',
             background: 'transparent',
             zIndex: 21,
@@ -2446,8 +2482,8 @@ export default function RoomScreen() {
             top: 593,
             width: 201,
             height: 16,
-            fontFamily: "'Noto Sans JP', 'MS Gothic', monospace",
-            fontSize: 11,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(11px * var(--majak-type-scale))',
             background: legacyPalette.chatEditBack,
             color: legacyPalette.chatEditText,
             border: 'none',
@@ -2843,8 +2879,8 @@ export default function RoomScreen() {
               top: namePos.top,
               width: 98,
               height: 14,
-              fontFamily: "'MS PGothic', 'MS Gothic', sans-serif",
-              fontSize: 12,
+              fontFamily: 'var(--majak-font-family-ui)',
+              fontSize: 'calc(12px * var(--majak-type-scale))',
               lineHeight: '14px',
               color: playerTextColor,
               zIndex: 10,
@@ -2861,8 +2897,8 @@ export default function RoomScreen() {
               top: textPos.top,
               width: textBlockWidth,
               height: 30,
-              fontFamily: "'MS PGothic', 'MS Gothic', sans-serif",
-              fontSize: 12,
+              fontFamily: 'var(--majak-font-family-ui)',
+              fontSize: 'calc(12px * var(--majak-type-scale))',
               lineHeight: '15px',
               color: playerTextColor,
               zIndex: 10,
@@ -2903,8 +2939,8 @@ export default function RoomScreen() {
           top: 18,
           width: 126,
           height: 14,
-          fontFamily: "'MS PGothic', 'MS Gothic', sans-serif",
-          fontSize: 12,
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(12px * var(--majak-type-scale))',
           lineHeight: '14px',
           color: legacyPalette.roomTitle,
           overflow: 'hidden',
@@ -2936,8 +2972,8 @@ export default function RoomScreen() {
           paddingRight: 9,
           overflowY: 'auto',
           overflowX: 'hidden',
-          fontFamily: "'Noto Sans JP', 'Noto Sans JP', 'MS Gothic', monospace",
-          fontSize: 11,
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(11px * var(--majak-type-scale))',
           color: '#000',
           background: 'transparent',
           pointerEvents: 'none',
@@ -2968,8 +3004,8 @@ export default function RoomScreen() {
           top: 294,
           width: 200,   /* 1009-809 */
           height: 12,   /* 337-325 */
-          fontFamily: "'Noto Sans JP', 'Noto Sans JP', 'MS Gothic', monospace",
-          fontSize: 10,
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(10px * var(--majak-type-scale))',
           color: notice?.color ?? 'rgb(254,225,225)',
           overflow: 'hidden',
           whiteSpace: 'nowrap',
@@ -2997,8 +3033,8 @@ export default function RoomScreen() {
           paddingRight: 9,
           overflowY: 'auto',
           overflowX: 'hidden',
-          fontFamily: "'Noto Sans JP', 'Noto Sans JP', 'MS Gothic', monospace",
-          fontSize: 11,
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(11px * var(--majak-type-scale))',
           color: '#000',
           background: 'transparent',
         }}
@@ -3026,8 +3062,8 @@ export default function RoomScreen() {
           top: 593,
           width: 201,   /* 1010-809 */
           height: 16,   /* 640-624 */
-          fontFamily: "'Noto Sans JP', 'Noto Sans JP', 'MS Gothic', monospace",
-          fontSize: 11,
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(11px * var(--majak-type-scale))',
           background: legacyPalette.chatEditBack,
           color: legacyPalette.chatEditText,
           border: 'none',

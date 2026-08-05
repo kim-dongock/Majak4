@@ -1,7 +1,7 @@
 import { api } from './client'
 import type {
   DashboardStats, PlayerSummary, PlayerDetail,
-  GemProduct, DailyRevenue, AdminAccount,
+  CashProduct, DailyRevenue, AdminAccount,
 } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────
@@ -38,19 +38,27 @@ export const userApi = {
     api.post<{ unsuspended: boolean }>(`/api/admin/users/${memberNo}/unsuspend`, {}),
 }
 
-// ── GEM ───────────────────────────────────────────────────────────────────
-export const gemApi = {
+// ── キャッシュ ───────────────────────────────────────────────────────────
+export const cashApi = {
   adjust: (memberNo: number, amount: number, memo: string) =>
-    api.post<{ memberNo: number; balanceBefore: number; balanceAfter: number }>(
-      '/api/admin/gem/adjust', { memberNo, amount, memo }),
+    api.post<{
+      memberNo: number
+      balanceBefore: number
+      balanceAfter: number
+      paidCashBefore: number
+      paidCashAfter: number
+      freeCashBefore: number
+      freeCashAfter: number
+    }>(
+      '/api/admin/cash/adjust', { memberNo, amount, memo }),
 
-  getProducts: () => api.get<GemProduct[]>('/api/admin/gem/products'),
+  getProducts: () => api.get<CashProduct[]>('/api/admin/cash/products'),
 
-  updateProduct: (p: GemProduct) =>
-    api.put<{ updated: boolean }>(`/api/admin/gem/products/${encodeURIComponent(p.productId)}`, p),
+  updateProduct: (p: CashProduct) =>
+    api.put<{ updated: boolean }>(`/api/admin/cash/products/${encodeURIComponent(p.productId)}`, p),
 
   getRevenue: (days = 30) =>
-    api.get<DailyRevenue[]>(`/api/admin/gem/revenue?days=${days}`),
+    api.get<DailyRevenue[]>(`/api/admin/cash/revenue?days=${days}`),
 }
 
 // ── Admin Accounts ────────────────────────────────────────────────────────

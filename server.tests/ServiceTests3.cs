@@ -1240,7 +1240,7 @@ public class EnterChannelPauseTests
         const string channelId = "MAJAK200000001";
         var repo = CreateEnterRepoLoadCommonFails();
         var session = new PlayerSessionService();
-        var owner = new MajakPlayer { ConnectionId = "old", MemberNo = "user01", ChannelId = channelId };
+        var owner = new MajakPlayer { ConnectionId = "old", MemberNo = "user01", ChannelId = channelId, TabId = "test-tab" };
         var room = session.CreateRoom(channelId, owner, "", 1, 0, 0, false);
         room.State = GameRoomState.Playing;
         owner.IsOutPlayer = true;
@@ -1267,7 +1267,7 @@ public class EnterChannelPauseTests
     }
 
     [Fact]
-    public async Task Execute_AbandonPreviousRoom_DetachesOldPlayingConnectionBeforeMultiLoginCheck()
+    public async Task Execute_AbandonPreviousRoom_DoesNotOverrideActivePlayingSession()
     {
         const string channelId = "MAJAK200000001";
         var repo = CreateEnterRepoLoadCommonFails();
@@ -1289,17 +1289,230 @@ public class EnterChannelPauseTests
 
         await cmd.ExecuteAsync(ctx);
 
-        Assert.True(owner.IsOutPlayer);
-        Assert.Equal(0, room.ActivePlayerCount);
+        Assert.False(owner.IsOutPlayer);
+        Assert.Equal(1, room.ActivePlayerCount);
         Assert.Same(room, session.GetRoom(room.RoomId));
-        Assert.Null(session.GetByMember("user01"));
-        Assert.DoesNotContain(sent, packet =>
+        Assert.Same(owner, session.GetByMember("user01"));
+        Assert.Contains(sent, packet =>
         {
             var dict = CommandTestHelper.ToDict(packet.packet);
             return dict.TryGetValue("error", out var error)
                 && error is System.Text.Json.JsonElement element
                 && element.GetString() == "USER_MULTI_LOGIN";
         });
+    }
+
+    [Fact]
+    public async Task Execute_ContinueRequest_DoesNotOverrideActiveTrainingSession()
+    {
+        const string channelId = "MAJAK2000T5A001";
+        var repo = CreateEnterRepoLoadCommonFails();
+        var session = new PlayerSessionService();
+        var owner = new MajakPlayer { ConnectionId = "old", MemberNo = "user01", ChannelId = channelId };
+        var room = session.CreateRoom(channelId, owner, "", 1, 0, 0, false, subId: "00T5A");
+        room.State = GameRoomState.Playing;
+        session.Register(owner);
+        var cmd = CreateEnterChannelCommand(session, repo.Object);
+        var (ctx, sent) = CommandTestHelper.MakeContext(new MajakPlayer { ConnectionId = "new" }, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.Pix] = "user01",
+            [GKey.Name] = "User",
+            [GKey.AvatarId] = "avatar01",
+            [Key.IsContinue] = 1,
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.True(room.IsTrainingChannel);
+        Assert.False(owner.IsOutPlayer);
+        Assert.Equal(1, room.ActivePlayerCount);
+        Assert.Same(owner, session.GetByMember("user01"));
+        Assert.Contains(sent, packet =>
+        {
+            var dict = CommandTestHelper.ToDict(packet.packet);
+            return dict.TryGetValue("error", out var error)
+                && error is System.Text.Json.JsonElement element
+                && element.GetString() == "USER_MULTI_LOGIN";
+        });
+    }
+
+    [Fact]
+    public async Task Execute_ActivePlayingSession_RejectsNewConnectionAndPreservesExistingPlayer()
+    {
+        const string channelId = "MAJAK200000001";
+        var repo = CreateEnterRepoLoadCommonFails();
+        var session = new PlayerSessionService();
+        var owner = new MajakPlayer { ConnectionId = "old", MemberNo = "user01", ChannelId = channelId };
+        var room = session.CreateRoom(channelId, owner, "", 1, 0, 0, false);
+        room.State = GameRoomState.Playing;
+        session.Register(owner);
+        var cmd = CreateEnterChannelCommand(session, repo.Object);
+        var (ctx, sent) = CommandTestHelper.MakeContext(new MajakPlayer { ConnectionId = "new" }, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.Pix] = "user01",
+            [GKey.Name] = "User",
+            [GKey.AvatarId] = "avatar01",
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Same(owner, session.GetByMember("user01"));
+        Assert.Same(owner, room.Seats[0]);
+        Assert.Contains(sent, packet => packet.method == Cmd.EnterChannel
+            && CommandTestHelper.ToDict(packet.packet).TryGetValue("error", out var error)
+            && error is System.Text.Json.JsonElement element
+            && element.GetString() == "USER_MULTI_LOGIN");
+        Assert.DoesNotContain(sent, packet => packet.method == "forcedLogout");
+    }
+
+    [Fact]
+    public async Task Execute_WaitingRoomSession_RejectsNewConnectionAndPreservesExistingPlayer()
+    {
+        const string channelId = "MAJAK200000001";
+        var repo = CreateEnterRepoLoadCommonFails();
+        var session = new PlayerSessionService();
+        var owner = new MajakPlayer { ConnectionId = "old", MemberNo = "user01", ChannelId = channelId };
+        var room = session.CreateRoom(channelId, owner, "", 1, 0, 0, false);
+        session.Register(owner);
+        var cmd = CreateEnterChannelCommand(session, repo.Object);
+        var (ctx, sent) = CommandTestHelper.MakeContext(new MajakPlayer { ConnectionId = "new" }, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.Pix] = "user01",
+            [GKey.Name] = "User",
+            [GKey.AvatarId] = "avatar01",
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Equal(room.RoomId, owner.RoomId);
+        Assert.Same(room, session.GetRoom(room.RoomId));
+        Assert.Same(owner, session.GetByMember("user01"));
+        Assert.Contains(sent, packet => packet.method == Cmd.EnterChannel
+            && CommandTestHelper.ToDict(packet.packet).TryGetValue("error", out var error)
+            && error is System.Text.Json.JsonElement element
+            && element.GetString() == "USER_MULTI_LOGIN");
+        Assert.DoesNotContain(sent, packet => packet.method == Cmd.ForcedLogout);
+    }
+
+    [Fact]
+    public async Task Execute_LobbySession_RejectsNewConnectionAndPreservesExistingPlayer()
+    {
+        const string channelId = "MAJAK200000001";
+        var repo = CreateEnterRepoLoadCommonFails();
+        var session = new PlayerSessionService();
+        var existing = new MajakPlayer { ConnectionId = "old", MemberNo = "user01", ChannelId = channelId };
+        session.Register(existing);
+        var cmd = CreateEnterChannelCommand(session, repo.Object);
+        var (ctx, sent) = CommandTestHelper.MakeContext(new MajakPlayer { ConnectionId = "new" }, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.Pix] = "user01",
+            [GKey.Name] = "User",
+            [GKey.AvatarId] = "avatar01",
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Same(existing, session.GetByMember("user01"));
+        Assert.Contains(sent, packet => packet.method == Cmd.EnterChannel
+            && CommandTestHelper.ToDict(packet.packet).TryGetValue("error", out var error)
+            && error is System.Text.Json.JsonElement element
+            && element.GetString() == "USER_MULTI_LOGIN");
+        Assert.DoesNotContain(sent, packet => packet.method == Cmd.ForcedLogout);
+    }
+
+    [Fact]
+    public async Task LobbySessionLease_DeniesSecondConnectionUntilOwnerReleases()
+    {
+        var leases = CreateLobbySessionLeaseService();
+        var firstAttempt = await leases.TryAcquireAsync("user01", "old", "tab-old");
+        Assert.Equal(LobbySessionLeaseStatus.Acquired, firstAttempt.Status);
+        firstAttempt.Lease!.Commit();
+
+        var deniedAttempt = await leases.TryAcquireAsync("user01", "new", "tab-new");
+        Assert.Equal(LobbySessionLeaseStatus.Denied, deniedAttempt.Status);
+
+        await leases.ReleaseAsync("old");
+        var retryAttempt = await leases.TryAcquireAsync("user01", "new", "tab-new");
+        Assert.Equal(LobbySessionLeaseStatus.Acquired, retryAttempt.Status);
+        await retryAttempt.Lease!.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task LobbySessionLease_SameTabReplacesConnectionWithoutLettingOldReleaseDeleteIt()
+    {
+        var leases = CreateLobbySessionLeaseService();
+        var originalAttempt = await leases.TryAcquireAsync("user01", "old", "tab-1");
+        originalAttempt.Lease!.Commit();
+
+        var replacementAttempt = await leases.TryAcquireAsync("user01", "new", "tab-1");
+        Assert.Equal(LobbySessionLeaseStatus.ReplacedSameTab, replacementAttempt.Status);
+        replacementAttempt.Lease!.Commit();
+
+        await leases.ReleaseAsync("old");
+        var otherTabAttempt = await leases.TryAcquireAsync("user01", "third", "tab-2");
+        Assert.Equal(LobbySessionLeaseStatus.Denied, otherTabAttempt.Status);
+
+        await leases.ReleaseAsync("new");
+        var afterReleaseAttempt = await leases.TryAcquireAsync("user01", "third", "tab-2");
+        Assert.Equal(LobbySessionLeaseStatus.Acquired, afterReleaseAttempt.Status);
+        await afterReleaseAttempt.Lease!.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task LobbySessionLease_UncommittedEntryIsReleasedAutomatically()
+    {
+        var leases = CreateLobbySessionLeaseService();
+        var failedEntryAttempt = await leases.TryAcquireAsync("user01", "failed", "tab-failed");
+        await failedEntryAttempt.Lease!.DisposeAsync();
+
+        var retryAttempt = await leases.TryAcquireAsync("user01", "retry", "tab-retry");
+        Assert.Equal(LobbySessionLeaseStatus.Acquired, retryAttempt.Status);
+        await retryAttempt.Lease!.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Execute_GlobalLobbyLeaseExists_RejectsBeforeLoadingPlayerData()
+    {
+        const string channelId = "MAJAK200000001";
+        var repo = CreateEnterRepoLoadCommonFails();
+        var session = new PlayerSessionService();
+        var leases = CreateLobbySessionLeaseService();
+        var ownerAttempt = await leases.TryAcquireAsync("user01", "other-server-connection", "other-tab");
+        ownerAttempt.Lease!.Commit();
+        var cmd = CreateEnterChannelCommand(session, repo.Object, leases);
+        var (ctx, sent) = CommandTestHelper.MakeContext(new MajakPlayer { ConnectionId = "new" }, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.Pix] = "user01",
+            [GKey.Name] = "User",
+            [GKey.AvatarId] = "avatar01",
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Contains(sent, packet => packet.method == Cmd.EnterChannel
+            && CommandTestHelper.ToDict(packet.packet).TryGetValue("error", out var error)
+            && error is System.Text.Json.JsonElement element
+            && element.GetString() == "USER_MULTI_LOGIN");
+        repo.Verify(r => r.LoadCommonRatAsync(It.IsAny<MajakPlayer>()), Times.Never);
+        await leases.ReleaseAsync("other-server-connection");
+    }
+
+    [Fact]
+    public async Task MemberEntryLock_SerializesRequestsForSameMember()
+    {
+        var session = new PlayerSessionService();
+        var firstLease = await session.AcquireMemberEntryLockAsync("user01");
+
+        var secondLeaseTask = session.AcquireMemberEntryLockAsync("user01");
+
+        Assert.False(secondLeaseTask.IsCompleted);
+        firstLease.Dispose();
+        using var secondLease = await secondLeaseTask;
     }
 
     [Fact]
@@ -1344,23 +1557,41 @@ public class EnterChannelPauseTests
         return repo;
     }
 
-    private static EnterChannelCommand CreateEnterChannelCommand(PlayerSessionService session, PlayerRepository repo)
-        => new(
+    private static EnterChannelCommand CreateEnterChannelCommand(
+        PlayerSessionService session,
+        PlayerRepository repo,
+        LobbySessionLeaseService? lobbySessions = null)
+    {
+        var redis = TestMasterCacheFactory.CreateRedisService();
+        var masterCache = TestMasterCacheFactory.Create(playerRepo: repo);
+        return new(
             session,
             repo,
             new RatingService(),
             null!,
             null!,
             null!,
-            null!,
-            null!,
+            new RoomRegistryService(redis),
+            new ChannelMemberService(redis),
             Options.Create(new ChannelServerSettings()),
-            null!,
+            new ServerLoadService(redis, new ChannelServerSettings()),
             new GradeRankService(new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(), new Mock<ILogger<GradeRankService>>().Object),
-            TestMasterCacheFactory.Create(playerRepo: repo),
-            new AdminIdService(TestMasterCacheFactory.Create(playerRepo: repo)),
+            masterCache,
+            new AdminIdService(masterCache),
             new MenteTimeService(new ServiceCollection().BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(), new Mock<ILogger<MenteTimeService>>().Object),
-            new Mock<ILogger<EnterChannelCommand>>().Object);
+            new Mock<ILogger<EnterChannelCommand>>().Object,
+            lobbySessions);
+    }
+
+    private static LobbySessionLeaseService CreateLobbySessionLeaseService()
+        => new(
+            TestMasterCacheFactory.CreateRedisService(),
+            Options.Create(new ChannelServerSettings
+            {
+                ServerUrl = "http://test-server",
+                LobbySessionLeaseSeconds = 90,
+            }),
+            new Mock<ILogger<LobbySessionLeaseService>>().Object);
 
     private static async Task<bool> InvokeShouldRejectStoppedCupEnterAsync(
         EnterChannelCommand cmd,

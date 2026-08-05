@@ -27,6 +27,7 @@ public class ServerStatusBackgroundService : BackgroundService
     private readonly ServerLoadService                  _load;
     private readonly RoomRegistryService                _roomRegistry;
     private readonly ChannelMemberService               _channelMembers;
+    private readonly LobbySessionLeaseService           _lobbySessions;
     private readonly IOptions<ChannelServerSettings>    _settings;
     private readonly PrimaryLeaderService               _leader;
     private readonly IHubContext<MajakGameHub>          _hub;
@@ -40,6 +41,7 @@ public class ServerStatusBackgroundService : BackgroundService
         ServerLoadService                  load,
         RoomRegistryService                roomRegistry,
         ChannelMemberService               channelMembers,
+        LobbySessionLeaseService           lobbySessions,
         IOptions<ChannelServerSettings>    settings,
         PrimaryLeaderService               leader,
         IHubContext<MajakGameHub>          hub,
@@ -50,6 +52,7 @@ public class ServerStatusBackgroundService : BackgroundService
         _load         = load;
         _roomRegistry = roomRegistry;
         _channelMembers = channelMembers;
+        _lobbySessions = lobbySessions;
         _settings     = settings;
         _leader       = leader;
         _hub          = hub;
@@ -82,6 +85,7 @@ public class ServerStatusBackgroundService : BackgroundService
 
                 // プライマリリーダーロックを即解放 (フェイルオーバー高速化)
                 _leader.Release();
+                _lobbySessions.ReleaseAllAsync().GetAwaiter().GetResult();
 
                 _log.LogInformation("[ServerStatus] Redis 登録解除完了 (ルーム {RoomCount} 件, チャンネル {ChanCount} 件)",
                     rooms.Count, channels.Count);
@@ -118,6 +122,16 @@ public class ServerStatusBackgroundService : BackgroundService
                 // 生存 ConnectionId を持つ PlayerSessionService を正とする。
                 foreach (var chanelId in chanelIds)
                     await _channelMembers.SyncChannelAsync(chanelId, _session.GetAllChannelPlayers(chanelId));
+
+                var lostLobbyConnections = await _lobbySessions.RefreshAllAsync();
+                foreach (string connectionId in lostLobbyConnections)
+                {
+                    await _hub.Clients.Client(connectionId).SendAsync(Cmd.ForcedLogout, new
+                    {
+                        error = "LOBBY_SESSION_LEASE_LOST",
+                        message = "接続情報の有効期限が切れたため切断されました。",
+                    });
+                }
 
                 // プライマリリーダーロックを取得 / 更新
                 await _leader.TryAcquireOrRenewAsync();

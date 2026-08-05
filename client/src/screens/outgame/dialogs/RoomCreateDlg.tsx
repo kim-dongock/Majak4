@@ -10,7 +10,7 @@ import { showError } from '../../../utils/msgbox'
 
 const SX = (du: number) => Math.round(du * 1.5)
 const SY = (du: number) => Math.round(du * 1.625)
-const FONT = "'MS UI Gothic', 'MS PGothic', 'Meiryo', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 const DLG_BG = '#d4d0c8'
 
 export interface RoomCreateInfo {
@@ -148,7 +148,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
   const viewerTop = py(165) - 115
 
   const btnStyle: React.CSSProperties = {
-    position: 'absolute', fontFamily: FONT, fontSize: 12, color: '#111',
+    position: 'absolute', fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111',
     background: '#f4f4f4',
     borderTop: '1px solid #fff', borderLeft: '1px solid #fff',
     borderRight: '1px solid #9a9a9a', borderBottom: '1px solid #9a9a9a',
@@ -166,7 +166,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
 
   const legendStyle: React.CSSProperties = {
     fontFamily: FONT,
-    fontSize: 12,
+    fontSize: 'calc(12px * var(--majak-type-scale))',
     color: '#111',
     lineHeight: '14px',
     padding: '0 4px',
@@ -193,7 +193,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
           background: '#f0f0f0',
           display: 'flex', alignItems: 'center', paddingLeft: 8,
         }}>
-          <span style={{ fontFamily: FONT, fontSize: 12, color: '#111' }}>部屋を作る</span>
+          <span style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111' }}>部屋を作る</span>
         </div>
 
         <div style={{ position: 'relative', width: dlgW, height: contentH, background: DLG_BG }}>
@@ -215,7 +215,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
               }}
               style={{
                 position: 'absolute', left: 0, top: 0, width: px(132) - 18, height: py(14),
-                fontFamily: FONT, fontSize: 12, boxSizing: 'border-box', padding: '0 2px',
+                fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', boxSizing: 'border-box', padding: '0 2px',
                 border: '1px inset #d4d0c8', background: '#fff', color: '#111', outline: 'none',
               }}
             />
@@ -228,7 +228,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
               }}
               style={{
                 position: 'absolute', right: 0, top: 0, width: 18, height: py(14), padding: 0,
-                fontFamily: FONT, fontSize: 9, lineHeight: `${py(14) - 2}px`, color: '#111',
+                fontFamily: FONT, fontSize: 'calc(9px * var(--majak-type-scale))', lineHeight: `${py(14) - 2}px`, color: '#111',
                 background: '#f4f4f4', borderTop: '1px solid #fff', borderLeft: '1px solid #fff',
                 borderRight: '1px solid #777', borderBottom: '1px solid #777', cursor: 'pointer',
               }}
@@ -237,7 +237,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
               <div style={{
                 position: 'absolute', left: 0, top: py(14), width: px(132), maxHeight: py(70),
                 overflowY: 'auto', background: '#fff', border: '1px solid #777', boxSizing: 'border-box',
-                fontFamily: FONT, fontSize: 12, color: '#111', zIndex: 10,
+                fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111', zIndex: 10,
               }}>
                 {ROOM_TITLES.map(roomTitle => (
                   <div
@@ -258,15 +258,15 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
           <fieldset style={{ ...groupStyle, left: px(4), top: py(41), width: px(138), height: py(56) - 18 }}>
             <legend style={legendStyle}>カギの選択</legend>
           </fieldset>
-          <label style={{ position: 'absolute', left: px(9), top: py(54), display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONT, fontSize: 12, color: '#111', cursor: 'pointer' }}>
+          <label style={{ position: 'absolute', left: px(9), top: py(54), display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111', cursor: 'pointer' }}>
             <input type="radio" name="room-create-private" checked={!isPrivate} onChange={() => setIsPrivate(false)} style={{ margin: 0, width: 13, height: 13 }} />
             かけない
           </label>
-          <label style={{ position: 'absolute', left: px(9), top: py(67), display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONT, fontSize: 12, color: '#111', cursor: 'pointer' }}>
+          <label style={{ position: 'absolute', left: px(9), top: py(67), display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111', cursor: 'pointer' }}>
             <input type="radio" name="room-create-private" checked={isPrivate} onChange={() => setIsPrivate(true)} style={{ margin: 0, width: 13, height: 13 }} />
             カギ
           </label>
-          <span style={{ position: 'absolute', left: px(53), top: 102, fontFamily: FONT, fontSize: 12, color: '#111' }}>パスワード</span>
+          <span style={{ position: 'absolute', left: px(53), top: 102, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111' }}>パスワード</span>
           <input
             type="password"
             value={password}
@@ -275,7 +275,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
             onChange={e => setPassword(e.target.value)}
             style={{
               position: 'absolute', left: px(89), top: 98, width: px(46), height: 21,
-              fontFamily: FONT, fontSize: 12, boxSizing: 'border-box', padding: '0 2px',
+              fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', boxSizing: 'border-box', padding: '0 2px',
               border: '1px inset #d4d0c8', background: isPrivate ? '#fff' : '#eee', color: '#111', outline: 'none',
             }}
           />
@@ -283,11 +283,11 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
           {viewerEnable && (
             <fieldset style={{ ...groupStyle, left: px(4), top: viewerTop, width: px(138), height: py(24) }}>
               <legend style={legendStyle}>観戦者</legend>
-              <label style={{ position: 'absolute', left: px(8), top: 4, display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONT, fontSize: 12, color: '#111', cursor: 'pointer' }}>
+              <label style={{ position: 'absolute', left: px(8), top: 4, display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111', cursor: 'pointer' }}>
                 <input type="radio" name="room-create-viewer" checked={allowViewer} onChange={() => setAllowViewer(true)} style={{ margin: 0, width: 13, height: 13 }} />
                 観戦者可
               </label>
-              <label style={{ position: 'absolute', left: px(83), top: 4, display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONT, fontSize: 12, color: '#111', cursor: 'pointer' }}>
+              <label style={{ position: 'absolute', left: px(83), top: 4, display: 'flex', alignItems: 'center', gap: 4, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111', cursor: 'pointer' }}>
                 <input type="radio" name="room-create-viewer" checked={!allowViewer} onChange={() => setAllowViewer(false)} style={{ margin: 0, width: 13, height: 13 }} />
                 観戦不可
               </label>

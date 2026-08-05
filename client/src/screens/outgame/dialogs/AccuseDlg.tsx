@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import { showMessage } from '../../../utils/msgbox'
 
-const FONT = "'MS UI Gothic', 'MS PGothic', 'Meiryo', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 const IMG = '/assets/images/common'
 const DLG_BG = 'rgb(255,241,200)'
 const RADIO_W = 14
@@ -95,21 +95,21 @@ export default function AccuseDlg({ myPix, myMemberName, speakers, speakerNameBy
         backgroundPosition: '0 0',
         boxShadow: '2px 2px 7px rgba(0,0,0,0.45)',
         fontFamily: FONT,
-        fontSize: 12,
+        fontSize: 'calc(12px * var(--majak-type-scale))',
         color: '#000',
       }}>
         <div style={{ position: 'absolute', left: 58, top: 137, width: 50, height: 15 }}>通報者</div>
         <input
           value={myMemberName || myPix}
           readOnly
-          style={{ position: 'absolute', left: 155, top: 137, width: 150, height: 20, boxSizing: 'border-box', fontFamily: FONT, fontSize: 12 }}
+          style={{ position: 'absolute', left: 155, top: 137, width: 150, height: 20, boxSizing: 'border-box', fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))' }}
         />
 
         <div style={{ position: 'absolute', left: 58, top: 159, width: 50, height: 15 }}>対象者</div>
         <select
           value={targetPix}
           onChange={event => setTargetPix(event.target.value)}
-          style={{ position: 'absolute', left: 155, top: 159, width: 150, height: 20, fontFamily: FONT, fontSize: 12 }}
+          style={{ position: 'absolute', left: 155, top: 159, width: 150, height: 20, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))' }}
         >
           {speakers.map(pix => <option key={pix} value={pix}>{speakerNameById.get(pix) || pix}</option>)}
         </select>

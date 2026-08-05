@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJSlideAnnounce 相当 — インゲーム スライドアナウンス (AP-09 §2-10)
  * レガシー: legacy/client/HgMajak2/MJSlideAnnounce.h/cpp
  *
@@ -162,10 +162,10 @@ export default function SlideAnnounce({ data, onDone, top = 38 }: Props) {
   if (!visible || !data) return null
 
   const fg = fgImage(data.type, data.code)
-  const font = "'MS PGothic', 'MS UI Gothic', sans-serif"
+  const font = 'var(--majak-font-family-ui)'
   const textStyle = {
     fontFamily: font,
-    fontSize: 12, fontWeight: 'bold' as const,
+    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold' as const,
     lineHeight: '12px',
     color: '#000',
     background: 'transparent',

@@ -45,6 +45,11 @@ public class ChannelServerSettings
     public int ContinueRoomGraceSeconds { get; set; } = 300;
 
     /// <summary>
+    /// Redis に保持するロビー接続リースの TTL。8 秒ごとのハートビートで更新する。
+    /// </summary>
+    public int LobbySessionLeaseSeconds { get; set; } = 90;
+
+    /// <summary>
     /// チャンネル ID → サーバー URL の個別マッピング。
     /// マルチサーバー構成時に特定チャンネルを別サーバーに振り分ける場合に使用する。
     /// 省略可。

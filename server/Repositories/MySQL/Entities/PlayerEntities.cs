@@ -28,9 +28,30 @@ public sealed class PlayerWalletEntity
     public long EarnedGameMoney { get; set; }
     public long LoanedGameMoney { get; set; }
     public int GemCount { get; set; }
+    public int CashCount { get; set; }
+    public int PaidCashCount { get; set; }
+    public int FreeCashCount { get; set; }
     public ulong RowVersion { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    public void GrantFreeCash(int amount)
+    {
+        if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
+        FreeCashCount = checked(FreeCashCount + amount);
+        CashCount = checked(CashCount + amount);
+    }
+
+    public void SpendCash(int amount)
+    {
+        if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount));
+        if (CashCount < amount) throw new InvalidOperationException("Majak Cash balance is insufficient.");
+
+        int freeSpent = Math.Min(FreeCashCount, amount);
+        FreeCashCount -= freeSpent;
+        PaidCashCount -= amount - freeSpent;
+        CashCount -= amount;
+    }
 }
 
 public sealed class PlayerAvatarInventoryEntity

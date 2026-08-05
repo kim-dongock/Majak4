@@ -60,7 +60,7 @@ export default function RankingDlg({ data, onClose, memberNameByPix = new Map<st
         display: isMobile ? 'flex' : undefined,
         alignItems: isMobile ? 'center' : undefined,
         justifyContent: isMobile ? 'center' : undefined,
-        background: 'rgba(0,0,0,0.35)', fontFamily: 'MS Gothic, monospace',
+        background: 'rgba(0,0,0,0.35)', fontFamily: 'var(--majak-font-family-ui)',
       }}
       onContextMenu={event => event.preventDefault()}
     >
@@ -75,24 +75,24 @@ export default function RankingDlg({ data, onClose, memberNameByPix = new Map<st
         transformOrigin: 'top left',
         background: '#ece9d8', border: '2px solid #404040', boxShadow: '4px 4px 0 rgba(0,0,0,0.35)',
       }}>
-        <div style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 24, background: '#0a246a', color: '#fff', fontSize: 13, lineHeight: '24px', paddingLeft: 8 }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, right: 0, height: 24, background: '#0a246a', color: '#fff', fontSize: 'calc(13px * var(--majak-type-scale))', lineHeight: '24px', paddingLeft: 8 }}>
           ランキング
         </div>
         <button type="button" onClick={onClose} style={{ position: 'absolute', right: 4, top: 3, width: 18, height: 18, padding: 0, lineHeight: '16px' }}>×</button>
 
-        <div style={{ position: 'absolute', left: 12, top: 36, fontSize: 12 }}>
+        <div style={{ position: 'absolute', left: 12, top: 36, fontSize: 'calc(12px * var(--majak-type-scale))' }}>
           対象年月: {data.rankDate ?? '-'}　種別: {data.rankId ?? '-'}
         </div>
 
         {data.gradeRankSelf && (
-          <div style={{ position: 'absolute', left: 12, top: 60, right: 12, height: 44, border: '1px solid #808080', background: '#fff', padding: 6, fontSize: 12 }}>
+          <div style={{ position: 'absolute', left: 12, top: 60, right: 12, height: 44, border: '1px solid #808080', background: '#fff', padding: 6, fontSize: 'calc(12px * var(--majak-type-scale))' }}>
             自分: {data.gradeRankSelf.rank || '-'}位　{displayName(data.gradeRankSelf.pix)}　R {data.gradeRankSelf.rating}
             {data.gradeRankSelf.szIndex ? `　${data.gradeRankSelf.szIndex}` : ''}
           </div>
         )}
 
         <div style={{ position: 'absolute', left: 12, top: 118, right: 12, bottom: 48, border: '1px solid #808080', background: '#fff', overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'calc(12px * var(--majak-type-scale))' }}>
             <thead>
               <tr style={{ background: '#d4d0c8' }}>
                 <th style={{ width: 52, textAlign: 'right', padding: '3px 6px' }}>順位</th>

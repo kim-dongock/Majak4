@@ -6,11 +6,18 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "assets:generate": "npx capacitor-assets generate --android",
+    "cap:sync": "npx cap sync",
+    "android:open": "npx cap open android",
     "test:auto-control": "node scripts/test-auto-control.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@capacitor/splash-screen": "^8.0.2",
+    "@capgo/capacitor-social-login": "^8.3.40",
     "@microsoft/signalr": "^8.0.7",
     "@react-oauth/google": "^0.13.5",
     "phaser": "^3.88.2",
@@ -20,6 +27,8 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",

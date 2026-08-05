@@ -1,4 +1,4 @@
-const SOUND_BASE = '/assets/sounds/game/Sounds'
+const SOUND_BASE = '/assets/sounds/game'
 
 export interface MajakSoundConfig {
   bChkBGM: boolean

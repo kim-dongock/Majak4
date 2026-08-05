@@ -107,7 +107,7 @@ function FieldLabel({ x, y, children }: { x: number; y: number; children: string
   return (
     <span style={{
       position: 'absolute', left: SX(x), top: SY(y), width: SX(20), height: SY(8),
-      fontFamily: "'MS UI Gothic', sans-serif", fontSize: 12, lineHeight: `${SY(8)}px`, color: '#000',
+      fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: `${SY(8)}px`, color: '#000',
     }}>
       {children}
     </span>
@@ -150,7 +150,7 @@ export default function DebugLoginDlg({ servers, groups, users, onOK, onCancel }
 
   const comboStyle: React.CSSProperties = {
     position: 'absolute', width: SX(100), height: SY(20),
-    fontFamily: "'MS UI Gothic', sans-serif", fontSize: 12,
+    fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))',
   }
 
   return (
@@ -164,12 +164,12 @@ export default function DebugLoginDlg({ servers, groups, users, onOK, onCancel }
         background: DLG_BG, borderTop: `1px solid ${LIGHT}`, borderLeft: `1px solid ${LIGHT}`,
         borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,
         boxShadow: '2px 2px 0 rgba(0,0,0,0.35)',
-        fontFamily: "'MS UI Gothic', sans-serif", color: '#000',
+        fontFamily: 'var(--majak-font-family-ui)', color: '#000',
       }}>
         <div style={{
           position: 'absolute', left: 3, top: 3, right: 3, height: 18,
           background: 'linear-gradient(90deg, #000080, #1084d0)', color: '#fff',
-          fontSize: 12, lineHeight: '18px', paddingLeft: 5,
+          fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '18px', paddingLeft: 5,
         }}>
           LOGIN
         </div>
@@ -233,16 +233,16 @@ export default function DebugLoginDlg({ servers, groups, users, onOK, onCancel }
 
           <label style={{
             position: 'absolute', left: SX(30), top: SY(103), width: SX(80), height: SY(10),
-            display: 'flex', alignItems: 'center', gap: 4, fontSize: 12,
+            display: 'flex', alignItems: 'center', gap: 4, fontSize: 'calc(12px * var(--majak-type-scale))',
           }}>
             <input type="checkbox" checked={secure} onChange={event => setSecure(event.target.checked)} style={{ margin: 0 }} />
             クロ保護
           </label>
 
-          <button onClick={handleOK} style={{ position: 'absolute', left: SX(17), top: SY(125), width: SX(50), height: SY(14), fontSize: 12, padding: 0 }}>
+          <button onClick={handleOK} style={{ position: 'absolute', left: SX(17), top: SY(125), width: SX(50), height: SY(14), fontSize: 'calc(12px * var(--majak-type-scale))', padding: 0 }}>
             OK
           </button>
-          <button onClick={onCancel} style={{ position: 'absolute', left: SX(71), top: SY(125), width: SX(50), height: SY(14), fontSize: 12, padding: 0 }}>
+          <button onClick={onCancel} style={{ position: 'absolute', left: SX(71), top: SY(125), width: SX(50), height: SY(14), fontSize: 'calc(12px * var(--majak-type-scale))', padding: 0 }}>
             Cancel
           </button>
         </div>

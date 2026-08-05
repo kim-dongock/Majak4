@@ -152,7 +152,7 @@ function MiniRoomCell({
         overflow: 'hidden',
         imageRendering: 'pixelated',
       }}>
-        <div style={{ position: 'absolute', left: 8, top: 4, width: 116, height: 19, fontFamily: "'MS Gothic', monospace", fontSize: 12, lineHeight: '19px', color: '#000', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+        <div style={{ position: 'absolute', left: 8, top: 4, width: 116, height: 19, fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '19px', color: '#000', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
           {slotNo} : {room?.title ?? ''}
         </div>
         {room?.isPrivate && (
@@ -207,9 +207,9 @@ function MiniMemberList({
         border: '2px inset #d4d0c8',
         boxSizing: 'border-box',
       }}>
-        <div style={{ display: 'flex', height: 18, alignItems: 'center', background: '#f0f0f0', borderBottom: '1px solid #b8b8b8', fontFamily: "'MS Gothic', monospace", fontSize: 12, color: '#000' }}>
+        <div style={{ display: 'flex', height: 18, alignItems: 'center', background: '#f0f0f0', borderBottom: '1px solid #b8b8b8', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>
           <span style={{ width: idWidth, paddingLeft: 4, boxSizing: 'border-box' }}>ニックネーム</span>
-          <span style={{ width: titleWidth }}>称号</span>
+          <span style={{ width: titleWidth }}>資産</span>
         </div>
         {members.map(member => {
           const selected = selectedPix === member.pix
@@ -221,7 +221,7 @@ function MiniMemberList({
               style={{
                 display: 'flex', alignItems: 'center',
                 height: 20,
-                fontFamily: "'MS Gothic', monospace", fontSize: 12,
+                fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))',
                 background: selected ? '#0a246a' : '#fff',
                 color: selected ? '#fff' : '#000',
                 cursor: 'pointer',
@@ -335,7 +335,7 @@ export default function MiniChannelWnd({
         boxSizing: 'border-box',
         zIndex: 200,
         overflow: 'hidden',
-        fontFamily: "'MS Gothic', monospace",
+        fontFamily: 'var(--majak-font-family-ui)',
       }}
     >
       <div style={{ position: 'absolute', left: fullScreen ? 0 : 654, top: 0, width: compactFullScreen ? 330 : 255, height: compactFullScreen ? 336 : 550 }}>
@@ -361,8 +361,8 @@ export default function MiniChannelWnd({
                 position: 'absolute', left: 0, top: 0,
                 width: 650, height: 126,
                 overflowY: 'auto', overflowX: 'hidden',
-                fontFamily: "'MS Gothic', monospace",
-                fontSize: 12,
+                fontFamily: 'var(--majak-font-family-ui)',
+                fontSize: 'calc(12px * var(--majak-type-scale))',
                 color: '#000',
                 background: '#fff',
                 boxSizing: 'border-box',
@@ -386,8 +386,8 @@ export default function MiniChannelWnd({
                 boxSizing: 'border-box',
                 outline: 'none',
                 padding: '0 2px',
-                fontFamily: "'MS Gothic', monospace",
-                fontSize: 12,
+                fontFamily: 'var(--majak-font-family-ui)',
+                fontSize: 'calc(12px * var(--majak-type-scale))',
                 color: '#000',
                 background: '#fff',
               }}

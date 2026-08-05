@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CSerialCodeDlg 相当 — シリアルコード入力ダイアログ (AP-09 §3-1-9)
  * レガシー: legacy/client/HgMajak2/SerialCodeDlg.cpp
  *
@@ -24,7 +24,7 @@ import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 // DU→px (9pt "MS UI Gothic" @96dpi)
 const SX = (du: number) => Math.round(du * 1.5)
 const SY = (du: number) => Math.round(du * 1.625)
-const FONT   = "'MS UI Gothic', 'Meiryo', 'MS PGothic', sans-serif"
+const FONT   = 'var(--majak-font-family-ui)'
 const DLG_BG = '#d4d0c8'
 
 interface Props {
@@ -84,7 +84,7 @@ export default function SerialCodeDlg({ onOK, onClose }: Props) {
   const TITLE_H = 22
 
   const btnStyle = (def: boolean): React.CSSProperties => ({
-    position: 'absolute', fontFamily: FONT, fontSize: 12, color: '#000',
+    position: 'absolute', fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
     background: DLG_BG,
     borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
     borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
@@ -107,7 +107,7 @@ export default function SerialCodeDlg({ onOK, onClose }: Props) {
           background: 'linear-gradient(to right, #000080, #1060d0)',
           display: 'flex', alignItems: 'center', paddingLeft: 8,
         }}>
-          <span style={{ fontFamily: FONT, fontSize: 12, color: '#fff', fontWeight: 'bold' }}>
+          <span style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#fff', fontWeight: 'bold' }}>
             シリアルコード
           </span>
         </div>
@@ -118,7 +118,7 @@ export default function SerialCodeDlg({ onOK, onClose }: Props) {
           {/* LTEXT "シリアルコードを入力してください" (13,17,95,8) */}
           <div style={{
             position: 'absolute', left: SX(13), top: SY(17), width: SX(95),
-            fontFamily: FONT, fontSize: 12, color: '#000',
+            fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
           }}>
             シリアルコードを入力してください
           </div>
@@ -134,7 +134,7 @@ export default function SerialCodeDlg({ onOK, onClose }: Props) {
             style={{
               position: 'absolute', left: SX(22), top: SY(31),
               width: SX(96), height: SY(16),
-              fontFamily: FONT, fontSize: 12, color: '#000',
+              fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
               background: '#fff',
               border: '1px solid #767676',
               outline: 'none', padding: '0 3px', boxSizing: 'border-box',

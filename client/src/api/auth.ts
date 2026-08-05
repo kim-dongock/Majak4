@@ -12,6 +12,13 @@
  */
 import { clearRememberedGameAccessToken } from './gameAuthToken'
 
+declare const __API_BASE__: string | undefined
+const API_BASE = ((typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '') ?? '').replace(/\/$/, '')
+
+export function authApiUrl(path: string): string {
+  return `${API_BASE}${path}`
+}
+
 export interface MajakPlayer {
   pix:       string
   accessToken?: string
@@ -118,7 +125,7 @@ export function updateCacheAccountStatus(accountStatus: number): void {
 export async function googleLogin(idToken: string): Promise<MajakPlayer> {
   let res: Response
   try {
-    res = await fetch('/auth/google-login', {
+    res = await fetch(authApiUrl('/auth/google-login'), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -136,12 +143,12 @@ export async function googleLogin(idToken: string): Promise<MajakPlayer> {
   return data
 }
 
-let refreshLoginInFlight: Promise<MajakPlayer> | null = null
+let refreshLoginInFlight: Promise<MajakPlayer | null> | null = null
 
-async function requestRefreshLogin(): Promise<MajakPlayer> {
+async function requestRefreshLogin(): Promise<MajakPlayer | null> {
   let res: Response
   try {
-    res = await fetch('/auth/refresh', {
+    res = await fetch(authApiUrl('/auth/refresh'), {
       method: 'POST',
       credentials: 'include',
     })
@@ -149,7 +156,7 @@ async function requestRefreshLogin(): Promise<MajakPlayer> {
     throw new AuthError('network', String(err))
   }
 
-  if (res.status === 401) throw new AuthError('server', 'Refresh token expired')
+  if (res.status === 204) return null
   if (!res.ok) throw new AuthError('server', `HTTP ${res.status}`)
 
   const data = await res.json() as MajakPlayer
@@ -157,7 +164,7 @@ async function requestRefreshLogin(): Promise<MajakPlayer> {
   return data
 }
 
-export async function refreshLogin(): Promise<MajakPlayer> {
+export async function refreshLogin(): Promise<MajakPlayer | null> {
   refreshLoginInFlight ??= requestRefreshLogin().finally(() => {
     refreshLoginInFlight = null
   })
@@ -166,7 +173,7 @@ export async function refreshLogin(): Promise<MajakPlayer> {
 
 export async function logout(): Promise<void> {
   clearRememberedGameAccessToken()
-  await fetch('/auth/logout', {
+  await fetch(authApiUrl('/auth/logout'), {
     method: 'POST',
     credentials: 'include',
   }).catch(() => {})
@@ -184,7 +191,7 @@ export async function googleRegister(
 ): Promise<MajakPlayer> {
   let res: Response
   try {
-    res = await fetch('/auth/google-register', {
+    res = await fetch(authApiUrl('/auth/google-register'), {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
@@ -212,7 +219,7 @@ export async function googleRegister(
  */
 export async function checkNickname(name: string): Promise<{ available: boolean; reason: string }> {
   try {
-    const res = await fetch(`/auth/check-nickname?name=${encodeURIComponent(name)}`)
+    const res = await fetch(authApiUrl(`/auth/check-nickname?name=${encodeURIComponent(name)}`))
     if (!res.ok) return { available: false, reason: 'ERROR' }
     return await res.json() as { available: boolean; reason: string }
   } catch {

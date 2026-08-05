@@ -54,8 +54,7 @@ CREATE TABLE game_player_result_log (
     current_ticket        BIGINT NULL,
     PRIMARY KEY (game_player_result_id),
     UNIQUE KEY uq_game_player_result_session_member (game_session_id, member_no),
-    INDEX idx_game_player_result_member_played (member_no, played_at),
-    CONSTRAINT chk_game_player_result_ranking CHECK (ranking BETWEEN 1 AND 4)
+    INDEX idx_game_player_result_member_played (member_no, played_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: training_session_log
@@ -67,8 +66,7 @@ CREATE TABLE training_session_log (
     room_option         VARCHAR(200) NOT NULL DEFAULT '',
     player_count        TINYINT UNSIGNED NOT NULL,
     PRIMARY KEY (training_session_id),
-    INDEX idx_training_session_log_played_at (played_at),
-    CONSTRAINT chk_training_session_player_count CHECK (player_count BETWEEN 1 AND 4)
+    INDEX idx_training_session_log_played_at (played_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: training_player_result_log
@@ -80,8 +78,7 @@ CREATE TABLE training_player_result_log (
     point                     INT NOT NULL DEFAULT 0,
     PRIMARY KEY (training_player_result_id),
     UNIQUE KEY uq_training_player_result_seat (training_session_id, seat_order),
-    INDEX idx_training_player_result_member (member_no),
-    CONSTRAINT chk_training_player_result_seat CHECK (seat_order BETWEEN 0 AND 3)
+    INDEX idx_training_player_result_member (member_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: weekly_reward_claim_log
@@ -147,8 +144,8 @@ CREATE TABLE item_purchase_log (
     INDEX idx_item_purchase_item_purchased (item_code, purchased_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- テーブル: gem_transaction_log
-CREATE TABLE gem_transaction_log (
+-- テーブル: cash_transaction_log
+CREATE TABLE cash_transaction_log (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     member_no       BIGINT UNSIGNED NOT NULL,
     event_type      VARCHAR(30)   NOT NULL,
@@ -156,15 +153,21 @@ CREATE TABLE gem_transaction_log (
     amount          INT           NOT NULL,
     balance_before  INT UNSIGNED  NOT NULL,
     balance_after   INT UNSIGNED  NOT NULL,
+    paid_amount     INT           NOT NULL DEFAULT 0,
+    free_amount     INT           NOT NULL DEFAULT 0,
+    paid_before     INT UNSIGNED  NOT NULL DEFAULT 0,
+    paid_after      INT UNSIGNED  NOT NULL DEFAULT 0,
+    free_before     INT UNSIGNED  NOT NULL DEFAULT 0,
+    free_after      INT UNSIGNED  NOT NULL DEFAULT 0,
     ref_id          VARCHAR(64)   NULL,
     memo            VARCHAR(200)  NULL,
     operator_no     BIGINT UNSIGNED NULL,
     client_ip       VARCHAR(45)   NULL,
     occurred_at     DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    INDEX idx_gem_tx_member  (member_no, occurred_at),
-    INDEX idx_gem_tx_type    (event_type, occurred_at),
-    INDEX idx_gem_tx_ref     (ref_id),
-    INDEX idx_gem_tx_date    (occurred_at)
+    INDEX idx_cash_tx_member  (member_no, occurred_at),
+    INDEX idx_cash_tx_type    (event_type, occurred_at),
+    INDEX idx_cash_tx_ref     (ref_id),
+    INDEX idx_cash_tx_date    (occurred_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- テーブル: admin_operation_log
@@ -195,9 +198,7 @@ CREATE TABLE player_login_log (
     ip_address      VARCHAR(45)     NOT NULL DEFAULT '',
     user_agent      VARCHAR(200)    NOT NULL DEFAULT '',
     PRIMARY KEY (login_log_id, occurred_at),
-    INDEX idx_player_login_member_occurred (member_no, occurred_at),
-    CONSTRAINT chk_player_login_event_type
-        CHECK (event_type IN (0, 1, 2))
+    INDEX idx_player_login_member_occurred (member_no, occurred_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 
   PARTITION BY RANGE (TO_DAYS(occurred_at)) (
@@ -280,6 +281,5 @@ CREATE TABLE cup_match_log (
     point_change     INT             NOT NULL DEFAULT 0,
     point_after      INT             NOT NULL DEFAULT 0,
     PRIMARY KEY (cup_match_log_id),
-    INDEX idx_cup_match_log_cup_member (cup_id, member_no, played_at),
-    CONSTRAINT chk_cup_match_log_ranking CHECK (ranking BETWEEN 1 AND 4)
+    INDEX idx_cup_match_log_cup_member (cup_id, member_no, played_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

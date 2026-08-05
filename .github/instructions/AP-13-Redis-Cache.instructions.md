@@ -160,6 +160,23 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 | `channel:{chanelId}:server` | **8 秒ごと** | 自サーバー担当分の TTL を 60 秒にリセット | `ServerStatusBackgroundService` → `ServerLoadService.RefreshChannelLeasesBatchAsync()` |
 | `channel:{chanelId}:server` / `channelcounts` | グレースフルシャットダウン | 担当チャンネルの Redis キーを即削除 + HASH デクリメント | `ServerLoadService.ReleaseChannelsAsync()` |
 
+### 6-1. グローバルロビー接続リース
+
+| キーパターン | 型 | TTL | 用途 |
+|-------------|----|-----|------|
+| `player:lobby-session:{memberNo}` | STRING (JSON) | **90 秒** | 全ゲームサーバー共通で同一アカウントのロビー接続を 1 件に制限する |
+
+値は `{ ServerId, ConnectionId, TabId, LeaseToken }`。入場時は Lua で原子的に取得する。キーがない場合は新規取得し、既存値の `TabId` が同じ場合だけ接続 ID とトークンを置き換えて TTL を更新する。異なる `TabId` は新しい接続を拒否する。
+
+| タイミング | 処理 | クラス |
+|----------|------|--------|
+| チャンネル入室開始時 | Lua で新規取得、または同一ブラウザタブの再接続として原子的に置換。DB 読み込みや入場処理が失敗した場合は条件付きで即削除 | `EnterChannelCommand` → `LobbySessionLeaseService` |
+| **8 秒ごと** | Redis の値が自分の JSON 値と完全一致する場合だけ TTL を 90 秒へ更新 | `ServerStatusBackgroundService` → `LobbySessionLeaseService.RefreshAllAsync()` |
+| チャンネル退室・SignalR 切断時 | `LeaseToken` を含む JSON 値が完全一致する場合だけ Lua で削除 | `ExitChannelCommand` / `MajakGameHub.OnDisconnectedAsync()` |
+| サーバークラッシュ時 | ハートビート停止後、最大 90 秒で自動削除 | Redis TTL |
+
+> **タブ再接続と古い切断イベント対策**: `TabId` はブラウザの `sessionStorage` に保持する。したがって同じタブの更新・履歴復帰は許可され、別タブ・別ブラウザは拒否される。ConnectionId だけで更新・削除してはならない。JSON 値全体を比較することで、遅れて到着した旧接続の終了処理が新しい接続のリースを削除できないようにする。
+
 ---
 
 ## 7. JSON シリアライズ形式
@@ -187,6 +204,20 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
   "isPrivate": false, "memberCnt": 2, "memberMax": 4,
   "serverUrl": "https://sv1.example.jp", "roomOption": "..." }
 ```
+
+---
+
+## 8. Google モバイル認証コード
+
+| キーパターン | 型 | TTL | 用途 |
+|-------------|----|-----|------|
+| `auth:google-mobile:{sha256(code)}` | STRING (JSON) | **2 分** | 外部ブラウザで検証済みの Google ID token を Android アプリへ安全に引き渡す一回限りコード |
+
+- URL / deep link には ID token を含めず、暗号学的乱数から作ったコードのみを含める。
+- Redis キーにはコード原文ではなく SHA-256 hash を使う。
+- アプリからの交換時は `GETDEL` で原子的に取得・削除し、同じコードの再利用を拒否する。
+- Redis 未接続の開発環境ではプロセス内 `ConcurrentDictionary` へフォールバックする。
+- 発行: `GoogleMobileAuthCodeService.IssueAsync()`、消費: `ConsumeAsync()`。
 
 ---
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJLevelupDlg 相当 — 称号上昇ダイアログ (AP-09 §3-3-2)
  * レガシー: legacy/client/HgMajak2/MJLevelupDlg.h/cpp
  *
@@ -35,7 +35,7 @@ import { useRef, useEffect, useState } from 'react'
 import { playMajakSfx } from '../../../utils/majakSound'
 
 const IMG = '/assets/images/game'
-const FONT = "'MS PGothic', 'Noto Sans JP', 'MS UI Gothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 
 /** mj_sho_moji.png 12フレーム対応称号名 */
 const LEVEL_NAMES = [
@@ -199,7 +199,7 @@ export default function LevelupDlg({ level, lentMoney, onClose }: Props) {
           width: 148,   /* 309 - 161 = 148 */
           height: 14,   /* 219 - 205 = 14 */
           fontFamily: FONT,
-          fontSize: 14, fontWeight: 'bold', color: '#000',
+          fontSize: 'calc(14px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
           textAlign: 'right',
           lineHeight: '14px',
           overflow: 'hidden', whiteSpace: 'nowrap',

@@ -33,6 +33,7 @@ import { DESKTOP_INGAME_LAYOUT, getIngameLayout, type IngameLayoutMode } from '.
 import { MOBILE_PLAYFIELD_OFFSET_Y, mobileCenterHudOffset, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey } from '../game/mobileIngameViewport'
 import { useAuthStore } from '../store/authStore'
 import { getDefaultAvatarUrl, getGameAvatarUrl } from '../utils/resources'
+import { getUiFontFamily, getUiFontSize } from '../utils/typography'
 import {
   MID_BAD, MID_FESRIC, MID_GOOD, MID_NORMAL, MID_RICHI, MID_TEN_ALLLAST, MID_TEN_NANBA, MID_TEN_REACH1, MID_TEN_REACH2, MID_TEN_TONBA,
   playMajakBgm, playMajakCallVoice, playMajakSfx, playMajakSid,
@@ -98,7 +99,7 @@ const MOBILE_DISCARD_TILE_SCALE = 0.70
 const MOBILE_CONTENT_BASE_ASPECT = 375 / 667
 const MOBILE_CONTENT_SCALE_MIN = 0.68
 const MOBILE_OPPONENT_SUMMARY_TILE_SCALE = 0.64
-const MOBILE_HUD_AVATAR_WIDTH = 24
+const MOBILE_HUD_AVATAR_WIDTH = 44
 const MOBILE_HUD_AVATAR_INSET_X = 14
 const MOBILE_HUD_AVATAR_INSET_TOP = 8
 const MOBILE_SIDE_HAND_AVATAR_GAP = 8
@@ -2139,8 +2140,8 @@ export default class GameScene extends Phaser.Scene {
     const badgeX = loc === 1 ? lastX + 16 : loc === 3 ? lastX - 32 : loc === 2 ? lastX - 34 : lastX + 22
     const badgeY = loc === 1 ? lastY + 2 : loc === 3 ? lastY + 12 : loc === 2 ? lastY + 18 : lastY + 18
     this.mobileOpponentHandCountTexts[odr] = this.clipToBoard(this.add.text(badgeX, badgeY, String(count), {
-      fontFamily: "'MS PGothic', 'MS Gothic', sans-serif",
-      fontSize: '14px',
+      fontFamily: getUiFontFamily(),
+      fontSize: getUiFontSize(14),
       fontStyle: 'bold',
       color: '#ffffff',
       backgroundColor: 'rgba(0, 0, 0, 0.68)',
@@ -2368,7 +2369,7 @@ export default class GameScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => this.hidePaifuGraph())
     const closeText = this.add.text(PAIFU_GRAPH.x + PAIFU_GRAPH.w + 10, PAIFU_GRAPH.y - 22, '×', {
-      fontFamily: 'MS UI Gothic, Meiryo, sans-serif', fontSize: '12px', color: '#000000',
+      fontFamily: getUiFontFamily(), fontSize: getUiFontSize(12), color: '#000000',
     })
 
     layer.add([shade, body, closeBg, closeText])
@@ -2486,7 +2487,7 @@ export default class GameScene extends Phaser.Scene {
 
   private addPaifuGraphText(x: number, y: number, text: string, width: number, align: 'left' | 'right' | 'center' = 'center') {
     const obj = this.add.text(x, y, text, {
-      fontFamily: 'MS UI Gothic, Meiryo, sans-serif', fontSize: '12px', color: '#000000',
+      fontFamily: getUiFontFamily(), fontSize: getUiFontSize(12), color: '#000000',
       fixedWidth: width, align,
     }).setCrop(0, 0, width, 14)
     this.paifuGraphBody?.add(obj)
@@ -3665,10 +3666,12 @@ export default class GameScene extends Phaser.Scene {
 
     const frame = this.callBalloonFrame(action)
     if (frame === undefined) return
+    const player = this.players[odr]
     this.emitToUiScene('callAction', {
       odr,
       frame,
-      avatarUrl: this.callAvatarUrl(this.players[odr]),
+      avatarUrl: this.callAvatarUrl(player),
+      fallbackAvatarUrl: player.avatarUrl || player.fallbackAvatarUrl || this.callAvatarUrl(player),
     })
   }
 

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMJLotResultDlg 相当 — 抽選結果ダイアログ (AP-09 §3-2-12)
  * レガシー: legacy/client/HgMajak2/MJLotResultDlg.h/cpp
  *
@@ -48,7 +48,7 @@
 import { useRef, useEffect, useState } from 'react'
 
 const IMG_LOT = '/assets/images/game/lot'
-const FONT = "'MS PGothic', 'MS UI Gothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 
 /** 抽選1件の結果 */
 export interface LotEntry {
@@ -145,16 +145,7 @@ export default function LotResultDlg({
     : ''
 
   const makeMoneyString = (value: number, addCurrency = true) => {
-    const sign = value < 0 ? '-' : ''
-    const digits = String(Math.abs(Math.trunc(value)))
-    const units = ['', '万', '億', '兆', '京']
-    const parts: string[] = []
-    for (let end = digits.length, unit = 0; end > 0; end -= 4, unit++) {
-      const start = Math.max(0, end - 4)
-      const part = Number(digits.slice(start, end))
-      if (part > 0) parts.unshift(`${part}${units[unit] ?? ''}`)
-    }
-    return `${sign}${parts.length > 0 ? parts.join('') : '0'}${addCurrency ? '円' : ''}`
+    return `${Math.trunc(value).toLocaleString('ja-JP')}${addCurrency ? ' GP' : ''}`
   }
 
   /* 現在ページのデータ */
@@ -163,7 +154,7 @@ export default function LotResultDlg({
   const txtBase = {
     position: 'absolute' as const,
     fontFamily: FONT,
-    fontSize: 13, fontWeight: 'bold' as const,
+    fontSize: 'calc(13px * var(--majak-type-scale))', fontWeight: 'bold' as const,
     lineHeight: '13px' as const,
     pointerEvents: 'none' as const,
     overflow: 'hidden' as const, whiteSpace: 'nowrap' as const,
@@ -251,7 +242,7 @@ export default function LotResultDlg({
             position: 'absolute',
             left: 12, top: 275, width: 131, height: 41,
             fontFamily: FONT,
-            fontSize: 13, fontWeight: 'bold', color: '#fff',
+            fontSize: 'calc(13px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
             lineHeight: '13px',
             textAlign: 'center',
             whiteSpace: 'pre-line',

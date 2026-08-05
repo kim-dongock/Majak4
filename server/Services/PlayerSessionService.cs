@@ -31,6 +31,32 @@ public sealed record ServerDisconnectReason(string Source, string Reason, DateTi
 /// </summary>
 public class PlayerSessionService
 {
+    private sealed class MemberEntryGate
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+        public int ReferenceCount { get; set; }
+    }
+
+    private sealed class MemberEntryLease : IDisposable
+    {
+        private PlayerSessionService? _owner;
+        private readonly string _memberNo;
+        private readonly MemberEntryGate _gate;
+
+        public MemberEntryLease(PlayerSessionService owner, string memberNo, MemberEntryGate gate)
+        {
+            _owner = owner;
+            _memberNo = memberNo;
+            _gate = gate;
+        }
+
+        public void Dispose()
+        {
+            var owner = Interlocked.Exchange(ref _owner, null);
+            owner?.ReleaseMemberEntryLock(_memberNo, _gate);
+        }
+    }
+
     // ConnectionId → MajakPlayer
     private readonly ConcurrentDictionary<string, MajakPlayer> _byConnId = new();
     private readonly ConcurrentDictionary<string, string> _authMemberByConnId = new();
@@ -47,10 +73,44 @@ public class PlayerSessionService
     // chanelId → (ConnectionId → MajakPlayer)
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, MajakPlayer>> _byChannel = new();
     private readonly ConcurrentDictionary<string, ServerDisconnectReason> _disconnectReasons = new();
+    private readonly Dictionary<string, MemberEntryGate> _memberEntryGates = new(StringComparer.Ordinal);
+    private readonly object _memberEntryGatesSync = new();
 
     private int _nextRoomId = 0;
 
     // ─── プレイヤー ───────────────────────────────────────────────
+
+    public async ValueTask<IDisposable> AcquireMemberEntryLockAsync(string memberNo)
+    {
+        MemberEntryGate gate;
+        lock (_memberEntryGatesSync)
+        {
+            if (!_memberEntryGates.TryGetValue(memberNo, out gate!))
+            {
+                gate = new MemberEntryGate();
+                _memberEntryGates[memberNo] = gate;
+            }
+            gate.ReferenceCount++;
+        }
+
+        await gate.Semaphore.WaitAsync();
+        return new MemberEntryLease(this, memberNo, gate);
+    }
+
+    private void ReleaseMemberEntryLock(string memberNo, MemberEntryGate gate)
+    {
+        gate.Semaphore.Release();
+        lock (_memberEntryGatesSync)
+        {
+            gate.ReferenceCount--;
+            if (gate.ReferenceCount == 0
+                && _memberEntryGates.TryGetValue(memberNo, out var current)
+                && ReferenceEquals(current, gate))
+            {
+                _memberEntryGates.Remove(memberNo);
+            }
+        }
+    }
 
     public void Register(MajakPlayer player)
     {

@@ -7,7 +7,7 @@ import { showMessage } from '../../../utils/msgbox'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 const IMG = '/assets/images/game'
-const FONT = "'MS UI Gothic', 'MS PGothic', 'MS Gothic', sans-serif"
+const FONT = 'var(--majak-font-family-ui)'
 
 export interface TournamentRegistPayload {
   roomOption: string
@@ -72,7 +72,7 @@ function inputStyle(left: number, top: number, width: number): React.CSSProperti
     height: 22,
     boxSizing: 'border-box',
     fontFamily: FONT,
-    fontSize: 13,
+    fontSize: 'calc(13px * var(--majak-type-scale))',
     color: '#000',
     background: '#fff',
     border: '1px solid #6f8f68',
@@ -96,7 +96,7 @@ function labelStyle(left: number, top: number, width = 120): React.CSSProperties
     width,
     height: 18,
     fontFamily: FONT,
-    fontSize: 13,
+    fontSize: 'calc(13px * var(--majak-type-scale))',
     lineHeight: '18px',
     color: '#1a401a',
     whiteSpace: 'nowrap',
@@ -113,7 +113,7 @@ function checkStyle(left: number, top: number, width = 110): React.CSSProperties
     alignItems: 'center',
     gap: 4,
     fontFamily: FONT,
-    fontSize: 13,
+    fontSize: 'calc(13px * var(--majak-type-scale))',
     color: '#1a401a',
     whiteSpace: 'nowrap',
   }
@@ -170,10 +170,10 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
       errors.push('大会ルールをすべて選択してください。')
     }
     if ((Number(joinMoney) || 0) > 10_000) {
-      errors.push('参加費は0～10,000コインで入力してください。')
+      errors.push('参加費は0～10,000 GPで入力してください。')
     }
     if ([prize1, prize2, prize3, prize4].some(value => (Number(value) || 0) > 100_000)) {
-      errors.push('各順位の賞金は0～100,000コインで入力してください。')
+      errors.push('各順位の賞金は0～100,000 GPで入力してください。')
     }
     if (usePassword && password.trim().length === 0) {
       errors.push('パスワードを入力してください。')
@@ -265,7 +265,7 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
     <div style={{ position: 'absolute', inset: 0, zIndex: 280, background: 'rgba(0,0,0,0.35)', overflowY: 'auto' }}>
       <div style={{ position: 'relative', width: 500, height: 830, margin: '4px auto 16px' }}>
         <img src={`${IMG}/mj_tournament_bg.png`} alt="" draggable={false} style={{ position: 'absolute', left: 0, top: 0, width: 500, height: 830, imageRendering: 'pixelated' }} />
-        <div style={{ position: 'absolute', left: 155, top: 14, width: 190, height: 24, textAlign: 'center', fontFamily: FONT, fontSize: 15, fontWeight: 'bold', color: '#fff', lineHeight: '24px' }}>大会登録</div>
+        <div style={{ position: 'absolute', left: 155, top: 14, width: 190, height: 24, textAlign: 'center', fontFamily: FONT, fontSize: 'calc(15px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff', lineHeight: '24px' }}>大会登録</div>
 
         <span style={labelStyle(45, 66)}>大会名</span>
         <input value={name} onChange={event => setName(event.target.value.slice(0, 30))} maxLength={30} autoFocus style={inputStyle(150, 64, 265)} />
@@ -305,7 +305,7 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
 
         <span style={labelStyle(45, 284)}>参加費</span>
         <input value={joinMoney} onChange={event => setJoinMoney(event.target.value.replace(/\D/g, '').slice(0, 5))} style={inputStyle(150, 282, 90)} />
-        <span style={labelStyle(260, 284, 80)}>ハンコイン</span>
+        <span style={labelStyle(260, 284, 80)}>MP</span>
         <span style={labelStyle(45, 318)}>賞金 1位</span>
         <input value={prize1} onChange={event => setPrize1(event.target.value.replace(/\D/g, '').slice(0, 6))} style={inputStyle(150, 316, 90)} />
         <span style={labelStyle(260, 318, 80)}>2位</span>

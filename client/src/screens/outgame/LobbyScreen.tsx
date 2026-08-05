@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CMajakChannelWnd 相当 — ロビー (チャンネル) 画面 (AP-09 §1-5)
  * レガシー: legacy/client/HgMajak2/MajakChannelWnd.h/cpp
  *
@@ -22,6 +22,7 @@ import { getAvatarUrl, getShortAvatarUrl, getDefaultAvatarUrl } from '../../util
 import { configureMajakSound } from '../../utils/majakSound'
 import { readNoticePayload, type NoticeDisplay } from '../../utils/notice'
 import { sendAccuseComplaint } from '../../utils/accuse'
+import { getTabSessionId } from '../../utils/tabSession'
 import WelcomeDlg    from './dialogs/WelcomeDlg'
 import GetReqGameDialog from './dialogs/GetReqGameDialog'
 import PlayerInfoWnd, { type PlayerInfo as DlgPlayerInfo } from './dialogs/PlayerInfoWnd'
@@ -65,7 +66,6 @@ function buildEnterChannelPayload(channelId: string, player: ReturnType<typeof u
   const nickname = player?.name ?? ''
   return {
     gameId: 'MAJAK4',
-    k22e: 'MAJAK4',
     subId,
     k23e: subId,
     channelId,
@@ -78,6 +78,7 @@ function buildEnterChannelPayload(channelId: string, player: ReturnType<typeof u
     avatarId,
     k7e: avatarId,
     password: player?.password ?? '',
+    tabId: getTabSessionId(),
     abandonPreviousRoom: abandonRoomId > 0,
     abandonRoomId,
   }
@@ -363,15 +364,10 @@ const DEFAULT_ROOM_SLOT_COUNT = 12
 const COLS    = 4
 const TABLE_W = 150
 const TABLE_H = 133
-const BTN_W   = 41
-const BTN_H   = 19
-const ROOM_STATE_W = 37
-const ROOM_STATE_H = 15
 const ROOM_MARGIN = 6
 const ROOM_STEP_X = TABLE_W + ROOM_MARGIN
 const ROOM_STEP_Y = TABLE_H + ROOM_MARGIN
 const LOBBY_LEFT_NUDGE = 8
-const ROOM_OPTION_ICON_SIZE = 17
 const ROOM_JOIN = 1
 const ROOM_JOINREADY = 2
 const ROOM_GAMEJOIN = 4
@@ -613,76 +609,49 @@ function isRoomOptionMasked(mask: MJOptionMask, key: keyof MJOptionMask): boolea
   return Object.prototype.hasOwnProperty.call(mask, key)
 }
 
-function RoomOptionIcon({ src, x, y, frame, visualScale = 1 }: { src: string; x: number; y: number; frame: number; visualScale?: number }) {
+function RoomOptionIcon({ src, frame }: { src: string; frame: number }) {
   return (
     <span
       aria-hidden="true"
+      className="majak-lobby-room-rule-icon"
       style={{
-        position: 'absolute',
-        left: x,
-        top: y,
-        width: ROOM_OPTION_ICON_SIZE,
-        height: ROOM_OPTION_ICON_SIZE,
-        zIndex: 2,
         backgroundImage: `url(${IMG}/${src})`,
-        backgroundPosition: `${-frame * ROOM_OPTION_ICON_SIZE}px 0`,
+        backgroundPosition: `${-frame * 12}px 0`,
         backgroundRepeat: 'no-repeat',
-        transform: visualScale === 1 ? undefined : `scale(${visualScale})`,
-        transformOrigin: 'left top',
-        pointerEvents: 'none',
+        backgroundSize: 'auto 12px',
       }}
     />
   )
 }
 
-function RoomOptionIcons({ optionText, channelId, variant: _variant = 'desktop' }: { optionText: string; channelId?: string; variant?: 'desktop' | 'mobile' }) {
+function RoomOptionIcons({ optionText, channelId }: { optionText: string; channelId?: string }) {
   const parsed = parseRoomOption(optionText)
   if (!parsed) return null
   const option = maskRoomOption(parsed, channelId)
   const displayMask = buildRoomOptionMask(channelId)
-  const isMobile = _variant === 'mobile'
-  const iconScale = isMobile ? 1.18 : 1
-  const pos = (desktopX: number, desktopY: number, mobileX = desktopX, mobileY = desktopY) => ({
-    x: isMobile ? mobileX : desktopX,
-    y: isMobile ? mobileY : desktopY,
-  })
 
   if (isAutoMatchingChannel(channelId)) {
-    const speedPos = pos(66, 111, 64, 108)
-    const contestPos = pos(66, 39, 64, 44)
     return (
       <>
-        <RoomOptionIcon src="mj_opt_4.png" x={speedPos.x} y={speedPos.y} frame={option.nSpd} visualScale={iconScale} />
-        {!isDaniChannel(channelId) && <RoomOptionIcon src="mj_optcon.png" x={contestPos.x} y={contestPos.y} frame={option.nContest} visualScale={iconScale} />}
+        <RoomOptionIcon src="mj_opt_4.png" frame={option.nSpd} />
+        {!isDaniChannel(channelId) && <RoomOptionIcon src="mj_optcon.png" frame={option.nContest} />}
       </>
     )
   }
 
-  const setPos = pos(42, 23, 38, 24)
-  const kuiPos = pos(58, 23, 57, 24)
-  const umaPos = pos(74, 23, 76, 24)
-  const ronPos = pos(90, 23, 95, 24)
-  const redPos = pos(42, 39, 38, 45)
-  const torPos = pos(58, 39, 57, 45)
-  const warPos = pos(74, 39, 76, 45)
-  const tipPos = pos(90, 39, 95, 45)
-  const speedPos = pos(50, 111, 45, 108)
-  const openPos = pos(66, 111, 68, 108)
-  const chatPos = pos(82, 111, 91, 108)
-
   return (
     <>
-      {!isRoomOptionMasked(displayMask, 'nSet') && <RoomOptionIcon src="mj_opt_0.png" x={setPos.x} y={setPos.y} frame={option.nSet} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'bKui') && <RoomOptionIcon src="mj_opt_3.png" x={kuiPos.x} y={kuiPos.y} frame={optionFrame(option.bKui)} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'nUma') && <RoomOptionIcon src="mj_opt_1.png" x={umaPos.x} y={umaPos.y} frame={option.nUma} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'nRon') && <RoomOptionIcon src="mj_optron.png" x={ronPos.x} y={ronPos.y} frame={option.nRon} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'nRed') && <RoomOptionIcon src="mj_opt_5.png" x={redPos.x} y={redPos.y} frame={option.nRed} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'bTor') && <RoomOptionIcon src="mj_opt_2.png" x={torPos.x} y={torPos.y} frame={optionFrame(option.bTor)} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'bWar') && <RoomOptionIcon src="mj_optwar.png" x={warPos.x} y={warPos.y} frame={optionFrame(option.bWar)} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'bTip') && <RoomOptionIcon src="mj_opttip.png" x={tipPos.x} y={tipPos.y} frame={optionFrame(option.bTip)} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'nSpd') && <RoomOptionIcon src="mj_opt_4.png" x={speedPos.x} y={speedPos.y} frame={option.nSpd} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'bOpenHand') && <RoomOptionIcon src="mj_opt_6.png" x={openPos.x} y={openPos.y} frame={optionFrame(option.bOpenHand)} visualScale={iconScale} />}
-      {!isRoomOptionMasked(displayMask, 'bEnableChat') && !isRoomOptionMasked(displayMask, 'bViewChat') && <RoomOptionIcon src={option.bEnableChat ? 'mj_opt_7.png' : 'mj_opt_8.png'} x={chatPos.x} y={chatPos.y} frame={option.bEnableChat ? optionFrame(option.bViewChat) : 0} visualScale={iconScale} />}
+      {!isRoomOptionMasked(displayMask, 'nSet') && <RoomOptionIcon src="mj_opt_0.png" frame={option.nSet} />}
+      {!isRoomOptionMasked(displayMask, 'bKui') && <RoomOptionIcon src="mj_opt_3.png" frame={optionFrame(option.bKui)} />}
+      {!isRoomOptionMasked(displayMask, 'nUma') && <RoomOptionIcon src="mj_opt_1.png" frame={option.nUma} />}
+      {!isRoomOptionMasked(displayMask, 'nRon') && <RoomOptionIcon src="mj_optron.png" frame={option.nRon} />}
+      {!isRoomOptionMasked(displayMask, 'nRed') && <RoomOptionIcon src="mj_opt_5.png" frame={option.nRed} />}
+      {!isRoomOptionMasked(displayMask, 'bTor') && <RoomOptionIcon src="mj_opt_2.png" frame={optionFrame(option.bTor)} />}
+      {!isRoomOptionMasked(displayMask, 'bWar') && <RoomOptionIcon src="mj_optwar.png" frame={optionFrame(option.bWar)} />}
+      {!isRoomOptionMasked(displayMask, 'bTip') && <RoomOptionIcon src="mj_opttip.png" frame={optionFrame(option.bTip)} />}
+      {!isRoomOptionMasked(displayMask, 'nSpd') && <RoomOptionIcon src="mj_opt_4.png" frame={option.nSpd} />}
+      {!isRoomOptionMasked(displayMask, 'bOpenHand') && <RoomOptionIcon src="mj_opt_6.png" frame={optionFrame(option.bOpenHand)} />}
+      {!isRoomOptionMasked(displayMask, 'bEnableChat') && !isRoomOptionMasked(displayMask, 'bViewChat') && <RoomOptionIcon src={option.bEnableChat ? 'mj_opt_7.png' : 'mj_opt_8.png'} frame={option.bEnableChat ? optionFrame(option.bViewChat) : 0} />}
     </>
   )
 }
@@ -704,7 +673,7 @@ function RoomListPanel({
   rooms,
   members,
   slotCount,
-    variant = 'desktop',
+  variant = 'desktop',
   channelId,
   onEnter,
   onCreateRoom,
@@ -714,7 +683,7 @@ function RoomListPanel({
   members: RoomAvatarMember[]
   slotCount: number
   channelId?: string
-    variant?: 'desktop' | 'mobile'
+  variant?: 'desktop' | 'mobile'
   onEnter: (roomId: string) => void
   onCreateRoom: (slotNo: number) => void
   directRoomActionDisabled?: boolean
@@ -746,13 +715,13 @@ function RoomListPanel({
 
   return (
     <div
+      className="majak-desktop-lobby-room-list"
       style={{
         position: 'absolute',
         left: 15 - LOBBY_LEFT_NUDGE,
         top: 56,
         width: 654,
         height: 398,
-        backgroundColor: 'rgb(228,249,176)',
         overflowY: 'auto',
         overflowX: 'hidden',
       }}
@@ -793,8 +762,6 @@ function RoomCell({
   onCreateRoom: (slotNo: number) => void
   directRoomActionDisabled?: boolean
 }) {
-  const [fi, setFi] = useState(0)
-
   const isEmpty  = room === null
   const occupiedMemberCount = !isEmpty ? room.memberCnt + room.opMemberCnt : 0
   const isFull   = !isEmpty && occupiedMemberCount >= room.memberMax
@@ -807,22 +774,17 @@ function RoomCell({
       : !isFull)
   const hasRoomAction = isEmpty || isJoinable || isViewable
   const roomActionBlocked = Boolean(directRoomActionDisabled && !isViewable)
-  // mj_bncrall.png ベースフレーム: 作成=0, 参加=4, 観戦=8
-  const baseFrame = isEmpty ? 0 : isViewable ? 8 : 4
   const isMobile = variant === 'mobile'
-  const avatarPositions = [{ x: 14, y: 30 }, { x: 114, y: 30 }, { x: 14, y: 87 }, { x: 114, y: 87 }]
   const seats: RoomSeat[] = !isEmpty && room.seats.length > 0
     ? normalizeRoomCellSeats(room)
     : Array.from({ length: Math.min(occupiedMemberCount, 4) }, (_, pos) => ({ pix: '', pos, disconnected: false }))
 
-  // レガシー DrawRoom: frame0=空き/自室, frame1=待機室, frame2=対局中
   const isPlayingRoom = !isEmpty
     && (roomState === ROOM_GAMEJOIN || roomState === ROOM_GAMEVIEW || roomState === ROOM_GAMEFULL || Number(room.roomPlaying ?? 0) > 0)
-  const tableFrame = isEmpty ? 0 : isPlayingRoom ? 2 : 1
-  const roomPlaying = Number(room?.roomPlaying ?? (isPlayingRoom ? 1 : 0))
-  const roomStateFrame = roomPlaying < 2 ? roomPlaying : 3
   const cellScale = isMobile ? 'var(--majak-mobile-room-cell-scale, 0.68)' : '1'
   const cellSize = (value: number) => isMobile ? `calc(${value}px * ${cellScale})` : value
+  const orderedSeats = [...seats].sort((left, right) => left.pos - right.pos)
+  const roomStatus = isEmpty ? '空室' : isPlayingRoom ? '対局中' : isFull ? '満席' : '待機中'
 
   const handleClick = () => {
     if (roomActionBlocked || !hasRoomAction) return
@@ -832,6 +794,7 @@ function RoomCell({
 
   return (
     <div
+      className={`majak-lobby-room-cell${isMobile ? ' majak-lobby-room-cell--mobile' : ' majak-lobby-room-cell--desktop'}`}
       style={{
         position: variant === 'mobile' ? 'relative' : 'absolute',
         left: variant === 'mobile' ? undefined : ROOM_MARGIN + ROOM_STEP_X * ((slotNo - 1) % COLS),
@@ -853,112 +816,34 @@ function RoomCell({
         transformOrigin: 'left top',
         overflow: 'visible',
       }}>
-      {/* mj_rmimg.png: 600×133 (4フレーム 150×133) */}
-      <div style={{
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        width: TABLE_W, height: TABLE_H,
-        backgroundImage: `url(${IMG}/mj_rmimg.png)`,
-        backgroundPosition: `${-tableFrame * TABLE_W}px 0`,
-        backgroundRepeat: 'no-repeat',
-        overflow: 'hidden',
-      }} />
-
-      {/* レガシー DrawRoom: CRect(8,4,124,23), "%d : %s" */}
-      <div style={{
-        position: 'absolute', left: 8, top: 4,
-        width: 116, height: 19,
-        fontSize: 12, color: '#000',
-        fontFamily: "'MS Gothic', monospace",
-        lineHeight: '19px',
-        overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-        pointerEvents: 'none',
-      }}>
-        {slotNo} : {room?.title ?? ''}
-      </div>
-
-      {!isEmpty && room.isPrivate && (
-        <img
-          src={`${IMG}/mj_rkey.png`}
-          alt=""
-          draggable={false}
-          style={{ position: 'absolute', left: 132, top: 3, width: 12, height: 15, pointerEvents: 'none' }}
-        />
-      )}
-
-      {!isEmpty && <RoomOptionIcons optionText={room.roomOption} channelId={channelId} variant={variant} />}
-
-      {!isEmpty && seats.map((seat, index) => {
-        const member = members.find(item => item.pix === seat.pix)
-        const pos = avatarPositions[seat.pos] ?? avatarPositions[index]
-        const avatarId = seat.avatarId ?? member?.avatarId
-        const sex = seat.sex ?? member?.sex ?? 'male'
-        return (
-          <img
-            key={`${seat.pix || 'seat'}-${seat.pos}-${index}`}
-            src={avatarId ? getShortAvatarUrl(avatarId) : getDefaultAvatarUrl(sex)}
-            alt=""
-            draggable={false}
-            onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatarUrl(sex) }}
-            style={{
-              position: 'absolute', left: pos.x, top: pos.y,
-              width: 22, height: 32,
-              objectFit: 'cover',
-              opacity: seat.disconnected ? 0.55 : 1,
-              pointerEvents: 'none',
-            }}
-          />
-        )
-      })}
-
-      {!isEmpty && (
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: 56,
-            top: 91 - 2 - ROOM_STATE_H,
-            width: ROOM_STATE_W,
-            height: ROOM_STATE_H,
-            zIndex: 3,
-            backgroundImage: "url('/assets/images/common/roomstate.png')",
-            backgroundPosition: `${-roomStateFrame * ROOM_STATE_W}px 0`,
-            backgroundRepeat: 'no-repeat',
-            pointerEvents: 'none',
-          }}
-        />
-      )}
-
-      {/* mj_bncrall.png 16フレーム 41×19 — 作成/参加/観戦 */}
-      {hasRoomAction && !roomActionBlocked && (
-        <button
-          onClick={handleClick}
-          onMouseEnter={() => setFi(2)}
-          onMouseLeave={() => setFi(0)}
-          onMouseDown={() => setFi(3)}
-          onMouseUp={() => setFi(2)}
-          style={{
-            position: 'absolute',
-            left: 54,
-            top: isMobile ? 78 : 91,
-            width: BTN_W, height: BTN_H,
-            zIndex: 4,
-            display: 'block',
-            appearance: 'none',
-            WebkitAppearance: 'none',
-            backgroundImage: `url(${IMG}/mj_bncrall.png)`,
-            backgroundPosition: `${-(baseFrame + fi) * BTN_W}px 0`,
-            backgroundRepeat: 'no-repeat',
-            backgroundColor: 'transparent',
-            border: 'none', padding: 0, margin: 0,
-            cursor: 'pointer',
-            outline: 'none', opacity: 1, imageRendering: 'pixelated',
-            transform: isMobile ? 'scale(var(--majak-mobile-room-action-scale, 1.35))' : undefined,
-            transformOrigin: 'center center',
-          }}
-        />
-      )}
+        <article className={`majak-lobby-room-card${isEmpty ? ' is-empty' : ''}${isPlayingRoom ? ' is-playing' : ''}${isFull ? ' is-full' : ''}`}>
+          <header className="majak-lobby-room-card__head">
+            <span className="majak-lobby-room-card__number">{String(slotNo).padStart(2, '0')}</span>
+            <strong className="majak-lobby-room-card__title">{room?.title || '空きルーム'}</strong>
+            {!isEmpty && room.isPrivate && <span className="majak-lobby-room-card__lock" aria-label="パスワードあり">鍵</span>}
+            <span className="majak-lobby-room-card__capacity">{occupiedMemberCount}/{room?.memberMax ?? 4}</span>
+          </header>
+          <div className="majak-lobby-room-card__seats" aria-label={`${occupiedMemberCount}人参加中`}>
+            {[0, 1, 2, 3].map(seatIndex => {
+              const seat = orderedSeats[seatIndex]
+              const member = seat ? members.find(item => item.pix === seat.pix) : undefined
+              const avatarId = seat?.avatarId ?? member?.avatarId
+              const sex = seat?.sex ?? member?.sex ?? 'male'
+              return (
+                <span key={seat ? `${seat.pix || 'seat'}-${seat.pos}-${seatIndex}` : `empty-${seatIndex}`} className={`majak-lobby-room-card__seat${seat ? ' is-occupied' : ''}${seat?.disconnected ? ' is-disconnected' : ''}`}>
+                  {seat && <img src={avatarId ? getShortAvatarUrl(avatarId) : getDefaultAvatarUrl(sex)} alt="" draggable={false} onError={event => { event.currentTarget.src = getDefaultAvatarUrl(sex) }} />}
+                </span>
+              )
+            })}
+          </div>
+          <div className="majak-lobby-room-card__bottom">
+            <div className="majak-lobby-room-rules">{!isEmpty && <RoomOptionIcons optionText={room.roomOption} channelId={channelId} />}</div>
+            <div className="majak-lobby-room-card__action-row">
+              <span className={`majak-lobby-room-card__status${isPlayingRoom ? ' is-playing' : ''}${isFull ? ' is-full' : ''}`}>{roomStatus}</span>
+              {hasRoomAction && !roomActionBlocked && <button type="button" className={`majak-lobby-room-action-button${isViewable ? ' is-watch' : ''}`} onClick={handleClick}>{isEmpty ? '作成' : isViewable ? '観戦' : '参加'}</button>}
+            </div>
+          </div>
+        </article>
       </div>
     </div>
   )
@@ -1020,6 +905,12 @@ function uniqueMemberEntries(members: MemberEntry[]): MemberEntry[] {
     byPix.set(member.pix, { ...byPix.get(member.pix), ...member })
   }
   return Array.from(byPix.values())
+}
+
+function membersWithSelfFirst(members: MemberEntry[], myPix: string): MemberEntry[] {
+  if (!myPix) return members
+  const self = members.find(member => member.pix === myPix)
+  return self ? [self, ...members.filter(member => member.pix !== myPix)] : members
 }
 
 function readLegacyMemberInfo(raw: unknown): MemberEntry | null {
@@ -1105,11 +996,13 @@ function inviteResponseMessage(displayName: string, yesNo: unknown) {
 
 function MobileMemberListPanel({
   members,
+  myPix,
   selectedMember,
   onSelectMember,
   onViewProfile,
 }: {
   members: MemberEntry[]
+  myPix: string
   selectedMember: string | null
   onSelectMember: (pix: string) => void
   onViewProfile: (pix: string) => void
@@ -1136,7 +1029,7 @@ function MobileMemberListPanel({
         <button
           key={member.pix}
           type="button"
-          className={`majak-mobile-lobby-member${selectedMember === member.pix ? ' is-selected' : ''}`}
+          className={`majak-mobile-lobby-member${member.pix === myPix ? ' is-self' : ''}${selectedMember === member.pix ? ' is-selected' : ''}`}
           onClick={() => handleMemberTap(member.pix)}
           onDoubleClick={() => onViewProfile(member.pix)}
         >
@@ -1161,11 +1054,13 @@ function MobileMemberListPanel({
 
 function MemberListPanel({
   members,
+  myPix,
   isDani,
   onSelectMember,
   onViewProfile,
 }: {
   members: MemberEntry[]
+  myPix: string
   isDani: boolean
   onSelectMember: (pix: string) => void
   onViewProfile: (pix: string) => void
@@ -1183,6 +1078,7 @@ function MemberListPanel({
 
   return (
     <div
+      className="majak-desktop-lobby-members"
       style={{
         position: 'absolute',
         left: 678,
@@ -1192,6 +1088,7 @@ function MemberListPanel({
         overflow: 'hidden',
       }}
     >
+      <div className="majak-desktop-lobby-member-heading">メンバー一覧</div>
       {/* 背景 mj_userlist_bg.png (336×403) */}
       <img
         src={`${IMG}/mj_userlist_bg.png`}
@@ -1204,7 +1101,7 @@ function MemberListPanel({
       <div style={{
         position: 'absolute', left: 196, top: 8,
         width: 130,
-        fontFamily: "'MS Gothic', monospace", fontSize: 10, color: '#000',
+        fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(10px * var(--majak-type-scale))', color: '#000',
         textAlign: 'right', lineHeight: '12px',
       }}>
         <div>全体</div>
@@ -1261,12 +1158,12 @@ function MemberListPanel({
         width: 334, height: 18,
         display: 'flex', alignItems: 'center',
         background: '#f0f0f0',
-        fontFamily: "'MS Gothic', monospace", fontSize: 11, color: '#000',
+        fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(11px * var(--majak-type-scale))', color: '#000',
         border: '1px solid #b8b8b8',
         boxSizing: 'border-box',
       }}>
         <span style={{ width: nicknameColumnWidth, paddingLeft: 4 }}>ニックネーム</span>
-        <span style={{ width: levelColumnWidth }}>{isDani ? '段位' : '称号'}</span>
+        <span style={{ width: levelColumnWidth }}>{isDani ? '段位' : '資産'}</span>
         <span style={{ width: locationColumnWidth }}>位置</span>
       </div>
       <div
@@ -1296,11 +1193,11 @@ function MemberListPanel({
               alignItems: 'center',
               height: 36,
               cursor: 'pointer',
-              fontFamily: "'MS Gothic', monospace",
-              fontSize: 11,
-              color: '#000',
+              fontFamily: 'var(--majak-font-family-ui)',
+              fontSize: 'calc(11px * var(--majak-type-scale))',
+              color: member.pix === myPix ? '#164d7a' : '#000',
               borderBottom: '1px solid #ccc',
-              background: '#fff',
+              background: member.pix === myPix ? '#e4f1ff' : '#fff',
             }}
           >
             {/* アバターサムネイル — AP-08: getShortAvatarUrl (接続者リスト用) */}
@@ -1451,7 +1348,7 @@ function TournamentListPanel({
   return (
     <>
       {/* CHgTaikaiListHead::Create(CRect(15,137,668,154)) → content y=106 */}
-      <div style={{ position: 'absolute', left: 15, top: 106, width: 653, height: 18, fontFamily: "'MS UI Gothic', 'MS Gothic', sans-serif", fontSize: 13, color: '#000' }}>
+      <div style={{ position: 'absolute', left: 15, top: 106, width: 653, height: 18, fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))', color: '#000' }}>
         {[
           [0, 250, '大会名'],
           [250, 60, 'パス'],
@@ -1530,11 +1427,11 @@ function TournamentRow({
     >
       {entry && (
         <>
-          <span style={{ position: 'absolute', left: 10, top: 15, width: 240, height: 20, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontFamily: "'MS UI Gothic', 'MS Gothic', sans-serif", fontSize: 14, color: textColor, fontWeight }}>{entry.playName}</span>
-          <span style={{ position: 'absolute', left: 250, top: 15, width: 60, textAlign: 'center', fontFamily: "'MS UI Gothic', 'MS Gothic', sans-serif", fontSize: 14, color: textColor, fontWeight }}>{entry.hasPassword === 1 ? '有' : '無'}</span>
-          <span style={{ position: 'absolute', left: 310, top: 15, width: 100, textAlign: 'center', fontFamily: "'MS UI Gothic', 'MS Gothic', sans-serif", fontSize: 14, color: textColor, fontWeight }}>{formatTournamentStatus(entry)}</span>
-          <span style={{ position: 'absolute', left: 410, top: 15, width: 80, textAlign: 'center', fontFamily: "'MS UI Gothic', 'MS Gothic', sans-serif", fontSize: 14, color: textColor, fontWeight }}>{entry.playNum}</span>
-          <span style={{ position: 'absolute', left: 490, top: 15, width: 145, textAlign: 'center', fontFamily: "'MS UI Gothic', 'MS Gothic', sans-serif", fontSize: 14, color: textColor, fontWeight }}>{entry.playStartDt}</span>
+          <span style={{ position: 'absolute', left: 10, top: 15, width: 240, height: 20, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(14px * var(--majak-type-scale))', color: textColor, fontWeight }}>{entry.playName}</span>
+          <span style={{ position: 'absolute', left: 250, top: 15, width: 60, textAlign: 'center', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(14px * var(--majak-type-scale))', color: textColor, fontWeight }}>{entry.hasPassword === 1 ? '有' : '無'}</span>
+          <span style={{ position: 'absolute', left: 310, top: 15, width: 100, textAlign: 'center', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(14px * var(--majak-type-scale))', color: textColor, fontWeight }}>{formatTournamentStatus(entry)}</span>
+          <span style={{ position: 'absolute', left: 410, top: 15, width: 80, textAlign: 'center', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(14px * var(--majak-type-scale))', color: textColor, fontWeight }}>{entry.playNum}</span>
+          <span style={{ position: 'absolute', left: 490, top: 15, width: 145, textAlign: 'center', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(14px * var(--majak-type-scale))', color: textColor, fontWeight }}>{entry.playStartDt}</span>
         </>
       )}
     </button>
@@ -1545,7 +1442,7 @@ function TournamentDetailPanel({ tournament }: { tournament: TournamentEntry | n
   const lines = getTournamentDetailLines(tournament)
 
   return (
-    <div style={{ position: 'absolute', left: 678, top: 221, width: 336, height: 368, border: '2px inset #d4d0c8', boxSizing: 'border-box', background: '#fff', overflowY: 'auto', fontFamily: "'MS Gothic', monospace", fontSize: 12, lineHeight: '18px', color: '#000', padding: 4 }}>
+    <div style={{ position: 'absolute', left: 678, top: 221, width: 336, height: 368, border: '2px inset #d4d0c8', boxSizing: 'border-box', background: '#fff', overflowY: 'auto', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '18px', color: '#000', padding: 4 }}>
       {lines.map((line, index) => <div key={`${index}-${line}`} style={{ whiteSpace: 'nowrap' }}>{line}</div>)}
     </div>
   )
@@ -1560,11 +1457,11 @@ function getTournamentDetailLines(tournament: TournamentEntry | null, memberName
     `日付：${tournament.playStartDt.slice(5, 10)}`,
     `開始時間：${tournament.playStartDt.slice(11, 16)}`,
     `終了予定時間：${tournament.playEndDt.slice(11, 16)}`,
-    `参加費 ：${tournament.joinMoney} GEM`,
-    `賞金：1位 ${tournament.gradeMoney1} GEM`,
-    `賞金：2位 ${tournament.gradeMoney2} GEM`,
-    `賞金：3位 ${tournament.gradeMoney3} GEM`,
-    `賞金：4位 ${tournament.gradeMoney4} GEM`,
+    `参加費 ：${tournament.joinMoney} MP`,
+    `賞金：1位 ${tournament.gradeMoney1} MP`,
+    `賞金：2位 ${tournament.gradeMoney2} MP`,
+    `賞金：3位 ${tournament.gradeMoney3} MP`,
+    `賞金：4位 ${tournament.gradeMoney4} MP`,
     ' ',
     '【トーナメント内容】',
     `人数：${tournament.maxPlayerNum} 人トーナメント`,
@@ -1718,8 +1615,8 @@ function TournamentMatchLabels({
     overflow: 'hidden',
     whiteSpace: 'nowrap',
     textOverflow: 'ellipsis',
-    fontFamily: "'MS UI Gothic', 'MS Gothic', sans-serif",
-    fontSize: 12,
+    fontFamily: 'var(--majak-font-family-ui)',
+    fontSize: 'calc(12px * var(--majak-type-scale))',
     lineHeight: '15px',
     color: '#ffffff',
     pointerEvents: 'none',
@@ -1886,8 +1783,8 @@ function ChkBtn({
       <span
         style={{
           marginLeft: 4,
-          fontFamily: "'Noto Sans JP', 'Noto Sans JP', 'MS Gothic', monospace",
-          fontSize: 11,
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(11px * var(--majak-type-scale))',
           color: pressed || disabled ? '#888' : '#000',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
@@ -2007,6 +1904,8 @@ export default function LobbyScreen() {
   const [gamMoney, setGamMoney] = useState<number>(0)
   /** 龍珠残高 — channel:entered / mjkc33e で更新 (原典: m_pMember->m_nGemCount) */
   const [gemCount, setGemCount] = useState<number>(0)
+  /** キャッシュ残高 — channel:entered で更新 */
+  const [cashCount, setCashCount] = useState<number>(0)
   /** 麻雀アイテム所持情報 — c1e channel enter cache (原典: theApp.m_UserInfo.m_listMajItem) */
   const [majItems, setMajItems] = useState<RawMajItem[]>([])
   /** 称号 — channel:entered で更新 (原典: m_pMember->m_szSlevel) */
@@ -2027,6 +1926,7 @@ export default function LobbyScreen() {
   const [tournamentDetails, setTournamentDetails] = useState<TournamentDetailEntry[]>([])
   const tournamentDetailActionRef = useRef<'select' | 'page' | null>(null)
   const player = useAuthStore.getState().player
+  const displayMembers = membersWithSelfFirst(members, player?.pix ?? '')
   const autoMatchingChannel = isAutoMatchingChannel(channelId)
   const daniChannel = isDaniChannel(channelId)
   const trainingChannel = isTrainingChannel(channelId)
@@ -2264,6 +2164,7 @@ export default function LobbyScreen() {
         // DrawMemberInfo 相当: gammoney / gemcount / slevel を初期表示に反映
         if (typeof data.gammoney === 'number') setGamMoney(data.gammoney as number)
         if (typeof data.gemcount === 'number') setGemCount(data.gemcount as number)
+        if (typeof data.cashCount === 'number') setCashCount(data.cashCount as number)
         if (Array.isArray(data.majItems)) {
           const nextMajItems = (data.majItems as Array<Record<string, unknown>>)
             .map(normalizeRawMajItem)
@@ -2533,7 +2434,7 @@ export default function LobbyScreen() {
        */
       const onMoneyReplenishment = (data: Record<string, unknown>) => {
         if (!mounted) return
-        if (!checkResult(data, 'コイン補充に失敗しました')) return
+        if (!checkResult(data, 'GP補充に失敗しました')) return
         // 原典: ProcessMoneyReplenishmentCommand → pData->m_llGamMoney を更新
         if (typeof data.gammoney === 'number') setGamMoney(data.gammoney as number)
       }
@@ -2586,7 +2487,7 @@ export default function LobbyScreen() {
           setIsMatching(false)
           const failCode = String(data.failCode ?? data.failcode ?? '')
           if (failCode === '4' || failCode === 'E_INSUFFICIENT_MONEY') {
-            showError(String(data.message ?? 'ゲームマネーが不足しています。'))
+            showError(String(data.message ?? 'GPが不足しています。'))
           } else {
             showError(String(data.message ?? 'オートマッチングに失敗しました'))
           }
@@ -3161,8 +3062,10 @@ export default function LobbyScreen() {
         <ItemShopDlg
           onClose={() => setShowShop(false)}
           gamMoney={gamMoney}
+          cashCount={cashCount}
           gemCount={gemCount}
-          onBalanceUpdate={({ gamMoney, gemCount }) => {
+          onBalanceUpdate={({ cashCount, gamMoney, gemCount }) => {
+            if (typeof cashCount === 'number') setCashCount(cashCount)
             setGamMoney(gamMoney)
             setGemCount(gemCount)
           }}
@@ -3296,7 +3199,7 @@ export default function LobbyScreen() {
             <dl>
               <div><dt>大会名</dt><dd>{selectedTournament.playName}</dd></div>
               <div><dt>開催日時</dt><dd>{selectedTournament.playStartDt}</dd></div>
-              <div><dt>参加費</dt><dd>{selectedTournament.joinMoney.toLocaleString()} コイン</dd></div>
+              <div><dt>参加費</dt><dd>{selectedTournament.joinMoney.toLocaleString()} GP</dd></div>
             </dl>
             {selectedTournament.hasPassword === 1 && (
               <label>
@@ -3370,7 +3273,8 @@ export default function LobbyScreen() {
             </section>
             <aside className="majak-mobile-tournament-members">
               <MobileMemberListPanel
-                members={members}
+                members={displayMembers}
+                myPix={player?.pix ?? ''}
                 selectedMember={selectedMember}
                 onSelectMember={setSelectedMember}
                 onViewProfile={openMemberProfile}
@@ -3420,7 +3324,7 @@ export default function LobbyScreen() {
                   type="button"
                   onClick={() => {
                     if (gamMoney < 10000) {
-                      showMessage('大会を開催するには無料コインを10,000円以上持っている必要があります。', '確認')
+                      showMessage('大会を開催するには無料GPを10,000 GP以上持っている必要があります。', '確認')
                       return
                     }
                     setShowTournamentRegist(true)
@@ -3436,7 +3340,7 @@ export default function LobbyScreen() {
     )
   }
 
-  if (layoutMode === 'mobileLandscape') {
+  if (layoutMode !== 'desktop') {
     const mobileTitle = channelName
     return (
       <div className="majak-mobile-screen majak-mobile-lobby-screen">
@@ -3468,7 +3372,6 @@ export default function LobbyScreen() {
             <div className="majak-mobile-lobby-command-panel">
               <div className="majak-mobile-lobby-command-grid">
                 <MobileLobbyCommandButton onClick={openRanking} hidden={!showRankingButton}>ランキング</MobileLobbyCommandButton>
-                <MobileLobbyCommandButton onClick={onViewProfile} disabled={!selectedMember}>プロフィール</MobileLobbyCommandButton>
                 <MobileLobbyCommandButton onClick={onReqOneToOne} disabled={!selectedMember}>1:1チャット</MobileLobbyCommandButton>
                 <MobileLobbyCommandButton onClick={() => setShowSerial(true)} hidden={!showShopButtons}>シリアル</MobileLobbyCommandButton>
               </div>
@@ -3478,7 +3381,8 @@ export default function LobbyScreen() {
               </div>
             </div>
             <MobileMemberListPanel
-              members={members}
+              members={displayMembers}
+              myPix={player?.pix ?? ''}
               selectedMember={selectedMember}
               onSelectMember={setSelectedMember}
               onViewProfile={openMemberProfile}
@@ -3492,7 +3396,7 @@ export default function LobbyScreen() {
 
   return (
     /* CMajakChannelWnd クライアント領域: 1014×740px (H_FRAME=1024×740, タイトル31px込み) */
-    <div style={{ position: 'relative', width: 1014, height: 740 }}>
+    <div className="majak-desktop-lobby-screen" style={{ position: 'relative', width: 1014, height: 740 }}>
 
       {/* ── 背景: 通常ロビー / トーナメント一覧 / トーナメント表 ── */}
       <img
@@ -3506,7 +3410,7 @@ export default function LobbyScreen() {
         tournamentPage === 'match' ? (
         <>
           <TournamentMatchPanel tournament={selectedTournament} details={tournamentDetails} memberNameByPix={memberNameByPix} onWatch={onTournamentWatch} />
-          <MemberListPanel members={members} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
+          <MemberListPanel members={displayMembers} myPix={player?.pix ?? ''} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
         </>
         ) : (
         <>
@@ -3525,7 +3429,7 @@ export default function LobbyScreen() {
           <RoomListPanel rooms={rooms} members={members} slotCount={roomSlotCount} channelId={channelId} onEnter={onEnterRoom} onCreateRoom={onCreateRoom} directRoomActionDisabled={autoMatchingChannel} />
 
           {/* ── メンバーリスト (CHgMemberListWnd) MoveWindow(678,212,336×403) ── */}
-          <MemberListPanel members={members} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
+          <MemberListPanel members={displayMembers} myPix={player?.pix ?? ''} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
         </>
       )}
 
@@ -3535,8 +3439,8 @@ export default function LobbyScreen() {
         position: 'absolute', left: 37 - LOBBY_LEFT_NUDGE, top: 545,
         width: 632, height: 12,
         overflow: 'hidden',
-        fontFamily: "'MS Gothic', monospace",
-        fontSize: 10,
+        fontFamily: 'var(--majak-font-family-ui)',
+        fontSize: 'calc(10px * var(--majak-type-scale))',
         color: notice?.color ?? 'rgb(254,225,225)',
         lineHeight: '12px',
         whiteSpace: 'nowrap',
@@ -3560,8 +3464,8 @@ export default function LobbyScreen() {
             height: 113,
             overflowY: 'auto',
             overflowX: 'hidden',
-            fontFamily: "'MS Gothic', monospace",
-            fontSize: 12,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(12px * var(--majak-type-scale))',
             color: '#000',
             background: '#fff',
             border: '2px inset #d4d0c8',
@@ -3591,8 +3495,8 @@ export default function LobbyScreen() {
             top: 113,
             width: 640,
             height: 20,
-            fontFamily: "'MS Gothic', monospace",
-            fontSize: 12,
+            fontFamily: 'var(--majak-font-family-ui)',
+            fontSize: 'calc(12px * var(--majak-type-scale))',
             background: '#fff',
             color: '#000',
             border: '2px inset #d4d0c8',
@@ -3656,8 +3560,8 @@ export default function LobbyScreen() {
       {channelName && (
         <div style={{
           position: 'absolute', left: 124 - LOBBY_LEFT_NUDGE, top: 18, width: 296, height: 16,
-          fontFamily: "'MS PGothic', 'MS Ｐゴシック', 'MS Gothic', sans-serif",
-          fontSize: 16, lineHeight: '16px', fontWeight: 'bold', color: '#000',
+          fontFamily: 'var(--majak-font-family-ui)',
+          fontSize: 'calc(16px * var(--majak-type-scale))', lineHeight: '16px', fontWeight: 'bold', color: '#000',
           pointerEvents: 'none', overflow: 'hidden', whiteSpace: 'nowrap',
         }}>{channelName}</div>
       )}
@@ -3713,26 +3617,26 @@ export default function LobbyScreen() {
       {/* Nickname (legacy member-id position) */}
       <div style={{
         position: 'absolute', left: 865, top: 22, width: 144,
-        fontSize: 12, fontFamily: "'MS Gothic', monospace",
+        fontSize: 'calc(12px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)',
         color: 'rgb(0,114,188)', fontWeight: 'bold',
         textAlign: 'center', pointerEvents: 'none',
       }}>{player?.name ?? ''}</div>
 
       {/* コイン (X_MONEY=912,Y_MONEY=74) → content(912,43) */}
-      <div style={{ position: 'absolute', left: 864, top: 43, fontSize: 11, fontFamily: "'MS Gothic', monospace", color: 'rgb(0,114,188)', pointerEvents: 'none' }}>コイン</div>
-      <div style={{ position: 'absolute', left: 912, top: 43, width: 96, fontSize: 11, fontFamily: "'MS Gothic', monospace", color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{` : ${gamMoney.toLocaleString()}円`}</div>
+      <div style={{ position: 'absolute', left: 864, top: 43, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>GP</div>
+      <div style={{ position: 'absolute', left: 912, top: 43, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{` : ${gamMoney.toLocaleString()} GP`}</div>
 
-      {/* 称号 (X_TITLE=912,Y_TITLE=90) → content(912,59) */}
-      <div style={{ position: 'absolute', left: 864, top: 59, fontSize: 11, fontFamily: "'MS Gothic', monospace", color: 'rgb(0,114,188)', pointerEvents: 'none' }}>称号</div>
-      <div style={{ position: 'absolute', left: 912, top: 59, width: 96, fontSize: 11, fontFamily: "'MS Gothic', monospace", color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{slevel ? ` : ${slevel}` : ' :'}</div>
+      {/* 資産 (X_TITLE=912,Y_TITLE=90) → content(912,59) */}
+      <div style={{ position: 'absolute', left: 864, top: 59, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>資産</div>
+      <div style={{ position: 'absolute', left: 912, top: 59, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{slevel ? ` : ${slevel}` : ' :'}</div>
 
-      {/* 麻雀称号 (X_RATING=912,Y_RATING=106) → content(912,75) */}
-      <div style={{ position: 'absolute', left: 864, top: 75, fontSize: 11, fontFamily: "'MS Gothic', monospace", color: 'rgb(0,114,188)', pointerEvents: 'none' }}>麻雀称号</div>
-      <div style={{ position: 'absolute', left: 912, top: 75, width: 96, fontSize: 11, fontFamily: "'MS Gothic', monospace", color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{majakTitleName ? ` : ${majakTitleName}` : ' :'}</div>
+      {/* 実績称号 (X_RATING=912,Y_RATING=106) → content(912,75) */}
+      <div style={{ position: 'absolute', left: 864, top: 75, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>実績称号</div>
+      <div style={{ position: 'absolute', left: 912, top: 75, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{majakTitleName ? ` : ${majakTitleName}` : ' :'}</div>
 
       {/* 技 (X_TRICK=912,Y_TRICK=122) → content(912,91) */}
-      <div style={{ position: 'absolute', left: 864, top: 91, fontSize: 11, fontFamily: "'MS Gothic', monospace", color: 'rgb(0,114,188)', pointerEvents: 'none' }}>技</div>
-      <div style={{ position: 'absolute', left: 912, top: 91, width: 96, fontSize: 11, fontFamily: "'MS Gothic', monospace", color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{trickTitleName ? ` : ${trickTitleName}` : ' :'}</div>
+      <div style={{ position: 'absolute', left: 864, top: 91, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>技</div>
+      <div style={{ position: 'absolute', left: 912, top: 91, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{trickTitleName ? ` : ${trickTitleName}` : ' :'}</div>
 
       {/* ── アイコンボタン群 y=622 ── */}
 
@@ -3780,7 +3684,7 @@ export default function LobbyScreen() {
         x={677 - LOBBY_LEFT_NUDGE} y={628}
         onClick={() => {
           if (gamMoney < 10000) {
-            showMessage('大会を開催するには無料コインを10,000円以上持っている必要があります。', '確認')
+            showMessage('大会を開催するには無料GPを10,000 GP以上持っている必要があります。', '確認')
             return
           }
           setShowTournamentRegist(true)
@@ -3913,7 +3817,7 @@ export default function LobbyScreen() {
           }
           await SignalR.send('mjkc17e', { 'mjkk42e': '0' }).catch(() => {})
         }}
-        title="無料コイン補充"
+        title="無料GP補充"
         hidden={!showFreeChargeButton}
       />
 

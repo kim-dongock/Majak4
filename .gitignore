@@ -16,6 +16,11 @@ yarn-error.log*
 **/.vite/
 **/coverage/
 
+# Archived source trees
+/majak4_legacy/
+/client/_archive-unused/
+*.him
+
 # Environment files (keep only examples)
 **/.env
 **/.env.*

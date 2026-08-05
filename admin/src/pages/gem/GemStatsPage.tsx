@@ -3,7 +3,7 @@ import { Card, Select, Typography, Spin, Alert, Table, Tag } from 'antd'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts'
-import { gemApi } from '../../api/admin'
+import { cashApi } from '../../api/admin'
 import type { DailyRevenue } from '../../api/types'
 
 const { Title } = Typography
@@ -22,7 +22,7 @@ export default function GemStatsPage() {
 
   useEffect(() => {
     setLoading(true)
-    gemApi.getRevenue(days)
+    cashApi.getRevenue(days)
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false))
@@ -46,12 +46,12 @@ export default function GemStatsPage() {
     },
     { title: '件数', dataIndex: 'orderCount', render: (v: number) => v.toLocaleString() },
     { title: '売上 (円)', dataIndex: 'totalJpy', render: (v: number) => `¥${v.toLocaleString()}` },
-    { title: 'GEM', dataIndex: 'totalGem', render: (v: number) => v.toLocaleString() },
+    { title: 'キャッシュ', dataIndex: 'totalCash', render: (v: number) => v.toLocaleString() },
   ]
 
   return (
     <>
-      <Title level={4}>GEM 統計・売上</Title>
+      <Title level={4}>キャッシュ 統計・売上</Title>
 
       <Card style={{ marginBottom: 16 }}>
         <Select

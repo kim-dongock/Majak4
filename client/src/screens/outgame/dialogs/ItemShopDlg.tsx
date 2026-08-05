@@ -1,4 +1,4 @@
-﻿/**
+/**
  * CItemShopDlg 相当 — 麻雀ショップ (AP-09 §3-2-1)
  * 原典: legacy/client/HgMajak2/ItemShopDlg.h/cpp
  *
@@ -32,7 +32,7 @@
  *  残高テキスト:
  *    text1: CRect(150,453,235,464) DT_RIGHT
  *    text2: CRect(150,480,235,491) DT_RIGHT
- *    BUY:  text1=GEM残, text2=ゲーム内コイン残
+ *    BUY:  text1=キャッシュ残, text2=ゲーム内コイン残
  *    EXC:  text1=龍珠個数,    text2=ゲームマネー
  *  OnNcHitTest pt.y<31 → HTCAPTION (ドラッグ可能)                       L561
  *
@@ -50,6 +50,7 @@ import type { BuyItemData, ExcItemData } from './shopItemData'
 import BuyCustomItemDlg from './BuyCustomItemDlg'
 import BuyHanCoinItemDlg from './BuyHanCoinItemDlg'
 import BuyExchangeItemDlg from './BuyExchangeItemDlg'
+import ResponsiveItemShopDlg from './ResponsiveItemShopDlg'
 
 const IMG = '/assets/images/game'
 const IMG_CUSTOM_ITEM = `${IMG}/items/custom`  // mj_custom_{customId}.png
@@ -57,8 +58,8 @@ const SHOP_W = 662
 const SHOP_H = 514
 
 // レガシー: CreateFont(..., "ＭＳ Ｐゴシック")
-const FONT = "'MS PGothic', 'MS UI Gothic', 'Meiryo', 'Noto Sans JP', sans-serif"
-const ITEM_TEXT_FONT_SIZE = 11
+const FONT = 'var(--majak-font-family-ui)'
+const ITEM_TEXT_FONT_SIZE = 'calc(11px * var(--majak-type-scale))'
 
 // レガシータブ定数
 const BUY_CUSTOM = 0
@@ -93,8 +94,7 @@ interface Props {
   /** 交換購入後の所持龍珠/麻雀コイン更新 */
   onBalanceUpdate?: (balance: { gemCount: number; gamMoney: number }) => void
   /** プレイヤー所持データ */
-  hanCoin?:       number    // 旧互換: GEM残
-  hanCoinCoupon?: number    // 旧互換: 未使用
+  cashCount?:     number    // キャッシュ
   gemCount?:      number    // 龍珠個数
   gamMoney?:      number    // ゲームマネー
 }
@@ -191,29 +191,16 @@ function NumImg({ x, y, num }: { x: number; y: number; num: number }) {
  * makeMoneyString 相当 — 4桁単位 + "円"
  * ============================================================ */
 function moneyStr(v: number): string {
-  if (v === 0) return '0円'
-
-  const sign = v < 0 ? '-' : ''
-  let rest = Math.abs(Math.trunc(v))
-  const units = ['', '万', '億', '兆', '京']
-  const parts: string[] = []
-
-  for (let unitIndex = 0; rest > 0 && unitIndex < units.length; unitIndex++) {
-    const chunk = rest % 10000
-    if (chunk > 0) parts.unshift(`${chunk}${units[unitIndex]}`)
-    rest = Math.floor(rest / 10000)
-  }
-
-  return `${sign}${parts.join('')}円`
+  return `${Math.trunc(v).toLocaleString('ja-JP')} GP`
 }
 
 /** ====================================================================
  * CItemShopDlg 本体
  * ==================================================================== */
-export default function ItemShopDlg({
+export function LegacyItemShopDlg({
   onClose, initialTab = BUY_CUSTOM,
   onBuyCustom, onBuyItem, onExcItem, onConfirmItem, onBalanceUpdate,
-  gemCount: gemCountProp = 0, gamMoney: gamMoneyProp = 0,
+  cashCount: cashCountProp = 0, gemCount: gemCountProp = 0, gamMoney: gamMoneyProp = 0,
 }: Props) {
   const player = useAuthStore(state => state.player)
   const [tabNo, setTabNo]      = useState(initialTab)
@@ -222,13 +209,15 @@ export default function ItemShopDlg({
   const [buyCustomTarget, setBuyCustomTarget] = useState<CustomShopItem | null>(null)
   const [buyItemTarget, setBuyItemTarget] = useState<BuyItemData | null>(null)
   const [excItemTarget, setExcItemTarget] = useState<ExcItemData | null>(null)
+  const [cashCountState, setCashCountState] = useState(cashCountProp)
   const [gemCountState, setGemCountState] = useState(gemCountProp)
   const [gamMoneyState, setGamMoneyState] = useState(gamMoneyProp)
   const [dialogScale, setDialogScale] = useState(1)
   useEffect(() => {
+    setCashCountState(cashCountProp)
     setGemCountState(gemCountProp)
     setGamMoneyState(gamMoneyProp)
-  }, [gamMoneyProp, gemCountProp])
+  }, [cashCountProp, gamMoneyProp, gemCountProp])
   useEffect(() => {
     const updateScale = () => {
       const margin = 16
@@ -239,9 +228,10 @@ export default function ItemShopDlg({
     return () => window.removeEventListener('resize', updateScale)
   }, [])
   const gemCount = gemCountState
+  const cashCount = cashCountState
   const gamMoney = gamMoneyState
 
-  const hanCoin = gemCount
+  const hanCoin = cashCount
   const hanCoinCoupon = 0
 
   /* ドラッグ移動 — OnNcHitTest pt.y<31 → HTCAPTION (L561) */
@@ -322,12 +312,12 @@ export default function ItemShopDlg({
   /* ── 残高テキスト (レガシー L410-441) */
   const text1: string =
     tabNo === EXC_ITEM
-      ? `${gemCount}個`
-      : `${gemCount}個`
+      ? `${gemCount.toLocaleString('ja-JP')}個`
+      : `${cashCount.toLocaleString('ja-JP')} MP`
   const text2: string =
     tabNo === EXC_ITEM
       ? moneyStr(gamMoney)
-      : moneyStr(gamMoney)
+      : moneyStr(hanCoinCoupon)
 
   /* ── OFFSET 計算 (L191-192) */
   const ox = (i: number) => 155 * (i % 4)
@@ -359,15 +349,12 @@ export default function ItemShopDlg({
     return 'その他'
   }
   const openBuyCustom = (item: CustomShopItem) => {
-    onBuyCustom?.(item)
     setBuyCustomTarget(item)
   }
   const openBuyItem = (item: BuyItemData) => {
-    onBuyItem?.(item)
     setBuyItemTarget(item)
   }
   const openExcItem = (item: ExcItemData) => {
-    onExcItem?.(item)
     setExcItemTarget(item)
   }
   const buyItemDescription = (item: BuyItemData): string[] => (
@@ -376,14 +363,14 @@ export default function ItemShopDlg({
           `${item.nameSub}の間、獲得できる龍珠が${item.nameSub2}になります。`,
           '※対局終了時にアイテムの効果が有 効である必要があります。',
           '※龍珠2倍と龍珠3倍が同時に有効な 場合は龍珠4倍となります。',
-          `※オマケとして麻雀コイン${moneyStr(item.gameMoney)}が付い てきます。`,
+          `※オマケとして${moneyStr(item.gameMoney)}が付い てきます。`,
         ]
       : [
           '残っている回数量によって交流広 場及び段位戦場代が',
           '無料になります。',
           '※ハイ卓は対象外となります。',
           '※対局終了時に効果が有効である必要があります。',
-          `※オマケとして麻雀コイン${moneyStr(item.gameMoney)}が付い てきます。`,
+          `※オマケとして${moneyStr(item.gameMoney)}が付い てきます。`,
         ]
   )
 
@@ -418,7 +405,7 @@ export default function ItemShopDlg({
         {/* タイトル "麻雀ショップ" CRect(218,7,445,22) 15px Bold 白 — L407 */}
         <div style={{
           position: 'absolute', left: 218, top: 7, width: 227, height: 15,
-          fontFamily: FONT, fontSize: 14, fontWeight: 'bold', color: '#fff',
+          fontFamily: FONT, fontSize: 'calc(14px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
           lineHeight: '15px', textAlign: 'center', overflow: 'hidden', pointerEvents: 'none',
         }}>
           麻雀ショップ
@@ -446,7 +433,7 @@ export default function ItemShopDlg({
         {tabNo === BUY_CUSTOM && customSlice.map((item, i) => {
           const x = ox(i), y = oy(i)
           const imgUrl = `${IMG_CUSTOM_ITEM}/mj_custom_${item.customId}.png`
-          const canBuy = gemCount >= item.price && item.purchased === 0
+          const canBuy = cashCount >= item.price && item.purchased === 0
           return (
             <div key={`bc-${item.customId}`}>
               {/* アイテム画像 BUY_CUSTOM (33+ox, 138+oy) — L481 */}
@@ -534,7 +521,7 @@ export default function ItemShopDlg({
               {/* Buy (112+ox, 219+oy) 51×28 */}
               <SpriteButton src={`${IMG}/mj_shp_btn_buy.png`} frameW={51} frameH={28}
                 x={112 + x} y={219 + y}
-                disabled={gemCount < item.hancoinPrice}
+                disabled={cashCount < item.hancoinPrice}
                 onClick={() => openBuyItem(item)}
                 title="購入" />
             </div>
@@ -616,13 +603,13 @@ export default function ItemShopDlg({
         {/* 残高テキスト text1: (150,453)-(235,464) DT_RIGHT 12px Bold 黒 */}
         <div style={{
           position: 'absolute', left: 150, top: 453, width: 85, height: 11,
-          fontFamily: FONT, fontSize: 11, fontWeight: 'bold', color: '#000',
+          fontFamily: FONT, fontSize: 'calc(11px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
           lineHeight: '11px', textAlign: 'right', overflow: 'hidden', pointerEvents: 'none',
         }}>{text1}</div>
         {/* 残高テキスト text2: (150,480)-(235,491) */}
         <div style={{
           position: 'absolute', left: 150, top: 480, width: 85, height: 11,
-          fontFamily: FONT, fontSize: 11, fontWeight: 'bold', color: '#000',
+          fontFamily: FONT, fontSize: 'calc(11px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
           lineHeight: '11px', textAlign: 'right', overflow: 'hidden', pointerEvents: 'none',
         }}>{text2}</div>
 
@@ -662,13 +649,13 @@ export default function ItemShopDlg({
           pix={pix}
           memberName={memberName}
           hanCoin={hanCoin}
-          hanCoupon={hanCoinCoupon}
           onClose={() => setBuyCustomTarget(null)}
           onBuyOK={() => {
             setCustomItems(items => items.map(item => (
               item.shopNo === buyCustomTarget.shopNo ? { ...item, purchased: 1 } : item
             )))
             SignalR.send('mjkc35e', { k3e: player?.pix ?? '' }).catch(() => {})
+            onBuyCustom?.(buyCustomTarget)
           }}
         />
       )}
@@ -688,8 +675,8 @@ export default function ItemShopDlg({
           pix={pix}
           memberName={memberName}
           hanCoin={hanCoin}
-          hanCoupon={hanCoinCoupon}
           onClose={() => setBuyItemTarget(null)}
+          onBuyOK={() => onBuyItem?.(buyItemTarget)}
         />
       )}
 
@@ -716,9 +703,12 @@ export default function ItemShopDlg({
             setGemCountState(userGem)
             setGamMoneyState(userMoney)
             onBalanceUpdate?.({ gemCount: userGem, gamMoney: userMoney })
+            onExcItem?.(excItemTarget)
           }}
         />
       )}
     </div>
   )
 }
+
+export default ResponsiveItemShopDlg

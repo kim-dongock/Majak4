@@ -54,7 +54,8 @@ public class CreateRoomCommandTests
             repoMock.Object,
             registry,
             TestMasterCacheFactory.Create(playerRepo: repoMock.Object),
-            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }));
+            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
+            new Mock<ILogger<CreateRoomCommand>>().Object);
         var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
         {
             [GKey.ChannelId] = player.ChannelId,
@@ -99,7 +100,8 @@ public class CreateRoomCommandTests
             repoMock.Object,
             new RoomRegistryService(TestMasterCacheFactory.CreateRedisService()),
             TestMasterCacheFactory.Create(playerRepo: repoMock.Object),
-            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }));
+            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
+            new Mock<ILogger<CreateRoomCommand>>().Object);
         var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
         {
             [GKey.ChannelId] = player.ChannelId,
@@ -140,7 +142,8 @@ public class CreateRoomCommandTests
             repoMock.Object,
             new RoomRegistryService(TestMasterCacheFactory.CreateRedisService()),
             TestMasterCacheFactory.Create(playerRepo: repoMock.Object),
-            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }));
+            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
+            new Mock<ILogger<CreateRoomCommand>>().Object);
         var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
         {
             [GKey.ChannelId] = player.ChannelId,

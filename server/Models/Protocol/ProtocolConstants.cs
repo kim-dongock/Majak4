@@ -7,6 +7,7 @@ namespace MajakServer.Models.Protocol;
 public static class Cmd
 {
     public const string EnterChannel        = "c1e";
+    public const string ForcedLogout        = "forcedLogout";
 
     // ─── チャンネルコマンド (mjkc*e) ───
     public const string GetDetailRec         = "mjkc1e";

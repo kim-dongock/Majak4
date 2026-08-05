@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ExchangeItemReceiptDlg — CMJReceiptDlg2 相当の龍宝石/麻雀コイン交換レシート (AP-09 §3-2-9)
  * レガシー: legacy/client/HgMajak2/MJReceiptDlg2.h/cpp
  *
@@ -146,25 +146,16 @@ export default function ExchangeItemReceiptDlg({
 
   /* m_strMessage[] 生成 (コンストラクタ相当) */
   const msg0 = `"${memberName || pix}"さんが交換するアイテム`
-  const msg3 = `${costGem}個`
+  const msg3 = `${Math.trunc(costGem).toLocaleString('ja-JP')}個`
   const msg4 = makeMoneyString(costMoney)
-  const msg5 = `${userGem}個`
+  const msg5 = `${Math.trunc(userGem).toLocaleString('ja-JP')}個`
   const msg6 = makeMoneyString(userMoney)
   const msg7 = limitDays < 0
     ? (quantity <= 0 ? '永久' : `${quantity}回`)
     : `${limitDays}日間`
 
   function makeMoneyString(value: number): string {
-    const sign = value < 0 ? '-' : ''
-    const digits = String(Math.abs(Math.trunc(value)))
-    const units = ['', '万', '億', '兆', '京']
-    const parts: string[] = []
-    for (let end = digits.length, unit = 0; end > 0; end -= 4, unit++) {
-      const start = Math.max(0, end - 4)
-      const part = Number(digits.slice(start, end))
-      if (part > 0) parts.unshift(`${part}${units[unit] ?? ''}`)
-    }
-    return `${sign}${parts.length > 0 ? parts.join('') : '0'}円`
+    return `${Math.trunc(value).toLocaleString('ja-JP')} GP`
   }
 
   /* 注意書き (m_strMessage[8/9/10]) — アイテム種類別 */
@@ -190,8 +181,8 @@ export default function ExchangeItemReceiptDlg({
   /* テキストスタイル */
   const tBase = {
     position: 'absolute' as const,
-    fontFamily: "'MS PGothic', 'Noto Sans JP', 'Noto Sans JP', 'MS UI Gothic', sans-serif" as const,
-    fontSize: 12, fontWeight: 'bold' as const,
+    fontFamily: 'var(--majak-font-family-ui)' as const,
+    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold' as const,
     color: '#000' as const,
     pointerEvents: 'none' as const,
     overflow: 'hidden' as const, whiteSpace: 'nowrap' as const,
@@ -259,6 +250,7 @@ export default function ExchangeItemReceiptDlg({
 
         {/* m_strMessage[0] CRect(56,53,334,64) DT_CENTER */}
         <div style={center(56, 53, 278, 11)}>{msg0}</div>
+        <div style={{ ...center(56, 67, 278, 11), color: 'rgb(40,160,100)' }}>交換が完了しました。</div>
 
         {/* itemName CRect(144,155,351,166) DT_RIGHT */}
         <div style={right(144, 155, 207, 11)}>{itemName}</div>
