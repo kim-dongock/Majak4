@@ -379,15 +379,18 @@ public class ExitChannelCommand : ICommand
     private readonly PlayerSessionService _session;
     private readonly RoomRegistryService? _roomRegistry;
     private readonly LobbySessionLeaseService? _lobbySessions;
+    private readonly ChannelMemberService? _channelMemberSvc;
 
     public ExitChannelCommand(
         PlayerSessionService session,
         RoomRegistryService? roomRegistry = null,
-        LobbySessionLeaseService? lobbySessions = null)
+        LobbySessionLeaseService? lobbySessions = null,
+        ChannelMemberService? channelMemberSvc = null)
     {
         _session = session;
         _roomRegistry = roomRegistry;
         _lobbySessions = lobbySessions;
+        _channelMemberSvc = channelMemberSvc;
     }
 
     public async Task ExecuteAsync(CommandContext ctx)
@@ -440,6 +443,8 @@ public class ExitChannelCommand : ICommand
         _session.Remove(ctx.ConnectionId);
         if (_lobbySessions != null)
             await _lobbySessions.ReleaseAsync(ctx.ConnectionId);
+        if (_channelMemberSvc != null)
+            await _channelMemberSvc.LeaveAsync(channelId, player.MemberNo);
 
 
         await ctx.Clients.Group($"chanel_{channelId}")
@@ -733,6 +738,11 @@ public class HanChatAllRelayCommand : ICommand
         string message = ctx.GetString(GKey.String);
         if (string.IsNullOrEmpty(message)) message = ctx.GetString("string");
         if (string.IsNullOrEmpty(message)) return;
+        if (_session != null && player.RoomId is int currentRoomId)
+        {
+            var room = _session.GetRoom(currentRoomId);
+            if (room != null && !IsRoomChatEnabled(room)) return;
+        }
         string target = NormalizeChatTarget(ctx.GetString(GKey.Target));
         if (target == GKey.ValueAll) target = NormalizeChatTarget(ctx.GetString("target"));
 
@@ -825,6 +835,16 @@ public class HanChatAllRelayCommand : ICommand
 
     private static int GetLegacyRoomGroupNo(int roomId)
         => ((roomId - 1) / 10) + 1;
+
+    // CMJRoomWnd::ProcessCommonChatService: grade rooms and disabled room chat reject hc1e;
+    // replay rooms are the explicit exception.
+    private static bool IsRoomChatEnabled(GameRoom room)
+    {
+        bool isReplayRoom = room.SubId.Length > 2 && room.SubId[2] == 'V';
+        if (isReplayRoom) return true;
+        if (room.IsGradeChannel) return false;
+        return room.RoomOption.Length > 14 && room.RoomOption[14] == '1';
+    }
 
     private static bool IsAllChatTarget(string target)
         => string.IsNullOrEmpty(target) || target == GKey.ValueAll || target.Equals("all", StringComparison.OrdinalIgnoreCase);

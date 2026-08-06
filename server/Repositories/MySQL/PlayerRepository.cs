@@ -4,6 +4,7 @@ using MajakServer.Models.Protocol;
 using MajakServer.Infrastructure;
 using MajakServer.Repositories.MySQL;
 using MajakServer.Repositories.MySQL.Entities;
+using MajakServer.Services;
 using MajakServer.Utils;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -21,11 +22,6 @@ public class PlayerRepository
     private static readonly long[] MoneyLevelThresholds =
     [
         0L, 1L, 500L, 1500L, 3000L, 10000L, 30000L, 100000L, 500000L, 1000000L, 5000000L,
-    ];
-
-    private static readonly string[] MoneyLevelNames =
-    [
-        "一文無し", "貧乏", "庶民", "小金持ち", "一般人", "中流", "上流", "金持ち", "富豪", "大富豪", "大金持ち",
     ];
 
     private readonly RedisService? _redis;
@@ -1511,6 +1507,39 @@ public class PlayerRepository
         return coupon is null ? null : new SerialCouponInfo { MemberNo = MemberNoIds.Format(coupon.MemberNo) };
     }
 
+    /// <summary>
+    /// 指定されたアクティブなシリアルイベント候補について、クーポン番号を一度に検索する。
+    /// クーポンの所有者更新は UpdateSerialCouponMemberAsync の条件付き更新で別途行う。
+    /// </summary>
+    public virtual async Task<Dictionary<(string EvtCode, int EvtNo, int MissionNo), SerialCouponInfo>>
+        GetSerialCouponsAsync(IEnumerable<SerialMastInfo> serialMasts, string couponNo)
+    {
+        var candidates = serialMasts
+            .Where(mast => mast.EvtNo == 2)
+            .Select(mast => (mast.EvtCode, mast.EvtNo, mast.MissionNo))
+            .ToHashSet();
+        if (candidates.Count == 0) return [];
+
+        var eventCodes = candidates.Select(candidate => candidate.EvtCode).Distinct().ToArray();
+        await using var db = await RequireGameDb().CreateAsync();
+        var coupons = await db.SerialCoupons.AsNoTracking()
+            .Where(coupon => coupon.CouponNo == couponNo && eventCodes.Contains(coupon.EventCode))
+            .Select(coupon => new
+            {
+                coupon.EventCode,
+                EvtNo = checked((int)coupon.EventNo),
+                coupon.MissionNo,
+                coupon.MemberNo,
+            })
+            .ToListAsync();
+
+        return coupons
+            .Where(coupon => candidates.Contains((coupon.EventCode, coupon.EvtNo, coupon.MissionNo)))
+            .ToDictionary(
+                coupon => (coupon.EventCode, coupon.EvtNo, coupon.MissionNo),
+                coupon => new SerialCouponInfo { MemberNo = MemberNoIds.Format(coupon.MemberNo) });
+    }
+
     public virtual async Task<bool> UpdateSerialCouponMemberAsync(
         string evtCode, int evtNo, int missionNo, string couponNo, string memberNo)
     {
@@ -2330,7 +2359,7 @@ public class PlayerRepository
 
             player.GamMoney = result.NextMoney;
             player.NLevel = result.NextLevel;
-            player.SLevel = MoneyLevelNames[result.NextLevel];
+            player.SLevel = RatingService.GetSLevelName(result.NextLevel);
             if (_log is not null)
             {
                 foreach (var gift in result.Gifts)
@@ -2353,13 +2382,13 @@ public class PlayerRepository
             if (player.GamMoney >= MoneyLevelThresholds[level])
             {
                 player.NLevel = level;
-                player.SLevel = MoneyLevelNames[level];
+                player.SLevel = RatingService.GetSLevelName(level);
                 return;
             }
         }
 
         player.NLevel = 0;
-        player.SLevel = MoneyLevelNames[0];
+        player.SLevel = RatingService.GetSLevelName(0);
     }
 
     /// <summary>

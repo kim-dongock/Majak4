@@ -121,6 +121,51 @@ public class ItemRepository
     }
 
     /// <summary>
+    /// デフォルトカスタムアイテムをまとめて付与する。
+    /// 呼び出し側は、マスターに存在しないIDもレガシー互換のメモリ状態として保持する。
+    /// </summary>
+    public virtual async Task EnsureDefaultCustomItemsAsync(
+        string memberNo,
+        IReadOnlyCollection<(int CustomId, int Equip)> defaultItems)
+    {
+        if (defaultItems.Count == 0) return;
+
+        var memberNoValue = ParseMemberNo(memberNo);
+        var equipByCustomId = defaultItems
+            .GroupBy(item => item.CustomId)
+            .ToDictionary(group => group.Key, group => group.Last().Equip);
+        var customIds = equipByCustomId.Keys.Select(id => checked((uint)id)).ToArray();
+
+        await using var db = await RequireGameDb().CreateAsync();
+        var validCustomIds = await db.CustomItemMasters.AsNoTracking()
+            .Where(item => customIds.Contains(item.CustomId))
+            .Select(item => item.CustomId)
+            .ToListAsync();
+        var ownedCustomIds = await db.PlayerCustomItems.AsNoTracking()
+            .Where(item => item.MemberNo == memberNoValue && customIds.Contains(item.CustomId))
+            .Select(item => item.CustomId)
+            .ToListAsync();
+        var ownedSet = ownedCustomIds.ToHashSet();
+        var now = DateTime.Now;
+        var rows = validCustomIds
+            .Where(customId => !ownedSet.Contains(customId))
+            .Select(customId => new PlayerCustomItemEntity
+            {
+                MemberNo = memberNoValue,
+                CustomId = customId,
+                Quantity = 1,
+                EquipSlot = checked((byte)equipByCustomId[checked((int)customId)]),
+                AcquiredAt = now,
+                UpdatedAt = now,
+            })
+            .ToList();
+        if (rows.Count == 0) return;
+
+        db.PlayerCustomItems.AddRange(rows);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
     /// カスタムアイテム装備/解除 — SetUserCustomItem
     /// 同じ KIND の既存装備を解除後、新しいアイテムを装備
     /// </summary>

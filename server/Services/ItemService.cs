@@ -62,15 +62,22 @@ public class ItemService
             _itemMast = customMast.ToDictionary(x => x.CustomId, x => (x.Kind, x.Name, x.Price));
         }
 
-        foreach (int defaultId in DefaultCustomItems)
+        var missingDefaultItems = DefaultCustomItems
+            .Where(defaultId => !player.CustomItems.ContainsKey(defaultId))
+            .ToArray();
+        if (missingDefaultItems.Length == 0) return;
+
+        await _itemRepo.EnsureDefaultCustomItemsAsync(
+            player.MemberNo,
+            missingDefaultItems
+                .Select(defaultId => (CustomId: defaultId, Equip: GetDefaultEquip(defaultId) ? 1 : 0))
+                .ToArray());
+
+        foreach (int defaultId in missingDefaultItems)
         {
-            if (!player.CustomItems.ContainsKey(defaultId))
-            {
-                int kind  = _itemMast.TryGetValue(defaultId, out var m) ? m.Kind : 0;
-                int equip = GetDefaultEquip(defaultId) ? 1 : 0;
-                await _itemRepo.EnsureDefaultCustomItemAsync(player.MemberNo, defaultId, equip);
-                player.CustomItems[defaultId] = new UserCustomItem { Kind = kind, Equip = equip };
-            }
+            int kind  = _itemMast.TryGetValue(defaultId, out var m) ? m.Kind : 0;
+            int equip = GetDefaultEquip(defaultId) ? 1 : 0;
+            player.CustomItems[defaultId] = new UserCustomItem { Kind = kind, Equip = equip };
         }
     }
 

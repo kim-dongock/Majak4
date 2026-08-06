@@ -416,6 +416,31 @@ public class MissionServiceTests
         Assert.Equal(0, result);
     }
 
+    [Fact]
+    public async Task ReceiveSerialBonusAsync_UniqueSerials_UsesSingleCouponLookup()
+    {
+        _playerRepoMock.Setup(r => r.GetSerialMastsAsync())
+            .ReturnsAsync(new List<SerialMastInfo>
+            {
+                new() { EvtCode = "EVT01", EvtNo = 2, MissionNo = 1 },
+                new() { EvtCode = "EVT02", EvtNo = 2, MissionNo = 1 },
+            });
+        _playerRepoMock.Setup(r => r.GetSerialCouponsAsync(
+                It.IsAny<IEnumerable<SerialMastInfo>>(), "INVALID"))
+            .ReturnsAsync(new Dictionary<(string EvtCode, int EvtNo, int MissionNo), SerialCouponInfo>());
+
+        var player = new MajakPlayer { MemberNo = "u1" };
+        var svc = BuildService();
+
+        var (result, _, _) = await svc.ReceiveSerialBonusAsync(player, "INVALID", BuildMoneyService());
+
+        Assert.Equal(0, result);
+        _playerRepoMock.Verify(r => r.GetSerialCouponsAsync(
+            It.IsAny<IEnumerable<SerialMastInfo>>(), "INVALID"), Times.Once);
+        _playerRepoMock.Verify(r => r.GetSerialCouponAsync(
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+    }
+
     // シナリオ11: 使用済みシリアルコード → result=0
     // 原典: SelectEvtExchgItem → 既に使用済み
     [Fact]

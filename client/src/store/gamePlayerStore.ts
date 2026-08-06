@@ -38,6 +38,7 @@ export const useGamePlayerStore = create<GamePlayerState>((set, get) => ({
     try {
       const res = await fetch(authApiUrl(`/api/player/profile?pix=${encodeURIComponent(pix)}`), {
         headers: gameAuthHeaders(),
+        cache: 'no-store',
       })
       if (!res.ok) return
       const json = await res.json() as GamePlayerData

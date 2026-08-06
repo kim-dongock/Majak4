@@ -413,12 +413,14 @@ public class TournamentService
             await repo.UpdatePlanStatusAsync(plan);
 
             if (!_details.TryGetValue(plan.SeqNo, out var detailMap)) continue;
-
-            foreach (var detail in detailMap.Values.Where(d => !d.IsFinished))
-            {
+            var startingDetails = detailMap.Values.Where(detail => !detail.IsFinished).ToList();
+            foreach (var detail in startingDetails)
                 detail.StartDt = now;
-                await repo.MergeDetailsAsync([detail]);
+            if (startingDetails.Count > 0)
+                await repo.MergeDetailsAsync(startingDetails);
 
+            foreach (var detail in startingDetails)
+            {
                 // §３: NPC (“*AI*”) は除外して実プレイヤーのみに通知
                 var realMembers = detail.PlayerMemberNo
                     .Where(m => !string.IsNullOrEmpty(m) && m != TournamentConst.NpcMemberNo)
@@ -531,14 +533,16 @@ public class TournamentService
             if (!allDone && !timeout) continue;
 
             // タイムアウトした未終了対局を強制終了
-            foreach (var d in detailMap.Values.Where(x => !x.IsFinished))
+            var timedOutDetails = detailMap.Values.Where(detail => !detail.IsFinished).ToList();
+            foreach (var d in timedOutDetails)
             {
                 d.EndDt = now;
                 for (int i = 0; i < 4; i++)
                     d.GradeMemberNo[i] = d.JoinMemberNo[i];
-                await repo.UpdateDetailResultAsync(d);
                 plan.PlayEndCount++;
             }
+            if (timedOutDetails.Count > 0)
+                await repo.UpdateDetailResultsAsync(timedOutDetails);
 
             var (maxPhase, _) = TournamentTables.GetPlayInfo(plan.MaxPlayerNum, plan.PlayMode);
 

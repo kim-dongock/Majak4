@@ -139,10 +139,26 @@ export default function ChannelGroupScreen() {
   }, [])
 
   useEffect(() => {
-    if (player?.pix && gpData === null) {
+    if (player?.pix) {
       fetchProfile(player.pix)
     }
-  }, [player?.pix, gpData, fetchProfile])
+  }, [player?.pix, fetchProfile])
+
+  useEffect(() => {
+    if (!player?.pix) return
+
+    const refreshProfile = () => fetchProfile(player.pix)
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshProfile()
+    }
+
+    window.addEventListener('focus', refreshProfile)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      window.removeEventListener('focus', refreshProfile)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [player?.pix, fetchProfile])
 
   /** OnCommand() → GetParent()->SendMessage(WM_COMMAND) に相当するナビゲーション */
   const onKouryu  = () => navigate('/channel/select/kouryu')   // IDC_BTN_CATEGORY_KOURYU → EnterCustom(IDC_CHK_STAND)

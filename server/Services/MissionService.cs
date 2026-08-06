@@ -162,12 +162,15 @@ public class MissionService
             return (0, player.GamMoney, "");
 
         var serialMasts = await _playerRepo.GetSerialMastsAsync();
+        var couponsByMast = await _playerRepo.GetSerialCouponsAsync(serialMasts, serialCode);
         foreach (var mast in serialMasts)
         {
             SerialCodeResult result = mast.EvtNo switch
             {
                 1 => await ReceiveCommonSerialBonusAsync(player, serialCode, mast),
-                2 => await ReceiveUniqueSerialBonusAsync(player, serialCode, mast),
+                2 => await ReceiveUniqueSerialBonusAsync(
+                    player, serialCode, mast,
+                    couponsByMast.GetValueOrDefault((mast.EvtCode, mast.EvtNo, mast.MissionNo))),
                 _ => SerialCodeResult.OtherError,
             };
 
@@ -215,10 +218,8 @@ public class MissionService
     }
 
     private async Task<SerialCodeResult> ReceiveUniqueSerialBonusAsync(
-        MajakPlayer player, string serialCode, SerialMastInfo mast)
+        MajakPlayer player, string serialCode, SerialMastInfo mast, SerialCouponInfo? coupon)
     {
-        var coupon = await _playerRepo.GetSerialCouponAsync(
-            mast.EvtCode, mast.EvtNo, mast.MissionNo, serialCode);
         if (coupon == null) return SerialCodeResult.NoCoupon;
         if (!string.IsNullOrEmpty(coupon.MemberNo)) return SerialCodeResult.UsedCoupon;
 

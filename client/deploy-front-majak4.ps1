@@ -24,6 +24,14 @@ $ASSETS_PATH   = Join-Path $DIST_PATH "assets"
 
 Write-Host "=== Majak4 Frontend Deployment ===" -ForegroundColor Yellow
 
+function Assert-AwsSuccess {
+    param([string]$Operation)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "AWS CLI failed while $Operation (exit code $LASTEXITCODE)."
+    }
+}
+
 # ─── 1. Build ──────────────────────────────────────────────
 Write-Host "`n[1/3] Building for '$VITE_SERVICE' service..." -ForegroundColor Yellow
 $env:VITE_SERVICE_ID = $VITE_SERVICE
@@ -50,6 +58,7 @@ aws s3 sync $DIST_PATH "s3://$S3_BUCKET" `
     --exclude "*.html" `
     --exclude "assets/*" `
     --cache-control "public,max-age=31536000,immutable"
+Assert-AwsSuccess "syncing static files"
 
 $shouldSyncAssets = $false
 switch ($AssetUploadMode) {
@@ -62,28 +71,9 @@ switch ($AssetUploadMode) {
     }
     default {
         if (-not (Test-Path $ASSETS_PATH)) {
-            Write-Host "    [assets] dist/assets not found, skipping." -ForegroundColor DarkYellow
-            $shouldSyncAssets = $false
+            throw "Build output is missing '$ASSETS_PATH'."
         } else {
-            Write-Host "    [assets] checking changes with dry-run..." -ForegroundColor Gray
-            $dryRunOutput = aws s3 sync $ASSETS_PATH "s3://$S3_BUCKET/assets" `
-                --region $S3_REGION `
-                --delete `
-                --dryrun 2>&1
-            if ($LASTEXITCODE -ne 0) {
-                Write-Host "    [assets] dry-run failed." -ForegroundColor Red
-                Write-Host $dryRunOutput
-                exit 1
-            }
-            # AWS CLI dry-run lines can look like:
-            #   (dryrun) upload: ...
-            #   (dryrun) copy: ...
-            #   (dryrun) delete: ...
-            $assetHasChanges = ($dryRunOutput | Where-Object { $_ -match "(^|\s)(\(dryrun\)\s+)?(upload|copy|delete):" }).Count -gt 0
-            $shouldSyncAssets = $assetHasChanges
-            if (-not $assetHasChanges) {
-                Write-Host "    [assets] no changes detected; upload skipped." -ForegroundColor Green
-            }
+            $shouldSyncAssets = $true
         }
     }
 }
@@ -94,6 +84,7 @@ if ($shouldSyncAssets) {
         --region $S3_REGION `
         --delete `
         --cache-control "public,max-age=31536000,immutable"
+    Assert-AwsSuccess "syncing bundled assets"
 }
 
 aws s3 sync $DIST_PATH "s3://$S3_BUCKET" `
@@ -103,6 +94,7 @@ aws s3 sync $DIST_PATH "s3://$S3_BUCKET" `
     --include "*.html" `
     --cache-control "no-cache,no-store,must-revalidate" `
     --content-type "text/html; charset=utf-8"
+Assert-AwsSuccess "syncing HTML entry files"
 
 # ─── 3. S3 Static Website 설정 ───────────────────────────────────
 Write-Host "`n[3/3] Configuring S3 static website hosting..." -ForegroundColor Yellow
@@ -110,21 +102,27 @@ aws s3api put-bucket-website `
     --bucket $S3_BUCKET `
     --region $S3_REGION `
     --website-configuration '{\"IndexDocument\":{\"Suffix\":\"index.html\"},\"ErrorDocument\":{\"Key\":\"index.html\"}}'
+Assert-AwsSuccess "configuring S3 static website hosting"
 
 # ─── CloudFront 캐시 무효화 ────────────────────────────────────────
 if ($CLOUDFRONT_ID -ne "") {
     Write-Host "`n[+] Invalidating CloudFront cache..." -ForegroundColor Yellow
-    $prev = $ErrorActionPreference
-    $ErrorActionPreference = "SilentlyContinue"
-    aws cloudfront create-invalidation `
-        --distribution-id $CLOUDFRONT_ID `
-        --paths "/*" 2>&1
-    $ErrorActionPreference = $prev
-    if ($LASTEXITCODE -eq 0) {
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "SilentlyContinue"
+        $invalidationOutput = aws cloudfront create-invalidation `
+            --distribution-id $CLOUDFRONT_ID `
+            --paths "/*" 2>&1
+        $invalidationExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    if ($invalidationExitCode -eq 0) {
         Write-Host "    Cache invalidated." -ForegroundColor Green
     } else {
-        Write-Host "    CloudFront invalidation skipped (insufficient IAM permissions)." -ForegroundColor DarkYellow
-        Write-Host "    Invalidate manually: aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_ID --paths '/*'" -ForegroundColor Gray
+        $invalidationMessage = ($invalidationOutput | Out-String).Trim()
+        throw "CloudFront invalidation failed (exit code $invalidationExitCode). The S3 upload completed, but cache invalidation is required. $invalidationMessage"
     }
 }
 

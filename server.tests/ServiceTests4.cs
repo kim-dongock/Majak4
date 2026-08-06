@@ -81,6 +81,8 @@ public class TournamentMatchingTests
             .ReturnsAsync(true);
         _repoMock.Setup(r => r.UpdateDetailResultAsync(It.IsAny<TournamentDetail>()))
             .ReturnsAsync(true);
+        _repoMock.Setup(r => r.UpdateDetailResultsAsync(It.IsAny<IEnumerable<TournamentDetail>>()))
+            .ReturnsAsync(true);
         _repoMock.Setup(r => r.UpdatePlayerNumAsync(It.IsAny<long>(), It.IsAny<int>()))
             .ReturnsAsync(true);
         _repoMock.Setup(r => r.MergeJoinAsync(

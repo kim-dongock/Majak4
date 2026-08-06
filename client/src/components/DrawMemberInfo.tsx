@@ -23,12 +23,28 @@ export default function DrawMemberInfo() {
     ? gpData.gamMoney.toLocaleString('ja-JP')
     : ''
 
-  /** DrawMemberInfo 相当: チャンネル未入室状態でのマネー・称号取得 */
+  /** DrawMemberInfo 相当: チャンネル未入室状態での最新マネー・称号取得 */
   useEffect(() => {
-    if (player?.pix && gpData === null) {
+    if (player?.pix) {
       fetchProfile(player.pix)
     }
-  }, [player?.pix, gpData, fetchProfile])
+  }, [player?.pix, fetchProfile])
+
+  useEffect(() => {
+    if (!player?.pix) return
+
+    const refreshProfile = () => fetchProfile(player.pix)
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') refreshProfile()
+    }
+
+    window.addEventListener('focus', refreshProfile)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    return () => {
+      window.removeEventListener('focus', refreshProfile)
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+    }
+  }, [player?.pix, fetchProfile])
 
   if (!player?.avatarId) return null
 

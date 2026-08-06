@@ -9,6 +9,7 @@
     "assets:generate": "npx capacitor-assets generate --android",
     "cap:sync": "npx cap sync",
     "android:open": "npx cap open android",
+    "ios:open": "npx cap open ios",
     "test:auto-control": "node scripts/test-auto-control.mjs",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts,.tsx"
@@ -16,6 +17,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/ios": "^8.5.0",
     "@capacitor/splash-screen": "^8.0.2",
     "@capgo/capacitor-social-login": "^8.3.40",
     "@microsoft/signalr": "^8.0.7",

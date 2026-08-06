@@ -28,7 +28,6 @@ import GetReqGameDialog from './dialogs/GetReqGameDialog'
 import PlayerInfoWnd, { type PlayerInfo as DlgPlayerInfo } from './dialogs/PlayerInfoWnd'
 import OptDlg, { DEFAULT_OPTION, optionToString, type MJOption, type MJOptionMask } from './dialogs/OptDlg'
 import RoomCreateDlg, { type RoomCreateInfo } from './dialogs/RoomCreateDlg'
-import SerialCodeDlg from './dialogs/SerialCodeDlg'
 import CfgDlg, { loadMajakConfig, saveMajakConfig, type MJConfig } from './dialogs/CfgDlg'
 import ItemShopDlg from './dialogs/ItemShopDlg'
 import ConfirmItemDlg, { normalizeRawMajItem, type RawMajItem } from './dialogs/ConfirmItemDlg'
@@ -996,13 +995,11 @@ function inviteResponseMessage(displayName: string, yesNo: unknown) {
 
 function MobileMemberListPanel({
   members,
-  myPix,
   selectedMember,
   onSelectMember,
   onViewProfile,
 }: {
   members: MemberEntry[]
-  myPix: string
   selectedMember: string | null
   onSelectMember: (pix: string) => void
   onViewProfile: (pix: string) => void
@@ -1029,7 +1026,7 @@ function MobileMemberListPanel({
         <button
           key={member.pix}
           type="button"
-          className={`majak-mobile-lobby-member${member.pix === myPix ? ' is-self' : ''}${selectedMember === member.pix ? ' is-selected' : ''}`}
+          className={`majak-mobile-lobby-member${selectedMember === member.pix ? ' is-selected' : ''}`}
           onClick={() => handleMemberTap(member.pix)}
           onDoubleClick={() => onViewProfile(member.pix)}
         >
@@ -1054,13 +1051,13 @@ function MobileMemberListPanel({
 
 function MemberListPanel({
   members,
-  myPix,
+  selectedMember,
   isDani,
   onSelectMember,
   onViewProfile,
 }: {
   members: MemberEntry[]
-  myPix: string
+  selectedMember: string | null
   isDani: boolean
   onSelectMember: (pix: string) => void
   onViewProfile: (pix: string) => void
@@ -1184,10 +1181,8 @@ function MemberListPanel({
         {filteredMembers.map((member, index) => (
           <div
             key={`${member.pix}-${index}`}
-            onClick={() => {
-              onSelectMember(member.pix)
-              onViewProfile(member.pix)
-            }}
+            onClick={() => onSelectMember(member.pix)}
+            onDoubleClick={() => onViewProfile(member.pix)}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1195,9 +1190,9 @@ function MemberListPanel({
               cursor: 'pointer',
               fontFamily: 'var(--majak-font-family-ui)',
               fontSize: 'calc(11px * var(--majak-type-scale))',
-              color: member.pix === myPix ? '#164d7a' : '#000',
+              color: selectedMember === member.pix ? '#ffffff' : '#000',
               borderBottom: '1px solid #ccc',
-              background: member.pix === myPix ? '#e4f1ff' : '#fff',
+              background: selectedMember === member.pix ? '#356246' : '#fff',
             }}
           >
             {/* アバターサムネイル — AP-08: getShortAvatarUrl (接続者リスト用) */}
@@ -1871,7 +1866,6 @@ export default function LobbyScreen() {
   const [showOpt,      setShowOpt]      = useState(false)
   const [showCfg,      setShowCfg]      = useState(false)
   const [showCustom,   setShowCustom]   = useState(false)
-  const [showSerial,   setShowSerial]   = useState(false)
   const [showShop,     setShowShop]     = useState(false)
   const [showConfirm,  setShowConfirm]  = useState(false)
   const [showMission,  setShowMission]  = useState(false)
@@ -1885,6 +1879,8 @@ export default function LobbyScreen() {
   const [pendingRoomCreate, setPendingRoomCreate] = useState<RoomCreateInfo | null>(null)
   const [pendingRoomCreateSlot, setPendingRoomCreateSlot] = useState<number | null>(null)
   const [showPlayerInfo, setShowPlayerInfo] = useState<DlgPlayerInfo | null>(null)
+  const [oneToOneChat, setOneToOneChat] = useState<{ target: string; partnerName: string; partnerOnline: boolean; messages: Array<{ sender: string; text: string; system?: boolean }> } | null>(null)
+  const [oneToOneChatText, setOneToOneChatText] = useState('')
   const [inviteData,   setInviteData]   = useState<{
     inviterId: string; inviterName: string; roomId: number; roomPwd: string; avatarId?: string
     roomName?: string; roomOption?: string; inviteMessage?: string; inviterSex?: string; inviterRating?: number; inviterLevel?: string
@@ -2319,6 +2315,50 @@ export default function LobbyScreen() {
       }
       SignalR.on('hc1e', onChat)
 
+      const onOneToOneChat = (data: Record<string, unknown>) => {
+        if (!mounted) return
+        const sendMember = data.sendMember as Record<string, unknown> | undefined
+        const receiveMember = data.receiveMember as Record<string, unknown> | undefined
+        const sender = String(sendMember?.pix ?? data.sender ?? '')
+        const recipient = String(receiveMember?.pix ?? data.target ?? '')
+        const myPix = player?.pix ?? ''
+        const target = sender === myPix ? recipient : sender
+        const partnerName = String((sender === myPix ? receiveMember : sendMember)?.name ?? displayNameForPix(target))
+        if (target) setOneToOneChat(current => current?.target === target
+          ? { ...current, partnerName, partnerOnline: true }
+          : { target, partnerName, partnerOnline: true, messages: [] })
+      }
+      SignalR.on('hc6e', onOneToOneChat)
+
+      const onOneToOneChatString = (data: Record<string, unknown>) => {
+        if (!mounted) return
+        const sendMember = data.sendMember as Record<string, unknown> | undefined
+        const receiveMember = data.receiveMember as Record<string, unknown> | undefined
+        const sender = String(sendMember?.pix ?? data.sender ?? '')
+        const recipient = String(receiveMember?.pix ?? data.target ?? '')
+        const myPix = player?.pix ?? ''
+        const target = sender === myPix ? recipient : sender
+        const partnerName = String((sender === myPix ? receiveMember : sendMember)?.name ?? displayNameForPix(target))
+        const text = String(data.k41e ?? data.string ?? '')
+        if (!target || !text) return
+        setOneToOneChat(current => current?.target === target
+          ? { ...current, partnerName, partnerOnline: true, messages: [...current.messages, { sender, text }] }
+          : { target, partnerName, partnerOnline: true, messages: [{ sender, text }] })
+      }
+      SignalR.on('hc7e', onOneToOneChatString)
+
+      const onOneToOneChatEnd = (data: Record<string, unknown>) => {
+        const sendMember = data.sendMember as Record<string, unknown> | undefined
+        const sender = String(sendMember?.pix ?? data.sender ?? '')
+        const recipient = String((data.receiveMember as Record<string, unknown> | undefined)?.pix ?? data.target ?? '')
+        const myPix = player?.pix ?? ''
+        if (recipient !== myPix || !sender) return
+        setOneToOneChat(current => current?.target === sender
+          ? { ...current, partnerName: String(sendMember?.name ?? current.partnerName), partnerOnline: false, messages: [...current.messages, { sender, text: `${String(sendMember?.name ?? current.partnerName)}さんがチャットを終了しました。`, system: true }] }
+          : current)
+      }
+      SignalR.on('hc8e', onOneToOneChatEnd)
+
       /** channel:notice — G::commandNotice: keyString を公知領域へ表示 */
       const onNotice = (data: Record<string, unknown>) => {
         if (!mounted) return
@@ -2440,24 +2480,6 @@ export default function LobbyScreen() {
       }
       SignalR.on('mjkc17e', onMoneyReplenishment)
 
-      /**
-       * mjkc34e — ProcessResultSerialCode 相当
-       * success: gammoney/slevel を更新して「シリアルコード賞」MessageBox
-       * failure: 「エラー」MessageBox
-       */
-      const onSerialCodeResult = (data: Record<string, unknown>) => {
-        if (!mounted) return
-        const message = String(data.message ?? '')
-        if (Number(data.result) === 1) {
-          if (typeof data.gammoney === 'number') setGamMoney(data.gammoney as number)
-          if (typeof data.slevel === 'string') setSlevel(data.slevel as string)
-          showMessage(message, 'シリアルコード賞')
-          return
-        }
-        showError(message)
-      }
-      SignalR.on('mjkc34e', onSerialCodeResult)
-
       /** mjkc25e — OnBtnRankingClicked → ShowRankingDialog 相当 */
       const onRatingRankInfo = (data: Record<string, unknown>) => {
         if (!mounted) return
@@ -2483,7 +2505,8 @@ export default function LobbyScreen() {
        */
       const onAutoMatching = (data: Record<string, unknown>) => {
         if (!mounted) return
-        if (Number(data.result) !== 1) {
+        const result = Number(data.result)
+        if (result === 0) {
           setIsMatching(false)
           const failCode = String(data.failCode ?? data.failcode ?? '')
           if (failCode === '4' || failCode === 'E_INSUFFICIENT_MONEY') {
@@ -2493,6 +2516,10 @@ export default function LobbyScreen() {
           }
           return
         }
+
+        // Queue registration intentionally has no response. Ignore packets without a result
+        // instead of clearing the locally displayed matching state.
+        if (result !== 1) return
 
         const matchedRoomId = Number(data.roomId ?? data.k42e ?? 0)
         if (!matchedRoomId) {
@@ -2595,6 +2622,9 @@ export default function LobbyScreen() {
         SignalR.off('c12e',              onRoomList)
         SignalR.off('c7e',               onMemberList)
         SignalR.off('hc1e',              onChat)
+        SignalR.off('hc6e',              onOneToOneChat)
+        SignalR.off('hc7e',              onOneToOneChatString)
+        SignalR.off('hc8e',              onOneToOneChatEnd)
         SignalR.off('c40e',              onNotice)
         SignalR.off('mjkroom',           onRoomState)
         SignalR.off('c5e',               onMemberJoined)
@@ -2602,7 +2632,6 @@ export default function LobbyScreen() {
         SignalR.off('c22e',              onInviteGame)
         SignalR.off('c23e',              onInviteResponse)
         SignalR.off('mjkc17e',           onMoneyReplenishment)
-        SignalR.off('mjkc34e',           onSerialCodeResult)
         SignalR.off('mjkc25e',           onRatingRankInfo)
         SignalR.off('mjkc2e',            onAutoMatching)
         SignalR.off('mjkc3e',            onCancelAutoMatching)
@@ -2769,9 +2798,14 @@ export default function LobbyScreen() {
   const onToggleAutoMatch = async () => {
     const next = !isMatching
     if (next) {
-      await SignalR.send('mjkc2e', { pix: player?.pix ?? '', k3e: player?.pix ?? '' })
       setIsMatching(true)
       setChatLog(prev => [...prev, ...systemChatMessages([AUTO_MATCH_ENTRY_MESSAGE], '#000040')])
+      try {
+        await SignalR.send('mjkc2e', { pix: player?.pix ?? '', k3e: player?.pix ?? '' })
+      } catch {
+        setIsMatching(false)
+        showError('オートマッチングの申し込みに失敗しました')
+      }
     } else {
       await SignalR.send('mjkc3e', { pix: player?.pix ?? '', k3e: player?.pix ?? '' }).catch(() => {})
     }
@@ -2803,8 +2837,12 @@ export default function LobbyScreen() {
   }
 
   /** チャンネル変更 (OnBtnChangeChannelClicked → ExitChannel → OnRefreshChannelList 相当) */
-  const onChangeLobby = () => {
+  const onChangeLobby = async () => {
     const group = getLobbySelectGroup(channelId)
+    try {
+      await SignalR.send('c2e', {})
+    } catch {}
+    await SignalR.disconnect().catch(() => {})
     navigate(group ? `/channel/select/${group}` : '/channel')
   }
 
@@ -2886,7 +2924,7 @@ export default function LobbyScreen() {
       showMessage('対局中のメンバーには1:1チャットを申し込めません。')
       return
     }
-    openMemberProfile(pix)
+    SignalR.send('hc6e', { target: pix, k38e: pix }).catch(() => {})
   }
 
   const onReqOneToOne = () => {
@@ -2894,11 +2932,28 @@ export default function LobbyScreen() {
     startOneToOneChat(selectedMember)
   }
 
+  const sendOneToOneChat = () => {
+    if (!oneToOneChat) return
+    const text = oneToOneChatText.trim()
+    if (!text) return
+    SignalR.send('hc7e', { target: oneToOneChat.target, k38e: oneToOneChat.target, string: text, k41e: text }).catch(() => {})
+    setOneToOneChatText('')
+  }
+
+  const endOneToOneChat = () => {
+    if (!oneToOneChat) return
+    SignalR.send('hc8e', { target: oneToOneChat.target, k38e: oneToOneChat.target }).catch(() => {})
+    setOneToOneChat(null)
+  }
+
   const openRanking = async () => {
+    const now = new Date()
+    const rankDate = now.getFullYear() * 100 + now.getMonth() + 1
     await SignalR.send('mjkc25e', {
       mjkk73e: 99,
-      mjkk74e: 0,
+      mjkk74e: rankDate,
       mjkk75e: 3,
+      k3e: player?.pix ?? '',
     }).catch(() => {})
   }
 
@@ -3021,13 +3076,6 @@ export default function LobbyScreen() {
     })
   }
 
-  /** SendSerialCode 相当 — Key.SerialCode = mjkk130e */
-  const onSendSerialCode = (serialCode: string) => {
-    SignalR.send('mjkc34e', { 'mjkk130e': serialCode }).catch(() => {
-      showError('サーバーへの送信に失敗しました')
-    })
-  }
-
   const shopDialogs = (
     <>
       {showCustom && (
@@ -3108,6 +3156,22 @@ export default function LobbyScreen() {
         />
       )}
 
+      {oneToOneChat && (
+        <div className="majak-one-to-one-chat" role="dialog" aria-modal="true" aria-labelledby="majak-one-to-one-chat-title">
+          <section className="majak-one-to-one-chat__window">
+            <header>
+              <div><span>{oneToOneChat.partnerOnline ? 'チャット中' : '退室しました'}</span><h2 id="majak-one-to-one-chat-title">{oneToOneChat.partnerName}</h2></div>
+              <button type="button" onClick={endOneToOneChat} aria-label="閉じる">×</button>
+            </header>
+            <div className="majak-one-to-one-chat__messages">
+              {oneToOneChat.messages.length === 0 && <p className="majak-one-to-one-chat__empty">チャットを開始しました。</p>}
+              {oneToOneChat.messages.map((message, index) => <p key={`${message.sender}-${index}`} className={`${message.system ? 'is-system' : ''}${message.sender === player?.pix ? ' is-mine' : ''}`}><span>{message.text}</span></p>)}
+            </div>
+            <div className="majak-one-to-one-chat__input"><input value={oneToOneChatText} maxLength={80} disabled={!oneToOneChat.partnerOnline} onChange={event => setOneToOneChatText(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); sendOneToOneChat() } }} autoFocus /><button type="button" disabled={!oneToOneChat.partnerOnline} onClick={sendOneToOneChat}>送信</button></div>
+          </section>
+        </div>
+      )}
+
       {showRoomCreate && (
         <RoomCreateDlg
           initialTitle=""
@@ -3156,10 +3220,6 @@ export default function LobbyScreen() {
           onCancel={() => setShowCfg(false)}
           onModify={configureMajakSound}
         />
-      )}
-
-      {showSerial && (
-        <SerialCodeDlg onOK={onSendSerialCode} onClose={() => setShowSerial(false)} />
       )}
 
       {showAccuse && (
@@ -3232,7 +3292,7 @@ export default function LobbyScreen() {
       <div className="majak-boot-loading">
         <div className="majak-boot-loading__panel">
           <img className="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} />
-          <div className="majak-boot-loading__bar"><div className="majak-boot-loading__fill" /></div>
+          <div className="majak-sync-spinner" aria-hidden="true" />
         </div>
       </div>
     )
@@ -3274,7 +3334,6 @@ export default function LobbyScreen() {
             <aside className="majak-mobile-tournament-members">
               <MobileMemberListPanel
                 members={displayMembers}
-                myPix={player?.pix ?? ''}
                 selectedMember={selectedMember}
                 onSelectMember={setSelectedMember}
                 onViewProfile={openMemberProfile}
@@ -3370,10 +3429,27 @@ export default function LobbyScreen() {
           />
           <aside className="majak-mobile-lobby-side">
             <div className="majak-mobile-lobby-command-panel">
+              {autoMatchingChannel && (
+                <>
+                  <button
+                    type="button"
+                    className={`majak-mobile-auto-match-button${isMatching ? ' is-matching' : ''}`}
+                    onClick={() => { void onToggleAutoMatch() }}
+                  >
+                    {isMatching ? '対戦申し込みを取り消す' : '対戦申し込み'}
+                  </button>
+                  {isMatching && (
+                    <div className="majak-mobile-auto-match-status" role="status">
+                      <strong>マッチング中!</strong>
+                      <span>対戦相手を探しています…</span>
+                    </div>
+                  )}
+                </>
+              )}
               <div className="majak-mobile-lobby-command-grid">
                 <MobileLobbyCommandButton onClick={openRanking} hidden={!showRankingButton}>ランキング</MobileLobbyCommandButton>
                 <MobileLobbyCommandButton onClick={onReqOneToOne} disabled={!selectedMember}>1:1チャット</MobileLobbyCommandButton>
-                <MobileLobbyCommandButton onClick={() => setShowSerial(true)} hidden={!showShopButtons}>シリアル</MobileLobbyCommandButton>
+                <MobileLobbyCommandButton onClick={onViewProfile} disabled={!selectedMember}>プロフィール</MobileLobbyCommandButton>
               </div>
               <div className="majak-mobile-lobby-command-checks">
                 <label><input type="checkbox" checked={rejectInvite} disabled={autoMatchingChannel} onChange={event => setRejectInvite(event.currentTarget.checked)} />招待拒否</label>
@@ -3382,7 +3458,6 @@ export default function LobbyScreen() {
             </div>
             <MobileMemberListPanel
               members={displayMembers}
-              myPix={player?.pix ?? ''}
               selectedMember={selectedMember}
               onSelectMember={setSelectedMember}
               onViewProfile={openMemberProfile}
@@ -3410,7 +3485,7 @@ export default function LobbyScreen() {
         tournamentPage === 'match' ? (
         <>
           <TournamentMatchPanel tournament={selectedTournament} details={tournamentDetails} memberNameByPix={memberNameByPix} onWatch={onTournamentWatch} />
-          <MemberListPanel members={displayMembers} myPix={player?.pix ?? ''} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
+          <MemberListPanel members={displayMembers} selectedMember={selectedMember} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
         </>
         ) : (
         <>
@@ -3429,7 +3504,7 @@ export default function LobbyScreen() {
           <RoomListPanel rooms={rooms} members={members} slotCount={roomSlotCount} channelId={channelId} onEnter={onEnterRoom} onCreateRoom={onCreateRoom} directRoomActionDisabled={autoMatchingChannel} />
 
           {/* ── メンバーリスト (CHgMemberListWnd) MoveWindow(678,212,336×403) ── */}
-          <MemberListPanel members={displayMembers} myPix={player?.pix ?? ''} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
+          <MemberListPanel members={displayMembers} selectedMember={selectedMember} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
         </>
       )}
 
@@ -3539,6 +3614,12 @@ export default function LobbyScreen() {
             onClick={onToggleAutoMatch}
             title={isMatching ? '対局参加表明を取り消す' : '対局に参加表明する'}
           />
+          {isMatching && (
+            <div className="majak-desktop-auto-match-status" role="status">
+              <strong>マッチング中!</strong>
+              <span>対戦相手を探しています…</span>
+            </div>
+          )}
         </>
       ) : (
         <img src={`${IMG}/${replayChannel ? 'mj_rm_ui_paifu_Bg.png' : trainingChannel ? 'mj_rm_ui_Practice_bg.png' : 'mj_rm_ui_koryu_Bg.png'}`} alt="" draggable={false}
@@ -3723,16 +3804,6 @@ export default function LobbyScreen() {
       />
 
       {/* ── アイコンボタン群 y=659 ── */}
-
-      {/* mj_btn_sirial.png (80×32) IDC_BTN_SERIAL_CODE at (X_BTN_ICON_OFF_9=934, Y_BTN_ICON_OFF_6=659) */}
-      <SpriteButton
-        src={`${IMG}/mj_btn_sirial.png`}
-        frameW={80} frameH={32}
-        x={934 - LOBBY_LEFT_NUDGE} y={628}
-        onClick={() => setShowSerial(true)}
-        title="シリアルコード"
-        hidden={!showShopButtons || (tournamentChannel && tournamentPage !== 'match')}
-      />
 
       {/* mj_btn_chglobby.png (80×32) IDC_BTN_CHANGELOBBY at (X_BTN_ICON_OFF_3=934, Y_BTN_ICON_OFF_3=622) */}
       <SpriteButton

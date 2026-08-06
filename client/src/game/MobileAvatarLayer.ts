@@ -16,6 +16,7 @@ interface MobileTurnMarkState {
   width: number
   height: number
   visible: boolean
+  tileFrame?: boolean
 }
 
 interface MobileCallAvatarState {
@@ -57,7 +58,8 @@ interface MobileAvatarSlot {
 export default class MobileAvatarLayer {
   private readonly root: HTMLDivElement
   private readonly slots: MobileAvatarSlot[]
-  private readonly turnMark: HTMLImageElement
+  private readonly turnMark: HTMLDivElement
+  private turnMarkAnimation?: Animation
 
   constructor(parent: HTMLElement, onActivate: (loc: number) => void) {
     this.root = document.createElement('div')
@@ -86,22 +88,20 @@ export default class MobileAvatarLayer {
         imageRendering: 'auto',
         pointerEvents: 'auto',
         cursor: 'pointer',
-        transform: 'translateZ(0)',
       })
       image.addEventListener('click', () => onActivate(loc))
       this.root.appendChild(image)
       return { image, requestId: 0, url: '', fallbackUrl: '' }
     })
 
-    this.turnMark = document.createElement('img')
-    this.turnMark.alt = ''
-    this.turnMark.draggable = false
+    this.turnMark = document.createElement('div')
     Object.assign(this.turnMark.style, {
       position: 'absolute',
       display: 'none',
       zIndex: '1',
       imageRendering: 'pixelated',
       pointerEvents: 'none',
+      backgroundRepeat: 'no-repeat',
     })
     this.root.appendChild(this.turnMark)
 
@@ -113,10 +113,10 @@ export default class MobileAvatarLayer {
     if (!slot) return
 
     Object.assign(slot.image.style, {
-      left: `${state.x}px`,
-      top: `${state.y}px`,
-      width: `${state.width}px`,
-      height: `${state.height}px`,
+      left: `${Math.round(state.x)}px`,
+      top: `${Math.round(state.y)}px`,
+      width: `${Math.round(state.width)}px`,
+      height: `${Math.round(state.height)}px`,
     })
     slot.image.alt = state.alt
     slot.fallbackUrl = state.fallbackUrl
@@ -151,17 +151,30 @@ export default class MobileAvatarLayer {
   }
 
   updateTurnMark(state: MobileTurnMarkState): void {
+    const tileFrame = Boolean(state.tileFrame)
     Object.assign(this.turnMark.style, {
       display: state.visible && state.url ? 'block' : 'none',
       left: `${state.x}px`,
       top: `${state.y}px`,
       width: `${state.width}px`,
       height: `${state.height}px`,
+      backgroundImage: state.url ? `url("${state.url}")` : 'none',
+      backgroundSize: tileFrame ? `${state.width * 37}px ${state.height}px` : `${state.width}px ${state.height}px`,
+      backgroundPosition: '0 0',
     })
-    if (state.url && this.turnMark.src !== state.url) this.turnMark.src = state.url
+    this.turnMarkAnimation?.cancel()
+    this.turnMarkAnimation = undefined
+    if (state.visible && state.url) {
+      this.turnMarkAnimation = this.turnMark.animate(
+        [{ opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }],
+        { duration: 1000, iterations: Infinity },
+      )
+    }
   }
 
   hideTurnMark(): void {
+    this.turnMarkAnimation?.cancel()
+    this.turnMarkAnimation = undefined
     this.turnMark.style.display = 'none'
   }
 
@@ -181,7 +194,6 @@ export default class MobileAvatarLayer {
       objectPosition: 'center center',
       imageRendering: 'auto',
       pointerEvents: 'none',
-      transform: 'translateZ(0)',
     })
     image.onerror = () => {
       image.onerror = null

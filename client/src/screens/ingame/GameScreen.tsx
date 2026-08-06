@@ -16,7 +16,7 @@ import KyoRes, { type KyoResData } from './KyoRes.tsx'
 import SlideAnnounce, { type SlideAnnounceData } from './SlideAnnounce'
 import ViewerListWnd, { type ViewerEntry } from './ViewerListWnd'
 import AskEndDlg from '../outgame/dialogs/AskEndDlg'
-import MiniChannelWnd from '../outgame/MiniChannelWnd'
+import GameInviteDialog from './GameInviteDialog'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
 import { useCustomSkinStore } from '../../store/customSkinStore'
@@ -686,11 +686,9 @@ function GameLoadingOverlay({ visible }: { visible: boolean }) {
   if (!visible) return null
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0, 0, 0, 0.58)', pointerEvents: 'auto' }}>
-      <div style={{ width: 260, height: 312, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: 'rgba(255, 255, 255, 0.94)', border: '1px solid rgba(0, 0, 0, 0.24)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)' }}>
+      <div style={{ width: 260, height: 312, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: 'rgba(255, 255, 255, 0.94)', border: '1px solid rgba(0, 0, 0, 0.24)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)' }} aria-busy="true" aria-label="対局状況を同期中">
         <img src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} style={{ width: 230, height: 230, objectFit: 'cover' }} />
-        <div style={{ width: 168, height: 8, border: '1px solid #385c51', background: '#d7ded9', padding: 1 }}>
-          <div style={{ width: '44%', height: '100%', background: '#21765f' }} />
-        </div>
+        <div className="majak-sync-spinner" aria-hidden="true" />
       </div>
     </div>
   )
@@ -771,7 +769,10 @@ export default function GameScreen() {
   const [emoticonNow, setEmoticonNow] = useState(0)
   const [emoticonCooldown, setEmoticonCooldown] = useState(false)
   const [channelMembers, setChannelMembers] = useState<ChannelMemberEntry[]>([])
-  const [showInviteList, setShowInviteList] = useState(false)
+  const [showInviteDialog, setShowInviteDialog] = useState(false)
+  const [inviteTargetPix, setInviteTargetPix] = useState<string | null>(null)
+  const [inviteWaiting, setInviteWaiting] = useState(false)
+  const [inviteResult, setInviteResult] = useState<'accepted' | 'declined' | 'timeout' | null>(null)
   const initialMyOdr = gameState?.myOdr ?? players.find(p => p.playerId === useAuthStore.getState().player?.pix)?.pos
   const [viewOdr, setViewOdr] = useState<number | undefined>(undefined)
   const effectiveMyOdr = viewOdr ?? initialMyOdr
@@ -1440,8 +1441,13 @@ export default function GameScreen() {
       if (!mounted) return
       const pix = String(data.k3e ?? data.pix ?? '')
       if (!pix || (pendingInviteTargetRef.current && pendingInviteTargetRef.current !== pix)) return
+      const isPendingInvite = pendingInviteTargetRef.current === pix
       pendingInviteTargetRef.current = null
       const yesNo = data.k64e
+      if (isPendingInvite) {
+        setInviteWaiting(false)
+        setInviteResult(yesNo === 'v7e' ? 'accepted' : 'declined')
+      }
       const displayName = displayNameForPix(pix)
       const text = yesNo === 'v7e'
         ? `${displayName}さんがゲーム申し込みを承諾しました。`
@@ -1635,23 +1641,54 @@ export default function GameScreen() {
     else navigate(-1)
   }
 
+  const closeInviteDialog = () => {
+    setShowInviteDialog(false)
+    setInviteTargetPix(null)
+    setInviteWaiting(false)
+    setInviteResult(null)
+    pendingInviteTargetRef.current = null
+  }
+
   const openInviteList = () => {
     if (inviteDisabled) return
-    setShowInviteList(true)
+    setShowInviteDialog(true)
+    setInviteTargetPix(null)
+    setInviteWaiting(false)
+    setInviteResult(null)
     void SignalR.send('c7e', buildGetMemberListPayload(channelId ?? '')).catch(() => {})
   }
 
-  const onGameInvi = async (targetPix: string) => {
-    setShowInviteList(false)
+  const onGameInvi = async (message: string) => {
+    const targetPix = inviteTargetPix
+    if (!targetPix) return
     pendingInviteTargetRef.current = targetPix
     const pix = useAuthStore.getState().player?.pix ?? ''
+    setInviteWaiting(true)
     await SignalR.send('c22e', {
       k3e: pix,
       targetPix,
+      targetMemberNo: targetPix,
       k42e: roomId ?? '',
-      k65e: '一緒に対戦しませんか？',
+      k65e: message,
       k64e: false,
-    }).catch(() => {})
+    }).catch(() => {
+      setInviteWaiting(false)
+      setInviteResult('timeout')
+    })
+  }
+
+  const cancelInviteWait = () => {
+    const targetPix = inviteTargetPix
+    if (targetPix) {
+      void SignalR.send('c22e', {
+        targetPix,
+        targetMemberNo: targetPix,
+        k42e: roomId ?? '',
+        k65e: '',
+        k64e: true,
+      }).catch(() => {})
+    }
+    closeInviteDialog()
   }
 
   const sendEmoticon = async (index: number) => {
@@ -1744,7 +1781,13 @@ export default function GameScreen() {
       return
     }
     if (returnChannelId && returnRoomId) {
-      navigate(`/channel/${returnChannelId}/lobby/room/${returnRoomId}`, { replace: true })
+      navigate(`/channel/${returnChannelId}/lobby/room/${returnRoomId}`, {
+        replace: true,
+        state: {
+          mode: 'enter',
+          skipEnterChannel: true,
+        },
+      })
     } else {
       navigate(-1)
     }
@@ -1915,13 +1958,22 @@ export default function GameScreen() {
         <GameSpriteButton src={`${IMG}/mj_btInvite.png`} frameW={106} frameH={26} x={803} y={649} disabled={inviteDisabled} onClick={openInviteList} title="招待" />
       </div>
 
-      {showInviteList && (
-        <MiniChannelWnd
-          channelId={channelId}
+      {showInviteDialog && (
+        <GameInviteDialog
           members={channelMembers}
-          fullScreen
-          onClose={() => setShowInviteList(false)}
-          onReqGame={pix => void onGameInvi(pix)}
+          targetPix={inviteTargetPix}
+          waiting={inviteWaiting}
+          result={inviteResult}
+          onChooseTarget={setInviteTargetPix}
+          onSend={message => void onGameInvi(message)}
+          onCancelWait={cancelInviteWait}
+          onTimeout={() => {
+            setInviteWaiting(false)
+            setInviteResult('timeout')
+            pendingInviteTargetRef.current = null
+          }}
+          onBackToMembers={() => setInviteTargetPix(null)}
+          onClose={closeInviteDialog}
         />
       )}
 

@@ -89,6 +89,9 @@ public static class Cmd
     public const string EnterRoomCmd   = "c14e";            // G::commandEnterRoom
     public const string ViewRoom       = "c18e";            // G::commandViewRoom
     public const string HanChatRelay   = "hc1e";            // HANCHAT::commandHanChatString
+    public const string HanChatOneToOne = "hc6e";           // HANCHAT::commandHanChatOneToOneChat
+    public const string HanChatOneToOneString = "hc7e";     // HANCHAT::commandHanChatOneToOneChatString
+    public const string HanChatOneToOneEnd = "hc8e";        // HANCHAT::commandHanChatOneToOneChatEnd
     public const string MemberList     = "c16e";            // G::commandMemberList (S→C)
     public const string AddMember      = "c5e";             // G::commandAddMember (S→C)
     public const string DeleteMember   = "c6e";             // G::commandDeleteMember (S→C)

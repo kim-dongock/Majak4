@@ -28,8 +28,8 @@ public class ItemServiceTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((1, "success"));
 
-        _itemRepoMock.Setup(r => r.EnsureDefaultCustomItemAsync(
-                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+        _itemRepoMock.Setup(r => r.EnsureDefaultCustomItemsAsync(
+            It.IsAny<string>(), It.IsAny<IReadOnlyCollection<(int CustomId, int Equip)>>()))
             .Returns(Task.CompletedTask);
 
         _itemRepoMock.Setup(r => r.SetEquipAsync(
@@ -237,8 +237,8 @@ public class ItemServiceTests
             {
                 (100000, 10, "背景板デフォルト", 0),
             });
-        _itemRepoMock.Setup(r => r.EnsureDefaultCustomItemAsync(
-                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+        _itemRepoMock.Setup(r => r.EnsureDefaultCustomItemsAsync(
+            It.IsAny<string>(), It.IsAny<IReadOnlyCollection<(int CustomId, int Equip)>>()))
             .Returns(Task.CompletedTask);
 
         var player = new MajakPlayer { MemberNo = "user01" };
@@ -249,6 +249,8 @@ public class ItemServiceTests
         Assert.Equal(10, player.CustomItems[100000].Kind);
         Assert.Equal(0, player.CustomItems[100001].Kind);
         Assert.Equal(0, player.CustomItems[100002].Kind);
+        _itemRepoMock.Verify(r => r.EnsureDefaultCustomItemsAsync(
+            "user01", It.IsAny<IReadOnlyCollection<(int CustomId, int Equip)>>()), Times.Once);
     }
 
     [Fact]
@@ -306,8 +308,8 @@ public class BuyCustomItemCommandTests
         _itemRepoMock.Setup(s => s.BuyCustomItemAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
             .ReturnsAsync((spReturnVal, spReturnVal == 1 ? "success" : "error"));
-        _itemRepoMock.Setup(r => r.EnsureDefaultCustomItemAsync(
-                It.IsAny<string>(), It.IsAny<int>(), It.IsAny<int>()))
+        _itemRepoMock.Setup(r => r.EnsureDefaultCustomItemsAsync(
+            It.IsAny<string>(), It.IsAny<IReadOnlyCollection<(int CustomId, int Equip)>>()))
             .Returns(Task.CompletedTask);
         _itemRepoMock.Setup(r => r.GetCustomShopMastAsync())
             .ReturnsAsync(new List<CustomShopItemInfo>

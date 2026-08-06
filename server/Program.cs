@@ -137,6 +137,9 @@ builder.Services.AddScoped<GetRoomListCommand>();
 builder.Services.AddScoped<GetMemberListCommand>();
 builder.Services.AddScoped<ExitChannelCommand>();
 builder.Services.AddScoped<HanChatAllRelayCommand>();
+builder.Services.AddScoped<HanChatOneToOneCommand>();
+builder.Services.AddScoped<HanChatOneToOneStringCommand>();
+builder.Services.AddScoped<HanChatOneToOneEndCommand>();
 builder.Services.AddScoped<ViewRoomCommand>();
 builder.Services.AddScoped<ComplaintCommand>();
 

@@ -816,7 +816,9 @@ export default class GameScene extends Phaser.Scene {
   private roomId = ''
   private isReplay = false
   private isViewer = false
+  private viewerHistorySyncPending = false
   private layoutMode: IngameLayoutMode = 'desktop'
+  private customHaiId = 0
   private replayPaifuData: unknown
   private replayPaifuApplied = false
   private isReplayApplyingHistory = false
@@ -885,8 +887,10 @@ export default class GameScene extends Phaser.Scene {
     this.hanchanOrderInitialized = false
     this.isReplay = data.mode === 'replay'
     this.isViewer = Boolean(data.isViewer)
+    this.viewerHistorySyncPending = this.isViewer && !this.isReplay
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
+    this.customHaiId = Number(data.customHaiId ?? 0)
     this.replayPaifuData = data.paifu
     this.replayPaifuApplied = false
     this.isReplayApplyingHistory = false
@@ -940,7 +944,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     /* ── UIScene 起動 ── */
-    this.scene.launch('UIScene', { gameScene: this, myOdr: this.myOdr, layoutMode: this.layoutMode, isViewer: this.isViewer, customBgId: this.customBgId, customBoardType: this.customBoardType })
+    this.scene.launch('UIScene', { gameScene: this, myOdr: this.myOdr, layoutMode: this.layoutMode, isViewer: this.isViewer, customBgId: this.customBgId, customBoardType: this.customBoardType, customHaiId: this.customHaiId })
 
     /* ── SignalR イベント登録 ── */
     this.acceptingSignalR = true
@@ -1147,7 +1151,9 @@ export default class GameScene extends Phaser.Scene {
         })
       }
       if (playType === 'MJPID_ACTION') this.popPaiInfo(false)
-      if (playType && playType !== 'MJPID_INIHAN') this.emitGameSync(false, 'game-content-ready')
+      if (playType && playType !== 'MJPID_INIHAN' && !this.viewerHistorySyncPending) {
+        this.emitGameSync(false, 'game-content-ready')
+      }
       if (playType === 'MJPID_INIHAN') {
         this.chicha = Number(data.chicha ?? data.nChicha ?? this.chicha)
         this.applyHanchanOrder(data)
@@ -1214,7 +1220,7 @@ export default class GameScene extends Phaser.Scene {
           odr: Number.isFinite(oyaOrder) ? oyaOrder : 0,
           viewOdr: this.myOdr,
         })
-        this.emitGameSync(false, 'initial-kyoku-ready')
+        if (!this.viewerHistorySyncPending) this.emitGameSync(false, 'initial-kyoku-ready')
         return
       }
       if (playType === 'MJPID_ENDKYO') {
@@ -1463,6 +1469,8 @@ export default class GameScene extends Phaser.Scene {
         this.applyPendingResyncHandSnapshot()
         this.redrawAllPerspectivePai()
         this.lastLiveHistoryAppliedAt = performance.now()
+        const viewerHistoryWasPending = this.viewerHistorySyncPending
+        this.viewerHistorySyncPending = false
         this.emitToUiScene('stateUpdate', { players: this.players, viewOdr: this.myOdr })
         this.logResyncProbe('history apply complete', {
           currentKyoku: this.paifuGraphRound.kyokuCnt,
@@ -1472,8 +1480,9 @@ export default class GameScene extends Phaser.Scene {
           queueAfter: this.paiInfoQueue.map(msg => ({ ini: msg.bIniKyo, openPos: msg.openPos, count: msg.tiles.length })),
         })
         if (DEBUG_GAME) console.info('[GameScene] live history applied', { packetCount: packets.length })
+        if (viewerHistoryWasPending) this.emitGameSync(false, 'viewer-history-applied')
       } finally {
-        if (showHistoryLoading) this.emitGameSync(false, 'history')
+        if (showHistoryLoading && !this.viewerHistorySyncPending) this.emitGameSync(false, 'history')
       }
     }
     this.onSignalR('history', handleHistory)
@@ -1714,7 +1723,7 @@ export default class GameScene extends Phaser.Scene {
       .finally(() => {
         this.time.delayedCall(1500, () => {
           this.gameResyncInFlight = false
-          this.emitGameSync(false, reason)
+          if (!this.viewerHistorySyncPending) this.emitGameSync(false, reason)
         })
       })
   }

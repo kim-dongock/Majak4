@@ -45,8 +45,41 @@ export interface RegisteredPlayerCache {
 }
 
 const REGISTERED_PLAYER_STORAGE_KEY = 'majak2.registeredPlayer.v1'
+const LOCAL_LOGOUT_STORAGE_KEY = 'majak2.localLogout.v1'
 
 // Cache read/write
+
+function clearRegisteredPlayerCache(): void {
+  try {
+    window.localStorage.removeItem(REGISTERED_PLAYER_STORAGE_KEY)
+  } catch {
+    // Continue logout even when storage is unavailable.
+  }
+}
+
+function markLocalLogout(): void {
+  try {
+    window.localStorage.setItem(LOCAL_LOGOUT_STORAGE_KEY, '1')
+  } catch {
+    // Continue logout even when storage is unavailable.
+  }
+}
+
+function clearLocalLogout(): void {
+  try {
+    window.localStorage.removeItem(LOCAL_LOGOUT_STORAGE_KEY)
+  } catch {
+    // Continue sign-in even when storage is unavailable.
+  }
+}
+
+function isLocalLogoutMarked(): boolean {
+  try {
+    return window.localStorage.getItem(LOCAL_LOGOUT_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 
 export function readRegisteredPlayerCache(): RegisteredPlayerCache | null {
   try {
@@ -140,12 +173,15 @@ export async function googleLogin(idToken: string): Promise<MajakPlayer> {
 
   const data = await res.json() as MajakPlayer
   if (!data.requiresRegistration) saveRegisteredPlayerCache(data)
+  clearLocalLogout()
   return data
 }
 
 let refreshLoginInFlight: Promise<MajakPlayer | null> | null = null
 
 async function requestRefreshLogin(): Promise<MajakPlayer | null> {
+  if (isLocalLogoutMarked()) return null
+
   let res: Response
   try {
     res = await fetch(authApiUrl('/auth/refresh'), {
@@ -173,10 +209,19 @@ export async function refreshLogin(): Promise<MajakPlayer | null> {
 
 export async function logout(): Promise<void> {
   clearRememberedGameAccessToken()
-  await fetch(authApiUrl('/auth/logout'), {
-    method: 'POST',
-    credentials: 'include',
-  }).catch(() => {})
+  clearRegisteredPlayerCache()
+  markLocalLogout()
+  try {
+    await fetch(authApiUrl('/auth/logout'), {
+      method: 'POST',
+      credentials: 'include',
+    })
+  } catch {
+    // Local and native authentication must still be cleared while offline.
+  } finally {
+    const { signOutFromNativeGoogle } = await import('../utils/nativeGoogleAuth')
+    await signOutFromNativeGoogle()
+  }
 }
 
 /**
@@ -210,6 +255,7 @@ export async function googleRegister(
 
   const data = await res.json() as MajakPlayer
   saveRegisteredPlayerCache(data)
+  clearLocalLogout()
   return data
 }
 

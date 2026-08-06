@@ -52,6 +52,198 @@ body:has(.majak-game-screen) {
   overflow: auto;
 }
 
+.majak-invite-dialog {
+  width: min(420px, calc(100vw - 24px));
+  height: min(480px, calc(100dvh - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #b9c7a1;
+  border-radius: 6px;
+  color: #182219;
+  background: #edf0e7;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.52);
+  box-sizing: border-box;
+}
+
+.majak-invite-dialog__header {
+  flex: 0 0 auto;
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  color: #ffffff;
+  background: #2f6240;
+  box-sizing: border-box;
+}
+
+.majak-invite-dialog__header h2,
+.majak-invite-dialog__header p {
+  margin: 0;
+}
+
+.majak-invite-dialog__header h2 {
+  font-size: var(--majak-font-18);
+  line-height: 1.15;
+}
+
+.majak-invite-dialog__header p {
+  margin-top: 2px;
+  color: #e6f0df;
+  font-size: var(--majak-font-12);
+}
+
+.majak-invite-dialog__close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: 4px;
+  color: #ffffff;
+  background: #1f4b2d;
+  font-size: var(--majak-font-18);
+  line-height: 1;
+}
+
+.majak-invite-dialog__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  border-top: 1px solid #bccab3;
+  border-bottom: 1px solid #bccab3;
+  background: #ffffff;
+}
+
+.majak-invite-dialog__labels,
+.majak-invite-dialog__member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(92px, 35%);
+  column-gap: 12px;
+  align-items: center;
+}
+
+.majak-invite-dialog__labels {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 34px;
+  padding: 0 14px;
+  color: #465545;
+  background: #e1e8d8;
+  border-bottom: 1px solid #b7c5ae;
+  font-size: var(--majak-font-12);
+  font-weight: 800;
+  box-sizing: border-box;
+}
+
+.majak-invite-dialog__labels span:last-child,
+.majak-invite-dialog__member span:last-child {
+  text-align: right;
+}
+
+.majak-invite-dialog__member {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 1px solid #e0e5dc;
+  color: #172018;
+  background: #ffffff;
+  font-size: var(--majak-font-14);
+  font-weight: 700;
+  text-align: left;
+  box-sizing: border-box;
+}
+
+.majak-invite-dialog__member:hover,
+.majak-invite-dialog__member:focus-visible {
+  outline: none;
+  background: #edf5e8;
+}
+
+.majak-invite-dialog__member.is-selected {
+  color: #ffffff;
+  background: #2f6d3a;
+}
+
+.majak-invite-dialog__member span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-invite-dialog__empty {
+  margin: 0;
+  padding: 30px 14px;
+  color: #5e695d;
+  font-size: var(--majak-font-13);
+  text-align: center;
+}
+
+.majak-invite-dialog__actions {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 6px;
+  padding: 10px 12px;
+  background: #edf0e7;
+}
+
+.majak-invite-dialog__actions button {
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid #8fa68a;
+  border-radius: 4px;
+  color: #1b301f;
+  background: #ffffff;
+  font-size: var(--majak-font-12);
+  font-weight: 800;
+}
+
+.majak-invite-dialog__actions .majak-invite-dialog__submit {
+  color: #ffffff;
+  background: #28623a;
+  border-color: #1c4b2a;
+}
+
+.majak-invite-dialog__actions button:disabled {
+  color: #7b8578;
+  background: #e2e5de;
+  border-color: #c9cec4;
+}
+
+@media (max-width: 460px) {
+  .majak-invite-dialog {
+    width: calc(100vw - 16px);
+    height: min(430px, calc(100dvh - 16px));
+  }
+
+  .majak-invite-dialog__header {
+    min-height: 52px;
+    padding: 9px 10px;
+  }
+
+  .majak-invite-dialog__header h2 {
+    font-size: var(--majak-font-16);
+  }
+
+  .majak-invite-dialog__member,
+  .majak-invite-dialog__labels {
+    grid-template-columns: minmax(0, 1fr) minmax(78px, 34%);
+    column-gap: 8px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+
+  .majak-invite-dialog__actions {
+    gap: 4px;
+    padding: 7px 8px;
+  }
+}
+
 .majak-room-scroll {
   scrollbar-color: #6fb460 #305c34;
   scrollbar-width: thin;
@@ -129,6 +321,68 @@ body:has(.majak-game-screen) {
     radial-gradient(circle at 18% 12%, rgba(219, 255, 170, 0.24), transparent 24rem),
     linear-gradient(145deg, #10351d 0%, #1d6b31 48%, #0d2618 100%);
   overflow: hidden;
+}
+
+.majak-mobile-portrait-notice {
+  width: 100vw;
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: max(32px, env(safe-area-inset-top)) 28px max(32px, env(safe-area-inset-bottom));
+  overflow: hidden;
+  color: #f7ffe9;
+  text-align: center;
+  background:
+    linear-gradient(135deg, transparent 0 48%, rgba(209, 242, 116, 0.08) 48% 52%, transparent 52%),
+    linear-gradient(155deg, #0b2817 0%, #1e6e35 52%, #0a2114 100%);
+}
+
+.majak-mobile-portrait-notice__logo {
+  width: min(42vw, 152px);
+  aspect-ratio: 1;
+  object-fit: cover;
+  border: 3px solid rgba(246, 255, 219, 0.92);
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+}
+
+.majak-mobile-portrait-notice__device {
+  width: 78px;
+  height: 48px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border: 3px solid #f2ffc5;
+  border-radius: 8px;
+  box-shadow: 0 0 0 6px rgba(242, 255, 197, 0.14);
+}
+
+.majak-mobile-portrait-notice__device span {
+  width: 34px;
+  height: 5px;
+  border-radius: 3px;
+  background: #d9f276;
+}
+
+.majak-mobile-portrait-notice h1 {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(22px, 6vw, 30px);
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.3;
+}
+
+.majak-mobile-portrait-notice p {
+  margin: -8px 0 0;
+  color: rgba(247, 255, 233, 0.86);
+  font-size: clamp(14px, 3.8vw, 17px);
+  line-height: 1.7;
 }
 
 .majak-mobile-frame__bar {
@@ -265,6 +519,11 @@ body:has(.majak-game-screen) {
   background: rgba(17, 82, 35, 0.96);
 }
 
+.majak-mobile-ingame-chat-toggle:disabled {
+  cursor: default;
+  opacity: 0.42;
+}
+
 .majak-mobile-ingame-action-bar {
   flex: 0 1 auto;
   display: flex;
@@ -311,33 +570,35 @@ body:has(.majak-game-screen) {
   right: max(8px, env(safe-area-inset-right));
   bottom: calc(max(10px, env(safe-area-inset-bottom)) + 44px);
   z-index: 79;
-  width: min(350px, calc(100% - 16px));
+  width: min(320px, calc(100% - 16px));
   max-height: calc(100% - 62px);
   display: grid;
-  grid-template-rows: auto minmax(48px, 0.56fr) minmax(86px, 1fr) auto;
-  gap: 5px;
-  padding: 7px;
-  border: 1px solid rgba(235, 255, 204, 0.5);
-  border-radius: 7px;
-  background: rgba(8, 48, 20, 0.94);
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+  grid-template-rows: 28px minmax(42px, .38fr) minmax(94px, 1fr) 32px;
+  gap: 4px;
+  padding: 6px;
+  border: 2px outset #d4d0c8;
+  border-radius: 0;
+  background: #8f9b78 url('/assets/images/game/mj_sideBg.png') center top / 225px 704px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.58);
   box-sizing: border-box;
 }
 
 .majak-mobile-ingame-chat-panel__close {
   justify-self: end;
   min-height: 28px;
+  min-width: 60px;
+  border-radius: 2px;
 }
 
 .majak-mobile-ingame-chat-panel__status,
 .majak-mobile-ingame-chat-panel__log {
   min-height: 0;
-  padding: 5px 6px;
+  padding: 4px 5px;
   overflow: auto;
-  border: 1px solid rgba(231, 255, 189, 0.38);
-  border-radius: 5px;
-  color: #061f10;
-  background: rgba(228, 249, 176, 0.96);
+  border: 2px inset #d4d0c8;
+  border-radius: 0;
+  color: #000;
+  background: rgba(255, 255, 255, .92);
   font-family: var(--majak-font-family-ui);
   font-size: var(--majak-font-11);
   font-weight: 700;
@@ -348,8 +609,7 @@ body:has(.majak-game-screen) {
 .majak-mobile-ingame-chat-panel__status > div,
 .majak-mobile-ingame-chat-panel__log > div {
   padding: 1px 2px;
-  border-radius: 2px;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+  text-shadow: none;
 }
 
 .majak-mobile-ingame-chat-panel.is-tengoku-skin .majak-mobile-ingame-chat-panel__status,
@@ -375,10 +635,10 @@ body:has(.majak-game-screen) {
   min-width: 0;
   min-height: 30px;
   padding: 0 7px;
-  border: 1px solid #6c8a67;
-  border-radius: 4px;
-  color: #062b12;
-  background: #f7ffe9;
+  border: 2px inset #d4d0c8;
+  border-radius: 0;
+  color: #000;
+  background: #c3c19c;
   font-size: var(--majak-font-13);
   font-weight: 700;
   box-sizing: border-box;
@@ -386,10 +646,10 @@ body:has(.majak-game-screen) {
 
 .majak-mobile-ingame-chat-panel__input button {
   min-height: 30px;
-  border: 1px solid rgba(239, 255, 205, 0.42);
-  border-radius: 5px;
-  color: #f8ffe7;
-  background: rgba(17, 82, 35, 0.9);
+  border: 2px outset #d4d0c8;
+  border-radius: 0;
+  color: #000;
+  background: #e7e7e7;
   font-size: var(--majak-font-12);
   font-weight: 800;
 }
@@ -1094,6 +1354,81 @@ body:has(.majak-game-screen) {
   white-space: nowrap;
 }
 
+
+.majak-mobile-auto-match-status {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin: 0 0 6px;
+  padding: 5px 8px;
+  color: #ffffff;
+  text-align: center;
+  background: #a62c16;
+  border: 2px solid #ffdf73;
+  box-shadow: 0 2px 0 #66190d, inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  box-sizing: border-box;
+  pointer-events: none;
+  animation: majak-auto-match-blink 1s steps(2, end) infinite;
+}
+
+.majak-mobile-auto-match-status strong {
+  font-size: var(--majak-font-20);
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.majak-mobile-auto-match-status span {
+  font-size: var(--majak-font-13);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.majak-desktop-auto-match-status {
+  position: absolute;
+  left: 270px;
+  top: 468px;
+  width: 370px;
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #8e1c0d;
+  background: rgba(255, 244, 191, 0.94);
+  border: 2px solid #a62c16;
+  box-shadow: 0 2px 0 rgba(81, 20, 9, 0.7);
+  font-family: var(--majak-font-family-ui);
+  box-sizing: border-box;
+  pointer-events: none;
+  z-index: 26;
+  animation: majak-auto-match-blink 1s steps(2, end) infinite;
+}
+
+.majak-desktop-auto-match-status strong {
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.majak-desktop-auto-match-status span {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+@keyframes majak-auto-match-blink {
+  50% { opacity: 0.28; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .majak-mobile-auto-match-status,
+  .majak-desktop-auto-match-status {
+    animation: none;
+  }
+}
+
 .majak-mobile-lobby-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -1117,6 +1452,34 @@ body:has(.majak-game-screen) {
   border-radius: 0;
   background: #e8ede4;
   box-sizing: border-box;
+}
+
+.majak-mobile-auto-match-button {
+  width: 100%;
+  min-height: 34px;
+  margin: 0 0 6px;
+  padding: 4px 8px;
+  color: #ffffff;
+  font: inherit;
+  font-size: var(--majak-font-13);
+  font-weight: 700;
+  line-height: 1.2;
+  background: #df4b20;
+  border: 2px solid #8f240d;
+  border-radius: 2px;
+  box-shadow: inset 0 1px 0 rgba(255, 228, 187, 0.6), 0 2px 0 #8f240d;
+  cursor: pointer;
+}
+
+.majak-mobile-auto-match-button:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 0 rgba(255, 228, 187, 0.35);
+}
+
+.majak-mobile-auto-match-button.is-matching {
+  color: #402000;
+  background: #f1cf74;
+  border-color: #97721a;
 }
 
 .majak-mobile-lobby-command-grid {
@@ -1238,6 +1601,160 @@ body:has(.majak-game-screen) {
 @keyframes majak-room-playing-pulse {
   0%, 100% { box-shadow: inset 0 0 0 1px rgba(104, 208, 198, .72), 0 0 0 1px rgba(31, 105, 116, .34); }
   50% { box-shadow: inset 0 0 0 1px rgba(164, 245, 233, .96), 0 0 0 2px rgba(55, 160, 157, .52); }
+}
+
+.majak-game-invite-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(12, 24, 20, .58);
+}
+
+.majak-game-invite-dialog {
+  width: min(440px, 100%);
+  max-height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  border: 2px solid #2b5745;
+  border-radius: 6px;
+  color: #1b2c24;
+  background: #f5f7ec;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .38);
+  font-family: var(--majak-font-family-ui);
+}
+
+.majak-game-invite-dialog__header {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 14px;
+  color: #ffffff;
+  background: #2f6240;
+  box-sizing: border-box;
+}
+
+.majak-game-invite-dialog__header h2 {
+  margin: 0;
+  font-size: var(--majak-font-18);
+  font-weight: 700;
+}
+
+.majak-game-invite-dialog__icon-button {
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.66);
+  border-radius: 4px;
+  color: #ffffff;
+  background: #1f4b2d;
+  font-size: var(--majak-font-18);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.majak-game-invite-dialog__icon-button:hover,
+.majak-game-invite-dialog__icon-button:focus-visible {
+  background: #173b23;
+}
+
+.majak-game-invite-dialog__body {
+  min-height: 0;
+  padding: 16px;
+}
+
+.majak-game-invite-dialog__lead {
+  margin: 0 0 12px;
+  font-size: var(--majak-font-13);
+}
+
+.majak-game-invite-dialog__member-list {
+  max-height: min(390px, 52vh);
+  overflow-y: auto;
+  border: 1px solid #8ba394;
+  background: #fff;
+}
+
+.majak-game-invite-dialog__member {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid #d7e0d7;
+  color: #1b2c24;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.majak-game-invite-dialog__member:last-child { border-bottom: 0; }
+.majak-game-invite-dialog__member:hover { background: #ebf4e7; }
+.majak-game-invite-dialog__member.is-selected { color: #fff; background: #315f3e; }
+.majak-game-invite-dialog__member span,
+.majak-game-invite-dialog__member small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.majak-game-invite-dialog__member small { color: inherit; font-size: var(--majak-font-11); }
+
+.majak-game-invite-dialog__empty { margin: 0; padding: 18px 12px; color: #59695f; text-align: center; }
+
+.majak-game-invite-dialog__field { display: grid; gap: 7px; font-size: var(--majak-font-12); }
+.majak-game-invite-dialog__field input {
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #6c8877;
+  border-radius: 3px;
+  color: #17251d;
+  background: #fff;
+  font: inherit;
+}
+
+.majak-game-invite-dialog__wait,
+.majak-game-invite-dialog__result { display: grid; gap: 12px; align-content: center; min-height: 132px; text-align: center; }
+.majak-game-invite-dialog__wait p,
+.majak-game-invite-dialog__result p { margin: 0; font-size: var(--majak-font-13); }
+.majak-game-invite-dialog__wait progress { width: 100%; height: 10px; accent-color: #2d7a56; }
+
+.majak-game-invite-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #cbd8ca;
+  background: #e8eee4;
+}
+
+.majak-game-invite-dialog__actions button {
+  min-width: 82px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid #647b6b;
+  border-radius: 3px;
+  color: #213328;
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.majak-game-invite-dialog__actions button:hover:not(:disabled) { background: #f6faf2; }
+.majak-game-invite-dialog__actions button:disabled { cursor: default; opacity: .5; }
+.majak-game-invite-dialog__actions .majak-game-invite-dialog__primary { border-color: #24573e; color: #fff; background: #2d704f; }
+.majak-game-invite-dialog__actions .majak-game-invite-dialog__primary:hover:not(:disabled) { background: #236342; }
+
+@media (max-width: 480px) {
+  .majak-game-invite-backdrop { padding: 10px; }
+  .majak-game-invite-dialog { width: 100%; }
+  .majak-game-invite-dialog__body { padding: 12px; }
+  .majak-game-invite-dialog__member-list { max-height: 48vh; }
+  .majak-game-invite-dialog__actions { padding: 10px 12px; }
+  .majak-game-invite-dialog__actions button { flex: 1; min-width: 0; }
 }
 
 .majak-lobby-room-card__head {
@@ -1987,6 +2504,216 @@ body:has(.majak-game-screen) {
   flex: 1 1 0;
 }
 
+.majak-ranking-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: grid;
+  place-items: center;
+  padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  box-sizing: border-box;
+  background: rgba(6, 19, 17, 0.68);
+}
+
+.majak-ranking-dialog {
+  width: min(680px, 100%);
+  height: min(560px, calc(100dvh - 24px));
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #9eb49a;
+  border-radius: 6px;
+  color: #17251d;
+  background: #d4dfd0;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.52);
+}
+
+.majak-ranking-dialog__header {
+  position: relative;
+  flex: 0 0 auto;
+  min-height: 56px;
+  padding: 9px 52px 8px 14px;
+  overflow: hidden;
+  color: #ffffff;
+  background: #2f6240;
+  box-sizing: border-box;
+}
+
+.majak-ranking-dialog__eyebrow {
+  display: none;
+}
+
+.majak-ranking-dialog__header h2 {
+  margin: 0 0 2px;
+  font-size: var(--majak-font-18);
+  line-height: 1.1;
+}
+
+.majak-ranking-dialog__header p {
+  margin: 0;
+  color: #e9f1e5;
+  font-size: var(--majak-font-12);
+}
+
+.majak-ranking-dialog__rank-art {
+  display: none;
+}
+
+.majak-ranking-dialog__close {
+  position: absolute;
+  top: 9px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 4px;
+  color: #ffffff;
+  background: #1f4b2d;
+  font-size: var(--majak-font-18);
+  line-height: 1;
+}
+
+.majak-ranking-dialog__body {
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.majak-ranking-dialog__self {
+  display: grid;
+  grid-template-columns: 82px 62px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 66px;
+  padding: 8px 12px;
+  border: 1px solid #9daf99;
+  border-radius: 4px;
+  background: #f7faf5;
+  box-sizing: border-box;
+}
+
+.majak-ranking-dialog__self > span {
+  color: #506650;
+  font-size: var(--majak-font-10);
+  font-weight: 800;
+}
+
+.majak-ranking-dialog__self > strong {
+  color: #285b3a;
+  font-size: var(--majak-font-26);
+  line-height: 1;
+  text-align: right;
+}
+
+.majak-ranking-dialog small { font-size: var(--majak-font-11); }
+
+.majak-ranking-dialog__self div,
+.majak-ranking-dialog__self div span { min-width: 0; display: block; }
+.majak-ranking-dialog__self div b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--majak-font-14); }
+.majak-ranking-dialog__self div span { margin-top: 3px; color: #526158; font-size: var(--majak-font-11); }
+.majak-ranking-dialog__self em { color: #506650; font-size: var(--majak-font-11); font-style: normal; font-weight: 800; white-space: nowrap; }
+
+.majak-ranking-dialog__list {
+  min-height: 0;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #9daf99;
+  border-radius: 4px;
+  background: #ffffff;
+}
+
+.majak-ranking-dialog__columns,
+.majak-ranking-dialog__row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 112px 86px;
+  align-items: center;
+  column-gap: 10px;
+}
+
+.majak-ranking-dialog__columns {
+  flex: 0 0 31px;
+  padding: 0 12px;
+  color: #ffffff;
+  background: #587864;
+  font-size: var(--majak-font-11);
+  font-weight: 800;
+  box-sizing: border-box;
+}
+
+.majak-ranking-dialog__columns span:nth-child(n + 3),
+.majak-ranking-dialog__rating,
+.majak-ranking-dialog__grade { text-align: right; }
+
+.majak-ranking-dialog__rows { min-height: 0; overflow-y: auto; }
+
+.majak-ranking-dialog__row {
+  min-height: 48px;
+  padding: 5px 12px;
+  border-bottom: 1px solid #dde2d5;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.majak-ranking-dialog__row:nth-child(even) { background: #f2f6f0; }
+.majak-ranking-dialog__row.is-self { background: #e2f0dd; box-shadow: inset 4px 0 #4d8657; }
+.majak-ranking-dialog__place { color: #355447; font-size: var(--majak-font-18); }
+.majak-ranking-dialog__place small { margin-left: 1px; color: #5d6b61; }
+.majak-ranking-dialog__place.rank-1 { color: #9a6a12; }
+.majak-ranking-dialog__place.rank-2 { color: #5d6971; }
+.majak-ranking-dialog__place.rank-3 { color: #9a5534; }
+.majak-ranking-dialog__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--majak-font-14); }
+.majak-ranking-dialog__rating { color: #1d5e47; font-size: var(--majak-font-13); font-weight: 800; }
+.majak-ranking-dialog__grade { color: #56695c; font-size: var(--majak-font-12); }
+.majak-ranking-dialog__empty { margin: 0; padding: 32px 12px; color: #65746b; text-align: center; font-size: var(--majak-font-13); }
+
+.majak-ranking-dialog__footer {
+  flex: 0 0 50px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  border-top: 1px solid #c3ccba;
+  background: #d4dfd0;
+  box-sizing: border-box;
+}
+
+.majak-ranking-dialog__footer button {
+  min-width: 108px;
+  min-height: 32px;
+  border: 1px solid #17442c;
+  border-radius: 4px;
+  color: #ffffff;
+  background: #356246;
+  font-size: var(--majak-font-13);
+  font-weight: 800;
+}
+
+@media (max-width: 520px) {
+  .majak-ranking-dialog { height: calc(100dvh - 24px); }
+  .majak-ranking-dialog__header { min-height: 64px; padding: 11px 48px 9px 12px; }
+  .majak-ranking-dialog__header h2 { font-size: var(--majak-font-18); }
+  .majak-ranking-dialog__body { gap: 8px; padding: 8px; }
+  .majak-ranking-dialog__self { grid-template-columns: 68px 49px minmax(0, 1fr); gap: 7px; min-height: 62px; padding: 7px 9px; }
+  .majak-ranking-dialog__self > strong { font-size: var(--majak-font-22); }
+  .majak-ranking-dialog__self em { display: none; }
+  .majak-ranking-dialog__columns { display: none; }
+  .majak-ranking-dialog__row { grid-template-columns: 43px minmax(0, 1fr) auto; grid-template-areas: 'place name rating' 'place grade grade'; column-gap: 7px; min-height: 57px; padding: 7px 9px; }
+  .majak-ranking-dialog__place { grid-area: place; font-size: var(--majak-font-17); }
+  .majak-ranking-dialog__name { grid-area: name; }
+  .majak-ranking-dialog__rating { grid-area: rating; font-size: var(--majak-font-12); }
+  .majak-ranking-dialog__grade { grid-area: grade; color: #65746b; text-align: left; font-size: var(--majak-font-10); }
+  .majak-ranking-dialog__footer { flex-basis: 46px; padding: 6px 8px; }
+  .majak-ranking-dialog__footer button { width: 100%; }
+}
+
 .majak-mobile-room-title-select {
   width: 100%;
 }
@@ -2264,19 +2991,10 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-lobby-member.is-selected {
-  border-color: #b88923;
-  background: #ecf0e4;
-}
-
-.majak-mobile-lobby-member.is-self {
-  border-color: #4c86b0;
-  color: #164d7a;
-  background: #e4f1ff;
-}
-
-.majak-mobile-lobby-member.is-self.is-selected {
-  border-color: #b88923;
-  background: #d9eafa;
+  border-color: #315f3e;
+  color: #ffffff;
+  background: #356246;
+  box-shadow: inset 4px 0 #d4b34d;
 }
 
 .majak-mobile-lobby-member img {
@@ -2321,6 +3039,57 @@ body:has(.majak-game-screen) {
 .majak-mobile-lobby-member__location {
   color: #65736d;
   font-size: var(--majak-font-10);
+}
+
+.majak-mobile-lobby-member.is-selected .majak-mobile-lobby-member__title,
+.majak-mobile-lobby-member.is-selected .majak-mobile-lobby-member__location {
+  color: #e6f1df;
+}
+
+.majak-one-to-one-chat {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(0 0 0 / 45%);
+}
+
+.majak-one-to-one-chat__window {
+  width: min(480px, 100%);
+  max-height: min(520px, 100%);
+  display: grid;
+  grid-template-rows: auto minmax(180px, 1fr) auto;
+  overflow: hidden;
+  border: 2px solid #356246;
+  border-radius: 4px;
+  background: #f6f7ef;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 35%);
+}
+
+.majak-one-to-one-chat__window header,
+.majak-one-to-one-chat__input { display: flex; align-items: center; gap: 8px; padding: 8px; }
+.majak-one-to-one-chat__window header { grid-column: 1 / -1; justify-content: space-between; color: #fff; background: #356246; }
+.majak-one-to-one-chat__window header span { display: block; font-size: var(--majak-font-10); color: #dcebd7; }
+.majak-one-to-one-chat__window h2 { margin: 0; font-size: var(--majak-font-16); }
+.majak-one-to-one-chat__window header button { min-width: 28px; color: #fff; background: transparent; border: 0; font-size: 22px; }
+.majak-one-to-one-chat__messages { min-height: 0; overflow-y: auto; padding: 14px 12px; color: #27332d; background: #e8f0df; }
+.majak-one-to-one-chat__messages p { width: fit-content; max-width: 82%; margin: 0 0 9px; padding: 8px 10px; overflow-wrap: anywhere; border-radius: 12px; border-top-left-radius: 2px; background: #fff; box-shadow: 0 1px 1px rgb(24 55 32 / 16%); }
+.majak-one-to-one-chat__messages p.is-mine { margin-left: auto; color: #253b2b; border-top-left-radius: 12px; border-top-right-radius: 2px; background: #b8e986; }
+.majak-one-to-one-chat__messages p.is-system { width: auto; margin: 10px auto; padding: 0; color: #687566; background: transparent; box-shadow: none; font-size: var(--majak-font-11); text-align: center; }
+.majak-one-to-one-chat__empty { color: #65736d; font-size: var(--majak-font-11); }
+.majak-one-to-one-chat__input { grid-column: 1 / -1; border-top: 1px solid #bec9ba; background: #e8ede4; }
+.majak-one-to-one-chat__input input { min-width: 0; flex: 1; height: 30px; box-sizing: border-box; }
+.majak-one-to-one-chat__input button { min-width: 52px; height: 30px; color: #fff; border: 1px solid #244a31; border-radius: 2px; background: #356246; }
+.majak-one-to-one-chat__input button:disabled { border-color: #a4aaa1; background: #9ca59a; }
+
+@media (min-width: 768px) {
+  .majak-one-to-one-chat__window {
+    width: min(760px, calc(100vw - 32px));
+    height: min(520px, calc(100vh - 32px));
+    max-height: none;
+  }
 }
 
 .majak-mobile-text-button {
@@ -2570,18 +3339,19 @@ body:has(.majak-game-screen) {
   object-fit: cover;
 }
 
-.majak-boot-loading__bar {
-  width: 168px;
-  height: 8px;
-  border: 1px solid #385c51;
-  background: #d7ded9;
-  padding: 1px;
+.majak-sync-spinner {
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 4px solid #c9d7d0;
+  border-top-color: #21765f;
+  border-right-color: #21765f;
+  border-radius: 50%;
+  animation: majak-game-sync-spin 800ms linear infinite;
 }
 
-.majak-boot-loading__fill {
-  width: 44%;
-  height: 100%;
-  background: #21765f;
+@keyframes majak-game-sync-spin {
+  to { transform: rotate(360deg); }
 }
 
 .majak-player-profile-overlay {

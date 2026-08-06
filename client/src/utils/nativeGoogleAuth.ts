@@ -48,3 +48,9 @@ export async function signInWithNativeGoogle(): Promise<string> {
   }
   return login.result.idToken
 }
+
+export async function signOutFromNativeGoogle(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return
+  await SocialLogin.logout({ provider: 'google' }).catch(() => {})
+  initialization = null
+}

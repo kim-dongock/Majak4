@@ -55,11 +55,13 @@ public class RatingService
     }
 
     /// <summary>GetSLevel — NLevel で文字列レベルを返す</summary>
-    public string GetSLevel(int nLevel)
+    public static string GetSLevelName(int nLevel)
     {
         if (nLevel < 0 || nLevel >= SLevelNames.Length) return SLevelNames[0];
         return SLevelNames[nLevel];
     }
+
+    public string GetSLevel(int nLevel) => GetSLevelName(nLevel);
 
     /// <summary>GetMoneyByRating — レーティングでコイン換算 (保険/参考用)</summary>
     public long GetMoneyByRating(int rating)

@@ -227,7 +227,6 @@ public class RatingRankInfoCommandTests
         var (ctx, sent) = CommandTestHelper.MakeContext(player,
             new Dictionary<string, object?>
             {
-                [Key.GradeRankId]      = 1,
                 [Key.GradeRankDate]    = 202504,
                 [Key.GradeRankRefresh] = 1,
                 [GKey.Pix]         = "me01",
@@ -796,7 +795,7 @@ public class HanChatAllRelayCommandTests
             IsAdminId = true,
         };
         session.Register(player);
-        var room = session.CreateRoom("ch1", player, "", 1, 0, 0, false, roomId: 17);
+        var room = session.CreateRoom("ch1", player, "120000001000001", 1, 0, 0, false, roomId: 17);
         var cmd = new HanChatAllRelayCommand(session);
         var (ctx, sent) = CommandTestHelper.MakeContext(player,
             new Dictionary<string, object?> { [GKey.String] = "!HPKOKU" });
@@ -863,7 +862,7 @@ public class HanChatAllRelayCommandTests
         var p1 = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1" };
         session.Register(p0);
         session.Register(p1);
-        var room = session.CreateRoom("ch1", p0, "120000001000000", 1, 0, 0, false, roomId: 7);
+        var room = session.CreateRoom("ch1", p0, "120000001000001", 1, 0, 0, false, roomId: 7);
         room.AddPlayer(p1, 1);
 
         IReadOnlyList<string>? recipients = null;
@@ -908,9 +907,9 @@ public class HanChatAllRelayCommandTests
         session.Register(p7);
         session.Register(p9);
         session.Register(p11);
-        session.CreateRoom("ch1", p7, "120000001000000", 1, 0, 0, false, roomId: 7);
-        session.CreateRoom("ch1", p9, "120000001000000", 1, 0, 0, false, roomId: 9);
-        session.CreateRoom("ch1", p11, "120000001000000", 1, 0, 0, false, roomId: 11);
+        session.CreateRoom("ch1", p7, "120000001000001", 1, 0, 0, false, roomId: 7);
+        session.CreateRoom("ch1", p9, "120000001000001", 1, 0, 0, false, roomId: 9);
+        session.CreateRoom("ch1", p11, "120000001000001", 1, 0, 0, false, roomId: 11);
 
         IReadOnlyList<string>? recipients = null;
         var sent = new List<(string method, object packet)>();
@@ -938,6 +937,21 @@ public class HanChatAllRelayCommandTests
         Assert.DoesNotContain("c11", recipients ?? Array.Empty<string>());
         Assert.Single(sent);
         Assert.Equal(Cmd.HanChatRelay, sent[0].method);
+    }
+
+    [Fact]
+    public async Task Execute_InRoomWithChatDisabled_DoesNotRelay()
+    {
+        var session = new PlayerSessionService();
+        var player = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1" };
+        session.Register(player);
+        session.CreateRoom("ch1", player, "120000001000000", 1, 0, 0, false, roomId: 17);
+        var (ctx, sent) = CommandTestHelper.MakeContext(player,
+            new Dictionary<string, object?> { [GKey.String] = "blocked" });
+
+        await new HanChatAllRelayCommand(session).ExecuteAsync(ctx);
+
+        Assert.Empty(sent);
     }
 
     // シナリオ2: メッセージが空 → 何も送らない

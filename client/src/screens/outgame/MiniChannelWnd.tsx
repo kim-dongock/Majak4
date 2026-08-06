@@ -29,6 +29,7 @@ interface MemberEntry {
   pix: string
   name: string
   rating: number
+  gamMoney?: number
   slevel?: string
   location?: string
   roomId?: number
@@ -245,13 +246,69 @@ function MiniMemberList({
   )
 }
 
+function InviteMemberList({
+  members,
+  selectedPix,
+  onSelect,
+  onClose,
+  onViewProfile,
+  onReqGame,
+}: {
+  members: MemberEntry[]
+  selectedPix: string
+  onSelect: (pix: string) => void
+  onClose: () => void
+  onViewProfile?: (pix: string) => void
+  onReqGame?: (pix: string) => void
+}) {
+  const selectedMember = members.find(member => member.pix === selectedPix)
+
+  return (
+    <div className="majak-invite-dialog" role="dialog" aria-modal="true" aria-label="対戦を申し込む">
+      <header className="majak-invite-dialog__header">
+        <div>
+          <h2>対戦を申し込む</h2>
+          <p>ロビーにいるメンバーを選択</p>
+        </div>
+        <button type="button" className="majak-invite-dialog__close" onClick={onClose} aria-label="閉じる">×</button>
+      </header>
+      <div className="majak-invite-dialog__list" role="listbox" aria-label="招待できるメンバー">
+        <div className="majak-invite-dialog__labels" aria-hidden="true"><span>ニックネーム</span><span>資産</span></div>
+        {members.length === 0 ? (
+          <p className="majak-invite-dialog__empty">招待できるメンバーがいません。</p>
+        ) : members.map(member => {
+          const selected = selectedMember?.pix === member.pix
+          return (
+            <button
+              key={member.pix}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              className={`majak-invite-dialog__member${selected ? ' is-selected' : ''}`}
+              onClick={() => onSelect(member.pix)}
+              onDoubleClick={() => onViewProfile?.(member.pix)}
+            >
+              <span>{member.name || member.pix}</span>
+              <span>{Math.max(0, member.gamMoney ?? 0).toLocaleString('ja-JP')}</span>
+            </button>
+          )
+        })}
+      </div>
+      <footer className="majak-invite-dialog__actions">
+        <button type="button" onClick={() => selectedMember && onViewProfile?.(selectedMember.pix)} disabled={!selectedMember || !onViewProfile}>プロフィール</button>
+        <button type="button" className="majak-invite-dialog__submit" onClick={() => selectedMember && onReqGame?.(selectedMember.pix)} disabled={!selectedMember || !onReqGame}>対戦を申し込む</button>
+        <button type="button" onClick={onClose}>閉じる</button>
+      </footer>
+    </div>
+  )
+}
+
 export default function MiniChannelWnd({
   channelId,
   members,
   rooms = [],
   slotCount = 12,
   fullScreen = false,
-  compact = false,
   scale = 1,
   placement = 'center',
   onClose,
@@ -262,6 +319,9 @@ export default function MiniChannelWnd({
   const [chatText, setChatText] = useState('')
   const [selectedPix, setSelectedPix] = useState(members[0]?.pix ?? '')
   const chatRef = useRef<HTMLDivElement>(null)
+  const displayMembers = fullScreen
+    ? members.filter(member => (!member.roomId || member.roomId <= 0) && (!member.location || member.location === 'ロビー'))
+    : members
 
   useEffect(() => {
     const handler = (data: Record<string, unknown>) => {
@@ -282,10 +342,10 @@ export default function MiniChannelWnd({
   }, [])
 
   useEffect(() => {
-    if (!members.some(member => member.pix === selectedPix)) {
-      setSelectedPix(members[0]?.pix ?? '')
+    if (!displayMembers.some(member => member.pix === selectedPix)) {
+      setSelectedPix(displayMembers[0]?.pix ?? '')
     }
-  }, [members, selectedPix])
+  }, [displayMembers, selectedPix])
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight
@@ -310,9 +370,8 @@ export default function MiniChannelWnd({
     event.stopPropagation()
   }
 
-  const compactFullScreen = fullScreen && compact
-  const width = compactFullScreen ? 336 : fullScreen ? 261 : 915
-  const height = compactFullScreen ? 346 : 575
+  const width = fullScreen ? 'min(420px, calc(100vw - 24px))' : 915
+  const height = fullScreen ? 'min(480px, calc(100dvh - 24px))' : 575
   const title = fullScreen ? '観戦' : 'ロビー'
   const bottomPlacement = placement === 'bottom'
 
@@ -338,17 +397,27 @@ export default function MiniChannelWnd({
         fontFamily: 'var(--majak-font-family-ui)',
       }}
     >
-      <div style={{ position: 'absolute', left: fullScreen ? 0 : 654, top: 0, width: compactFullScreen ? 330 : 255, height: compactFullScreen ? 336 : 550 }}>
-        <MiniMemberList
-          members={members}
+      {fullScreen ? (
+        <InviteMemberList
+          members={displayMembers}
           selectedPix={selectedPix}
           onSelect={setSelectedPix}
           onClose={onClose}
           onViewProfile={onViewProfile}
           onReqGame={onReqGame}
-          compact={compactFullScreen}
         />
-      </div>
+      ) : (
+        <div style={{ position: 'absolute', left: 654, top: 0, width: 255, height: 550 }}>
+          <MiniMemberList
+            members={members}
+            selectedPix={selectedPix}
+            onSelect={setSelectedPix}
+            onClose={onClose}
+            onViewProfile={onViewProfile}
+            onReqGame={onReqGame}
+          />
+        </div>
+      )}
 
       {!fullScreen && (
         <>

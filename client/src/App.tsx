@@ -170,7 +170,7 @@ function AppLoadingScreen() {
     <div className="majak-boot-loading">
       <div className="majak-boot-loading__panel">
         <img className="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} />
-        <div className="majak-boot-loading__bar"><div className="majak-boot-loading__fill" /></div>
+        <div className="majak-sync-spinner" aria-hidden="true" />
       </div>
     </div>
   )

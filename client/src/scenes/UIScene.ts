@@ -24,7 +24,7 @@ import Phaser from 'phaser'
 import { getIngameLayout, type IngameLayoutMode } from '../game/ingameLayout'
 import MobileAvatarLayer from '../game/MobileAvatarLayer'
 import { mobileCenterHudOffset, mobileVisibleWorldBounds } from '../game/mobileIngameViewport'
-import { getLegacyFullUiSkinId, isTengokuBoardSkin } from '../utils/legacySkinPalette'
+import { isTengokuBoardSkin } from '../utils/legacySkinPalette'
 import { getUiFontFamily, getUiFontSize, getUiFontSizePx } from '../utils/typography'
 
 interface HudPoint { x: number; y: number }
@@ -74,6 +74,7 @@ const IMG = '/assets/images/game'
 const BOARD_X = 5
 const BOARD_Y = 31
 const CUSTOM_DEFAULT_ID_COSTUME = 100011
+const CUSTOM_DEFAULT_ID_HAI = 100003
 const AVAILABLE_COSTUME_IDS = new Set([9, 10, 11])
 const HUD_TEXT_RESOLUTION = typeof window === 'undefined'
   ? 1
@@ -138,7 +139,8 @@ const DESKTOP_HUD_METRICS: HudMetrics = {
   turnOffsetUnknown: 33,
 }
 
-const DESKTOP_PLAYER_AVATAR_SIZE = { width: 45, height: 88 } as const
+const DESKTOP_PLAYER_AVATAR_SIZE = { width: 60, height: 112 } as const
+const DESKTOP_TURN_TILE_SIZE = { width: 22, height: 37 } as const
 
 const MOBILE_HUD_METRICS: HudMetrics = {
   avatar: { width: MOBILE_HUD_ICON_WIDTH, height: MOBILE_HUD_ICON_HEIGHT },
@@ -341,7 +343,7 @@ export default class UIScene extends Phaser.Scene {
   private avatarSprites: Phaser.GameObjects.Image[] = []
   private majakTitleSprites: Phaser.GameObjects.Image[] = []
   private trickTitleSprites: Phaser.GameObjects.Image[] = []
-  private turnMark?: Phaser.GameObjects.Image
+  private turnMark?: Phaser.GameObjects.Sprite
   private hostMark?: Phaser.GameObjects.Image
   private menFonSprites: Phaser.GameObjects.Image[] = []
   private chichaSprite?: Phaser.GameObjects.Image
@@ -371,6 +373,7 @@ export default class UIScene extends Phaser.Scene {
   private isViewer = false
   private customBgId = 0
   private customBoardType = 0
+  private customHaiId = 0
   private chicha = 0
   private oyaOrder = 0
   private kyokuCnt = 0
@@ -384,12 +387,13 @@ export default class UIScene extends Phaser.Scene {
     super({ key: 'UIScene' })
   }
 
-  init(data: { myOdr?: number; layoutMode?: IngameLayoutMode; isViewer?: boolean; customBgId?: number; customBoardType?: number }) {
+  init(data: { myOdr?: number; layoutMode?: IngameLayoutMode; isViewer?: boolean; customBgId?: number; customBoardType?: number; customHaiId?: number }) {
     this.myOdr = data.myOdr ?? 0
     this.layoutMode = data.layoutMode ?? 'desktop'
     this.isViewer = Boolean(data.isViewer)
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
+    this.customHaiId = Number(data.customHaiId ?? 0)
     applyUiLayout(this.layoutMode)
   }
 
@@ -476,7 +480,7 @@ export default class UIScene extends Phaser.Scene {
     }
 
     /* PutTurnMark は画面上に 1 つだけ置く */
-    this.turnMark = this.add.image(0, 0, this.resolveSkinTextureKey('mj_myTurn'))
+    this.turnMark = this.add.sprite(0, 0, this.resolveSkinTextureKey('mj_myTurn'))
       .setOrigin(0, 0).setDepth(1002).setVisible(false)
     this.hostMark = this.add.image(0, 0, this.resolveSkinTextureKey('mj_hostmark'))
       .setOrigin(0, 0).setDepth(11).setVisible(false)
@@ -708,24 +712,32 @@ export default class UIScene extends Phaser.Scene {
     const baseAvt = boardLocalPoint(pos)
     const avt = this.layoutMode === 'mobileLandscape'
       ? this.mobileAvatarPoint(loc, baseAvt, this.mobileAvatarSize(true))
-      : baseAvt
+      : this.desktopAvatarPoint(baseAvt)
     const isKnownUser = Boolean(this.players[activeOdr]?.pix)
-    const turnPoint = this.turnMarkPoint(loc, avt, isKnownUser)
-    const turnTextureKey = this.resolveSkinTextureKey(isKnownUser ? 'mj_myTurn' : 'mj_aiTurn')
+    const turnTextureKey = this.textures.exists('hai_omote_skin') ? 'hai_omote_skin' : 'hai_omote'
+    const turnPoint = this.layoutMode === 'mobileLandscape'
+      ? { x: avt.x + (this.mobileAvatarSize(true).width - 18) / 2, y: avt.y + (this.mobileAvatarSize(true).height - 31) / 2 }
+      : { x: avt.x + (DESKTOP_PLAYER_AVATAR_SIZE.width - DESKTOP_TURN_TILE_SIZE.width) / 2, y: avt.y + (DESKTOP_PLAYER_AVATAR_SIZE.height - DESKTOP_TURN_TILE_SIZE.height) / 2 }
     this.traceUiFlow('turnMark update', { activeOdr, myOdr: this.myOdr, loc, x: turnPoint.x, y: turnPoint.y, isKnownUser })
+    this.tweens.killTweensOf(this.turnMark)
     this.turnMark
-      .setTexture(turnTextureKey)
+      .setTexture(turnTextureKey, 0)
       .setPosition(turnPoint.x, turnPoint.y)
+      .setDisplaySize(DESKTOP_TURN_TILE_SIZE.width, DESKTOP_TURN_TILE_SIZE.height)
+      .setAlpha(1)
       .setVisible(this.layoutMode !== 'mobileLandscape')
+    if (this.layoutMode !== 'mobileLandscape') {
+      this.tweens.add({ targets: this.turnMark, alpha: 0.2, duration: 500, yoyo: true, repeat: -1 })
+    }
     if (this.layoutMode === 'mobileLandscape' && this.mobileAvatarLayer) {
-      const source = this.textures.get(turnTextureKey).getSourceImage() as HTMLImageElement
       this.mobileAvatarLayer.updateTurnMark({
-        url: this.turnMarkUrl(isKnownUser ? 'mj_myTurn' : 'mj_aiTurn'),
+        url: this.mobileTurnTileUrl(),
         x: turnPoint.x,
         y: turnPoint.y,
-        width: source.naturalWidth || source.width,
-        height: source.naturalHeight || source.height,
+        width: 18,
+        height: 31,
         visible: true,
+        tileFrame: true,
       })
     }
     this.updateWindMarkers()
@@ -738,23 +750,12 @@ export default class UIScene extends Phaser.Scene {
     if (this.players.length > 0) this.updatePlayerTexts(this.players)
   }
 
-  private turnMarkUrl(key: 'mj_myTurn' | 'mj_aiTurn'): string {
-    const skinId = getLegacyFullUiSkinId(this.customBgId, this.customBoardType)
-    if (skinId === undefined) return `${IMG}/${key}.png`
-    return `${IMG}/skin/${skinId}/${key}_${String(skinId).padStart(2, '0')}.png`
-  }
-
-  private turnMarkPoint(_loc: number, avatarPoint: HudPoint, isKnownUser: boolean): HudPoint {
-    if (this.layoutMode === 'mobileLandscape') {
-      return {
-        x: avatarPoint.x - 6,
-        y: avatarPoint.y + (isKnownUser ? 44 : 30),
-      }
+  private mobileTurnTileUrl(): string {
+    if (this.customHaiId > 0 && this.customHaiId !== CUSTOM_DEFAULT_ID_HAI) {
+      const suffix = String(this.customHaiId).padStart(2, '0')
+      return `${IMG}/skin/${this.customHaiId}/mj_hai_omote_0_${suffix}.png`
     }
-    return {
-      x: avatarPoint.x - 5,
-      y: avatarPoint.y + (isKnownUser ? HUD_METRICS.turnOffsetKnown : HUD_METRICS.turnOffsetUnknown),
-    }
+    return `${IMG}/mj_hai_omote_0.png`
   }
 
   private toggleMobileHudInfo(loc: number) {
@@ -776,8 +777,15 @@ export default class UIScene extends Phaser.Scene {
       : { width: MOBILE_HUD_ICON_WIDTH, height: MOBILE_HUD_ICON_HEIGHT }
   }
 
-  private desktopAvatarSize(player: PlayerHudState) {
-    return player.pix ? DESKTOP_PLAYER_AVATAR_SIZE : HUD_METRICS.avatar
+  private desktopAvatarSize(_player: PlayerHudState) {
+    return DESKTOP_PLAYER_AVATAR_SIZE
+  }
+
+  private desktopAvatarPoint(point: HudPoint): HudPoint {
+    return {
+      x: point.x - (DESKTOP_PLAYER_AVATAR_SIZE.width - DESKTOP_HUD_METRICS.avatar.width) / 2,
+      y: point.y - (DESKTOP_PLAYER_AVATAR_SIZE.height - DESKTOP_HUD_METRICS.avatar.height) / 2,
+    }
   }
 
   private mobileAvatarPoint(loc: number, fallback: HudPoint, size: { width: number; height: number }): HudPoint {
@@ -886,7 +894,9 @@ export default class UIScene extends Phaser.Scene {
       const trk = boardLocalPoint(pos.trk)
       const mobileInfoVisible = this.isMobileHudInfoVisible(loc)
       const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(mobileInfoVisible) : this.desktopAvatarSize(p)
-      const avt = this.mobileAvatarPoint(loc, baseAvt, avatarSize)
+      const avt = this.layoutMode === 'mobileLandscape'
+        ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
+        : this.desktopAvatarPoint(baseAvt)
       const mobileTextLeft = loc === 1 || loc === 2 ? avt.x - MOBILE_HUD_INFO_WIDTH - MOBILE_HUD_TEXT_GAP : avt.x + avatarSize.width + MOBILE_HUD_TEXT_GAP
       const mobileNameX = loc === 1 || loc === 2 ? avt.x + avatarSize.width - MOBILE_HUD_NAME_WIDTH : avt.x
       const mobileNameY = avt.y + avatarSize.height + MOBILE_HUD_NAME_GAP
@@ -923,7 +933,7 @@ export default class UIScene extends Phaser.Scene {
           alt: displayName,
         })
       } else {
-        this.setDynamicImage(this.avatarSprites[loc], this.avatarKey(odr, p), avatarUrl, avt.x, avt.y, 10, 'mj_aiAvtrL', true, avatarSize)
+        this.setDynamicImage(this.avatarSprites[loc], this.avatarKey(odr, p), avatarUrl, avt.x, avt.y, 10, 'mj_aiAvtrL', true, avatarSize, this.layoutMode === 'desktop')
       }
       const majakTitleDepth = this.layoutMode === 'mobileLandscape' ? 9 : 2
       const trickTitleDepth = this.layoutMode === 'mobileLandscape' ? 8 : 1
@@ -946,7 +956,9 @@ export default class UIScene extends Phaser.Scene {
     }
     const baseAvt = boardLocalPoint(odrBoxPos(loc).avt)
     const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(true) : this.desktopAvatarSize(this.players[hostOdr])
-    const avt = this.mobileAvatarPoint(loc, baseAvt, avatarSize)
+    const avt = this.layoutMode === 'mobileLandscape'
+      ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
+      : this.desktopAvatarPoint(baseAvt)
     const point = this.layoutMode === 'mobileLandscape' ? { x: avt.x + 24, y: avt.y + 58 } : boardLocalPoint(odrBoxPos(loc).hst)
     this.hostMark.setPosition(point.x, point.y).setVisible(true)
   }
@@ -1188,6 +1200,7 @@ export default class UIScene extends Phaser.Scene {
     if (!preserveTurnMark) this.activeTurnOdr = null
     this.reachedOdr.clear()
     if (!preserveTurnMark) {
+      if (this.turnMark) this.tweens.killTweensOf(this.turnMark)
       this.turnMark?.setVisible(false)
       this.mobileAvatarLayer?.hideTurnMark()
       window.dispatchEvent(new CustomEvent(TURN_MARK_EVENT, { detail: { activeOdr: null, viewOdr: this.myOdr } }))

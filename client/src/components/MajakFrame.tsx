@@ -180,11 +180,29 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
   }
 
   if (layoutMode !== 'desktop') {
-    const isPortrait = layoutMode === 'mobilePortrait'
     const showMobileHeader = accBox !== 'room'
     const showMobileExit = location.pathname === '/channel'
       || location.pathname.startsWith('/channel/select/')
       || /\/channel\/[^/]+\/lobby$/.test(location.pathname)
+
+    if (layoutMode === 'mobilePortrait') {
+      return (
+        <main className="majak-mobile-portrait-notice" aria-live="polite">
+          <img
+            className="majak-mobile-portrait-notice__logo"
+            src="/assets/images/common/ico_big_majak2.jpg"
+            alt="麻雀4"
+            draggable={false}
+          />
+          <div className="majak-mobile-portrait-notice__device" aria-hidden="true">
+            <span />
+          </div>
+          <h1>端末を横向きにしてください</h1>
+          <p>麻雀4は横向きの画面に対応しています。<br />端末を横向きにすると、そのままゲームを続けられます。</p>
+        </main>
+      )
+    }
+
     return (
       <div className={`majak-mobile-frame${accBox === 'room' ? ' majak-mobile-frame--room' : ''}`} style={{ position: 'relative' }}>
         {showMobileHeader && (
@@ -200,12 +218,7 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
           </header>
         )}
         <main className="majak-mobile-frame__content">
-          {isPortrait ? (
-            <div className="majak-mobile-rotate">
-              <div className="majak-mobile-rotate__mark">横</div>
-              <h1>画面を横向きにしてください</h1>
-            </div>
-          ) : children}
+          {children}
         </main>
         {showCfg && <CfgDlg initial={cfg} onOK={value => { setCfg(value); saveMajakConfig(value); setShowCfg(false) }} onCancel={() => setShowCfg(false)} />}
         {showExitConfirm && <EndingPopupWnd onOK={() => { void handleExitConfirm() }} onCancel={() => setShowExitConfirm(false)} />}

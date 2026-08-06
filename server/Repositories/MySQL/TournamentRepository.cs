@@ -388,36 +388,32 @@ public class TournamentRepository
     /// <summary>対局結果を対局詳細に反映 — 原典: UpdateResultTournamentMode</summary>
     public virtual async Task<bool> UpdateDetailResultAsync(TournamentDetail detail)
     {
+        return await UpdateDetailResultsAsync([detail]);
+    }
+
+    /// <summary>複数の対局結果をまとめて反映する。</summary>
+    public virtual async Task<bool> UpdateDetailResultsAsync(IEnumerable<TournamentDetail> details)
+    {
         try
         {
+            var rows = details.ToList();
+            if (rows.Count == 0) return true;
             await using var db = await RequireGameDb().CreateAsync();
-            ulong sessionId = checked((ulong)detail.SeqNo);
-            ushort subId = checked((ushort)detail.SubId);
-            var room = await db.TournamentRooms.SingleOrDefaultAsync(item =>
-                item.SessionId == sessionId && item.SubId == subId);
-            if (room is null) return false;
-            room.EndedAt = detail.EndDt;
-            room.ScoreTmp1 = detail.PointTmp[0];
-            room.ScoreTmp2 = detail.PointTmp[1];
-            room.ScoreTmp3 = detail.PointTmp[2];
-            room.ScoreTmp4 = detail.PointTmp[3];
-            room.Score1 = detail.Point[0];
-            room.Score2 = detail.Point[1];
-            room.Score3 = detail.Point[2];
-            room.Score4 = detail.Point[3];
-            room.Rank1MemberNo = ParseNullableMemberNo(detail.GradePlayerMemberNo[0]);
-            room.Rank2MemberNo = ParseNullableMemberNo(detail.GradePlayerMemberNo[1]);
-            room.Rank3MemberNo = ParseNullableMemberNo(detail.GradePlayerMemberNo[2]);
-            room.Rank4MemberNo = ParseNullableMemberNo(detail.GradePlayerMemberNo[3]);
-            room.Grade1MemberNo = detail.GradeMemberNo[0];
-            room.Grade2MemberNo = detail.GradeMemberNo[1];
-            room.Grade3MemberNo = detail.GradeMemberNo[2];
-            room.Grade4MemberNo = detail.GradeMemberNo[3];
+            var sessionIds = rows.Select(detail => checked((ulong)detail.SeqNo)).Distinct().ToArray();
+            var rooms = await db.TournamentRooms
+                .Where(room => sessionIds.Contains(room.SessionId))
+                .ToDictionaryAsync(room => (room.SessionId, room.SubId));
+            foreach (var detail in rows)
+            {
+                var key = (checked((ulong)detail.SeqNo), checked((ushort)detail.SubId));
+                if (!rooms.TryGetValue(key, out var room)) return false;
+                ApplyDetailResult(room, detail);
+            }
             return await db.SaveChangesAsync() > 0;
         }
         catch (Exception ex)
         {
-            LogFailure(ex, nameof(UpdateDetailResultAsync));
+            LogFailure(ex, nameof(UpdateDetailResultsAsync));
             return false;
         }
     }
@@ -472,6 +468,27 @@ public class TournamentRepository
         if (!string.IsNullOrEmpty(plan.PlaySchedule))
             plan.StartPlanDtAll = [.. plan.PlaySchedule.Split('|', StringSplitOptions.RemoveEmptyEntries)];
         return plan;
+    }
+
+    private static void ApplyDetailResult(TournamentRoomEntity room, TournamentDetail detail)
+    {
+        room.EndedAt = detail.EndDt;
+        room.ScoreTmp1 = detail.PointTmp[0];
+        room.ScoreTmp2 = detail.PointTmp[1];
+        room.ScoreTmp3 = detail.PointTmp[2];
+        room.ScoreTmp4 = detail.PointTmp[3];
+        room.Score1 = detail.Point[0];
+        room.Score2 = detail.Point[1];
+        room.Score3 = detail.Point[2];
+        room.Score4 = detail.Point[3];
+        room.Rank1MemberNo = ParseNullableMemberNo(detail.GradePlayerMemberNo[0]);
+        room.Rank2MemberNo = ParseNullableMemberNo(detail.GradePlayerMemberNo[1]);
+        room.Rank3MemberNo = ParseNullableMemberNo(detail.GradePlayerMemberNo[2]);
+        room.Rank4MemberNo = ParseNullableMemberNo(detail.GradePlayerMemberNo[3]);
+        room.Grade1MemberNo = detail.GradeMemberNo[0];
+        room.Grade2MemberNo = detail.GradeMemberNo[1];
+        room.Grade3MemberNo = detail.GradeMemberNo[2];
+        room.Grade4MemberNo = detail.GradeMemberNo[3];
     }
 
     private static TournamentDetail ToDetail(TournamentRoomEntity room)

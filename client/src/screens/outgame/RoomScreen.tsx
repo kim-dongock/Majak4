@@ -205,12 +205,10 @@ function buildCreateRoomPayload(
 function InlineGameLoadingOverlay({ visible }: { visible: boolean }) {
   if (!visible) return null
   return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0, 0, 0, 0.58)', pointerEvents: 'auto' }}>
-      <div style={{ width: 260, height: 312, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: 'rgba(255, 255, 255, 0.94)', border: '1px solid rgba(0, 0, 0, 0.24)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)' }}>
+    <div style={{ position: 'absolute', inset: 0, zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0, 0, 0, 0.58)', pointerEvents: 'auto' }}>
+      <div style={{ width: 260, height: 312, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: 'rgba(255, 255, 255, 0.94)', border: '1px solid rgba(0, 0, 0, 0.24)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)' }} aria-busy="true" aria-label="対局状況を同期中">
         <img src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} style={{ width: 230, height: 230, objectFit: 'cover' }} />
-        <div style={{ width: 168, height: 8, border: '1px solid #385c51', background: '#d7ded9', padding: 1 }}>
-          <div style={{ width: '44%', height: '100%', background: '#21765f' }} />
-        </div>
+        <div className="majak-sync-spinner" aria-hidden="true" />
       </div>
     </div>
   )
@@ -634,6 +632,7 @@ type ChannelMemberEntry = {
   pix: string
   name: string
   rating: number
+  gamMoney?: number
   avatarId?: string
   sex?: string
   slevel?: string
@@ -918,6 +917,10 @@ export default function RoomScreen() {
     })
   }, [mobileIngameChatOpen])
   useEffect(() => {
+    if (chatEnabled) return
+    setMobileIngameChatOpen(false)
+  }, [chatEnabled])
+  useEffect(() => {
     if (!isMobileIngame) {
       setMobileIngameScale(1)
       setMobileHanResScale(1)
@@ -971,9 +974,10 @@ export default function RoomScreen() {
     if (!inlineGame || !inlineGameRef.current) return
     const myPix = useAuthStore.getState().player?.pix ?? ''
     const me = playersRef.current.find(p => p.playerId === myPix)
+    const isViewer = locState.mode === 'view' || (playersRef.current.length > 0 && !me)
     logRejoinProbe('createGame', {
       myOdr: me?.pos,
-      isViewer: locState.mode === 'view',
+      isViewer,
       playersCount: playersRef.current.length,
       roomOption: currentRoomOption,
       layoutMode: ingameLayoutMode,
@@ -984,7 +988,7 @@ export default function RoomScreen() {
       layoutMode: ingameLayoutMode,
       roomId: roomId ?? '',
       myOdr: me?.pos,
-      isViewer: locState.mode === 'view',
+      isViewer,
       players: playersRef.current as unknown as Array<Record<string, unknown>>,
       roomOption: currentRoomOption,
       inputConfig: { nSelPasKey: roomCfg.nSelPasKey },
@@ -994,7 +998,7 @@ export default function RoomScreen() {
       skipInitialRoomEnter: true,
     })
     return () => destroyGame()
-  }, [inlineGame, roomId, customBoardId, customHaiId, ingameLayoutMode])
+  }, [inlineGame, roomId, customBoardId, customHaiId, ingameLayoutMode, locState.mode])
 
   const nextMessageId = () => `${Date.now()}-${messageSeqRef.current++}`
 
@@ -1258,22 +1262,23 @@ export default function RoomScreen() {
         }
         return null
       }).filter((member): member is Record<string, unknown> => member != null && String(member.pix ?? '') !== '')
-      const list: Array<Record<string, unknown>> = legacyList.length > 0
-        ? legacyList
-        : Array.isArray(data.members) ? data.members as Array<Record<string, unknown>> : []
+      const list: Array<Record<string, unknown>> = Array.isArray(data.members)
+        ? data.members as Array<Record<string, unknown>>
+        : legacyList
       const myPix = useAuthStore.getState().player?.pix ?? ''
       setChannelMembers(list
         .map(m => ({
           pix: String(m.k3e ?? m.pix ?? m['member' + 'Id'] ?? ''),
           name:     String(m.k8e ?? m.nickname ?? m.name ?? ''),
           rating:   Number(m.k31e ?? m.rating ?? 0),
+          gamMoney: Number(m.k34e ?? m.gammoney ?? 0),
           avatarId: m.k7e != null || m.avatarId != null ? String(m.k7e ?? m.avatarId) : undefined,
           sex:      m.k11e != null || m.sex != null ? String(m.k11e ?? m.sex) : undefined,
           slevel:   m.k32e != null || m.slevel != null ? String(m.k32e ?? m.slevel) : undefined,
           location: m.k12e != null || m.location != null ? String(m.k12e ?? m.location) : undefined,
           roomId:   m.k42e != null || m.roomId != null ? Number(m.k42e ?? m.roomId) : undefined,
         }))
-        .filter(m => m.pix && m.pix !== myPix && (m.roomId == null || m.roomId <= 0) && m.location !== 'room'))
+        .filter(m => m.pix && m.pix !== myPix && (m.roomId == null || m.roomId <= 0) && (!m.location || m.location === 'ロビー')))
     }
     SignalR.on('c7e', onChannelMemberList)
 
@@ -1998,6 +2003,8 @@ export default function RoomScreen() {
   const membershipResolved = players.length > 0 || viewers.length > 0
   const isViewerUser = locState.mode === 'view' || (!routeExpectsPlayerSeat && membershipResolved && !me)
   const hasPlayerSeat = Boolean(me) && !isViewerUser
+  // Inline mobile play can begin before c16e refreshes the local seat record.
+  const hasInlineGamePlayerControls = inlineGame && !isViewerUser && (hasPlayerSeat || routeExpectsPlayerSeat)
   const emoticonButtonDisabled = !hasPlayerSeat || chatInputDisabled
   const sendEmoticon = async (type: number) => {
     if (emoticonButtonDisabled || type < 0 || type >= EMOTICON_COUNT) return
@@ -2018,7 +2025,7 @@ export default function RoomScreen() {
   const trainingReadyToStart = nonHostPlayers.every(p => p.ready)
   const effectiveRoomFull = trainingChannel || isRoomFull
   const effectiveAllReady = trainingChannel ? trainingReadyToStart : allReady
-  const autoControlEnabled = inlineGame && hasPlayerSeat
+  const autoControlEnabled = hasInlineGamePlayerControls
   const childAutoControlEnabled = autoControlEnabled && !autoControl.prox
   const subId = extractSubId(channelId)
   const chanceButtonVisible = hasChanceItem
@@ -2673,7 +2680,7 @@ export default function RoomScreen() {
                 {mobileIngameToolOpen ? '▲' : '▼'}
               </button>
               <div className="majak-mobile-ingame-action-bar">
-                {hasPlayerSeat && (
+                {hasInlineGamePlayerControls && (
                   <>
                     <button type="button" onClick={openInviteList} disabled={autoMatchingChannel}>招待</button>
                     <button type="button" className={autoControl.autoPass ? 'is-active' : undefined} onClick={onSetPass} disabled={!childAutoControlEnabled}>オートパス</button>
@@ -2702,8 +2709,12 @@ export default function RoomScreen() {
                 <button
                   type="button"
                   className="majak-mobile-ingame-chat-toggle"
-                  onClick={() => setMobileIngameChatOpen(true)}
+                  onClick={() => {
+                    if (chatInputDisabled) return
+                    setMobileIngameChatOpen(true)
+                  }}
                   aria-expanded={mobileIngameChatOpen}
+                  disabled={chatInputDisabled}
                 >
                   チャット
                 </button>

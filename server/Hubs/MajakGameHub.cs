@@ -498,6 +498,9 @@ public class MajakGameHub : Hub
         Cmd.GetRoomMembers       => _sp.GetRequiredService<Commands.Room.RoomGetMembersCommand>(),
         Cmd.ExitChannel          => _sp.GetRequiredService<Commands.Channel.ExitChannelCommand>(),
         Cmd.HanChatRelay         => _sp.GetRequiredService<Commands.Channel.HanChatAllRelayCommand>(),
+        Cmd.HanChatOneToOne      => _sp.GetRequiredService<Commands.Channel.HanChatOneToOneCommand>(),
+        Cmd.HanChatOneToOneString => _sp.GetRequiredService<Commands.Channel.HanChatOneToOneStringCommand>(),
+        Cmd.HanChatOneToOneEnd   => _sp.GetRequiredService<Commands.Channel.HanChatOneToOneEndCommand>(),
         Cmd.ViewRoom             => _sp.GetRequiredService<Commands.Channel.ViewRoomCommand>(),
         Cmd.Complaint            => _sp.GetRequiredService<Commands.Channel.ComplaintCommand>(),
         // Room commands
