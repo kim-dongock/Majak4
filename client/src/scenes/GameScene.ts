@@ -28,6 +28,8 @@
 import Phaser from 'phaser'
 import * as SignalR from '../api/signalr'
 import type { CreateGameOptions } from '../game/GameInstance'
+import { DEFAULT_GAME_ASSIST_CONFIG, GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig, type GameAssistConfig } from '../game/assistConfig'
+import { assistTileMask, decideDiscardSource, decideTouchTileAction, waitGuideWorldY } from '../game/assistLogic'
 import { resolveAutoControlAction } from '../game/autoControl'
 import { emitGameLoadProgress } from '../game/gameLoadProgress'
 import { DESKTOP_INGAME_LAYOUT, getIngameLayout, type IngameLayoutMode } from '../game/ingameLayout'
@@ -414,6 +416,13 @@ function serialToPaiCode(serial: number): number {
   return 0
 }
 
+function isTouchPointer(pointer?: Phaser.Input.Pointer): boolean {
+  if (!pointer) return false
+  if (pointer.wasTouch) return true
+  const event = pointer.event as Event & { pointerType?: string }
+  return event.pointerType === 'touch' || event.type.startsWith('touch')
+}
+
 function hasHoraFormAfterAdd(counts: number[], handCount: number, addSerial: number): boolean {
   if (addSerial < 0 || addSerial >= 34 || counts[addSerial] >= 4) return false
   counts[addSerial]++
@@ -562,6 +571,19 @@ interface WaitTileGuideEntry {
   code: number
   rest: number
   furiten: boolean
+  han?: number
+  noYaku?: boolean
+  isYakuman?: boolean
+}
+
+interface WaitGuidePreviewResponse {
+  discardCode: number
+  waits: Array<{
+    serial: number
+    han: number
+    noYaku: boolean
+    isYakuman: boolean
+  }>
 }
 
 interface DiscardState {
@@ -576,6 +598,12 @@ interface DiscardFlightOrigin {
   scaleX: number
   scaleY: number
   depth: number
+}
+
+interface DiscardSourceMarkerState {
+  isTedashi: boolean
+  displayIdx: number
+  handCount: number
 }
 
 interface PendingDiscardState {
@@ -758,6 +786,8 @@ export default class GameScene extends Phaser.Scene {
   private hoverCursor?: Phaser.GameObjects.Image
   private selectedCursor?: Phaser.GameObjects.Image
   private tenpaiMarkerSprites: Phaser.GameObjects.Image[] = []
+  private assistHighlightSprites: Phaser.GameObjects.Image[] = []
+  private discardSourceMarkerSprites: Array<Phaser.GameObjects.Image | undefined> = [undefined, undefined, undefined, undefined]
   private waitTileGuideContainer?: Phaser.GameObjects.Container
   private actionBtns: Phaser.GameObjects.Sprite[] = []
   private paifuGraphLayer?: Phaser.GameObjects.Container
@@ -779,6 +809,9 @@ export default class GameScene extends Phaser.Scene {
   private pendingActionChoice: { def: { act: string; code: Act }; acts: string[]; choices: Array<{ code: Act; bipaiIndex: number[] }> } | null = null
   private currentHoraErrorReason = ''
   private selectedIdx = -1
+  private touchConfirmDiscardIdx = -1
+  private activeAssistTileCode = 0
+  private activeAssistHandIdx = -1
   private canDiscardOnTileClick = false
   private autoDiscardTimer?: Phaser.Time.TimerEvent
   private actionResponseTimer?: Phaser.Time.TimerEvent
@@ -807,6 +840,10 @@ export default class GameScene extends Phaser.Scene {
   private paiInfoQueue: PaiInfoMsgState[] = []
   private pendingResyncHandSnapshot?: ResyncHandSnapshot
   private latestActionPaiInfoTiles: TileState[][] = [[], [], [], []]
+  private discardSourceMarkers: Array<DiscardSourceMarkerState | undefined> = [undefined, undefined, undefined, undefined]
+  private discardAfterCall = [false, false, false, false]
+  private waitGuideRequestSerial = 0
+  private readonly waitGuidePreviewCache = new Map<string, Promise<WaitGuidePreviewResponse | null>>()
   private currentActionOffers: string[] = []
 
   /* ゲームステート */
@@ -834,8 +871,10 @@ export default class GameScene extends Phaser.Scene {
   private replayHandOpenHandler?: EventListener
   private replayGraphHandler?: EventListener
   private autoControlHandler?: EventListener
+  private assistConfigHandler?: EventListener
   private autoControl: GameAutoControlState = { prox: false, autoTap: false, autoPass: false, autoHora: false }
   private inputConfig = { nSelPasKey: 0 }
+  private assistConfig: GameAssistConfig = { ...DEFAULT_GAME_ASSIST_CONFIG }
   private customBgId = 0
   private customBoardType = 0
   private currentBgmSkinId: number | undefined
@@ -907,6 +946,7 @@ export default class GameScene extends Phaser.Scene {
     this.gameResyncHistoryReceived = false
     this.gameResyncHistoryApplied = false
     this.inputConfig = { nSelPasKey: data.inputConfig?.nSelPasKey === 1 ? 1 : 0 }
+    this.assistConfig = toGameAssistConfig(data.assistConfig)
     if (DEBUG_GAME) console.info('[GameScene] init', {
       roomId: this.roomId,
       myOdr: this.myOdr,
@@ -977,8 +1017,10 @@ export default class GameScene extends Phaser.Scene {
     this.requestInitialRoomState()
     this.setupReplayControlEvents()
     this.setupAutoControlEvents()
+    this.setupAssistConfigEvents()
     this.setupKeyboardEvents()
     this.setupContextMenuEvents()
+    this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onScenePointerDown, this)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardownSceneResources())
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.teardownSceneResources())
   }
@@ -989,8 +1031,11 @@ export default class GameScene extends Phaser.Scene {
     this.teardownSignalR()
     this.teardownReplayControlEvents()
     this.teardownAutoControlEvents()
+    this.teardownAssistConfigEvents()
     this.teardownKeyboardEvents()
     this.teardownContextMenuEvents()
+    this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onScenePointerDown, this)
+    this.clearAssistHighlights()
     this.boardMaskGraphics?.destroy()
     this.boardMaskGraphics = undefined
     this.boardMask = undefined
@@ -1416,7 +1461,9 @@ export default class GameScene extends Phaser.Scene {
         }
         if (isTurnMode) {
           if (isForLocalPlayer && !this.shouldSuppressLivePlayback()) playMajakSid(SID_TURN, this.soundSkinOptions())
-          this.ensureTurnDrawTile(Number.isFinite(seatOrder) ? seatOrder : this.myOdr)
+          const turnOdr = Number.isFinite(seatOrder) ? seatOrder : this.myOdr
+          this.clearDiscardSourceMarker(turnOdr)
+          this.ensureTurnDrawTile(turnOdr)
           this.traceGameFlow('emit turnChange', {
             seatOrder,
             isForLocalPlayer,
@@ -1965,6 +2012,26 @@ export default class GameScene extends Phaser.Scene {
     this.autoControlHandler = undefined
   }
 
+  private setupAssistConfigEvents() {
+    this.teardownAssistConfigEvents()
+    this.assistConfigHandler = ((event: CustomEvent<GameAssistConfig>) => {
+      this.assistConfig = toGameAssistConfig(event.detail)
+      if (this.assistConfig.bChkTnp) this.redrawTenpaiMarkers()
+      else this.clearTenpaiMarkers()
+      if (!this.assistConfig.bChkHor) this.clearWaitTileGuide()
+      if (this.assistConfig.bChkPai && this.activeAssistTileCode > 0) this.showAssistHighlights(this.activeAssistTileCode)
+      else this.clearAssistHighlights()
+      for (let odr = 0; odr < this.players.length; odr++) this.redrawDiscardSourceMarker(odr)
+    }) as EventListener
+    window.addEventListener(GAME_ASSIST_CONFIG_EVENT, this.assistConfigHandler)
+  }
+
+  private teardownAssistConfigEvents() {
+    if (!this.assistConfigHandler) return
+    window.removeEventListener(GAME_ASSIST_CONFIG_EVENT, this.assistConfigHandler)
+    this.assistConfigHandler = undefined
+  }
+
   private resolveSkinTextureKey(key: string): string {
     const candidate = skinTextureCandidate(key)
     return this.textures.exists(candidate) ? candidate : key
@@ -2224,10 +2291,10 @@ export default class GameScene extends Phaser.Scene {
           .setScale(handScale)
           .setDepth(depth)
           .setInteractive({ useHandCursor: true })
-          .on('pointerdown', () => this.onTilePointerDown(idx))
-          .on('pointerup', () => this.onTilePointerUp(idx))
-          .on('pointerover', () => this.onTilePointerOver(idx))
-          .on('pointerout', () => this.onTilePointerOut(idx))
+          .on('pointerdown', (pointer: Phaser.Input.Pointer) => this.onTilePointerDown(idx, pointer))
+          .on('pointerup', (pointer: Phaser.Input.Pointer) => this.onTilePointerUp(idx, pointer))
+          .on('pointerover', (pointer: Phaser.Input.Pointer) => this.onTilePointerOver(idx, pointer))
+          .on('pointerout', (pointer: Phaser.Input.Pointer) => this.onTilePointerOut(idx, pointer))
         this.clipToBoard(spr)
         if (tile.isSelected) {
           this.selectedCursor = this.clipToBoard(this.add.image(x, y - 5, 'cursor_mouse')
@@ -2257,7 +2324,34 @@ export default class GameScene extends Phaser.Scene {
     })
     this.updateMobileActionHandVisibility()
     if (!this.isViewer && odr === this.myOdr) this.redrawTenpaiMarkers()
+    this.redrawDiscardSourceMarker(odr)
     this.redrawPaifuGraphContent()
+  }
+
+  private redrawDiscardSourceMarker(odr: number) {
+    this.discardSourceMarkerSprites[odr]?.destroy()
+    this.discardSourceMarkerSprites[odr] = undefined
+    const state = this.discardSourceMarkers[odr]
+    if (!this.assistConfig.bChkTap || !state || this.isReplay) return
+    const loc = odrToLoc(odr, this.myOdr)
+    if (loc === 0) return
+    const scale = this.handTileScale(odr, loc)
+    const isDrawTile = !state.isTedashi
+    const position = this.layoutMode === 'mobileLandscape'
+      ? mobileOuterHandPos(loc, state.displayIdx, state.handCount, isDrawTile, scale) ?? handPos(loc, state.displayIdx, isDrawTile, true)
+      : handPos(loc, state.displayIdx, isDrawTile, true)
+    const texture = loc % 2 === 0 ? 'mj_tapai_0' : 'mj_tapai_1'
+    this.discardSourceMarkerSprites[odr] = this.clipToBoard(this.add.image(position.x, position.y, texture, state.isTedashi ? 0 : 1)
+      .setOrigin(0, 0)
+      .setScale(scale)
+      .setAlpha(32 / 256)
+      .setDepth(1000))
+  }
+
+  private clearDiscardSourceMarker(odr: number) {
+    this.discardSourceMarkers[odr] = undefined
+    this.discardSourceMarkerSprites[odr]?.destroy()
+    this.discardSourceMarkerSprites[odr] = undefined
   }
 
   private updateMobileActionHandVisibility() {
@@ -2311,7 +2405,7 @@ export default class GameScene extends Phaser.Scene {
 
   private redrawTenpaiMarkers() {
     this.clearTenpaiMarkers()
-    if (this.isReplay || !this.canDiscardOnTileClick || this.players[this.myOdr].isReach) return
+    if (!this.assistConfig.bChkTnp || this.isReplay || !this.canDiscardOnTileClick || this.players[this.myOdr].isReach) return
     const hand = this.players[this.myOdr].hand
     for (let idx = 0; idx < hand.length; idx++) {
       if (!checkTempaiAfterDiscard(hand, idx)) continue
@@ -2343,6 +2437,7 @@ export default class GameScene extends Phaser.Scene {
         .setScale(this.discardTileScale())
         .setDepth(y)
       this.clipToBoard(spr)
+      this.bindAssistTileInput(spr, discard.code)
       this.suteSprites[odr].push(spr)
     })
     this.redrawPaifuGraphContent()
@@ -2446,6 +2541,7 @@ export default class GameScene extends Phaser.Scene {
       const frame = paiToFrame(tile.code)
       const texture = this.resolveSkinTexture(meldTexture(loc, 0, false))
       const spr = this.clipToBoard(this.add.image(x, y, texture.key, frame).setOrigin(0, 0).setScale(meldScale).setDepth(y))
+      this.bindAssistTileInput(spr, tile.code)
       this.meldSprites[odr].push(spr)
     })
 
@@ -2456,6 +2552,7 @@ export default class GameScene extends Phaser.Scene {
         const texture = this.resolveSkinTexture(meldTexture(loc, tile.flag, Boolean(tile.isDown)))
         const frame = texture.frame ?? paiToFrame(tile.code)
         const spr = this.clipToBoard(this.add.image(x, y, texture.key, frame).setOrigin(0, 0).setScale(meldScale).setDepth(y))
+        if (!tile.isDown) this.bindAssistTileInput(spr, tile.code)
         this.meldSprites[odr].push(spr)
       })
     })
@@ -2490,6 +2587,7 @@ export default class GameScene extends Phaser.Scene {
         .setOrigin(0, 0)
         .setScale(this.tileScale())
         .setDepth(y + (idx % 2 === 0 ? WAN_EXPOSE_OFFSET_Y * 2 : 0)))
+      if (code) this.bindAssistTileInput(sprite, code)
       this.deadWallSprites.push(sprite)
     }
   }
@@ -2687,15 +2785,19 @@ export default class GameScene extends Phaser.Scene {
   /* ======================================================================
    * タイル選択 / 打牌 (CMJUserIF 相当)
    * ====================================================================== */
-  private onTilePointerOver(idx: number) {
+  private onTilePointerOver(idx: number, pointer?: Phaser.Input.Pointer) {
+    if (isTouchPointer(pointer)) return
     if (DEBUG_GAME && this.canDiscardOnTileClick) console.info('[GameScene] tile hover discard candidate', {
       idx,
       myOdr: this.myOdr,
       tile: this.players[this.myOdr].hand[idx],
     })
-    if (!this.canDiscardOnTileClick && !this.pendingActionChoice) return
     const hand = this.players[this.myOdr].hand
     if (idx < 0 || idx >= hand.length) return
+    this.activeAssistTileCode = hand[idx].code
+    this.activeAssistHandIdx = idx
+    this.showAssistHighlights(hand[idx].code)
+    if (!this.canDiscardOnTileClick && !this.pendingActionChoice) return
     const loc = odrToLoc(this.myOdr, this.myOdr)
     const isDrawTile = idx === hand.length - 1 && hand.length % 3 === 2
     const handScale = this.handTileScale(this.myOdr, loc)
@@ -2711,24 +2813,96 @@ export default class GameScene extends Phaser.Scene {
     if (this.canDiscardOnTileClick) this.showWaitTileGuide(idx)
   }
 
-  private onTilePointerOut(_idx: number) {
+  private onTilePointerOut(_idx: number, pointer?: Phaser.Input.Pointer) {
+    if (isTouchPointer(pointer)) return
     this.hoverCursor?.destroy()
     this.hoverCursor = undefined
     this.clearWaitTileGuide()
+    this.activeAssistTileCode = 0
+    this.activeAssistHandIdx = -1
+    this.clearAssistHighlights()
+  }
+
+  private bindAssistTileInput(sprite: Phaser.GameObjects.Image, code: number) {
+    if (code <= 0) return
+    sprite.setInteractive({ useHandCursor: true })
+      .on('pointerover', (pointer: Phaser.Input.Pointer) => {
+        if (isTouchPointer(pointer)) return
+        this.activeAssistTileCode = code
+        this.showAssistHighlights(code)
+      })
+      .on('pointerout', (pointer: Phaser.Input.Pointer) => {
+        if (isTouchPointer(pointer)) return
+        this.activeAssistTileCode = 0
+        this.clearAssistHighlights()
+      })
+      .on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        if (!isTouchPointer(pointer)) return
+        this.activeAssistTileCode = code
+        this.activeAssistHandIdx = -1
+        this.clearWaitTileGuide()
+        this.showAssistHighlights(code)
+      })
+  }
+
+  private showAssistHighlights(sourceCode: number) {
+    this.clearAssistHighlights()
+    if (!this.assistConfig.bChkPai || sourceCode <= 0) return
+    const addMask = (code: number, sprite?: Phaser.GameObjects.Image) => {
+      if (!sprite?.active || !sprite.visible) return
+      const mask = assistTileMask(sourceCode, code)
+      if (mask === 0) return
+      const texture = sprite.frame.realWidth === 45 ? 'mj_tonari_1' : 'mj_tonari_0'
+      this.assistHighlightSprites.push(this.clipToBoard(this.add.image(sprite.x, sprite.y, texture, mask - 1)
+        .setOrigin(0, 0)
+        .setScale(sprite.scaleX, sprite.scaleY)
+        .setDepth(sprite.depth + 0.001)))
+    }
+
+    this.players.forEach((player, odr) => {
+      player.discards.forEach((discard, idx) => addMask(discard.code, this.suteSprites[odr][idx]))
+      let spriteIdx = 0
+      player.flowers.forEach(tile => addMask(tile.code, this.meldSprites[odr][spriteIdx++]))
+      player.melds.forEach(meld => meld.tiles.forEach(tile => {
+        const sprite = this.meldSprites[odr][spriteIdx++]
+        if (!tile.isDown) addMask(tile.code, sprite)
+      }))
+    })
+
+    const haipaiPos = this.currentHaipaiPos()
+    if (haipaiPos === undefined) return
+    this.paifuGraphRound.dora.forEach((code, idx) => {
+      const wallIdx = this.deadWallIndexForBipai(this.getDoraIndex(idx), haipaiPos)
+      if (wallIdx !== undefined) addMask(code, this.deadWallSprites[wallIdx])
+    })
+  }
+
+  private clearAssistHighlights() {
+    this.assistHighlightSprites.forEach(sprite => sprite.destroy())
+    this.assistHighlightSprites = []
   }
 
   private clearWaitTileGuide() {
+    this.waitGuideRequestSerial++
     this.waitTileGuideContainer?.destroy()
     this.waitTileGuideContainer = undefined
   }
 
   private showWaitTileGuide(idx: number) {
     this.clearWaitTileGuide()
-    if (this.isReplay || !this.canDiscardOnTileClick || this.players[this.myOdr].isReach) return
+    if (!this.assistConfig.bChkHor || this.isReplay || !this.canDiscardOnTileClick || this.players[this.myOdr].isReach) return
     const hand = this.players[this.myOdr].hand
     if (idx < 0 || idx >= hand.length) return
     const entries = this.calculateWaitTileGuide(idx)
     if (entries.length === 0) return
+    const requestSerial = this.waitGuideRequestSerial
+    this.renderWaitTileGuide(idx, entries)
+    void this.enrichWaitTileGuide(idx, entries, requestSerial)
+  }
+
+  private renderWaitTileGuide(idx: number, entries: WaitTileGuideEntry[]) {
+    this.waitTileGuideContainer?.destroy()
+    this.waitTileGuideContainer = undefined
 
     const wL = 30
     const wM = 34
@@ -2737,7 +2911,17 @@ export default class GameScene extends Phaser.Scene {
     const yN = 3
     const yP = 16
     const yF = 58
-    const yPos = 488
+    const yH = 71
+    const guideHeight = 85
+    let yPos = 488
+    if (this.layoutMode === 'mobileLandscape') {
+      const bounds = mobileVisibleWorldBounds()
+      const handScale = MOBILE_SELF_HAND_TILE_SCALE * mobileContentScale()
+      const handStart = mobileOuterHandPos(0, 0, MOBILE_SELF_HAND_FIXED_COUNT, false, handScale)
+      if (bounds && handStart) {
+        yPos = waitGuideWorldY(handStart.y, bounds.top, bounds.bottom, guideHeight) - BOARD_Y
+      }
+    }
     const width = wL + wR + wM * entries.length
     const tileSprite = this.handSprites[this.myOdr][idx]
     const rawX = (tileSprite?.x ?? BOARD_X) - BOARD_X + 37 / 2 - width / 2
@@ -2754,11 +2938,53 @@ export default class GameScene extends Phaser.Scene {
       guide.add(this.add.image(xN + entryIdx * wM, yN, this.resolveSkinTextureKey('mj_machihai_num'), Math.max(0, Math.min(9, entry.rest))).setOrigin(0, 0))
       guide.add(this.add.image(x, yP, this.resolveSkinTextureKey('hai_omote'), paiToFrame(entry.code)).setOrigin(0, 0))
       if (entry.furiten) guide.add(this.add.image(x, yF, this.resolveSkinTextureKey('mj_machihai_furiten')).setOrigin(0, 0))
+      if (entry.noYaku) {
+        guide.add(this.add.image(x, yH, this.resolveSkinTextureKey('mj_machihai_yakunashi')).setOrigin(0, 0))
+      } else if (entry.isYakuman) {
+        guide.add(this.add.image(x, yH, this.resolveSkinTextureKey('mj_machihai_yakuman')).setOrigin(0, 0))
+      } else if (entry.han !== undefined) {
+        const digits = String(Math.max(0, Math.min(99, entry.han))).padStart(2, '0').slice(-2)
+        digits.split('').forEach((digit, digitIdx) => {
+          guide.add(this.add.image(xN - 9 + entryIdx * wM + digitIdx * 9, yH, this.resolveSkinTextureKey('mj_machihai_num'), Number(digit)).setOrigin(0, 0))
+        })
+        guide.add(this.add.image(x, yH, this.resolveSkinTextureKey('mj_machihai_han')).setOrigin(0, 0))
+      }
     })
     const rightX = wL + wM * entries.length
     guide.add(this.add.image(rightX, 0, this.resolveSkinTextureKey('mj_machihai_base03')).setOrigin(0, 0).setAlpha(0.5))
     guide.add(this.add.image(rightX, 0, this.resolveSkinTextureKey('mj_machihai_frame03')).setOrigin(0, 0))
     this.waitTileGuideContainer = guide
+  }
+
+  private async enrichWaitTileGuide(idx: number, entries: WaitTileGuideEntry[], requestSerial: number) {
+    const tile = this.players[this.myOdr].hand[idx]
+    const bipaiIndex = tile?.bipaiIndex
+    const actionSeq = this.currentActionPrompt?.actionSeq
+    if (bipaiIndex === undefined || actionSeq === undefined || !this.roomId) return
+    const cacheKey = `${actionSeq}:${bipaiIndex}`
+    let request = this.waitGuidePreviewCache.get(cacheKey)
+    if (!request) {
+      request = SignalR.invoke<WaitGuidePreviewResponse | null>('GetWaitGuidePreview', Number(this.roomId), bipaiIndex)
+        .catch(() => null)
+      this.waitGuidePreviewCache.set(cacheKey, request)
+    }
+    const preview = await request
+    const currentTile = this.players[this.myOdr].hand[idx]
+    if (!preview
+      || requestSerial !== this.waitGuideRequestSerial
+      || !this.assistConfig.bChkHor
+      || this.activeAssistHandIdx !== idx
+      || this.currentActionPrompt?.actionSeq !== actionSeq
+      || currentTile?.bipaiIndex !== bipaiIndex
+      || preview.discardCode !== tile.code)
+      return
+
+    const yakuBySerial = new Map(preview.waits.map(wait => [wait.serial, wait]))
+    const enriched = entries.map(entry => {
+      const yaku = yakuBySerial.get(paiToSerial(entry.code))
+      return yaku ? { ...entry, han: yaku.han, noYaku: yaku.noYaku, isYakuman: yaku.isYakuman } : entry
+    })
+    this.renderWaitTileGuide(idx, enriched)
   }
 
   private calculateWaitTileGuide(discardIdx: number): WaitTileGuideEntry[] {
@@ -2999,7 +3225,7 @@ export default class GameScene extends Phaser.Scene {
     return true
   }
 
-  private onTilePointerDown(idx: number) {
+  private onTilePointerDown(idx: number, pointer?: Phaser.Input.Pointer) {
     const hand = this.players[this.myOdr].hand
     if (DEBUG_GAME) console.info('[GameScene] tile pointerdown', {
       idx,
@@ -3019,13 +3245,27 @@ export default class GameScene extends Phaser.Scene {
       return
     }
 
+    if (isTouchPointer(pointer)) {
+      const decision = decideTouchTileAction(this.selectedIdx, idx)
+      this.touchConfirmDiscardIdx = decision.confirmDiscard ? idx : -1
+      if (this.selectedIdx >= 0) hand[this.selectedIdx].isSelected = false
+      this.selectedIdx = decision.selectedIdx
+      hand[idx].isSelected = true
+      this.activeAssistTileCode = hand[idx].code
+      this.activeAssistHandIdx = idx
+      this.redrawHand(this.myOdr)
+      this.showAssistHighlights(hand[idx].code)
+      this.showWaitTileGuide(idx)
+      return
+    }
+
     if (this.selectedIdx >= 0) hand[this.selectedIdx].isSelected = false
     this.selectedIdx = idx
     hand[idx].isSelected = true
     this.redrawHand(this.myOdr)
   }
 
-  private onTilePointerUp(idx: number) {
+  private onTilePointerUp(idx: number, pointer?: Phaser.Input.Pointer) {
     const hand = this.players[this.myOdr].hand
     if (DEBUG_GAME) console.info('[GameScene] tile pointerup', {
       idx,
@@ -3048,7 +3288,29 @@ export default class GameScene extends Phaser.Scene {
       })
       return
     }
+    if (isTouchPointer(pointer)) {
+      const confirmDiscard = this.touchConfirmDiscardIdx === idx
+      this.touchConfirmDiscardIdx = -1
+      if (!confirmDiscard) return
+      this.activeAssistTileCode = 0
+      this.activeAssistHandIdx = -1
+      this.clearAssistHighlights()
+      this.clearWaitTileGuide()
+    }
     this.discard(idx)
+  }
+
+  private onScenePointerDown(pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) {
+    if (!isTouchPointer(pointer) || currentlyOver.length > 0 || this.selectedIdx < 0) return
+    const hand = this.players[this.myOdr].hand
+    if (this.selectedIdx < hand.length) hand[this.selectedIdx].isSelected = false
+    this.selectedIdx = -1
+    this.touchConfirmDiscardIdx = -1
+    this.activeAssistTileCode = 0
+    this.activeAssistHandIdx = -1
+    this.clearAssistHighlights()
+    this.clearWaitTileGuide()
+    this.redrawHand(this.myOdr)
   }
 
   /** 打牌送信 (WM_LBUTTONDOWN → PutSutepai 相当) */
@@ -3727,6 +3989,11 @@ export default class GameScene extends Phaser.Scene {
       const bipaiIndex = indices[0]
       const hand = this.players[odr].hand
       const handIdx = hand.findIndex(t => t.bipaiIndex === bipaiIndex)
+      const handCountBefore = hand.length
+      const discardSource = handIdx >= 0
+        ? decideDiscardSource(handCountBefore, handIdx, this.discardAfterCall[odr], !this.isLocalPlayerOdr(odr), bipaiIndex)
+        : undefined
+      this.discardAfterCall[odr] = false
       const animateDiscard = action === Act.Tap && this.shouldAnimateLiveDiscard()
       const flightOrigin = animateDiscard ? this.captureDiscardFlightOrigin(odr, handIdx) : undefined
       this.logDiscardProbe('apply discard ACTION start', {
@@ -3774,6 +4041,7 @@ export default class GameScene extends Phaser.Scene {
         this.logDiscardProbe('defer discard ACTION until PaiInfo reveals code', { action, odr, bipaiIndex })
       }
       this.lastDiscardOdr = odr
+      if (discardSource) this.discardSourceMarkers[odr] = { ...discardSource, handCount: handCountBefore }
       this.redrawHand(odr)
       this.redrawDiscards(odr)
       if (materializedDiscard && animateDiscard) this.animateLatestDiscard(odr, flightOrigin)
@@ -3812,6 +4080,7 @@ export default class GameScene extends Phaser.Scene {
         this.syncLiveDoraIndicators(this.paifuGraphRound.dora.length + 1)
       }
       this.applyMeldAction(odr, action as Act, indices, this.readClaimedOdr(data, odr, action as Act), suppressLivePlayback)
+      this.discardAfterCall[odr] = action === Act.Chi || action === Act.Pon
     }
   }
 
@@ -4486,6 +4755,8 @@ export default class GameScene extends Phaser.Scene {
     this.paifuGraphDraws = [[], [], [], []]
     this.paifuGraphDiscards = [[], [], [], []]
     this.latestActionPaiInfoTiles = [[], [], [], []]
+    this.discardAfterCall = [false, false, false, false]
+    this.waitGuidePreviewCache.clear()
     this.paifuGraphRound = {
       ...this.paifuGraphRound,
       dora: [],
@@ -4499,6 +4770,7 @@ export default class GameScene extends Phaser.Scene {
     this.clearTenpaiMarkers()
     this.clearWaitTileGuide()
     for (let odr = 0; odr < this.players.length; odr++) {
+      this.clearDiscardSourceMarker(odr)
       if (!preserveHands) this.players[odr].hand = []
       this.paifuGraphInitialHands[odr] = preserveHands ? this.cloneTiles(this.players[odr].hand) : []
       this.players[odr].discards = []

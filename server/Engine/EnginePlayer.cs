@@ -14,6 +14,7 @@ public class EnginePlayer
     public List<PaiCode> Sutehai = new();
     public List<FuroBlock> Furo  = new();
     public List<PaiCode> NukiDora = new();  // for flower/nuki modes
+    private readonly HashSet<int> _kuikaeForbiddenSerials = new();
 
     // ─── Mode / Action ───────────────────────────────────────────────────────
     public PlayerMode Mode    { get; set; } = PlayerMode.None;
@@ -89,6 +90,7 @@ public class EnginePlayer
         KyokuPoint     = 0;
         KanCnt         = 0;
         PaoOrder       = MajakConst.InvalidOrder;
+        _kuikaeForbiddenSerials.Clear();
         Yaku.Clear();
     }
 
@@ -99,7 +101,9 @@ public class EnginePlayer
     /// <summary>Discard a tile from hand (TAP / RIC discard step).</summary>
     public ActionResult Tapai(PaiCode tapai)
     {
+        if (IsKuikaeForbidden(tapai)) return ActionResult.ErrKuikae;
         if (!TryRemoveTehai(new[] { tapai.BipaiIndex }, 1, Sutehai)) return ActionResult.ErrPaiNotFoundInHand;
+        _kuikaeForbiddenSerials.Clear();
         ClearIppatsu();
         if (RichiType == RichiType.None) IsFuriten = false;
         if (!tapai.IsYaochupai) IsNagashiMangan = false;
@@ -176,6 +180,7 @@ public class EnginePlayer
         furo.Tiles.Sort((a, b) => a.GetSerial().CompareTo(b.GetSerial()));
         Furo.Add(furo);
         IsMenzen = false;
+        SetChiKuikae(curTapai, furo);
         return ActionResult.Ok;
     }
 
@@ -187,7 +192,33 @@ public class EnginePlayer
         if (!TryRemoveTehai(bipaiIndex, 2, furo.Tiles)) return ActionResult.ErrPaiNotFoundInHand;
         Furo.Add(furo);
         IsMenzen = false;
+        SetPonKuikae(curTapai);
         return ActionResult.Ok;
+    }
+
+    public bool IsKuikaeForbidden(PaiCode tile)
+        => _kuikaeForbiddenSerials.Contains(tile.GetSerial());
+
+    private void SetChiKuikae(PaiCode calledTile, FuroBlock furo)
+    {
+        _kuikaeForbiddenSerials.Clear();
+        int calledSerial = calledTile.GetSerial();
+        int firstSerial = furo.Tiles[0].GetSerial();
+        _kuikaeForbiddenSerials.Add(calledSerial);
+
+        int alternativeSerial = calledSerial == firstSerial
+            ? firstSerial + 3
+            : calledSerial == firstSerial + 2
+                ? firstSerial - 1
+                : -1;
+        if (alternativeSerial >= 0 && alternativeSerial / 9 == firstSerial / 9)
+            _kuikaeForbiddenSerials.Add(alternativeSerial);
+    }
+
+    private void SetPonKuikae(PaiCode calledTile)
+    {
+        _kuikaeForbiddenSerials.Clear();
+        _kuikaeForbiddenSerials.Add(calledTile.GetSerial());
     }
 
     public ActionResult MinKan(int tapaiOrder, PaiCode curTapai, int[] bipaiIndex)

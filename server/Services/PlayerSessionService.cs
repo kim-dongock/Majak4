@@ -314,7 +314,7 @@ public class PlayerSessionService
         int cupId = 0, int cupSeq = 0, int cupJudgementType = -1, int cupPointSumType = 0,
         int cupMaxMatchCntLimit = -1, int cupConditionRegular = 0, int cupConditionBilling = 0, bool cupEntryLimited = false,
         string cupNormalYakuCondition = "", string cupYakumanCondition = "",
-        string subId = "")
+        string subId = "", long unitMoney = 0)
     {
         int roomId = AllocateNextRoomId();
         var room = new GameRoom
@@ -326,6 +326,7 @@ public class PlayerSessionService
             Password         = roomPassword,
             RoomOption       = roomOption,
             MoneyRate        = moneyRate,
+            UnitMoney        = unitMoney,
             MinMoney         = minMoney,
             MaxMoney         = maxMoney,
             MaxViewer        = maxViewer,

@@ -86,6 +86,43 @@ public class EnginePlayerFuroTests
         Assert.Equal(ActionResult.ErrPaiNotFoundInHand, result);
     }
 
+    [Fact]
+    public void Chi_Kuikae_BlocksCalledAndAlternativeTilesUntilFirstDiscard()
+    {
+        var player = new EnginePlayer();
+        player.InitHanchan(0, DefaultRule());
+        player.InitKyoku();
+
+        AddToTehai(player, 3, 10); // 4m
+        AddToTehai(player, 4, 11); // 5m
+        var calledAgain = AddToTehai(player, 2, 12); // 3m
+        var alternative = AddToTehai(player, 5, 13); // 6m
+        var safeTile = AddToTehai(player, 8, 14); // 9m
+        var calledTile = PaiCode.MakeSerial(2); // 3mをチーして345m
+
+        Assert.Equal(ActionResult.Ok, player.Chi(3, calledTile, new[] { 10, 11 }));
+        Assert.Equal(ActionResult.ErrKuikae, player.Tapai(calledAgain));
+        Assert.Equal(ActionResult.ErrKuikae, player.Tapai(alternative));
+        Assert.Equal(ActionResult.Ok, player.Tapai(safeTile));
+        Assert.Equal(ActionResult.Ok, player.Tapai(calledAgain));
+    }
+
+    [Fact]
+    public void Chi_Kuikae_MiddleCalledTileDoesNotBlockUnrelatedSuji()
+    {
+        var player = new EnginePlayer();
+        player.InitHanchan(0, DefaultRule());
+        player.InitKyoku();
+
+        AddToTehai(player, 2, 10); // 3m
+        AddToTehai(player, 4, 11); // 5m
+        var unrelatedTile = AddToTehai(player, 1, 12); // 2m
+        var calledTile = PaiCode.MakeSerial(3); // 4mをチーして345m
+
+        Assert.Equal(ActionResult.Ok, player.Chi(3, calledTile, new[] { 10, 11 }));
+        Assert.Equal(ActionResult.Ok, player.Tapai(unrelatedTile));
+    }
+
     // ─── Pon ────────────────────────────────────────────────────────────────
 
     // シナリオ4: 有効なポン → Furo追加 + IsMenzen=false
@@ -109,6 +146,29 @@ public class EnginePlayerFuroTests
         Assert.Equal(Act.Pon, p.Furo[0].Act);
         Assert.Equal(3, p.Furo[0].Tiles.Count);
         Assert.False(p.IsMenzen);
+    }
+
+    [Fact]
+    public void Pon_Kuikae_BlocksCalledTileAndAdvertisesOnlyLegalDiscards()
+    {
+        var logic = new MajakGameLogic();
+        var player = logic.Player[0];
+        player.InitHanchan(0, DefaultRule());
+        player.InitKyoku();
+
+        AddToTehai(player, 27, 10);
+        AddToTehai(player, 27, 11);
+        var calledAgain = AddToTehai(player, 27, 12);
+        var safeTile = AddToTehai(player, 28, 13);
+        var calledTile = PaiCode.MakeSerial(27);
+
+        Assert.Equal(ActionResult.Ok, player.Pon(1, calledTile, new[] { 10, 11 }));
+        player.Mode = PlayerMode.Turn;
+
+        var actions = logic.GetValidActions(0);
+        Assert.DoesNotContain(calledAgain.BipaiIndex, actions.TapCandidates);
+        Assert.Contains(safeTile.BipaiIndex, actions.TapCandidates);
+        Assert.Equal(ActionResult.ErrKuikae, player.Tapai(calledAgain));
     }
 
     // シナリオ5: 副露した本人の流し満貫状態は HMajakPlayer::Pon では変更されない

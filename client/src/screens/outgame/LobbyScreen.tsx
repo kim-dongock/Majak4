@@ -3664,12 +3664,6 @@ export default function LobbyScreen() {
             onClick={onToggleAutoMatch}
             title={isMatching ? '対局参加表明を取り消す' : '対局に参加表明する'}
           />
-          {isMatching && (
-            <div className="majak-desktop-auto-match-status" role="status">
-              <strong>マッチング中!</strong>
-              <span>対戦相手を探しています…</span>
-            </div>
-          )}
         </>
       ) : (
         <img src={`${IMG}/${replayChannel ? 'mj_rm_ui_paifu_Bg.png' : trainingChannel ? 'mj_rm_ui_Practice_bg.png' : 'mj_rm_ui_koryu_Bg.png'}`} alt="" draggable={false}

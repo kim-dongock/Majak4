@@ -1,5 +1,8 @@
 namespace MajakServer.Engine;
 
+internal sealed record WaitGuidePreview(int DiscardCode, IReadOnlyList<WaitGuideYakuEntry> Waits);
+internal sealed record WaitGuideYakuEntry(int Serial, int Han, bool NoYaku, bool IsYakuman);
+
 /// <summary>
 /// Core game state machine — port of HMajakGameLogic.cpp/h.
 /// Handles the full hanchan lifecycle: InitHanchan → ProcessAction → EndHanchan.
@@ -546,7 +549,8 @@ public class MajakGameLogic
             else
             {
                 foreach (var t in player.Tehai)
-                    result.TapCandidates.Add(t.BipaiIndex);
+                    if (!player.IsKuikaeForbidden(t))
+                        result.TapCandidates.Add(t.BipaiIndex);
             }
 
             // リーチ (リーチ前、残り牌4枚以上、点数1000以上 or コンテスト)
@@ -805,6 +809,64 @@ public class MajakGameLogic
         var tsumo = Evaluate(isTsumo: true);
         var ron = Evaluate(isTsumo: false);
         return (tsumo.points, ron.points, tsumo.riichiPoints, ron.riichiPoints);
+    }
+
+    internal WaitGuidePreview? EvaluateWaitGuide(int engineOrder, int discardBipaiIndex)
+    {
+        if (engineOrder < 0 || engineOrder >= Player.Length) return null;
+        EnginePlayer source = Player[engineOrder];
+        if (source.Mode != PlayerMode.Turn || source.RichiType != RichiType.None) return null;
+
+        int discardIndex = source.Tehai.FindIndex(tile => tile.BipaiIndex == discardBipaiIndex);
+        if (discardIndex < 0) return null;
+        PaiCode discard = source.Tehai[discardIndex];
+
+        var baseSnapshot = new EnginePlayer { Order = source.Order, GamePoint = source.GamePoint };
+        baseSnapshot.Furo.AddRange(source.Furo);
+        baseSnapshot.NukiDora.AddRange(source.NukiDora);
+        for (int index = 0; index < source.Tehai.Count; index++)
+            if (index != discardIndex) baseSnapshot.Tehai.Add(source.Tehai[index]);
+
+        int chanfon = HanchanInfo.CurKyoku / 4;
+        int menfon = (source.Order - KyokuInfo.OyaOrder + Player.Length) % Player.Length;
+        bool doubleYakuman = !_rule.GradeGame;
+        var waits = new List<WaitGuideYakuEntry>(13);
+        var baseHand = new Hand(baseSnapshot);
+
+        for (int serial = 0; serial < 34 && waits.Count < 13; serial++)
+        {
+            if (baseSnapshot.Tehai.Count(tile => tile.GetSerial() == serial) >= 4 || !baseHand.CheckHoraForm(serial))
+                continue;
+
+            var candidate = new EnginePlayer { Order = source.Order, GamePoint = source.GamePoint };
+            candidate.Tehai.AddRange(baseSnapshot.Tehai);
+            candidate.Tehai.Add(PaiCode.MakeSerial(serial));
+            candidate.Furo.AddRange(source.Furo);
+            candidate.NukiDora.AddRange(source.NukiDora);
+
+            var yaku = new Yaku();
+            new Hand(candidate).GetYaku(yaku, _rule.Kuitan, tsumo: false, source.IsMenzen,
+                chanfon, menfon, serial, doubleYakuman);
+            bool noYaku = yaku.HanSum == 0 && !source.IsMenzen;
+
+            if (!yaku.IsYakuman && yaku.HanSum != 0)
+            {
+                int totalDora = 0;
+                foreach (PaiCode tile in candidate.Tehai) totalDora += CountDora(yaku, tile, richi: false);
+                foreach (FuroBlock furo in candidate.Furo)
+                    foreach (PaiCode tile in furo.Tiles) totalDora += CountDora(yaku, tile, richi: false);
+                foreach (PaiCode tile in candidate.NukiDora)
+                {
+                    yaku.DoraCnt[3]++;
+                    totalDora += 1 + CountDora(yaku, tile, richi: false);
+                }
+                if (totalDora > 0) yaku.AddYaku(HoraYaku.Dora, totalDora);
+            }
+
+            waits.Add(new WaitGuideYakuEntry(serial, yaku.HanSum, noYaku, yaku.IsYakuman));
+        }
+
+        return new WaitGuidePreview(discard.Code, waits);
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────────────

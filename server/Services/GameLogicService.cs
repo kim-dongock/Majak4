@@ -2581,7 +2581,7 @@ public class GameLogicService
                 PointSum       = ep.ResultRecord.PointSum,
                 Yakitori       = ep.IsYakitori,
                 Chip           = ep.Tip,
-                MoneyChange    = (long)ep.SetTotal * room.MoneyRate,
+                MoneyChange    = (long)ep.SetTotal * room.UnitMoney,
                 PrevMoney      = seat.GamMoney,
                 // エンジン統計値
                 KyokuCnt       = ep.ResultRecord.KyokuCnt,
@@ -2648,7 +2648,7 @@ public class GameLogicService
                 PointSum = ep.ResultRecord.PointSum,
                 Yakitori = ep.IsYakitori,
                 Chip = ep.Tip,
-                MoneyChange = (long)ep.SetTotal * room.MoneyRate,
+                MoneyChange = (long)ep.SetTotal * room.UnitMoney,
                 KyokuCnt = ep.ResultRecord.KyokuCnt,
                 HoraCnt = ep.ResultRecord.HoraCnt,
                 HoraPoint = ep.ResultRecord.HoraPoint,
@@ -2902,6 +2902,8 @@ public class GameLogicService
         {(8,'A'),  new[]{30,  10,   0,  -10}},
         {(9,'A'),  new[]{30,  10,   0,  -20}},
         {(10,'A'), new[]{30,  10, -10,  -30}},
+        {(11,'A'), new[]{30,  10, -11,  -33}},
+        {(12,'A'), new[]{30,  10, -12,  -36}},
         // 上級チャンネル 'B'
         {(10,'B'), new[]{60,  20, -16,  -48}},
         {(11,'B'), new[]{60,  20, -18,  -54}},
@@ -2913,8 +2915,6 @@ public class GameLogicService
         {(17,'B'), new[]{60,  20, -34, -102}},
         {(18,'B'), new[]{60,  20, -38, -114}},
         // 上上級チャンネル 'C'
-        {(11,'C'), new[]{90,  30, -21,  -63}},
-        {(12,'C'), new[]{90,  30, -24,  -72}},
         {(13,'C'), new[]{90,  30, -27,  -81}},
         {(14,'C'), new[]{90,  30, -30,  -90}},
         {(15,'C'), new[]{90,  30, -33,  -99}},
@@ -2922,9 +2922,6 @@ public class GameLogicService
         {(17,'C'), new[]{90,  30, -39, -117}},
         {(18,'C'), new[]{90,  30, -42, -126}},
         // 特選上級チャンネル 'D'
-        {(13,'D'), new[]{120, 40, -28,  -84}},
-        {(14,'D'), new[]{120, 40, -32,  -96}},
-        {(15,'D'), new[]{120, 40, -36, -108}},
         {(16,'D'), new[]{120, 40, -40, -120}},
         {(17,'D'), new[]{120, 40, -44, -132}},
         {(18,'D'), new[]{120, 40, -48, -144}},
@@ -3001,8 +2998,9 @@ public class GameLogicService
             {
                 var p = _session.GetByMember(u!.MemberNo);
                 int currRating = p?.ActiveRecord.Rating ?? 0;
+                int matchCnt = p?.GradeRecord.MatchCnt ?? 0;
                 int newRating  = _ratingService.CalcGradeRating(
-                    currRating, u.PointSum, u.MatchCnt, ratingAvg);
+                    currRating, u.PointSum, matchCnt, ratingAvg);
                 u.RatingChange = newRating - currRating;
                 u.Rating       = newRating;
             }

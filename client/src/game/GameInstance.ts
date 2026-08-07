@@ -6,6 +6,7 @@ import Phaser from 'phaser'
 import PreloadScene from '../scenes/PreloadScene'
 import GameScene from '../scenes/GameScene'
 import UIScene from '../scenes/UIScene'
+import type { GameAssistConfig } from './assistConfig'
 import { INGAME_WORLD, type IngameLayoutMode } from './ingameLayout'
 import { stopMajakBgm } from '../utils/majakSound'
 
@@ -34,6 +35,8 @@ export interface CreateGameOptions {
   inputConfig?: {
     nSelPasKey?: number
   }
+  /** アシスト設定 (CMJConfig::m_bChkTap/Pai/Tnp/Hor) */
+  assistConfig?: Partial<GameAssistConfig>
   /** 装備中カスタム背景 (CUSTOMITEM_BOARD_*) */
   customBgId?: number
   /** 装備中カスタム背景タイプ (CUSTOM_ITEM_TYPE_BG_*) */
@@ -68,6 +71,10 @@ function sameGameOptions(a: CreateGameOptions, b: CreateGameOptions): boolean {
     a.isViewer === b.isViewer &&
     a.roomOption === b.roomOption &&
     a.inputConfig?.nSelPasKey === b.inputConfig?.nSelPasKey &&
+    a.assistConfig?.bChkTap === b.assistConfig?.bChkTap &&
+    a.assistConfig?.bChkPai === b.assistConfig?.bChkPai &&
+    a.assistConfig?.bChkTnp === b.assistConfig?.bChkTnp &&
+    a.assistConfig?.bChkHor === b.assistConfig?.bChkHor &&
     a.customBgId === b.customBgId &&
     a.customBoardType === b.customBoardType &&
     a.customHaiId === b.customHaiId &&

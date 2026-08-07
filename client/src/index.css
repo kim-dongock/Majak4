@@ -1387,44 +1387,12 @@ body:has(.majak-game-screen) {
   line-height: 1.2;
 }
 
-.majak-desktop-auto-match-status {
-  position: absolute;
-  left: 270px;
-  top: 468px;
-  width: 370px;
-  min-height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  color: #8e1c0d;
-  background: rgba(255, 244, 191, 0.94);
-  border: 2px solid #a62c16;
-  box-shadow: 0 2px 0 rgba(81, 20, 9, 0.7);
-  font-family: var(--majak-font-family-ui);
-  box-sizing: border-box;
-  pointer-events: none;
-  z-index: 26;
-  animation: majak-auto-match-blink 1s steps(2, end) infinite;
-}
-
-.majak-desktop-auto-match-status strong {
-  font-size: 22px;
-  font-weight: 900;
-}
-
-.majak-desktop-auto-match-status span {
-  font-size: 14px;
-  font-weight: 700;
-}
-
 @keyframes majak-auto-match-blink {
   50% { opacity: 0.28; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .majak-mobile-auto-match-status,
-  .majak-desktop-auto-match-status {
+  .majak-mobile-auto-match-status {
     animation: none;
   }
 }

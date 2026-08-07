@@ -139,7 +139,7 @@ public enum ActionResult
     ErrPaiNotMatch, ErrAfterRichi, ErrSelf, ErrNotHoraForm,
     ErrFuriten, ErrNoYaku, ErrNotMenzen, ErrPointNotEnough,
     ErrNotTempai, ErrAnkanAfterRichi, ErrInvalidPaiCount,
-    ErrNotNextOrder, ErrInvalidAction,
+    ErrNotNextOrder, ErrInvalidAction, ErrKuikae,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

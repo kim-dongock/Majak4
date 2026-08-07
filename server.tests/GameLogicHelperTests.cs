@@ -503,6 +503,35 @@ public class CalcGradeModeLeveUpTests
         Assert.False(report.Users[0]!.UpdateBeginner);
         Assert.True(report.Users[0]!.UpdateExtra);
     }
+
+    [Theory]
+    [InlineData("0007A", 11, 3, -11)]
+    [InlineData("0007A", 12, 4, -36)]
+    [InlineData("0006A", 11, 4, -16)]
+    [InlineData("0007C", 13, 3, -27)]
+    [InlineData("0006C", 13, 4, -40)]
+    [InlineData("0007D", 16, 4, -120)]
+    [InlineData("0006D", 16, 4, -60)]
+    [InlineData("0007A", 13, 1, 0)]
+    [InlineData("0007B", 9, 1, 0)]
+    [InlineData("0007C", 12, 1, 0)]
+    [InlineData("0007D", 15, 1, 0)]
+    public void CalcGradeModeLeveUp_UsesOfficialPointTable(
+        string subId, int gradeLevel, int ranking, int expectedPoint)
+    {
+        var report = new GameReport();
+        report.Users[0] = new GameReport.UserResult
+        {
+            MemberNo = "u1",
+            PrevGradeLevel = gradeLevel,
+            PrevGradePoint = 3_000,
+            Ranking = ranking,
+        };
+
+        InvokeCalcGradeModeLeveUp(report, new GameRoom { SubId = subId });
+
+        Assert.Equal(expectedPoint, report.Users[0]!.GradeAddPoint);
+    }
 }
 
 public class GameResultPayloadTests
@@ -1089,6 +1118,38 @@ public class CalcRatingTests
         {
             Assert.Equal(10, u!.RatingChange);
             Assert.Equal(1510, u.Rating);
+        });
+    }
+
+    [Fact]
+    public void CalcRating_GradeMode_UsesAccumulatedGradeMatchCount()
+    {
+        var session = new PlayerSessionService();
+        for (int i = 1; i <= 4; i++)
+        {
+            var player = new MajakPlayer { ConnectionId = $"c{i}", MemberNo = $"u{i}" };
+            player.GradeRecord.Rating = 1500;
+            player.GradeRecord.MatchCnt = 400;
+            player.ActiveRecord = player.GradeRecord;
+            session.Register(player);
+        }
+
+        var service = BuildService(session);
+        var report = new GameReport();
+        for (int i = 0; i < 4; i++)
+            report.Users[i] = new GameReport.UserResult
+            {
+                MemberNo = $"u{i + 1}",
+                PointSum = 20,
+                MatchCnt = 1,
+            };
+
+        InvokeCalcRating(service, report, new GameRoom { SubId = "00G7A" });
+
+        Assert.All(report.Users.Where(user => user != null), user =>
+        {
+            Assert.Equal(2, user!.RatingChange);
+            Assert.Equal(1502, user.Rating);
         });
     }
 

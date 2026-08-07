@@ -11,58 +11,58 @@ namespace MajakServer.Tests;
 /// <summary>
 /// s_stLevelGradeMode[] の MaxPoint 値を検証する。
 /// 原典の enum GRADE_LEVEL を参照:
-///   GRADE_10_KYU=0 → .NET=100, GRADE_1_DAN=10 → .NET=1, GRADE_9_DAN=18 → .NET=9
+///   GRADE_10_KYU=0, GRADE_1_DAN=10, GRADE_9_DAN=18
 /// </summary>
 public class GradeLevelTableDetailTests
 {
     // ─── 級位 (Kyu) MaxPoint ──────────────────────────────────────────────
 
     // 原典: {GRADE_10_KYU, 0, 0, 30, FALSE}
-    [Fact] public void MaxPoint_Grade10Kyu_Is30()  => Assert.Equal(30, GradeLevelTable.GetMaxPoint(100));
+    [Fact] public void MaxPoint_Grade10Kyu_Is30()  => Assert.Equal(30, GradeLevelTable.GetMaxPoint(0));
     // 原典: {GRADE_9_KYU, 0, 0, 30, FALSE}
-    [Fact] public void MaxPoint_Grade9Kyu_Is30()   => Assert.Equal(30, GradeLevelTable.GetMaxPoint(101));
+    [Fact] public void MaxPoint_Grade9Kyu_Is30()   => Assert.Equal(30, GradeLevelTable.GetMaxPoint(1));
     // 原典: {GRADE_8_KYU, 0, 0, 30, FALSE}
-    [Fact] public void MaxPoint_Grade8Kyu_Is30()   => Assert.Equal(30, GradeLevelTable.GetMaxPoint(102));
+    [Fact] public void MaxPoint_Grade8Kyu_Is30()   => Assert.Equal(30, GradeLevelTable.GetMaxPoint(2));
     // 原典: {GRADE_7_KYU, 0, 0, 30, FALSE}
-    [Fact] public void MaxPoint_Grade7Kyu_Is30()   => Assert.Equal(30, GradeLevelTable.GetMaxPoint(103));
+    [Fact] public void MaxPoint_Grade7Kyu_Is30()   => Assert.Equal(30, GradeLevelTable.GetMaxPoint(3));
     // 原典: {GRADE_6_KYU, 0, 0, 60, FALSE}
-    [Fact] public void MaxPoint_Grade6Kyu_Is60()   => Assert.Equal(60, GradeLevelTable.GetMaxPoint(104));
+    [Fact] public void MaxPoint_Grade6Kyu_Is60()   => Assert.Equal(60, GradeLevelTable.GetMaxPoint(4));
     // 原典: {GRADE_5_KYU, 0, 0, 60, FALSE}
-    [Fact] public void MaxPoint_Grade5Kyu_Is60()   => Assert.Equal(60, GradeLevelTable.GetMaxPoint(105));
+    [Fact] public void MaxPoint_Grade5Kyu_Is60()   => Assert.Equal(60, GradeLevelTable.GetMaxPoint(5));
     // 原典: {GRADE_4_KYU, 0, 0, 60, FALSE}
-    [Fact] public void MaxPoint_Grade4Kyu_Is60()   => Assert.Equal(60, GradeLevelTable.GetMaxPoint(106));
+    [Fact] public void MaxPoint_Grade4Kyu_Is60()   => Assert.Equal(60, GradeLevelTable.GetMaxPoint(6));
     // 原典: {GRADE_3_KYU, 0, 0, 90, FALSE}
-    [Fact] public void MaxPoint_Grade3Kyu_Is90()   => Assert.Equal(90, GradeLevelTable.GetMaxPoint(107));
+    [Fact] public void MaxPoint_Grade3Kyu_Is90()   => Assert.Equal(90, GradeLevelTable.GetMaxPoint(7));
     // 原典: {GRADE_2_KYU, 0, 0, 90, FALSE}
-    [Fact] public void MaxPoint_Grade2Kyu_Is90()   => Assert.Equal(90, GradeLevelTable.GetMaxPoint(108));
+    [Fact] public void MaxPoint_Grade2Kyu_Is90()   => Assert.Equal(90, GradeLevelTable.GetMaxPoint(8));
     // 原典: {GRADE_1_KYU, 0, 0, 90, FALSE}
-    [Fact] public void MaxPoint_Grade1Kyu_Is90()   => Assert.Equal(90, GradeLevelTable.GetMaxPoint(109));
+    [Fact] public void MaxPoint_Grade1Kyu_Is90()   => Assert.Equal(90, GradeLevelTable.GetMaxPoint(9));
 
     // ─── 段位 (Dan) MaxPoint ─────────────────────────────────────────────
 
     // 原典: {GRADE_1_DAN, 0, 0, 600, FALSE}
-    [Fact] public void MaxPoint_Grade1Dan_Is600()  => Assert.Equal(600,  GradeLevelTable.GetMaxPoint(1));
+    [Fact] public void MaxPoint_Grade1Dan_Is600()  => Assert.Equal(600,  GradeLevelTable.GetMaxPoint(10));
     // 原典: {GRADE_2_DAN, 600, 0, 1200, TRUE}
-    [Fact] public void MaxPoint_Grade2Dan_Is1200() => Assert.Equal(1200, GradeLevelTable.GetMaxPoint(2));
+    [Fact] public void MaxPoint_Grade2Dan_Is1200() => Assert.Equal(1200, GradeLevelTable.GetMaxPoint(11));
     // 原典: {GRADE_3_DAN, 600, 0, 1200, TRUE}
-    [Fact] public void MaxPoint_Grade3Dan_Is1200() => Assert.Equal(1200, GradeLevelTable.GetMaxPoint(3));
+    [Fact] public void MaxPoint_Grade3Dan_Is1200() => Assert.Equal(1200, GradeLevelTable.GetMaxPoint(12));
     // 原典: {GRADE_4_DAN, 1200, 0, 2400, TRUE}
-    [Fact] public void MaxPoint_Grade4Dan_Is2400() => Assert.Equal(2400, GradeLevelTable.GetMaxPoint(4));
+    [Fact] public void MaxPoint_Grade4Dan_Is2400() => Assert.Equal(2400, GradeLevelTable.GetMaxPoint(13));
     // 原典: {GRADE_5_DAN, 1200, 0, 2400, TRUE}
-    [Fact] public void MaxPoint_Grade5Dan_Is2400() => Assert.Equal(2400, GradeLevelTable.GetMaxPoint(5));
+    [Fact] public void MaxPoint_Grade5Dan_Is2400() => Assert.Equal(2400, GradeLevelTable.GetMaxPoint(14));
     // 原典: {GRADE_6_DAN, 1200, 0, 2400, TRUE}
-    [Fact] public void MaxPoint_Grade6Dan_Is2400() => Assert.Equal(2400, GradeLevelTable.GetMaxPoint(6));
+    [Fact] public void MaxPoint_Grade6Dan_Is2400() => Assert.Equal(2400, GradeLevelTable.GetMaxPoint(15));
     // 原典: {GRADE_7_DAN, 2400, 0, 4800, TRUE}
-    [Fact] public void MaxPoint_Grade7Dan_Is4800() => Assert.Equal(4800, GradeLevelTable.GetMaxPoint(7));
+    [Fact] public void MaxPoint_Grade7Dan_Is4800() => Assert.Equal(4800, GradeLevelTable.GetMaxPoint(16));
     // 原典: {GRADE_8_DAN, 2400, 0, 4800, TRUE}
-    [Fact] public void MaxPoint_Grade8Dan_Is4800() => Assert.Equal(4800, GradeLevelTable.GetMaxPoint(8));
+    [Fact] public void MaxPoint_Grade8Dan_Is4800() => Assert.Equal(4800, GradeLevelTable.GetMaxPoint(17));
     // 原典: {GRADE_9_DAN, 2400, 0, 4800, TRUE}
-    [Fact] public void MaxPoint_Grade9Dan_Is4800() => Assert.Equal(4800, GradeLevelTable.GetMaxPoint(9));
+    [Fact] public void MaxPoint_Grade9Dan_Is4800() => Assert.Equal(4800, GradeLevelTable.GetMaxPoint(18));
 
     // ─── 未定義グレード ───────────────────────────────────────────────────
 
-    [Fact] public void MaxPoint_Unknown_Is0()      => Assert.Equal(0,    GradeLevelTable.GetMaxPoint(999));
-    [Fact] public void MaxPoint_Zero_Is0()         => Assert.Equal(0,    GradeLevelTable.GetMaxPoint(0));
+    [Fact] public void MaxPoint_Unknown_Is0()      => Assert.Equal(0, GradeLevelTable.GetMaxPoint(999));
+    [Fact] public void MaxPoint_Negative_Is0()     => Assert.Equal(0, GradeLevelTable.GetMaxPoint(-1));
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

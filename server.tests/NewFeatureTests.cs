@@ -20,27 +20,27 @@ namespace MajakServer.Tests;
 // ═══════════════════════════════════════════════════════════════════════════
 public class GradeLevelTableTests
 {
-    // 原典 s_stLevelGradeMode の全 19 エントリを検証
+    // 公式段位ポイント表の全 19 エントリを検証
     [Theory]
-    [InlineData(100, 30)]   // GRADE_10_KYU
-    [InlineData(101, 30)]   // GRADE_9_KYU
-    [InlineData(102, 30)]   // GRADE_8_KYU
-    [InlineData(103, 30)]   // GRADE_7_KYU
-    [InlineData(104, 60)]   // GRADE_6_KYU
-    [InlineData(105, 60)]   // GRADE_5_KYU
-    [InlineData(106, 60)]   // GRADE_4_KYU
-    [InlineData(107, 90)]   // GRADE_3_KYU
-    [InlineData(108, 90)]   // GRADE_2_KYU
-    [InlineData(109, 90)]   // GRADE_1_KYU
-    [InlineData(1,   600)]  // GRADE_1_DAN
-    [InlineData(2,   1200)] // GRADE_2_DAN
-    [InlineData(3,   1200)] // GRADE_3_DAN
-    [InlineData(4,   2400)] // GRADE_4_DAN
-    [InlineData(5,   2400)] // GRADE_5_DAN
-    [InlineData(6,   2400)] // GRADE_6_DAN
-    [InlineData(7,   4800)] // GRADE_7_DAN
-    [InlineData(8,   4800)] // GRADE_8_DAN
-    [InlineData(9,   4800)] // GRADE_9_DAN
+    [InlineData(0, 30)]
+    [InlineData(1, 30)]
+    [InlineData(2, 30)]
+    [InlineData(3, 30)]
+    [InlineData(4, 60)]
+    [InlineData(5, 60)]
+    [InlineData(6, 60)]
+    [InlineData(7, 90)]
+    [InlineData(8, 90)]
+    [InlineData(9, 90)]
+    [InlineData(10, 600)]
+    [InlineData(11, 1200)]
+    [InlineData(12, 1200)]
+    [InlineData(13, 2400)]
+    [InlineData(14, 2400)]
+    [InlineData(15, 2400)]
+    [InlineData(16, 4800)]
+    [InlineData(17, 4800)]
+    [InlineData(18, 4800)]
     public void GetMaxPoint_KnownGrade_ReturnsCorrectValue(int grade, int expected)
     {
         Assert.Equal(expected, GradeLevelTable.GetMaxPoint(grade));
@@ -49,7 +49,7 @@ public class GradeLevelTableTests
     [Fact]
     public void GetMaxPoint_UnknownGrade_ReturnsZero()
     {
-        Assert.Equal(0, GradeLevelTable.GetMaxPoint(0));
+        Assert.Equal(0, GradeLevelTable.GetMaxPoint(-1));
         Assert.Equal(0, GradeLevelTable.GetMaxPoint(99));
         Assert.Equal(0, GradeLevelTable.GetMaxPoint(999));
     }
@@ -57,15 +57,13 @@ public class GradeLevelTableTests
     [Fact]
     public void GetMaxPoint_Grade1Dan_Is600()
     {
-        // GRADE_1_DAN (値=1) の MaxPoint は 600
-        Assert.Equal(600, GradeLevelTable.GetMaxPoint(1));
+        Assert.Equal(600, GradeLevelTable.GetMaxPoint(10));
     }
 
     [Fact]
     public void GetMaxPoint_TopGrade_Is4800()
     {
-        // GRADE_9_DAN (値=9) の MaxPoint は 4800
-        Assert.Equal(4800, GradeLevelTable.GetMaxPoint(9));
+        Assert.Equal(4800, GradeLevelTable.GetMaxPoint(18));
     }
 }
 

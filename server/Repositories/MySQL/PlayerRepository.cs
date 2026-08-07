@@ -274,15 +274,37 @@ public class PlayerRepository
 
     private static async Task EnsureModeStatsAsync(GameDataContext db, ulong memberNoValue, string modeCode, DateTime now)
     {
-        if (await db.PlayerModeStats.AnyAsync(item => item.MemberNo == memberNoValue && item.ModeCode == modeCode)) return;
+        var existing = await db.PlayerModeStats
+            .SingleOrDefaultAsync(item => item.MemberNo == memberNoValue && item.ModeCode == modeCode);
+        if (existing is not null)
+        {
+            if (ShouldRepairInitialGradeRating(existing))
+            {
+                existing.Rating = GameConst.RatingGradeModeInit;
+                existing.UpdatedAt = now;
+            }
+            return;
+        }
+
         db.PlayerModeStats.Add(new PlayerModeStatsEntity
         {
             MemberNo = memberNoValue,
             ModeCode = modeCode,
+            Rating = GetInitialModeRating(modeCode),
             CreatedAt = now,
             UpdatedAt = now,
         });
     }
+
+    internal static int GetInitialModeRating(string modeCode)
+        => string.Equals(modeCode, "grade", StringComparison.Ordinal)
+            ? GameConst.RatingGradeModeInit
+            : 1400;
+
+    internal static bool ShouldRepairInitialGradeRating(PlayerModeStatsEntity stats)
+        => string.Equals(stats.ModeCode, "grade", StringComparison.Ordinal)
+            && stats.Rating == 1400
+            && stats.MatchCount == 0;
 
     /// <summary>
     /// Loads MJKHANGERAT state for regular channels.

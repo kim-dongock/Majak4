@@ -1,11 +1,40 @@
 using MajakServer.Commands.Channel;
 using MajakServer.Infrastructure;
+using MajakServer.Models.Protocol;
 using MajakServer.Repositories.MySQL;
 
 namespace MajakServer.Tests;
 
 public class PlayerRepositoryTests
 {
+    [Theory]
+    [InlineData("grade", GameConst.RatingGradeModeInit)]
+    [InlineData("regular", 1400)]
+    [InlineData("compete", 1400)]
+    [InlineData("high_class", 1400)]
+    public void GetInitialModeRating_UsesOfficialGradeRating(string modeCode, int expected)
+    {
+        Assert.Equal(expected, PlayerRepository.GetInitialModeRating(modeCode));
+    }
+
+    [Theory]
+    [InlineData("grade", 1400, 0, true)]
+    [InlineData("grade", 1400, 1, false)]
+    [InlineData("grade", 1500, 0, false)]
+    [InlineData("regular", 1400, 0, false)]
+    public void ShouldRepairInitialGradeRating_OnlyRepairsUntouchedLegacyRows(
+        string modeCode, int rating, uint matchCount, bool expected)
+    {
+        var stats = new Repositories.MySQL.Entities.PlayerModeStatsEntity
+        {
+            ModeCode = modeCode,
+            Rating = rating,
+            MatchCount = matchCount,
+        };
+
+        Assert.Equal(expected, PlayerRepository.ShouldRepairInitialGradeRating(stats));
+    }
+
     [Theory]
     [InlineData("Y", true)]
     [InlineData("y", true)]

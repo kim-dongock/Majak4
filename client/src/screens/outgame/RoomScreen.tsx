@@ -1045,6 +1045,12 @@ export default function RoomScreen() {
       players: playersRef.current as unknown as Array<Record<string, unknown>>,
       roomOption: currentRoomOption,
       inputConfig: { nSelPasKey: roomCfg.nSelPasKey },
+      assistConfig: {
+        bChkTap: roomCfg.bChkTap,
+        bChkPai: roomCfg.bChkPai,
+        bChkTnp: roomCfg.bChkTnp,
+        bChkHor: roomCfg.bChkHor,
+      },
       customBgId: customBoardId,
       customBoardType,
       customHaiId,

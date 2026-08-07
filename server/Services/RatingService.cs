@@ -139,17 +139,12 @@ public class RatingService
     }
 
     /// <summary>
-    /// 段位モードチャンネル進入チェック — 原典: CheckEnterGradeMode
+    /// 段位モードチャンネル進入チェック — 公式段位ポイント表
     ///
-    /// 原典: HMajChnlServer::CheckEnterGradeMode
-    ///   1. プレイヤーのゲームマネーが DEALER_BASE(500) 以上あるか
-    ///   2. subId[4] に対応する段位テーブルの範囲内に GradeLevel があるか
-    ///
-    /// s_stEnterGradeModeCond テーブル (HMajCommon.h):
-    ///   'A' (通常卓)   : GRADE_10_KYU(0)  ～ GRADE_1_DAN(10)
-    ///   'B' (段位卓)   : GRADE_1_DAN(10)  ～ GRADE_4_DAN(13)
-    ///   'C' (高段位卓) : GRADE_2_DAN(11)  ～ GRADE_9_DAN(18)
-    ///   'D' (十段位卓) : GRADE_4_DAN(13)  ～ GRADE_9_DAN(18)
+    ///   'A' (通常卓)   : 四段未満
+    ///   'B' (段位卓)   : 初段以上、所持5000円以上
+    ///   'C' (高段位卓) : 四段以上、所持10000円以上
+    ///   'D' (十段位卓) : 七段以上、所持30000円以上
     /// </summary>
     /// <param name="gradeLevel">プレイヤーの現在段位 (GRADE_LEVEL enum 相当の int)</param>
     /// <param name="gamMoney">プレイヤーの保有ゲームマネー</param>
@@ -157,19 +152,15 @@ public class RatingService
     /// <returns>進入許可なら true</returns>
     public bool CheckEnterGradeMode(int gradeLevel, long gamMoney, string subId)
     {
-        // DEALER_BASE = 500 (HMajDef.h)
-        if (gamMoney < 500) return false;
-
         if (string.IsNullOrEmpty(subId) || subId.Length < 5) return false;
         char chanelType = subId[4];
 
-        // s_stEnterGradeModeCond テーブル
         return chanelType switch
         {
-            'A' => gradeLevel >= 0  && gradeLevel <= 10, // 通常卓: 10級 ～ 初段
-            'B' => gradeLevel >= 10 && gradeLevel <= 13, // 段位卓: 初段 ～ 四段
-            'C' => gradeLevel >= 11 && gradeLevel <= 18, // 高段位卓: 二段 ～ 九段
-            'D' => gradeLevel >= 13 && gradeLevel <= 18, // 十段位卓: 四段 ～ 九段
+            'A' => gamMoney >= 500    && gradeLevel >= 0  && gradeLevel <= 12,
+            'B' => gamMoney >= 5_000  && gradeLevel >= 10 && gradeLevel <= 18,
+            'C' => gamMoney >= 10_000 && gradeLevel >= 13 && gradeLevel <= 18,
+            'D' => gamMoney >= 30_000 && gradeLevel >= 16 && gradeLevel <= 18,
             _   => false,
         };
     }

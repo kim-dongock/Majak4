@@ -901,8 +901,16 @@ public class AutoMatchingBackgroundServiceTests
     {
         var playerRepo = new Mock<PlayerRepository>(MockBehavior.Loose);
         playerRepo.Setup(r => r.GetCupConfigsAsync()).ReturnsAsync(new List<CupConfig>());
+        var channelRepo = new Mock<ChannelRepository>(MockBehavior.Loose,
+            (GameDataContextFactory)null!, TestMasterCacheFactory.CreateRedisService());
+        channelRepo.Setup(r => r.GetChannelListAsync(It.IsAny<string>())).ReturnsAsync(new List<ChannelInfo>
+        {
+            new() { ChanelId = "ch1", UnitMoney = 20 },
+        });
         var services = new ServiceCollection();
-        services.AddSingleton(TestMasterCacheFactory.Create(playerRepo: playerRepo.Object));
+        services.AddSingleton(TestMasterCacheFactory.Create(
+            playerRepo: playerRepo.Object,
+            channelRepo: channelRepo.Object));
         var provider = services.BuildServiceProvider();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
         var logger       = new Mock<ILogger<AutoMatchingBackgroundService>>();
@@ -1001,5 +1009,6 @@ public class AutoMatchingBackgroundServiceTests
         var pending = _session.GetPendingMatch(rooms[0].RoomId);
         Assert.NotNull(pending);
         Assert.Equal(4, pending!.ExpectedMembers.Length);
+        Assert.Equal(20, rooms[0].UnitMoney);
     }
 }

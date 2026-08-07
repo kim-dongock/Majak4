@@ -32,7 +32,7 @@ public class ChannelRepository
     /// CHANELWT:   動的状態 (現在人数・使用中ルーム数等)
     /// Redis キャッシュヒット時は DB 接続を行わない。
     /// </summary>
-    public async Task<IReadOnlyList<ChannelInfo>> GetChannelListAsync(string gameId = "MAJAK4")
+    public virtual async Task<IReadOnlyList<ChannelInfo>> GetChannelListAsync(string gameId = "MAJAK4")
     {
         // Redis キャッシュ確認 (15分 TTL) — MasterCacheService 経由で呼ばれることが多いが、
         // Program.cs 起動時など直接呼ばれる場合もキャッシュを使う

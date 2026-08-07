@@ -393,6 +393,31 @@ public class MajakGameHub : Hub
         }
     }
 
+    public async Task<object?> GetWaitGuidePreview(int roomId, int discardBipaiIndex)
+    {
+        var player = _session.GetByConn(Context.ConnectionId);
+        if (player == null
+            || !_session.IsCurrentConnection(player.MemberNo, Context.ConnectionId)
+            || player.RoomId != roomId
+            || player.IsViewer
+            || player.IsOutPlayer
+            || player.EngineOrder < 0
+            || player.EngineOrder >= GameConst.PlayerMaxCount)
+            return null;
+
+        var room = _session.GetRoom(roomId);
+        if (room?.State != GameRoomState.Playing) return null;
+        if (!await room.EngineLock.WaitAsync(TimeSpan.FromMilliseconds(500))) return null;
+        try
+        {
+            return room.Engine.EvaluateWaitGuide(player.EngineOrder, discardBipaiIndex);
+        }
+        finally
+        {
+            room.EngineLock.Release();
+        }
+    }
+
     public async Task<object> GetGameStateFingerprint(int roomId)
     {
         var player = _session.GetByConn(Context.ConnectionId);

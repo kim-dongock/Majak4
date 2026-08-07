@@ -52,6 +52,7 @@
  *     LTEXT "カーソルが合っている牌を捨てたときの\n各待ち牌の残り枚数と確定翻数を表示します" (20,135,196,19)
  */
 import { useState } from 'react'
+import { GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig } from '../../../game/assistConfig'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 // DU→px 変換 (9pt "MS UI Gothic" @96dpi: baseX=6px → 6/4=1.5, baseY=13px → 13/8=1.625)
@@ -120,11 +121,15 @@ export function loadMajakConfig(): MJConfig {
 
 export function saveMajakConfig(cfg: MJConfig): void {
   if (typeof window === 'undefined') return
+  const normalized = normalizeConfig(cfg)
   try {
-    window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(normalizeConfig(cfg)))
+    window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(normalized))
   } catch {
     // localStorage can be unavailable in private or embedded contexts.
   }
+  window.dispatchEvent(new CustomEvent(GAME_ASSIST_CONFIG_EVENT, {
+    detail: toGameAssistConfig(normalized),
+  }))
 }
 
 interface Props {

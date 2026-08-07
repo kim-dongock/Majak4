@@ -332,18 +332,16 @@ public class RoomForceExitPayloadTests
 /// </summary>
 public class GradeLevelTableExtraTests
 {
-    // シナリオ1: 全段位コードの GetMaxPoint が非負
+    // シナリオ1: 全段位コードの GetMaxPoint が正数
     [Fact]
-    public void GetMaxPoint_AllDefinedGrades_NonNegative()
+    public void GetMaxPoint_AllDefinedGrades_Positive()
     {
-        // 10級(100) ～ 9段(9) の全段位
-        int[] grades = { 100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
-                          1,   2,   3,   4,   5,   6,   7,   8,   9 };
+        int[] grades = Enumerable.Range(0, 19).ToArray();
         foreach (var g in grades)
         {
             int maxPt = GradeLevelTable.GetMaxPoint(g);
-            Assert.True(maxPt >= 0,
-                $"Grade {g} returned negative MaxPoint: {maxPt}");
+            Assert.True(maxPt > 0,
+                $"Grade {g} returned non-positive MaxPoint: {maxPt}");
         }
     }
 
@@ -357,8 +355,8 @@ public class GradeLevelTableExtraTests
     [Fact]
     public void GetMaxPoint_Dan_GreaterThanKyu()
     {
-        int kyuMax = GradeLevelTable.GetMaxPoint(100); // 10級
-        int danMax = GradeLevelTable.GetMaxPoint(1);   // 1段
+        int kyuMax = GradeLevelTable.GetMaxPoint(0);  // 10級
+        int danMax = GradeLevelTable.GetMaxPoint(10); // 初段
         Assert.True(danMax > kyuMax,
             $"1段({danMax}) should have more points than 10級({kyuMax})");
     }

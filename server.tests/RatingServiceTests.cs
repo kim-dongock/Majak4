@@ -121,4 +121,25 @@ public class RatingServiceTests
         Assert.Equal(2, player.NLevel);   // 500コイン → NLevel=2
         Assert.Equal("庶民", player.SLevel);
     }
+
+    [Theory]
+    [InlineData(0, 499, "0ZG6A", false)]
+    [InlineData(0, 500, "0ZG6A", true)]
+    [InlineData(12, 500, "0ZG6A", true)]
+    [InlineData(13, 500, "0ZG6A", false)]
+    [InlineData(10, 4_999, "0ZG6B", false)]
+    [InlineData(10, 5_000, "0ZG6B", true)]
+    [InlineData(18, 5_000, "0ZG6B", true)]
+    [InlineData(13, 9_999, "0ZG6C", false)]
+    [InlineData(12, 10_000, "0ZG6C", false)]
+    [InlineData(13, 10_000, "0ZG6C", true)]
+    [InlineData(16, 29_999, "0ZG6D", false)]
+    [InlineData(15, 30_000, "0ZG6D", false)]
+    [InlineData(16, 30_000, "0ZG6D", true)]
+    [InlineData(18, 30_000, "0ZG6D", true)]
+    public void CheckEnterGradeMode_UsesOfficialRoomBoundaries(
+        int gradeLevel, long gamMoney, string subId, bool expected)
+    {
+        Assert.Equal(expected, _svc.CheckEnterGradeMode(gradeLevel, gamMoney, subId));
+    }
 }

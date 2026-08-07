@@ -2088,6 +2088,34 @@ public class GameLogicHelperTests
     }
 
     [Fact]
+    public async Task MakeGameReport_MoneyChangeUsesUnitMoneyInsteadOfMoneyRate()
+    {
+        var room = new GameRoom
+        {
+            RoomId = 13,
+            ChannelId = "ch1",
+            SubId = "0ZG6A",
+            MoneyRate = 3,
+            UnitMoney = 20,
+        };
+        room.AddPlayer(new MajakPlayer
+        {
+            MemberNo = "seat0",
+            NickName = "P0",
+            ConnectionId = "c0",
+        }, 0);
+        room.Engine.InitHanchan(new RuleInfo());
+        room.Engine.HanchanInfo.Player = new[] { 0, 1, 2, 3 };
+        Array.Fill(room.SeatToEngineOrder, -1);
+        room.SeatToEngineOrder[0] = 0;
+        room.Engine.Player[0].SetTotal = 5;
+
+        var report = await InvokeMakeGameReport(room);
+
+        Assert.Equal(100L, report.Users[0]!.MoneyChange);
+    }
+
+    [Fact]
     public async Task MakeGameReport_TrainingEmptyEngineSeats_AddsNpcRows()
     {
         var room = new GameRoom { RoomId = 12, ChannelId = "ch1", SubId = "00T5A", MoneyRate = 1 };
@@ -2102,6 +2130,8 @@ public class GameLogicHelperTests
         Array.Fill(room.SeatToEngineOrder, -1);
         room.SeatToEngineOrder[0] = 0;
 
+        room.Engine.Player[0].SetTotal = -500;
+
         room.Engine.Player[1].SetRank = 1;
         room.Engine.Player[1].GamePoint = 26000;
         room.Engine.Player[1].SetPoint = 1000;
@@ -2111,6 +2141,7 @@ public class GameLogicHelperTests
         var report = await InvokeMakeGameReport(room);
 
         Assert.Equal("seat0", report.Users[0]!.MemberNo);
+        Assert.Equal(0L, report.Users[0]!.MoneyChange);
         Assert.Equal(TournamentConst.NpcMemberNo, report.Users[1]!.MemberNo);
         Assert.False(report.Users[1]!.IsConnect);
         Assert.False(report.Users[1]!.Connected);
@@ -2119,6 +2150,7 @@ public class GameLogicHelperTests
         Assert.Equal(1000, report.Users[1]!.SetPoint);
         Assert.True(report.Users[1]!.Yakitori);
         Assert.Equal(25, report.Users[1]!.Chip);
+        Assert.Equal(0L, report.Users[1]!.MoneyChange);
     }
 
     // シナリオ: SendPaiInfoToAll はトーナメントチャンネルのプレイヤーに全公開情報を送る

@@ -165,11 +165,15 @@ public class AutoMatchingBackgroundService : BackgroundService
         // Legacy: AddReservePlayer keeps players in reserved state until each mjkc6e (AutoEnterRoom) arrives.
         // Cup channels attach CupConfig (JudgementType / CupId / CupSeq) to the room.
         Infrastructure.CupConfig? cupConfig = null;
+        ChannelInfo? channelInfo = null;
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var masterCache = scope.ServiceProvider.GetRequiredService<Infrastructure.MasterCacheService>();
             var cupConfigs  = await masterCache.GetCupConfigsAsync();
             cupConfig       = cupConfigs.FirstOrDefault(c => c.ChannelId == channelId);
+            var channels    = await masterCache.GetChannelListAsync();
+            channelInfo     = channels.FirstOrDefault(c => c.ChanelId == channelId)
+                ?? channels.FirstOrDefault(c => c.SubId == subId);
         }
 
         var room = _session.CreateReservedRoom(
@@ -189,7 +193,8 @@ public class AutoMatchingBackgroundService : BackgroundService
             cupEntryLimited:     cupConfig?.EntryLimited     ?? false,
             cupNormalYakuCondition: cupConfig?.NormalYakuCondition ?? "",
             cupYakumanCondition:    cupConfig?.YakumanCondition    ?? "",
-            subId: subId);
+            subId: subId,
+            unitMoney: channelInfo?.UnitMoney ?? 0);
         room.ServerUrl = _serverSettings.ResolveUrl(channelId);
 
         // Store SubId on the room for channel type checks.
