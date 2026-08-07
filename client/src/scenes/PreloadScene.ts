@@ -25,7 +25,8 @@
  *   三元牌(kind=3): 0x35-0x37 → frame 31-33
  */
 import Phaser from 'phaser'
-import { GAME_OPTIONS_REGISTRY_KEY, getGameOptions } from '../game/GameInstance'
+import { GAME_OPTIONS_REGISTRY_KEY, getGameOptions, type CreateGameOptions } from '../game/GameInstance'
+import { emitGameLoadProgress } from '../game/gameLoadProgress'
 import { getLegacyFullUiSkinId } from '../utils/legacySkinPalette'
 
 const IMG  = '/assets/images/game'
@@ -42,15 +43,32 @@ function customSkinBase(id: number): string {
 }
 
 export default class PreloadScene extends Phaser.Scene {
-  constructor() {
+  private readonly initialOptions?: CreateGameOptions
+  private readonly preloadOnly: boolean
+  private readonly onPreloadComplete?: () => void
+  private preloadStartedAt = 0
+
+  constructor(config: { options?: CreateGameOptions; preloadOnly?: boolean; onComplete?: () => void } = {}) {
     super({ key: 'PreloadScene' })
+    this.initialOptions = config.options
+    this.preloadOnly = Boolean(config.preloadOnly)
+    this.onPreloadComplete = config.onComplete
   }
 
   preload() {
-    const options = getGameOptions()
+    const options = this.initialOptions ?? getGameOptions()
     const customBgId = Number(options.customBgId ?? 0)
     const customBoardType = Number(options.customBoardType ?? 0)
     const customHaiId = Number(options.customHaiId ?? 0)
+    this.preloadStartedAt = performance.now()
+    if (!this.preloadOnly) emitGameLoadProgress('resources')
+    console.info('[GameAssets] load start', {
+      phase: this.preloadOnly ? 'app-startup-cache-warmup' : 'game-start',
+      customBgId,
+      customBoardType,
+      customHaiId,
+      startedAt: new Date().toISOString(),
+    })
     const customBgSuffix = customSkinSuffix(customBgId)
     const customHaiSuffix = customSkinSuffix(customHaiId)
     const fullUiSkinId = getLegacyFullUiSkinId(customBgId, customBoardType)
@@ -300,6 +318,17 @@ export default class PreloadScene extends Phaser.Scene {
   }
 
   create() {
+    const durationMs = Math.round(performance.now() - this.preloadStartedAt)
+    console.info('[GameAssets] load complete', {
+      phase: this.preloadOnly ? 'app-startup-cache-warmup' : 'game-start',
+      durationMs,
+      completedAt: new Date().toISOString(),
+    })
+    if (this.preloadOnly) {
+      this.onPreloadComplete?.()
+      return
+    }
+    emitGameLoadProgress('scene', { resourceDurationMs: durationMs })
     const options = this.game.registry.get(GAME_OPTIONS_REGISTRY_KEY) ?? getGameOptions()
     this.scene.start('GameScene', options)
   }

@@ -50,6 +50,8 @@ let gameInstance: Phaser.Game | null = null
 /** リプレイモード設定 — Phaser シーンが参照できるよう module スコープで保持 */
 let _gameOptions: CreateGameOptions = {}
 let gameParent: HTMLElement | null = null
+const warmedAssetSignatures = new Set<string>()
+const assetWarmups = new Map<string, Promise<void>>()
 
 export function getGameOptions(): CreateGameOptions { return _gameOptions }
 
@@ -71,6 +73,72 @@ function sameGameOptions(a: CreateGameOptions, b: CreateGameOptions): boolean {
     a.customHaiId === b.customHaiId &&
     a.skipInitialRoomEnter === b.skipInitialRoomEnter &&
     a.paifu === b.paifu
+}
+
+function assetSignature(options: CreateGameOptions): string {
+  return JSON.stringify({
+    customBgId: options.customBgId ?? 0,
+    customBoardType: options.customBoardType ?? 0,
+    customHaiId: options.customHaiId ?? 0,
+  })
+}
+
+export function warmGameAssetCache(options: CreateGameOptions = {}): Promise<void> {
+  const signature = assetSignature(options)
+  if (warmedAssetSignatures.has(signature)) return Promise.resolve()
+  const existing = assetWarmups.get(signature)
+  if (existing) return existing
+
+  const warmup = new Promise<void>((resolve, reject) => {
+    const parent = document.createElement('div')
+    Object.assign(parent.style, {
+      position: 'fixed',
+      left: '-10000px',
+      top: '-10000px',
+      width: '1px',
+      height: '1px',
+      overflow: 'hidden',
+      pointerEvents: 'none',
+    })
+    parent.setAttribute('aria-hidden', 'true')
+    document.body.appendChild(parent)
+
+    let warmupGame: Phaser.Game | null = null
+    const cleanup = () => {
+      window.setTimeout(() => {
+        warmupGame?.destroy(true)
+        parent.remove()
+      }, 0)
+    }
+
+    try {
+      warmupGame = new Phaser.Game({
+        type: Phaser.CANVAS,
+        width: 1,
+        height: 1,
+        parent,
+        audio: { noAudio: true },
+        render: { antialias: false, pixelArt: true },
+        scene: [new PreloadScene({
+          options,
+          preloadOnly: true,
+          onComplete: () => {
+            warmedAssetSignatures.add(signature)
+            cleanup()
+            resolve()
+          },
+        })],
+      })
+    } catch (error) {
+      cleanup()
+      reject(error)
+    }
+  }).finally(() => {
+    assetWarmups.delete(signature)
+  })
+
+  assetWarmups.set(signature, warmup)
+  return warmup
 }
 
 export function createGame(parent: HTMLElement, options: CreateGameOptions = {}): Phaser.Game {

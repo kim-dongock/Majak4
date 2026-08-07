@@ -69,6 +69,10 @@ public class MajakGameHub : Hub
     {
         try
         {
+            var observedPlayer = _session.GetByConn(Context.ConnectionId);
+            using var memberEntryLease = observedPlayer == null
+                ? null
+                : await _session.AcquireMemberEntryLockAsync(observedPlayer.MemberNo);
             var player = _session.GetByConn(Context.ConnectionId);
             var disconnectReason = _session.PeekDisconnectReason(Context.ConnectionId);
             _sp.GetService<ILogger<MajakGameHub>>()?.LogWarning(exception,
@@ -89,6 +93,17 @@ public class MajakGameHub : Hub
             Context.GetHttpContext()?.Connection.RemoteIpAddress?.ToString() ?? "");
             if (player != null)
             {
+                if (!_session.IsCurrentConnection(player.MemberNo, Context.ConnectionId))
+                {
+                    _sp.GetService<ILogger<MajakGameHub>>()?.LogInformation(
+                        "[GameReconnect] stale disconnect ignored because a newer connection owns the member session. disconnectedConnectionId={DisconnectedConnectionId} memberNo={MemberNo} currentConnectionId={CurrentConnectionId} roomId={RoomId}",
+                        Context.ConnectionId,
+                        player.MemberNo,
+                        _session.GetByMember(player.MemberNo)?.ConnectionId ?? "",
+                        player.RoomId);
+                    _session.Remove(Context.ConnectionId);
+                    return;
+                }
                 if (player.RoomId != null)
                 {
                     await HandleRoomDisconnectAsync(player);
@@ -136,10 +151,47 @@ public class MajakGameHub : Hub
             // Disconnect during play (legacy: PS_PLAY / PS_CONTINUE).
             // Set the out-player flag (legacy: m_bIsOutPlayer = TRUE).
             player.IsOutPlayer = true;
-            await _roomRegistry.SetContinueRoomAsync(player.MemberNo, room);
 
-            // LimitCnt is the number of active connected players left in the room.
-            room.LimitCnt = room.Seats.Count(s => s != null && !s.IsOutPlayer);
+            var removedRoom = _session.RemovePlayingRoomIfNoActivePlayers(roomId);
+            if (removedRoom != null)
+            {
+                await Clients.Group($"room_{roomId}")
+                    .SendAsync(Cmd.AutoExitRoom, new Dictionary<string, object?>
+                    {
+                        [GKey.Pix] = "",
+                        ["memberNo"] = "",
+                        ["message"] = "対局者が全員退室したため、観戦を終了します。",
+                        [Key.RoomForceExitReason] = 0,
+                    });
+
+                foreach (var continuedPlayer in removedRoom.Seats.Where(seat => seat != null).Select(seat => seat!))
+                {
+                    continuedPlayer.RoomId = null;
+                    await _roomRegistry.ClearContinueRoomAsync(continuedPlayer.MemberNo);
+                }
+                foreach (var viewer in removedRoom.Viewers)
+                {
+                    viewer.RoomId = null;
+                    viewer.IsViewer = false;
+                    if (!string.IsNullOrWhiteSpace(viewer.ConnectionId))
+                        await Groups.RemoveFromGroupAsync(viewer.ConnectionId, $"room_{roomId}");
+                }
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"room_{roomId}");
+                await _roomRegistry.RemoveRoomAsync(roomId, player.ChannelId);
+                await Clients.Group($"chanel_{player.ChannelId}")
+                    .SendAsync(Cmd.RoomState, RoomStatePayload.BuildEmpty(roomId, "all_disconnected"));
+                _session.DisconnectFromRoom(player, Context.ConnectionId);
+                return;
+            }
+
+            if (!ReferenceEquals(_session.GetRoom(roomId), room))
+            {
+                await _roomRegistry.ClearContinueRoomAsync(player.MemberNo);
+                _session.DisconnectFromRoom(player, Context.ConnectionId);
+                return;
+            }
+
+            await _roomRegistry.SetContinueRoomAsync(player.MemberNo, room);
 
             // Run ProxyPlay while holding the engine lock.
             if (await room.EngineLock.WaitAsync(TimeSpan.FromSeconds(5)))
@@ -186,7 +238,7 @@ public class MajakGameHub : Hub
             if (removeMemberMapping)
             {
                 // Keep the seat reserved and disconnect only the connection so ReconnectToRoom can restore it.
-                _session.DisconnectFromRoom(player);
+                _session.DisconnectFromRoom(player, Context.ConnectionId);
             }
             else
             {
@@ -256,16 +308,53 @@ public class MajakGameHub : Hub
 
     public async Task NotifyGameClientReady(int roomId)
     {
+        var log = _sp.GetService<ILogger<MajakGameHub>>();
+        log?.LogInformation("[GameReconnect] NotifyGameClientReady received. connectionId={ConnectionId} requestedRoomId={RequestedRoomId}",
+            Context.ConnectionId,
+            roomId);
         var player = _session.GetByConn(Context.ConnectionId);
-        if (player == null || player.RoomId != roomId) return;
+        if (player == null || player.RoomId != roomId)
+        {
+            log?.LogWarning("[GameReconnect] NotifyGameClientReady skipped: invalid session. connectionId={ConnectionId} requestedRoomId={RequestedRoomId} hasPlayer={HasPlayer} playerRoomId={PlayerRoomId}",
+                Context.ConnectionId,
+                roomId,
+                player != null,
+                player?.RoomId);
+            return;
+        }
         var gameLogic = _sp.GetRequiredService<GameLogicService>();
         bool allReady = await gameLogic.MarkGameClientReadyAsync(roomId, Context.ConnectionId);
+        log?.LogInformation("[GameReconnect] NotifyGameClientReady marked. connectionId={ConnectionId} roomId={RoomId} allReady={AllReady}",
+            Context.ConnectionId,
+            roomId,
+            allReady);
 
         var room = _session.GetRoom(roomId);
-        if (room?.State != GameRoomState.Playing || room.PlayHistory.Count == 0) return;
-        if (!await room.EngineLock.WaitAsync(TimeSpan.FromSeconds(5))) return;
+        if (room?.State != GameRoomState.Playing || room.PlayHistory.Count == 0)
+        {
+            log?.LogInformation("[GameReconnect] NotifyGameClientReady completed without snapshot. connectionId={ConnectionId} roomId={RoomId} roomFound={RoomFound} roomState={RoomState} playHistoryCount={PlayHistoryCount}",
+                Context.ConnectionId,
+                roomId,
+                room != null,
+                room?.State,
+                room?.PlayHistory.Count ?? 0);
+            return;
+        }
+        log?.LogInformation("[GameReconnect] NotifyGameClientReady waiting for engine lock. connectionId={ConnectionId} roomId={RoomId}",
+            Context.ConnectionId,
+            roomId);
+        if (!await room.EngineLock.WaitAsync(TimeSpan.FromSeconds(5)))
+        {
+            log?.LogWarning("[GameReconnect] NotifyGameClientReady skipped: engine lock acquisition failed. connectionId={ConnectionId} roomId={RoomId}",
+                Context.ConnectionId,
+                roomId);
+            return;
+        }
         try
         {
+            log?.LogInformation("[GameReconnect] NotifyGameClientReady acquired engine lock. connectionId={ConnectionId} roomId={RoomId}",
+                Context.ConnectionId,
+                roomId);
             var ctx = new CommandContext
             {
                 ConnectionId = Context.ConnectionId,
@@ -276,12 +365,31 @@ public class MajakGameHub : Hub
                 Payload = new Dictionary<string, object?>(),
             };
             await gameLogic.SendGameResyncAsync(room, ctx, player, includePrompt: false);
+            log?.LogInformation("[GameReconnect] NotifyGameClientReady snapshot send completed. connectionId={ConnectionId} roomId={RoomId} allReady={AllReady}",
+                Context.ConnectionId,
+                roomId,
+                allReady);
             if (allReady)
+            {
                 await gameLogic.StartGameActionsAsync(room, ctx);
+                log?.LogInformation("[GameReconnect] NotifyGameClientReady game actions start completed. connectionId={ConnectionId} roomId={RoomId}",
+                    Context.ConnectionId,
+                    roomId);
+            }
+        }
+        catch (Exception ex)
+        {
+            log?.LogError(ex, "[GameReconnect] NotifyGameClientReady failed. connectionId={ConnectionId} roomId={RoomId}",
+                Context.ConnectionId,
+                roomId);
+            throw;
         }
         finally
         {
             room.EngineLock.Release();
+            log?.LogInformation("[GameReconnect] NotifyGameClientReady released engine lock. connectionId={ConnectionId} roomId={RoomId}",
+                Context.ConnectionId,
+                roomId);
         }
     }
 
@@ -322,11 +430,14 @@ public class MajakGameHub : Hub
 
     public async Task RequestGameResync(int roomId)
     {
-        var player = _session.GetByConn(Context.ConnectionId);
         var log = _sp.GetService<ILogger<MajakGameHub>>();
+        log?.LogInformation("[GameReconnect] RequestGameResync received. connectionId={ConnectionId} requestedRoomId={RequestedRoomId}",
+            Context.ConnectionId,
+            roomId);
+        var player = _session.GetByConn(Context.ConnectionId);
         if (player == null || player.RoomId != roomId)
         {
-            log?.LogWarning("RequestGameResync skipped: invalid session. connectionId={ConnectionId} requestedRoomId={RequestedRoomId} hasPlayer={HasPlayer} memberNo={MemberNo} playerRoomId={PlayerRoomId}",
+            log?.LogWarning("[GameReconnect] RequestGameResync skipped: invalid session. connectionId={ConnectionId} requestedRoomId={RequestedRoomId} hasPlayer={HasPlayer} memberNo={MemberNo} playerRoomId={PlayerRoomId}",
                 Context.ConnectionId,
                 roomId,
                 player != null,
@@ -337,14 +448,14 @@ public class MajakGameHub : Hub
         var room = _session.GetRoom(roomId);
         if (room == null)
         {
-            log?.LogWarning("RequestGameResync skipped: room not found. connectionId={ConnectionId} memberNo={MemberNo} requestedRoomId={RequestedRoomId}",
+            log?.LogWarning("[GameReconnect] RequestGameResync skipped: room not found. connectionId={ConnectionId} memberNo={MemberNo} requestedRoomId={RequestedRoomId}",
                 Context.ConnectionId,
                 player.MemberNo,
                 roomId);
             return;
         }
 
-        log?.LogDebug("RequestGameResync begin. connectionId={ConnectionId} memberNo={MemberNo} roomId={RoomId} isViewer={IsViewer} seatPos={SeatPos} engineOrder={EngineOrder} state={RoomState} playHistoryCount={PlayHistoryCount} leftCount={LeftCount} handCounts={HandCounts} discardCounts={DiscardCounts}",
+        log?.LogInformation("[GameReconnect] RequestGameResync session validated. connectionId={ConnectionId} memberNo={MemberNo} roomId={RoomId} isViewer={IsViewer} seatPos={SeatPos} engineOrder={EngineOrder} state={RoomState} playHistoryCount={PlayHistoryCount} leftCount={LeftCount} handCounts={HandCounts} discardCounts={DiscardCounts}",
             Context.ConnectionId,
             player.MemberNo,
             roomId,
@@ -370,18 +481,41 @@ public class MajakGameHub : Hub
             Payload      = new Dictionary<string, object?>(),
         };
 
-        if (!await room.EngineLock.WaitAsync(TimeSpan.FromSeconds(5))) return;
+        log?.LogInformation("[GameReconnect] RequestGameResync waiting for engine lock. connectionId={ConnectionId} roomId={RoomId}",
+            Context.ConnectionId,
+            roomId);
+        if (!await room.EngineLock.WaitAsync(TimeSpan.FromSeconds(5)))
+        {
+            log?.LogWarning("[GameReconnect] RequestGameResync skipped: engine lock acquisition failed. connectionId={ConnectionId} roomId={RoomId}",
+                Context.ConnectionId,
+                roomId);
+            return;
+        }
         try
         {
+            log?.LogInformation("[GameReconnect] RequestGameResync acquired engine lock. connectionId={ConnectionId} roomId={RoomId}",
+                Context.ConnectionId,
+                roomId);
             await gameLogic.SendGameResyncAsync(room, ctx, player);
-            log?.LogDebug("RequestGameResync complete. connectionId={ConnectionId} memberNo={MemberNo} roomId={RoomId}",
+            log?.LogInformation("[GameReconnect] RequestGameResync send completed. connectionId={ConnectionId} memberNo={MemberNo} roomId={RoomId}",
                 Context.ConnectionId,
                 player.MemberNo,
                 roomId);
         }
+        catch (Exception ex)
+        {
+            log?.LogError(ex, "[GameReconnect] RequestGameResync failed. connectionId={ConnectionId} memberNo={MemberNo} roomId={RoomId}",
+                Context.ConnectionId,
+                player.MemberNo,
+                roomId);
+            throw;
+        }
         finally
         {
             room.EngineLock.Release();
+            log?.LogInformation("[GameReconnect] RequestGameResync released engine lock. connectionId={ConnectionId} roomId={RoomId}",
+                Context.ConnectionId,
+                roomId);
         }
     }
 
@@ -394,6 +528,20 @@ public class MajakGameHub : Hub
     public async Task SendCommand(string code, Dictionary<string, object?> payload)
     {
         var player = _session.GetByConn(Context.ConnectionId);
+        bool isReconnectRoomCommand = code == Cmd.GetRoomMembers
+            || code == Cmd.EnterRoomCmd
+            || code == Cmd.AutoEnterRoom;
+        var reconnectLog = isReconnectRoomCommand
+            ? _sp.GetService<ILogger<MajakGameHub>>()
+            : null;
+        reconnectLog?.LogInformation("[GameReconnect] room command received. command={Command} connectionId={ConnectionId} hasPlayer={HasPlayer} memberNo={MemberNo} playerRoomId={PlayerRoomId} requestedRoomId={RequestedRoomId} roomExists={RoomExists}",
+            code,
+            Context.ConnectionId,
+            player != null,
+            player?.MemberNo ?? "",
+            player?.RoomId,
+            payload.TryGetValue("roomId", out var requestedRoomId) ? requestedRoomId : payload.GetValueOrDefault("k42e"),
+            player?.RoomId is int playerRoomId && _session.GetRoom(playerRoomId) != null);
         if (code == Cmd.GetMajItemList)
         {
             _sp.GetService<ILogger<MajakGameHub>>()?.LogInformation(
@@ -420,6 +568,9 @@ public class MajakGameHub : Hub
         var handler = ResolveCommand(code);
         if (handler == null)
         {
+            reconnectLog?.LogWarning("[GameReconnect] room command skipped: handler not found. command={Command} connectionId={ConnectionId}",
+                code,
+                Context.ConnectionId);
             AbortConnectionWithReason(code, player, $"Unknown legacy command. code={code}");
             _sp.GetService<ILogger<MajakGameHub>>()?.LogWarning(
                 "Unknown legacy command. Code={Code}, ConnectionId={ConnectionId}, MemberNo={MemberNo}",
@@ -429,10 +580,28 @@ public class MajakGameHub : Hub
 
         try
         {
+            int? roomIdBeforeHandler = player?.RoomId;
+            reconnectLog?.LogInformation("[GameReconnect] room command handler start. command={Command} connectionId={ConnectionId} handler={Handler} playerRoomIdBefore={PlayerRoomIdBefore}",
+                code,
+                Context.ConnectionId,
+                handler.GetType().Name,
+                roomIdBeforeHandler);
             await handler.ExecuteAsync(cmdCtx);
+            var playerAfterHandler = _session.GetByConn(Context.ConnectionId);
+            reconnectLog?.LogInformation("[GameReconnect] room command handler completed. command={Command} connectionId={ConnectionId} hasPlayer={HasPlayer} playerRoomIdBefore={PlayerRoomIdBefore} playerRoomIdAfter={PlayerRoomIdAfter} roomIdChanged={RoomIdChanged}",
+                code,
+                Context.ConnectionId,
+                playerAfterHandler != null,
+                roomIdBeforeHandler,
+                playerAfterHandler?.RoomId,
+                roomIdBeforeHandler != playerAfterHandler?.RoomId);
         }
         catch (Exception ex)
         {
+            reconnectLog?.LogError(ex, "[GameReconnect] room command handler failed. command={Command} connectionId={ConnectionId} playerRoomId={PlayerRoomId}",
+                code,
+                Context.ConnectionId,
+                _session.GetByConn(Context.ConnectionId)?.RoomId);
             _sp.GetService<ILogger<MajakGameHub>>()?.LogError(ex,
                 "Legacy command handler failed. Code={Code}, ConnectionId={ConnectionId}, MemberNo={MemberNo}",
                 code, Context.ConnectionId, player?.MemberNo ?? "");

@@ -1034,23 +1034,73 @@ public class GameLogicService
 
     public virtual async Task SendGameResyncAsync(GameRoom room, CommandContext ctx, MajakPlayer player, bool includePrompt = true)
     {
+        _log?.LogInformation("[GameReconnect] SendGameResyncAsync begin. connectionId={ConnectionId} roomId={RoomId} roomState={RoomState} includePrompt={IncludePrompt} isViewer={IsViewer} seatPos={SeatPos} engineOrder={EngineOrder} playHistoryCount={PlayHistoryCount}",
+            ctx.ConnectionId,
+            room.RoomId,
+            room.State,
+            includePrompt,
+            player.IsViewer,
+            player.SeatPos,
+            player.EngineOrder,
+            room.PlayHistory.Count);
         await SendPaiInfoAsync(room, ctx, player, isInit: true, includeAll: true);
+        _log?.LogInformation("[GameReconnect] SendGameResyncAsync PaiInfo step returned. connectionId={ConnectionId} roomId={RoomId}",
+            ctx.ConnectionId,
+            room.RoomId);
         if (room.PlayHistory.Count > 0)
         {
+            _log?.LogInformation("[GameReconnect] SendGameResyncAsync history send start. connectionId={ConnectionId} roomId={RoomId} historyCount={HistoryCount}",
+                ctx.ConnectionId,
+                room.RoomId,
+                room.PlayHistory.Count);
             await ctx.Caller.SendAsync(Cmd.History, new
             {
                 roomId = room.RoomId,
                 historyCount = room.PlayHistory.Count,
                 history = room.PlayHistory,
             });
+            _log?.LogInformation("[GameReconnect] SendGameResyncAsync history send completed. connectionId={ConnectionId} roomId={RoomId} historyCount={HistoryCount}",
+                ctx.ConnectionId,
+                room.RoomId,
+                room.PlayHistory.Count);
+        }
+        else
+        {
+            _log?.LogInformation("[GameReconnect] SendGameResyncAsync history skipped: empty history. connectionId={ConnectionId} roomId={RoomId}",
+                ctx.ConnectionId,
+                room.RoomId);
         }
         if (room.LastGameReportPayload != null && room.State != GameRoomState.Playing)
         {
+            _log?.LogInformation("[GameReconnect] SendGameResyncAsync game report send start. connectionId={ConnectionId} roomId={RoomId} roomState={RoomState}",
+                ctx.ConnectionId,
+                room.RoomId,
+                room.State);
             await ctx.Caller.SendAsync(Cmd.GameReport, room.LastGameReportPayload);
+            _log?.LogInformation("[GameReconnect] SendGameResyncAsync completed with game report. connectionId={ConnectionId} roomId={RoomId}",
+                ctx.ConnectionId,
+                room.RoomId);
             return;
         }
         if (includePrompt)
+        {
+            _log?.LogInformation("[GameReconnect] SendGameResyncAsync current prompt send start. connectionId={ConnectionId} roomId={RoomId}",
+                ctx.ConnectionId,
+                room.RoomId);
             await SendCurrentActionPromptAsync(room, ctx, player);
+            _log?.LogInformation("[GameReconnect] SendGameResyncAsync current prompt send completed. connectionId={ConnectionId} roomId={RoomId}",
+                ctx.ConnectionId,
+                room.RoomId);
+        }
+        else
+        {
+            _log?.LogInformation("[GameReconnect] SendGameResyncAsync current prompt skipped. connectionId={ConnectionId} roomId={RoomId}",
+                ctx.ConnectionId,
+                room.RoomId);
+        }
+        _log?.LogInformation("[GameReconnect] SendGameResyncAsync complete. connectionId={ConnectionId} roomId={RoomId}",
+            ctx.ConnectionId,
+            room.RoomId);
     }
 
     private static async Task SendCurrentPublicTurnPromptAsync(GameRoom room, CommandContext ctx)
@@ -3625,6 +3675,15 @@ public class GameLogicService
 
     public async Task SendPaiInfoAsync(GameRoom room, CommandContext ctx, MajakPlayer player, bool isInit, bool includeAll)
     {
+        _log?.LogInformation("[GameReconnect] SendPaiInfoAsync begin. connectionId={ConnectionId} targetConnectionId={TargetConnectionId} roomId={RoomId} isInit={IsInit} includeAll={IncludeAll} isViewer={IsViewer} seatPos={SeatPos} engineOrder={EngineOrder}",
+            ctx.ConnectionId,
+            player.ConnectionId,
+            room.RoomId,
+            isInit,
+            includeAll,
+            player.IsViewer,
+            player.SeatPos,
+            player.EngineOrder);
         int openPos = player.IsViewer ? MajakConst.PlayerMaxCount : player.EngineOrder;
         if (!player.IsViewer && (openPos < 0 || openPos >= MajakConst.PlayerMaxCount))
         {
@@ -3632,13 +3691,20 @@ public class GameLogicService
             openPos = seatPos >= 0 && seatPos < room.SeatToEngineOrder.Length
                 ? room.SeatToEngineOrder[seatPos]
                 : MajakConst.PlayerMaxCount;
+            _log?.LogInformation("[GameReconnect] SendPaiInfoAsync resolved engine order from seat mapping. connectionId={ConnectionId} roomId={RoomId} seatPos={SeatPos} mappedOpenPos={OpenPos}",
+                ctx.ConnectionId,
+                room.RoomId,
+                player.SeatPos,
+                openPos);
             if (openPos < 0 || openPos >= MajakConst.PlayerMaxCount)
             {
-                _log?.LogWarning("SendPaiInfo skipped: engine order not resolved. roomId={RoomId} memberNo={MemberNo} seatPos={SeatPos} engineOrder={EngineOrder}",
+                _log?.LogWarning("[GameReconnect] SendPaiInfoAsync skipped: engine order not resolved. connectionId={ConnectionId} roomId={RoomId} memberNo={MemberNo} seatPos={SeatPos} engineOrder={EngineOrder} mappedOpenPos={OpenPos}",
+                    ctx.ConnectionId,
                     room.RoomId,
                     player.MemberNo,
                     player.SeatPos,
-                    player.EngineOrder);
+                    player.EngineOrder,
+                    openPos);
                 return;
             }
         }
@@ -3657,8 +3723,34 @@ public class GameLogicService
 
         var buf = Engine.BipaiInfo.Create();
         room.Engine.GetBipai(ref buf, openMask, skipMask);
-        if (buf.PaiCnt <= 0) return;
+        _log?.LogInformation("[GameReconnect] SendPaiInfoAsync engine snapshot built. connectionId={ConnectionId} roomId={RoomId} openPos={OpenPos} openMask={OpenMask} skipMask={SkipMask} paiCount={PaiCount} currentHandCount={CurrentHandCount} leftCount={LeftCount}",
+            ctx.ConnectionId,
+            room.RoomId,
+            openPos,
+            openMask,
+            skipMask,
+            buf.PaiCnt,
+            openPos < MajakConst.PlayerMaxCount ? room.Engine.Player[openPos].Tehai.Count : 0,
+            room.Engine.GetBipaiCount());
+        if (buf.PaiCnt <= 0)
+        {
+            _log?.LogWarning("[GameReconnect] SendPaiInfoAsync skipped: engine returned no PaiInfo. connectionId={ConnectionId} roomId={RoomId} openPos={OpenPos} includeAll={IncludeAll} roomState={RoomState} leftCount={LeftCount}",
+                ctx.ConnectionId,
+                room.RoomId,
+                openPos,
+                includeAll,
+                room.State,
+                room.Engine.GetBipaiCount());
+            return;
+        }
 
+        _log?.LogInformation("[GameReconnect] SendPaiInfoAsync smmc4e send start. connectionId={ConnectionId} targetConnectionId={TargetConnectionId} roomId={RoomId} openPos={OpenPos} resyncSnapshot={ResyncSnapshot} paiCount={PaiCount}",
+            ctx.ConnectionId,
+            player.ConnectionId,
+            room.RoomId,
+            openPos,
+            includeAll && openPos < MajakConst.PlayerMaxCount,
+            buf.PaiCnt);
         await ctx.Clients.Client(player.ConnectionId)
             .SendAsync(Cmd.PaiInfoList, new
             {
@@ -3675,6 +3767,13 @@ public class GameLogicService
                           .Select(pc => new { code = pc.Code, idx = pc.BipaiIndex, red = pc.IsRed })
                                   .ToArray(),
             });
+                _log?.LogInformation("[GameReconnect] SendPaiInfoAsync smmc4e send completed. connectionId={ConnectionId} targetConnectionId={TargetConnectionId} roomId={RoomId} openPos={OpenPos} resyncSnapshot={ResyncSnapshot} paiCount={PaiCount}",
+                    ctx.ConnectionId,
+                    player.ConnectionId,
+                    room.RoomId,
+                    openPos,
+                    includeAll && openPos < MajakConst.PlayerMaxCount,
+                    buf.PaiCnt);
     }
 
 

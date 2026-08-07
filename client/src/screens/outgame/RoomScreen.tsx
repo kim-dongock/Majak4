@@ -17,7 +17,6 @@
  */
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef, type CSSProperties } from 'react'
-import { flushSync } from 'react-dom'
 import * as SignalR from '../../api/signalr'
 import { useAuthStore } from '../../store/authStore'
 import { useCustomSkinStore } from '../../store/customSkinStore'
@@ -26,6 +25,7 @@ import { readNoticePayload, type NoticeDisplay } from '../../utils/notice'
 import { sendAccuseComplaint } from '../../utils/accuse'
 import { getTabSessionId } from '../../utils/tabSession'
 import { MAJAK_ACCUSE_EVENT } from '../../components/MajakFrame'
+import GameReconnectLoading from '../../components/GameReconnectLoading'
 import CfgDlg, { loadMajakConfig, saveMajakConfig, type MJConfig } from './dialogs/CfgDlg'
 import AccuseDlg from './dialogs/AccuseDlg'
 import PlayerInfoWnd, { type PlayerInfo as PlayerInfoDialogData } from './dialogs/PlayerInfoWnd'
@@ -36,6 +36,7 @@ import MiniChannelWnd from './MiniChannelWnd'
 import { getDefaultAvatarUrl, getGameAvatarUrl } from '../../utils/resources'
 import { configureMajakSound, playMajakChat, playMajakSid, SID_EXIT, SID_JOIN } from '../../utils/majakSound'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
+import { GAME_LOAD_PROGRESS_EVENT, GAME_LOAD_STEPS, type GameLoadStep } from '../../game/gameLoadProgress'
 import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyFullUiSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 
@@ -57,8 +58,38 @@ const GAME_SYNC_EVENT = 'majak:game-sync'
 const KYO_RESULT_ACTION_EVENT = 'majak:kyo-result-action'
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
 const PAIFU_HAND_OPEN_EVENT = 'majak:paifu-hand-open'
-const ROOM_ACTION_RESPONSE_TIMEOUT_MS = 7000
 const DEBUG_GAME = import.meta.env.VITE_DEBUG_GAME === '1'
+
+const ROOM_ENTER_ERROR_MESSAGES: Record<number, string> = {
+  10005: 'パスワードが違います。',
+  10009: 'このルームには入室できません。',
+  10011: 'ルームサーバーが混雑しています。しばらくしてからもう一度お試しください。',
+  10019: 'ルームへの入室要求が不正です。',
+  10021: '既に別のルームに入室しています。',
+  10022: '既にこのルームに入室しています。',
+  10027: '接続情報が一致しません。チャンネルから入り直してください。',
+  30001: 'ルームへの入室に失敗しました。',
+  30011: 'このルームの入室条件を満たしていません。',
+}
+
+function roomEnterErrorMessage(data: Record<string, unknown>): string {
+  const rawMessage = data.k2e ?? data.message
+  const message = typeof rawMessage === 'string' ? rawMessage.trim() : ''
+  if (message && message !== 'エラー') return message
+
+  const failCode = Number(data.failcode ?? data.failCode)
+  return ROOM_ENTER_ERROR_MESSAGES[failCode] ?? 'ルームへの入室に失敗しました。'
+}
+
+function isFatalRoomEntryError(data: Record<string, unknown>): boolean {
+  const rawMessage = data.k2e ?? data.message
+  return typeof rawMessage !== 'string' || !rawMessage.trim() || rawMessage.trim() === 'エラー'
+}
+
+function getDocumentNavigationType() {
+  const entry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+  return entry?.type ?? ''
+}
 const MAX_ROOM_LOG_MESSAGES = 200
 
 type GameAutoControlState = {
@@ -200,18 +231,6 @@ function buildCreateRoomPayload(
     minMoney: Number(state.minMoney ?? 0),
     maxMoney: Number(state.maxMoney ?? 0),
   }
-}
-
-function InlineGameLoadingOverlay({ visible }: { visible: boolean }) {
-  if (!visible) return null
-  return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0, 0, 0, 0.58)', pointerEvents: 'auto' }}>
-      <div style={{ width: 260, height: 312, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: 'rgba(255, 255, 255, 0.94)', border: '1px solid rgba(0, 0, 0, 0.24)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)' }} aria-busy="true" aria-label="対局状況を同期中">
-        <img src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} style={{ width: 230, height: 230, objectFit: 'cover' }} />
-        <div className="majak-sync-spinner" aria-hidden="true" />
-      </div>
-    </div>
-  )
 }
 
 const BOARD_X = 5
@@ -751,6 +770,8 @@ export default function RoomScreen() {
   const [announceData, setAnnounceData] = useState<SlideAnnounceData | null>(null)
   const [inlineGame, setInlineGame] = useState(false)
   const [inlineGameLoading, setInlineGameLoading] = useState(false)
+  const [gameLoadStep, setGameLoadStep] = useState<GameLoadStep>('server')
+  const [gameLoadComplete, setGameLoadComplete] = useState(false)
   const [hanResData, setHanResData] = useState<HanResPlayer[] | null>(null)
   const [hanResFlags, setHanResFlags] = useState({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
   const [roomActionPending, setRoomActionPending] = useState(true)
@@ -784,19 +805,76 @@ export default function RoomScreen() {
   const inlineGameActiveRef = useRef(false)
   const inlineGameEndedRef = useRef(false)
   const inlineGameLoadingVisibleRef = useRef(false)
-  const inlineGameLoadingStartedAtRef = useRef(0)
-  const inlineGameLoadingOffTimerRef = useRef<number | null>(null)
-  const roomActionPendingTimerRef = useRef<number | null>(null)
+  const gameLoadTimingRef = useRef({ active: false, startedAt: 0, lastAt: 0, step: 'server' as GameLoadStep, source: '' })
+  const gameReconnectActiveRef = useRef(Boolean(locState.resumePlaying) || getDocumentNavigationType() === 'reload')
   const viewersRef = useRef<ViewerEntry[]>([])
   const messageSeqRef = useRef(0)
   const gameNavigatedRef = useRef(false)
   const roomActionSentKeyRef = useRef('')
+  const reconnectSetupSerialRef = useRef(0)
   const exitingRoomRef = useRef(false)
   const roomJoinMessageMembersRef = useRef(new Set<string>())
   const proxyGuideShownRef = useRef(false)
   const roomEntryGuideShownRef = useRef(false)
   const gemGameGuideShownRef = useRef(false)
   const emoticonSeqRef = useRef(0)
+  const beginGameLoad = (source: string, trigger = '') => {
+    const current = gameLoadTimingRef.current
+    if (current.active && current.source === source) {
+      console.info('[GameReconnect] existing progress preserved', { source, trigger, channelId, roomId })
+      return
+    }
+    const now = performance.now()
+    gameLoadTimingRef.current = { active: true, startedAt: now, lastAt: now, step: 'server', source }
+    setGameLoadStep('server')
+    setGameLoadComplete(false)
+    console.info('[GameReconnect] start', {
+      source,
+      trigger,
+      channelId,
+      roomId,
+      navigationType: getDocumentNavigationType(),
+      startedAt: new Date().toISOString(),
+    })
+  }
+  const advanceGameLoad = (step: GameLoadStep, details: Record<string, unknown> = {}) => {
+    const timing = gameLoadTimingRef.current
+    if (!timing.active) return
+    const previousIndex = GAME_LOAD_STEPS.findIndex(item => item.id === timing.step)
+    const nextIndex = GAME_LOAD_STEPS.findIndex(item => item.id === step)
+    if (nextIndex <= previousIndex) return
+    const now = performance.now()
+    console.info('[GameReconnect] stage', {
+      completedStep: timing.step,
+      completedLabel: GAME_LOAD_STEPS[previousIndex]?.label ?? timing.step,
+      previousDurationMs: Math.round(now - timing.lastAt),
+      nextStep: step,
+      nextLabel: GAME_LOAD_STEPS[nextIndex]?.label ?? step,
+      totalElapsedMs: Math.round(now - timing.startedAt),
+      source: timing.source,
+      ...details,
+    })
+    timing.lastAt = now
+    timing.step = step
+    setGameLoadStep(step)
+  }
+  const finishGameLoad = (details: Record<string, unknown> = {}) => {
+    const timing = gameLoadTimingRef.current
+    if (!timing.active) return
+    const now = performance.now()
+    const stepIndex = GAME_LOAD_STEPS.findIndex(item => item.id === timing.step)
+    console.info('[GameReconnect] complete', {
+      completedStep: timing.step,
+      completedLabel: GAME_LOAD_STEPS[stepIndex]?.label ?? timing.step,
+      finalStageDurationMs: Math.round(now - timing.lastAt),
+      totalDurationMs: Math.round(now - timing.startedAt),
+      source: timing.source,
+      completedAt: new Date().toISOString(),
+      ...details,
+    })
+    timing.active = false
+    setGameLoadComplete(true)
+  }
   const logRejoinProbe = (eventName: string, details: Record<string, unknown> = {}) => {
     if (!DEBUG_GAME) return
     console.info('[RoomScreen/RejoinProbe]', eventName, {
@@ -811,15 +889,7 @@ export default function RoomScreen() {
       ...details,
     })
   }
-  const getDocumentNavigationType = () => {
-    const entry = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-    return entry?.type ?? ''
-  }
   const clearRoomActionPending = (reason: string) => {
-    if (roomActionPendingTimerRef.current !== null) {
-      window.clearTimeout(roomActionPendingTimerRef.current)
-      roomActionPendingTimerRef.current = null
-    }
     logRejoinProbe('room action pending cleared', { reason })
     setRoomActionPending(false)
   }
@@ -827,14 +897,6 @@ export default function RoomScreen() {
     inlineGameEndedRef.current = true
     gameNavigatedRef.current = false
     inlineGameLoadingVisibleRef.current = false
-    if (inlineGameLoadingOffTimerRef.current !== null) {
-      window.clearTimeout(inlineGameLoadingOffTimerRef.current)
-      inlineGameLoadingOffTimerRef.current = null
-    }
-    if (roomActionPendingTimerRef.current !== null) {
-      window.clearTimeout(roomActionPendingTimerRef.current)
-      roomActionPendingTimerRef.current = null
-    }
     logRejoinProbe('inline game ended', { reason })
     destroyGame()
     setInlineGameLoading(false)
@@ -847,15 +909,8 @@ export default function RoomScreen() {
     setMobileIngameToolOpen(false)
   }
   const startRoomActionPending = (command: string, details: Record<string, unknown> = {}) => {
-    if (roomActionPendingTimerRef.current !== null) window.clearTimeout(roomActionPendingTimerRef.current)
-    logRejoinProbe('room action pending started', { command, timeoutMs: ROOM_ACTION_RESPONSE_TIMEOUT_MS, ...details })
+    logRejoinProbe('room action pending started', { command, ...details })
     setRoomActionPending(true)
-    roomActionPendingTimerRef.current = window.setTimeout(() => {
-      roomActionPendingTimerRef.current = null
-      logRejoinProbe('room action response timeout; returning to lobby', { command, timeoutMs: ROOM_ACTION_RESPONSE_TIMEOUT_MS, ...details })
-      setRoomActionPending(false)
-      navigate(`/channel/${channelId ?? ''}/lobby`, { replace: true })
-    }, ROOM_ACTION_RESPONSE_TIMEOUT_MS)
   }
   useEffect(() => {
     inlineGameActiveRef.current = inlineGame
@@ -867,45 +922,43 @@ export default function RoomScreen() {
       setInlineGameLoading(false)
       return
     }
-    inlineGameLoadingStartedAtRef.current = performance.now()
     inlineGameLoadingVisibleRef.current = true
     setInlineGameLoading(true)
   }, [inlineGame])
   useEffect(() => {
     const setInlineGameLoadingVisible = (visible: boolean) => {
-      if (inlineGameLoadingOffTimerRef.current !== null) {
-        window.clearTimeout(inlineGameLoadingOffTimerRef.current)
-        inlineGameLoadingOffTimerRef.current = null
-      }
       if (visible) {
         if (inlineGameLoadingVisibleRef.current) return
-        inlineGameLoadingStartedAtRef.current = performance.now()
         inlineGameLoadingVisibleRef.current = true
         setInlineGameLoading(true)
         return
       }
-      const elapsed = performance.now() - inlineGameLoadingStartedAtRef.current
-      const delay = Math.max(0, 600 - elapsed)
-      inlineGameLoadingOffTimerRef.current = window.setTimeout(() => {
-        inlineGameLoadingVisibleRef.current = false
-        setInlineGameLoading(false)
-        inlineGameLoadingOffTimerRef.current = null
-      }, delay)
+      inlineGameLoadingVisibleRef.current = false
+      setInlineGameLoading(false)
     }
     const onSync = (event: Event) => {
       const detail = (event as CustomEvent<{ active?: boolean; reason?: string }>).detail ?? {}
       const active = Boolean(detail.active)
       logRejoinProbe('GAME_SYNC_EVENT', { active, reason: detail.reason ?? '' })
       if (active) {
-        flushSync(() => setInlineGameLoadingVisible(true))
+        setInlineGameLoadingVisible(true)
         return
       }
+      advanceGameLoad('ready', { syncReason: detail.reason ?? '' })
+      finishGameLoad({ syncReason: detail.reason ?? '' })
       setInlineGameLoadingVisible(false)
     }
+    const onLoadProgress = (event: Event) => {
+      const detail = (event as CustomEvent<{ step?: string } & Record<string, unknown>>).detail ?? {}
+      if (typeof detail.step !== 'string') return
+      if (!GAME_LOAD_STEPS.some(step => step.id === detail.step)) return
+      advanceGameLoad(detail.step as GameLoadStep, detail)
+    }
     window.addEventListener(GAME_SYNC_EVENT, onSync)
+    window.addEventListener(GAME_LOAD_PROGRESS_EVENT, onLoadProgress)
     return () => {
       window.removeEventListener(GAME_SYNC_EVENT, onSync)
-      if (inlineGameLoadingOffTimerRef.current !== null) window.clearTimeout(inlineGameLoadingOffTimerRef.current)
+      window.removeEventListener(GAME_LOAD_PROGRESS_EVENT, onLoadProgress)
     }
   }, [])
   useEffect(() => { viewersRef.current = viewers }, [viewers])
@@ -1074,6 +1127,61 @@ export default function RoomScreen() {
   /** SignalR 接続 & ルーム参加 */
   useEffect(() => {
     let mounted = true
+    let pendingChannelEntryHandler: SignalR.MessageHandler | null = null
+    const effectInstance = ++reconnectSetupSerialRef.current
+    console.info('[GameReconnect] RoomScreen connection effect mounted', {
+      effectInstance,
+      channelId,
+      roomId,
+      mode: locState.mode ?? 'enter',
+      resumePlaying: Boolean(locState.resumePlaying),
+      locationKey: location.key,
+      navigationType: getDocumentNavigationType(),
+      roomActionSentKey: roomActionSentKeyRef.current,
+      existingConnectionId: SignalR.getConnection()?.connectionId,
+      existingConnectionState: SignalR.getConnection()?.state ?? 'missing',
+    })
+
+    const waitForChannelEntryResponse = () => new Promise<Record<string, unknown>>(resolve => {
+      if (pendingChannelEntryHandler) SignalR.off('c1e', pendingChannelEntryHandler)
+      const onChannelEntered = (data: Record<string, unknown>) => {
+        SignalR.off('c1e', onChannelEntered)
+        pendingChannelEntryHandler = null
+        resolve(data)
+      }
+      pendingChannelEntryHandler = onChannelEntered
+      SignalR.on('c1e', onChannelEntered)
+    })
+
+    const enterChannel = async (payload: Record<string, unknown>) => {
+      console.info('[GameReconnect] RoomScreen c1e request start', {
+        effectInstance,
+        connectionId: SignalR.getConnection()?.connectionId,
+        channelId,
+        roomId,
+      })
+      const responsePromise = waitForChannelEntryResponse()
+      try {
+        const [, response] = await Promise.all([SignalR.send('c1e', payload), responsePromise])
+        const succeeded = Number(response.result) === 1 || response.k1e === 'v1e'
+        console.info('[GameReconnect] channel entry response', {
+          effectInstance,
+          connectionId: SignalR.getConnection()?.connectionId,
+          succeeded,
+          error: response.error,
+          message: response.k2e ?? response.message,
+        })
+        if (!succeeded) {
+          throw new Error(String(response.k2e ?? response.message ?? 'チャンネルへの再接続に失敗しました'))
+        }
+      } catch (error) {
+        if (pendingChannelEntryHandler) {
+          SignalR.off('c1e', pendingChannelEntryHandler)
+          pendingChannelEntryHandler = null
+        }
+        throw error
+      }
+    }
 
     const absorbAlreadyInRoom = (data: Record<string, unknown>) => {
       const message = String(data.k2e ?? data.message ?? '')
@@ -1083,16 +1191,35 @@ export default function RoomScreen() {
       if (currentRoomId > 0 && responseRoomId > 0 && responseRoomId !== currentRoomId) return false
       logRejoinProbe('absorb already-in-room', { responseRoomId, message, data })
       if (DEBUG_GAME) console.info('[RoomScreen] already in current room; keeping room screen', { roomId, responseRoomId, message, data })
-      void SignalR.send('c16e', {}).catch(() => {})
-      if (locState.resumePlaying) {
-        flushSync(() => {
-          inlineGameLoadingStartedAtRef.current = performance.now()
-          inlineGameLoadingVisibleRef.current = true
-          setInlineGameLoading(true)
-          setInlineGame(true)
+      if (gameReconnectActiveRef.current) {
+        console.warn('[GameReconnect] already-in-room response rejected as reconnect proof', {
+          connectionId: SignalR.getConnection()?.connectionId,
+          currentRoomId,
+          responseRoomId,
+          message,
         })
+        return false
       }
+      void SignalR.send('c16e', {}).catch(() => {})
       return true
+    }
+
+    const handleRoomEntryFailure = (data: Record<string, unknown>) => {
+      const fatalRoomError = isFatalRoomEntryError(data)
+      void showError(roomEnterErrorMessage(data)).then(() => {
+        if (!mounted) return
+        if (fatalRoomError) {
+          const responseRoomId = Number(data.k42e ?? data.roomId ?? 0)
+          window.sessionStorage.setItem(ABANDON_ROOM_STORAGE_KEY, JSON.stringify({
+            channelId: channelId ?? '',
+            roomId: responseRoomId > 0 ? responseRoomId : Number(roomId ?? 0),
+            fatalRoomError: true,
+          }))
+        } else if (gameReconnectActiveRef.current) {
+          return
+        }
+        navigate(`/channel/${channelId ?? ''}/lobby`, { replace: true })
+      })
     }
 
     /**
@@ -1102,7 +1229,23 @@ export default function RoomScreen() {
      * 応答フィールド: result(1=成功), roomId, roomOption, state
      */
     const onRoomEnter = (data: Record<string, unknown>) => {
-      if (!mounted) return
+      console.info('[GameReconnect] RoomScreen c14e response received', {
+        effectInstance,
+        mounted,
+        connectionId: SignalR.getConnection()?.connectionId,
+        roomActionSentKey: roomActionSentKeyRef.current,
+        result: data.result ?? data.k1e,
+        state: data.state,
+        responseRoomId: data.k42e ?? data.roomId,
+        message: data.k2e ?? data.message,
+      })
+      if (!mounted) {
+        console.warn('[GameReconnect] RoomScreen c14e response ignored: effect unmounted', {
+          effectInstance,
+          connectionId: SignalR.getConnection()?.connectionId,
+        })
+        return
+      }
       clearRoomActionPending('c14e response')
       logRejoinProbe('c14e room enter response', {
         result: data.result,
@@ -1114,9 +1257,7 @@ export default function RoomScreen() {
       })
       if (Number(data.result) !== 1) {
         if (absorbAlreadyInRoom(data)) return
-        const msg = String(data.message ?? 'ルームへの入室に失敗しました')
-        showError(msg)
-        navigate(`/channel/${channelId ?? ''}/lobby`)
+        handleRoomEntryFailure(data)
         return
       }
       const nextRoomTitle = data.k45e ?? data.roomTitle
@@ -1138,12 +1279,11 @@ export default function RoomScreen() {
         }
       }
       if (Number(data.state ?? -1) === 2) {
-        flushSync(() => {
-          inlineGameLoadingStartedAtRef.current = performance.now()
-          inlineGameLoadingVisibleRef.current = true
-          setInlineGameLoading(true)
-          setInlineGame(true)
-        })
+        inlineGameLoadingVisibleRef.current = true
+        setInlineGameLoading(true)
+        setInlineGame(true)
+      } else {
+        finishGameLoad({ reason: 'waiting-room-ready' })
       }
     }
     SignalR.on('c14e', onRoomEnter)
@@ -1170,8 +1310,7 @@ export default function RoomScreen() {
         data,
       })
       if (absorbAlreadyInRoom(data)) return
-      showError(String(data.k2e ?? data.message ?? 'ルームへの入室に失敗しました'))
-      navigate(`/channel/${channelId ?? ''}/lobby`)
+      handleRoomEntryFailure(data)
     }
     SignalR.on('c34e', onRoomEnterError)
 
@@ -1554,6 +1693,8 @@ export default function RoomScreen() {
      */
     const navigateToGame = () => {
       if (!mounted || gameNavigatedRef.current) return
+      if (!gameLoadTimingRef.current.active) beginGameLoad('game-start')
+      advanceGameLoad('resources', { trigger: 'navigateToGame' })
       gameNavigatedRef.current = true
       inlineGameEndedRef.current = false
       setHanResData(null)
@@ -1564,12 +1705,9 @@ export default function RoomScreen() {
       if (DEBUG_GAME) console.info('[RoomScreen] inline game mount', {
         roomId,
       })
-      flushSync(() => {
-        inlineGameLoadingStartedAtRef.current = performance.now()
-        inlineGameLoadingVisibleRef.current = true
-        setInlineGameLoading(true)
-        setInlineGame(true)
-      })
+      inlineGameLoadingVisibleRef.current = true
+      setInlineGameLoading(true)
+      setInlineGame(true)
     }
 
     const onGameStart = (data: Record<string, unknown>) => {
@@ -1598,7 +1736,7 @@ export default function RoomScreen() {
       if (result != null && !isOk(result)) {
         if (absorbAlreadyInRoom(data)) return
         showError(String(data.k2e ?? data.message ?? '観戦に失敗しました'))
-        navigate(`/channel/${channelId ?? ''}/lobby`)
+        if (!gameReconnectActiveRef.current) navigate(`/channel/${channelId ?? ''}/lobby`)
         return
       }
       const nextRoomTitle = data.k45e ?? data.roomTitle
@@ -1610,7 +1748,23 @@ export default function RoomScreen() {
     SignalR.on('c18e', onViewRoom)
 
     const onAutoEnterRoom = (data: Record<string, unknown>) => {
-      if (!mounted) return
+      console.info('[GameReconnect] RoomScreen mjkc6e response received', {
+        effectInstance,
+        mounted,
+        connectionId: SignalR.getConnection()?.connectionId,
+        roomActionSentKey: roomActionSentKeyRef.current,
+        result: data.k1e ?? data.result,
+        state: data.state,
+        responseRoomId: data.k42e ?? data.roomId,
+        message: data.k2e ?? data.message,
+      })
+      if (!mounted) {
+        console.warn('[GameReconnect] RoomScreen mjkc6e response ignored: effect unmounted', {
+          effectInstance,
+          connectionId: SignalR.getConnection()?.connectionId,
+        })
+        return
+      }
       clearRoomActionPending('mjkc6e response')
       logRejoinProbe('mjkc6e auto enter response', {
         result: data.k1e ?? data.result,
@@ -1622,7 +1776,7 @@ export default function RoomScreen() {
       if (result != null && !isOk(result)) {
         if (absorbAlreadyInRoom(data)) return
         showError(String(data.k2e ?? data.message ?? 'ルームへの入室に失敗しました'))
-        navigate(`/channel/${channelId ?? ''}/lobby`)
+        if (!gameReconnectActiveRef.current) navigate(`/channel/${channelId ?? ''}/lobby`)
         return
       }
       const nextRoomTitle = data.k45e ?? data.roomTitle
@@ -1631,7 +1785,8 @@ export default function RoomScreen() {
       if (typeof nextRoomOption === 'string') setCurrentRoomOption(nextRoomOption)
       // Tournament reservation recovery can enter a waiting room. Only a
       // server-confirmed playing room has resync packets to reconstruct.
-      if (locState.resumePlaying && Number(data.state ?? -1) === 2) navigateToGame()
+      if (gameReconnectActiveRef.current && Number(data.state ?? -1) === 2) navigateToGame()
+      else if (Number(data.state ?? -1) !== 2) finishGameLoad({ reason: 'waiting-room-ready' })
     }
     SignalR.on('mjkc6e', onAutoEnterRoom)
 
@@ -1722,7 +1877,7 @@ export default function RoomScreen() {
       if (!mounted || connectionLostHandled) return
       connectionLostHandled = true
       logRejoinProbe('SignalR connection lost', { errorMessage: error?.message ?? String(error ?? '') })
-      if (inlineGameActiveRef.current) {
+      if (gameReconnectActiveRef.current || inlineGameActiveRef.current) {
         console.warn('[RoomScreen] SignalR connection lost during inline game; waiting for game resync/reconnect', {
           channelId,
           roomId,
@@ -1745,33 +1900,112 @@ export default function RoomScreen() {
     window.addEventListener('offline', onBrowserOffline)
 
     async function setup(forceRejoin = false) {
+      const setupAttempt = `${effectInstance}:${forceRejoin ? 'rejoin' : 'initial'}`
       const player = useAuthStore.getState().player
       // AP-04 §8: ルーム入室時に初めて WebSocket 接続
       const hubUrl = serverUrl ? `${serverUrl}/hubs/majak` : '/hubs/majak'
-      logRejoinProbe('setup start', { forceRejoin, hubUrl, skipEnterChannel: Boolean(locState.skipEnterChannel) })
+      const navigationType = getDocumentNavigationType()
+      const reconnectTrigger = forceRejoin ? 'signalr' : navigationType === 'reload' ? 'page-reload' : locState.resumePlaying ? 'continuation' : ''
+      if (reconnectTrigger) gameReconnectActiveRef.current = true
+      beginGameLoad(gameReconnectActiveRef.current ? 'game-reconnect' : 'room-entry', reconnectTrigger)
+      console.info('[GameReconnect] RoomScreen setup start', {
+        setupAttempt,
+        mounted,
+        forceRejoin,
+        reconnectTrigger,
+        gameReconnect: gameReconnectActiveRef.current,
+        channelId,
+        roomId,
+        mode: locState.mode ?? 'enter',
+        skipEnterChannel: Boolean(locState.skipEnterChannel),
+        roomActionSentKey: roomActionSentKeyRef.current,
+        hubUrl,
+        connectionIdBeforeConnect: SignalR.getConnection()?.connectionId,
+        connectionStateBeforeConnect: SignalR.getConnection()?.state ?? 'missing',
+      })
+      logRejoinProbe('setup start', { forceRejoin, gameReconnect: gameReconnectActiveRef.current, reconnectTrigger, hubUrl, skipEnterChannel: Boolean(locState.skipEnterChannel) })
       // AP-04 §8: ルーム入室時の WebSocket 接続
       // ロビーで同一サーバーに接続済みなら再接続しない (signalr.ts で自動スキップ)
       // 異なるサーバー URL の場合 (マルチサーバー構成) は再接続する
       await SignalR.connect(hubUrl)
-      if (!mounted) return
-      logRejoinProbe('SignalR connected in setup', { forceRejoin, hubUrl })
-      if (forceRejoin || !locState.skipEnterChannel) {
-        const isContinue = Boolean(locState.resumePlaying) || getDocumentNavigationType() === 'reload'
-        logRejoinProbe('send c1e enter channel', { forceRejoin, isContinue })
-        await SignalR.send('c1e', buildEnterChannelPayload(channelId ?? '', player, isContinue))
+      console.info('[GameReconnect] RoomScreen SignalR.connect resolved', {
+        setupAttempt,
+        mounted,
+        connectionId: SignalR.getConnection()?.connectionId,
+        connectionState: SignalR.getConnection()?.state ?? 'missing',
+        roomActionSentKey: roomActionSentKeyRef.current,
+      })
+      if (!mounted) {
+        console.warn('[GameReconnect] RoomScreen setup stopped after connect: effect unmounted', {
+          setupAttempt,
+          connectionId: SignalR.getConnection()?.connectionId,
+        })
+        return
       }
-      if (!mounted) return
+      advanceGameLoad('channel', { hubUrl })
+      logRejoinProbe('SignalR connected in setup', { forceRejoin, hubUrl })
+      if (gameReconnectActiveRef.current || forceRejoin || !locState.skipEnterChannel) {
+        const isContinue = gameReconnectActiveRef.current
+        logRejoinProbe('send c1e enter channel', {
+          forceRejoin,
+          isContinue,
+          ignoredSkipEnterChannel: gameReconnectActiveRef.current && Boolean(locState.skipEnterChannel),
+        })
+        await enterChannel(buildEnterChannelPayload(channelId ?? '', player, isContinue))
+        console.info('[GameReconnect] RoomScreen c1e request completed', {
+          setupAttempt,
+          mounted,
+          connectionId: SignalR.getConnection()?.connectionId,
+          roomActionSentKey: roomActionSentKeyRef.current,
+        })
+      }
+      if (!mounted) {
+        console.warn('[GameReconnect] RoomScreen setup stopped after c1e: effect unmounted', {
+          setupAttempt,
+          connectionId: SignalR.getConnection()?.connectionId,
+        })
+        return
+      }
+      advanceGameLoad('room', { skipEnterChannel: Boolean(locState.skipEnterChannel) })
       const roomActionKey = `${channelId ?? ''}:${roomId ?? ''}:${locState.mode ?? 'enter'}:${serverUrl}`
+      console.info('[GameReconnect] RoomScreen evaluating room action', {
+        setupAttempt,
+        connectionId: SignalR.getConnection()?.connectionId,
+        forceRejoin,
+        mode: locState.mode ?? 'enter',
+        roomActionKey,
+        previousRoomActionSentKey: roomActionSentKeyRef.current,
+        keysMatch: roomActionSentKeyRef.current === roomActionKey,
+        gameReconnect: gameReconnectActiveRef.current,
+        inlineGame: inlineGameActiveRef.current,
+        locationKey: location.key,
+      })
       if (!forceRejoin && roomActionSentKeyRef.current === roomActionKey) {
         const navigationType = getDocumentNavigationType()
-        const shouldReturnToLobby = !inlineGameActiveRef.current && location.key === 'default'
+        const shouldReturnToLobby = !gameReconnectActiveRef.current && !inlineGameActiveRef.current && location.key === 'default'
         logRejoinProbe('skip room action: already sent key', { roomActionKey, navigationType, locationKey: location.key, shouldReturnToLobby })
+        console.warn('[GameReconnect] RoomScreen room-entry command skipped: action key already sent', {
+          setupAttempt,
+          connectionId: SignalR.getConnection()?.connectionId,
+          roomActionKey,
+          navigationType,
+          locationKey: location.key,
+          gameReconnect: gameReconnectActiveRef.current,
+          inlineGame: inlineGameActiveRef.current,
+          shouldReturnToLobby,
+        })
         if (shouldReturnToLobby) {
           navigate(channelId ? `/channel/${channelId}` : '/channel', { replace: true })
         }
         return
       }
       roomActionSentKeyRef.current = roomActionKey
+      console.info('[GameReconnect] RoomScreen room action key claimed', {
+        setupAttempt,
+        connectionId: SignalR.getConnection()?.connectionId,
+        roomActionKey,
+        mode: locState.mode ?? 'enter',
+      })
       if (createMode) {
         logRejoinProbe('send c8e create room', { roomActionKey })
         startRoomActionPending('c8e', { roomActionKey })
@@ -1782,14 +2016,25 @@ export default function RoomScreen() {
           pix: player?.pix ?? '',
           k3e: player?.pix ?? '',
         }
+        const sendAutoEnter = () => SignalR.send('mjkc6e', autoEnterPayload)
+        const autoEnterLogPayload = autoEnterPayload as Record<string, unknown>
+        console.info('[GameReconnect] RoomScreen mjkc6e send start', {
+          setupAttempt,
+          connectionId: SignalR.getConnection()?.connectionId,
+          roomActionKey,
+          requestedRoomId: autoEnterLogPayload.roomId ?? autoEnterLogPayload.k42e ?? roomId,
+        })
         logRejoinProbe('send mjkc6e auto enter', { roomActionKey, payload: autoEnterPayload })
         startRoomActionPending('mjkc6e', { roomActionKey })
-        await SignalR.send('mjkc6e', autoEnterPayload)
+        await sendAutoEnter()
+        console.info('[GameReconnect] RoomScreen mjkc6e invoke resolved', {
+          setupAttempt,
+          connectionId: SignalR.getConnection()?.connectionId,
+          roomActionKey,
+        })
       } else if (locState.mode === 'view') {
         const numericRoomId = Number(roomId ?? 0)
-        logRejoinProbe('send c18e view room', { roomActionKey, numericRoomId })
-        startRoomActionPending('c18e', { roomActionKey, numericRoomId })
-        await SignalR.send('c18e', {
+        const viewRoomPayload = {
           roomId: numericRoomId,
           k42e: numericRoomId,
           roomPwd: locState.roomPassword ?? '',
@@ -1798,22 +2043,41 @@ export default function RoomScreen() {
           playerType: 'v5e',
           k57e: 'v5e',
           ...(locState.tournamentViewPayload ?? {}),
-        })
+        }
+        const sendViewRoom = () => SignalR.send('c18e', viewRoomPayload)
+        logRejoinProbe('send c18e view room', { roomActionKey, numericRoomId })
+        startRoomActionPending('c18e', { roomActionKey, numericRoomId })
+        await sendViewRoom()
       } else {
         // 既存ルーム入室モード: c14e (G::commandEnterRoom)
         const numericRoomId = Number(roomId ?? 0)
-        logRejoinProbe('send c14e enter room', { roomActionKey, numericRoomId })
-        startRoomActionPending('c14e', { roomActionKey, numericRoomId })
-        await SignalR.send('c14e', {
+        const enterRoomPayload = {
           roomId: numericRoomId,
           k42e: numericRoomId,
           roomPassword: locState.roomPassword ?? '',
           k67e: locState.roomPassword ?? '',
+        }
+        const sendEnterRoom = () => SignalR.send('c14e', enterRoomPayload)
+        console.info('[GameReconnect] RoomScreen c14e send start', {
+          setupAttempt,
+          connectionId: SignalR.getConnection()?.connectionId,
+          roomActionKey,
+          numericRoomId,
+        })
+        logRejoinProbe('send c14e enter room', { roomActionKey, numericRoomId })
+        startRoomActionPending('c14e', { roomActionKey, numericRoomId })
+        await sendEnterRoom()
+        console.info('[GameReconnect] RoomScreen c14e invoke resolved', {
+          setupAttempt,
+          connectionId: SignalR.getConnection()?.connectionId,
+          roomActionKey,
+          numericRoomId,
         })
       }
     }
     const onReconnected = () => {
       logRejoinProbe('SignalR reconnected callback')
+      gameReconnectActiveRef.current = true
       roomActionSentKeyRef.current = ''
       setup(true).catch(err => {
         if (!mounted) return
@@ -1828,11 +2092,24 @@ export default function RoomScreen() {
       logRejoinProbe('initial setup failed', { errorMessage: err instanceof Error ? err.message : String(err) })
       console.error('[RoomScreen] setup failed', err)
       showError('ルームへの接続に失敗しました')
-      navigate(`/channel/${channelId ?? ''}/lobby`)
+      if (!gameReconnectActiveRef.current) navigate(`/channel/${channelId ?? ''}/lobby`)
     })
 
     return () => {
       mounted = false
+      console.info('[GameReconnect] RoomScreen connection effect cleanup', {
+        effectInstance,
+        channelId,
+        roomId,
+        mode: locState.mode ?? 'enter',
+        roomActionSentKey: roomActionSentKeyRef.current,
+        connectionId: SignalR.getConnection()?.connectionId,
+        connectionState: SignalR.getConnection()?.state ?? 'missing',
+      })
+      if (pendingChannelEntryHandler) {
+        SignalR.off('c1e', pendingChannelEntryHandler)
+        pendingChannelEntryHandler = null
+      }
       SignalR.offConnectionLost(onConnectionLost)
       SignalR.offReconnected(onReconnected)
       window.removeEventListener('offline', onBrowserOffline)
@@ -1858,10 +2135,6 @@ export default function RoomScreen() {
       SignalR.off('mjkc22e',          onGetGem)
       SignalR.off('smmc2e',           onOkResult)
       SignalR.off('c8e',             onRoomCreated)
-      if (roomActionPendingTimerRef.current !== null) {
-        window.clearTimeout(roomActionPendingTimerRef.current)
-        roomActionPendingTimerRef.current = null
-      }
       // WebSocket は LobbyScreen が管理する (同一サーバーなら切断しない)
       // 別サーバー URL の場合でも LobbyScreen 側で再接続される
     }
@@ -2144,22 +2417,13 @@ export default function RoomScreen() {
   if (roomActionPending && !inlineGame) {
     const pendingStage = (
       <div style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: '#000' }}>
-        <InlineGameLoadingOverlay visible />
+        <GameReconnectLoading visible currentStep={gameLoadStep} complete={gameLoadComplete} />
       </div>
     )
     if (isMobileIngame) {
       return (
         <div ref={mobileIngameShellRef} className="majak-mobile-ingame-shell majak-mobile-room-waiting-shell">
-          <div
-            className="majak-mobile-ingame-scale"
-            style={{
-              width: ROOM_W,
-              height: ROOM_H,
-              transform: `translateX(-50%) translateY(${mobileIngameOffsetY}px) scale(${mobileIngameScale})`,
-            }}
-          >
-            {pendingStage}
-          </div>
+          <GameReconnectLoading visible currentStep={gameLoadStep} complete={gameLoadComplete} />
         </div>
       )
     }
@@ -2339,7 +2603,7 @@ export default function RoomScreen() {
     const inlineGameStage = (
       <div style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: '#000' }}>
         <div ref={inlineGameRef} style={{ position: 'absolute', left: 0, top: -31, width: GAME_WIDTH, height: GAME_HEIGHT }} />
-        <InlineGameLoadingOverlay visible={!isMobileIngame && inlineGameLoading} />
+        <GameReconnectLoading visible={!isMobileIngame && inlineGameLoading} currentStep={gameLoadStep} complete={gameLoadComplete} />
 
         <div style={{ position: 'absolute', left: 0, top: 0, width: ROOM_W, height: ROOM_H, zIndex: 24, pointerEvents: 'none' }}>
           {activeEmoticons.map(item => <EmoticonAnimation key={item.id} item={item} now={emoticonNow} />)}
@@ -2664,7 +2928,7 @@ export default function RoomScreen() {
           >
             {inlineGameStage}
           </div>
-          <InlineGameLoadingOverlay visible={inlineGameLoading} />
+          <GameReconnectLoading visible={inlineGameLoading} currentStep={gameLoadStep} complete={gameLoadComplete} />
           {!mobileIngameChatOpen && (
             <div className={`majak-mobile-ingame-tool-drawer${mobileIngameToolOpen ? ' is-open' : ''}`} style={mobileIngameToolDrawerStyle}>
               <button

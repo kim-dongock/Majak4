@@ -29,6 +29,7 @@ import Phaser from 'phaser'
 import * as SignalR from '../api/signalr'
 import type { CreateGameOptions } from '../game/GameInstance'
 import { resolveAutoControlAction } from '../game/autoControl'
+import { emitGameLoadProgress } from '../game/gameLoadProgress'
 import { DESKTOP_INGAME_LAYOUT, getIngameLayout, type IngameLayoutMode } from '../game/ingameLayout'
 import { MOBILE_PLAYFIELD_OFFSET_Y, mobileCenterHudOffset, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey } from '../game/mobileIngameViewport'
 import { useAuthStore } from '../store/authStore'
@@ -55,7 +56,6 @@ const DISCARD_PROBE_PREFIX = '[GameScene/DiscardProbe]'
 const RESYNC_PROBE_PREFIX = '[GameScene/ResyncProbe]'
 const IMG = '/assets/images/game'
 const UI_SINGLE_DELIVERY_EVENTS = new Set(['turnChange', 'actionPromptStart', 'actionPromptEnd'])
-const INITIAL_RESYNC_AFTER_HISTORY_SKIP_MS = 1000
 const CUSTOM_BGM_ID_EXTRA = 100008
 const CUSTOM_BGM_ID_TENGOKU = 100009
 const CUSTOM_ITEM_TYPE_BG_EXTRA = 11
@@ -789,9 +789,13 @@ export default class GameScene extends Phaser.Scene {
   private flowTraceSerial = 0
   private actionSendInFlight = false
   private gameResyncInFlight = false
+  private gameRestorePending = false
+  private gameResyncInvokeResolved = false
+  private gameResyncSnapshotReceived = false
+  private gameResyncHistoryReceived = false
+  private gameResyncHistoryApplied = false
   private pendingAction: { seatOrder: number; action: number; actionSeq?: number } | null = null
   private currentActionPrompt: ActionPromptState | null = null
-  private lastLiveHistoryAppliedAt = 0
   private keyboardActionIndex = -1
   private keyboardHandler?: (event: KeyboardEvent) => void
   private contextMenuHandler?: (event: MouseEvent) => void
@@ -896,6 +900,12 @@ export default class GameScene extends Phaser.Scene {
     this.isReplayApplyingHistory = false
     this.pendingResyncHandSnapshot = undefined
     this.skipInitialRoomEnter = Boolean(data.skipInitialRoomEnter)
+    this.gameResyncInFlight = false
+    this.gameRestorePending = this.skipInitialRoomEnter && !this.isReplay
+    this.gameResyncInvokeResolved = false
+    this.gameResyncSnapshotReceived = false
+    this.gameResyncHistoryReceived = false
+    this.gameResyncHistoryApplied = false
     this.inputConfig = { nSelPasKey: data.inputConfig?.nSelPasKey === 1 ? 1 : 0 }
     if (DEBUG_GAME) console.info('[GameScene] init', {
       roomId: this.roomId,
@@ -912,6 +922,14 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
+    if (!this.isReplay) emitGameLoadProgress('scene')
+    if (this.skipInitialRoomEnter) {
+      console.info('[GameReconnect] GameScene create entered', {
+        roomId: this.roomId,
+        acceptingSignalR: this.acceptingSignalR,
+        restorePending: this.gameRestorePending,
+      })
+    }
     this.createBoardMask()
 
     /* ── ボード背景 mj_board.png (789×704) at (5,31) ── */
@@ -949,6 +967,12 @@ export default class GameScene extends Phaser.Scene {
     /* ── SignalR イベント登録 ── */
     this.acceptingSignalR = true
     this.setupSignalR()
+    if (this.skipInitialRoomEnter) {
+      console.info('[GameReconnect] GameScene SignalR handlers registered', {
+        roomId: this.roomId,
+        handlerCount: this.signalRHandlers.length,
+      })
+    }
     this.notifyGameClientReady()
     this.requestInitialRoomState()
     this.setupReplayControlEvents()
@@ -1026,12 +1050,43 @@ export default class GameScene extends Phaser.Scene {
 
     /* smmc4e — 牌情報リスト (レガシー SendPaiInfo / ProcessCommand_PaiInfoList) */
     const handlePaiInfo: SignalR.MessageHandler = data => {
-      if (!this.canHandleSignalR()) return
+      const canHandle = this.canHandleSignalR()
+      const isResyncSnapshot = Boolean(data.resyncSnapshot)
+      if (this.gameRestorePending || isResyncSnapshot) {
+        console.info('[GameReconnect] smmc4e handler entered', {
+          roomId: this.roomId,
+          canHandle,
+          restorePending: this.gameRestorePending,
+          isResyncSnapshot,
+          openPos: data.openPos,
+          isInit: data.bInit ?? data.init,
+          paiCount: Array.isArray(data.pai) ? data.pai.length : data.paiCount,
+          hasCurrentHand: Array.isArray(data.currentHand),
+        })
+      }
+      if (!canHandle) {
+        if (this.gameRestorePending || isResyncSnapshot) {
+          console.warn('[GameReconnect] smmc4e ignored because GameScene cannot handle SignalR', {
+            roomId: this.roomId,
+            acceptingSignalR: this.acceptingSignalR,
+          })
+        }
+        return
+      }
       const openPos = Number(data.openPos ?? this.myOdr)
       const isPlayerOpenPos = openPos >= 0 && (openPos < this.players.length || openPos === VIEWER_OPEN_POS)
       const isInit = Boolean(data.bInit ?? data.init)
-      const isResyncSnapshot = Boolean(data.resyncSnapshot)
       const pai = Array.isArray(data.pai) ? data.pai as Array<Record<string, unknown>> : []
+      emitGameLoadProgress('tiles', { isInit, isResyncSnapshot, paiCount: pai.length })
+      if (this.gameRestorePending && isResyncSnapshot) {
+        this.gameResyncSnapshotReceived = true
+        this.logResyncProbe('authoritative smmc4e snapshot accepted', {
+          openPos,
+          isInit,
+          paiCount: pai.length,
+          currentHandCount: Array.isArray(data.currentHand) ? data.currentHand.length : null,
+        })
+      }
       if (DEBUG_GAME) console.info('[GameScene] smmc4e PaiInfo', {
         openPos,
         isInit,
@@ -1068,6 +1123,7 @@ export default class GameScene extends Phaser.Scene {
         this.pendingDiscardsByBipaiIndex.clear()
         this.pendingResyncHandSnapshot = { openPos, tiles: currentHand }
         this.applyResyncHandSnapshot(this.pendingResyncHandSnapshot)
+        this.tryCompleteGameResync('authoritative-snapshot-applied')
         return
       }
 
@@ -1425,7 +1481,24 @@ export default class GameScene extends Phaser.Scene {
     this.onSignalR('playing', handleGamePlay)
 
     const handleHistory: SignalR.MessageHandler = data => {
-      if (!this.canHandleSignalR() || this.isReplay) return
+      const canHandle = this.canHandleSignalR()
+      console.info('[GameReconnect] history handler entered', {
+        roomId: this.roomId,
+        canHandle,
+        isReplay: this.isReplay,
+        restorePending: this.gameRestorePending,
+        historyCount: data.historyCount,
+      })
+      if (!canHandle || this.isReplay) {
+        console.warn('[GameReconnect] history ignored before application', {
+          roomId: this.roomId,
+          canHandle,
+          isReplay: this.isReplay,
+        })
+        return
+      }
+      if (this.gameRestorePending) this.gameResyncHistoryReceived = true
+      emitGameLoadProgress('history', { historyCount: data.historyCount })
       const showHistoryLoading = !this.gameResyncInFlight
       if (showHistoryLoading) this.emitGameSync(true, 'history')
       try {
@@ -1468,7 +1541,6 @@ export default class GameScene extends Phaser.Scene {
         }
         this.applyPendingResyncHandSnapshot()
         this.redrawAllPerspectivePai()
-        this.lastLiveHistoryAppliedAt = performance.now()
         const viewerHistoryWasPending = this.viewerHistorySyncPending
         this.viewerHistorySyncPending = false
         this.emitToUiScene('stateUpdate', { players: this.players, viewOdr: this.myOdr })
@@ -1479,6 +1551,14 @@ export default class GameScene extends Phaser.Scene {
           discardCounts: this.players.map(player => player.discards.length),
           queueAfter: this.paiInfoQueue.map(msg => ({ ini: msg.bIniKyo, openPos: msg.openPos, count: msg.tiles.length })),
         })
+        emitGameLoadProgress('sync', {
+          historyPacketCount: packets.length,
+          handCounts: this.players.map(player => player.hand.length),
+        })
+        if (this.gameRestorePending) {
+          this.gameResyncHistoryApplied = true
+          this.tryCompleteGameResync('authoritative-history-applied')
+        }
         if (DEBUG_GAME) console.info('[GameScene] live history applied', { packetCount: packets.length })
         if (viewerHistoryWasPending) this.emitGameSync(false, 'viewer-history-applied')
       } finally {
@@ -1532,7 +1612,6 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private logResyncProbe(eventName: string, details: Record<string, unknown> = {}) {
-    if (!DEBUG_GAME) return
     console.info(RESYNC_PROBE_PREFIX, eventName, {
       roomId: this.roomId,
       isViewer: this.isViewer,
@@ -1669,75 +1748,137 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private requestInitialRoomState() {
-    if (this.isReplay || !this.roomId) return
+    if (this.isReplay || !this.roomId) {
+      if (this.skipInitialRoomEnter) {
+        console.warn('[GameReconnect] initial room state request skipped', {
+          roomId: this.roomId,
+          isReplay: this.isReplay,
+          reason: !this.roomId ? 'missing-room-id' : 'replay',
+        })
+      }
+      return
+    }
     const numericRoomId = Number(this.roomId)
-    if (!Number.isFinite(numericRoomId) || numericRoomId <= 0) return
+    if (!Number.isFinite(numericRoomId) || numericRoomId <= 0) {
+      console.warn('[GameReconnect] initial room state request skipped: invalid room id', {
+        roomId: this.roomId,
+      })
+      return
+    }
     this.emitGameSync(true, 'initial-room-state')
 
-    this.time.delayedCall(0, () => {
-      if (!this.canHandleSignalR()) {
-        this.emitGameSync(false, 'initial-room-state')
-        return
-      }
-      if (this.skipInitialRoomEnter) {
-        const msSinceHistory = performance.now() - this.lastLiveHistoryAppliedAt
-        if (this.lastLiveHistoryAppliedAt > 0 && msSinceHistory <= INITIAL_RESYNC_AFTER_HISTORY_SKIP_MS) {
-          this.logResyncProbe('skip initial RequestGameResync: fresh history already applied', { msSinceHistory })
-          this.emitGameSync(false, 'initial-room-state:fresh-history')
-          return
-        }
-        this.logResyncProbe('request initial room state through c16e + RequestGameResync', { skipInitialRoomEnter: true, msSinceHistory })
-        void SignalR.send('c16e', {})
-          .then(() => {
-            this.logResyncProbe('initial c16e sent before RequestGameResync')
-            this.requestGameResync('initial-room-state')
+    if (!this.canHandleSignalR()) {
+      console.warn('[GameReconnect] initial room state request skipped: GameScene cannot handle SignalR', {
+        roomId: this.roomId,
+        acceptingSignalR: this.acceptingSignalR,
+      })
+      return
+    }
+    if (this.skipInitialRoomEnter) {
+      this.logResyncProbe('request initial room state through c16e + RequestGameResync', { skipInitialRoomEnter: true })
+      console.info('[GameReconnect] c16e send start', { roomId: numericRoomId })
+      void SignalR.send('c16e', {})
+        .then(() => {
+          console.info('[GameReconnect] c16e send resolved', { roomId: numericRoomId })
+        })
+        .catch(error => {
+          console.error('[GameReconnect] c16e send failed', {
+            roomId: numericRoomId,
+            errorMessage: error instanceof Error ? error.message : String(error),
           })
-          .catch(error => {
-            this.logResyncProbe('initial c16e failed before RequestGameResync', { errorMessage: error instanceof Error ? error.message : String(error) })
-            this.requestGameResync('initial-room-state')
-          })
-        return
-      }
-      this.logResyncProbe('send c14e from GameScene initial room state', { numericRoomId })
-      void SignalR.send('c14e', { roomId: numericRoomId, k42e: numericRoomId })
-        .then(() => SignalR.send('c16e', {}))
-        .catch(() => {})
-    })
+          this.logResyncProbe('initial c16e failed before RequestGameResync', { errorMessage: error instanceof Error ? error.message : String(error) })
+        })
+        .finally(() => {
+          console.info('[GameReconnect] c16e finished; starting RequestGameResync', { roomId: numericRoomId })
+          this.requestGameResync('initial-room-state')
+        })
+      return
+    }
+    this.logResyncProbe('send c14e from GameScene initial room state', { numericRoomId })
+    void SignalR.send('c14e', { roomId: numericRoomId, k42e: numericRoomId })
+      .then(() => SignalR.send('c16e', {}))
+      .catch(() => {})
   }
 
   private requestGameResync(reason: string) {
     const numericRoomId = Number(this.roomId)
-    if (!Number.isFinite(numericRoomId) || numericRoomId <= 0) return
+    if (!Number.isFinite(numericRoomId) || numericRoomId <= 0) {
+      console.warn('[GameReconnect] RequestGameResync skipped: invalid room id', {
+        roomId: this.roomId,
+        reason,
+      })
+      return
+    }
     this.gameResyncInFlight = true
+    this.gameRestorePending = true
+    this.gameResyncInvokeResolved = false
+    this.gameResyncSnapshotReceived = false
+    this.gameResyncHistoryReceived = false
+    this.gameResyncHistoryApplied = false
     this.emitGameSync(true, reason)
     this.logResyncProbe('RequestGameResync invoke start', { reason, numericRoomId })
     if (DEBUG_GAME) console.info('[GameScene] request game resync', { reason, roomId: this.roomId })
     void SignalR.invoke('RequestGameResync', numericRoomId)
       .then(() => {
         this.logResyncProbe('RequestGameResync invoke resolved', { reason, numericRoomId })
+        this.gameResyncInvokeResolved = true
+        this.tryCompleteGameResync(reason)
       })
       .catch(error => {
-        this.logResyncProbe('RequestGameResync invoke failed', { reason, numericRoomId, errorMessage: error instanceof Error ? error.message : String(error) })
-        this.requestInitialRoomState()
-      })
-      .finally(() => {
-        this.time.delayedCall(1500, () => {
-          this.gameResyncInFlight = false
-          if (!this.viewerHistorySyncPending) this.emitGameSync(false, reason)
-        })
+        const errorMessage = error instanceof Error ? error.message : String(error)
+        console.error('[GameReconnect] RequestGameResync invoke failed', { reason, numericRoomId, errorMessage })
+        this.logResyncProbe('RequestGameResync invoke failed', { reason, numericRoomId, errorMessage })
       })
   }
 
-  private notifyGameClientReady(attempt = 0) {
+  private tryCompleteGameResync(reason: string) {
+    const gate = {
+      restorePending: this.gameRestorePending,
+      inFlight: this.gameResyncInFlight,
+      invokeResolved: this.gameResyncInvokeResolved,
+      snapshotReceived: this.gameResyncSnapshotReceived,
+      historyReceived: this.gameResyncHistoryReceived,
+      historyApplied: this.gameResyncHistoryApplied,
+    }
+    if (!this.gameRestorePending || !this.gameResyncInFlight) {
+      this.logResyncProbe('resync completion gate blocked: not pending', { reason, gate })
+      return
+    }
+    if (!this.gameResyncInvokeResolved || !this.gameResyncSnapshotReceived) {
+      this.logResyncProbe('resync completion gate waiting for invoke or snapshot', { reason, gate })
+      return
+    }
+    if (this.gameResyncHistoryReceived && !this.gameResyncHistoryApplied) {
+      this.logResyncProbe('resync completion gate waiting for history application', { reason, gate })
+      return
+    }
+
+    this.gameResyncInFlight = false
+    this.gameRestorePending = false
+    if (!this.gameResyncHistoryReceived) {
+      emitGameLoadProgress('sync', { reason: 'authoritative-snapshot-only' })
+    }
+    this.logResyncProbe('resync completion gate passed', { reason, gate })
+    this.emitGameSync(false, reason)
+  }
+
+  private notifyGameClientReady() {
     const roomId = Number(this.roomId)
-    if (!Number.isInteger(roomId) || roomId <= 0) return
-    void SignalR.invoke('NotifyGameClientReady', roomId).catch(error => {
-      if (this.canHandleSignalR() && attempt < 20) {
-        this.time.delayedCall(250, () => this.notifyGameClientReady(attempt + 1))
-        return
-      }
-      console.warn('[GameScene] NotifyGameClientReady failed', { roomId, error })
-    })
+    if (!Number.isInteger(roomId) || roomId <= 0) {
+      console.warn('[GameReconnect] NotifyGameClientReady skipped: invalid room id', { roomId: this.roomId })
+      return
+    }
+    if (this.skipInitialRoomEnter) console.info('[GameReconnect] NotifyGameClientReady invoke start', { roomId })
+    void SignalR.invoke('NotifyGameClientReady', roomId)
+      .then(() => {
+        if (this.skipInitialRoomEnter) console.info('[GameReconnect] NotifyGameClientReady invoke resolved', { roomId })
+      })
+      .catch(error => {
+        console.warn('[GameReconnect] NotifyGameClientReady invoke failed', {
+          roomId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        })
+      })
   }
 
   private teardownSignalR() {
@@ -1844,6 +1985,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private emitGameSync(active: boolean, reason: string) {
+    if (!active && this.gameRestorePending) {
+      this.logResyncProbe('ignore premature game sync completion', { reason })
+      return
+    }
+    if (!active) emitGameLoadProgress('ready', { reason })
     window.dispatchEvent(new CustomEvent(GAME_SYNC_EVENT, { detail: { active, reason } }))
   }
 

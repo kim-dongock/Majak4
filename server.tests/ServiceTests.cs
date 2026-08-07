@@ -720,7 +720,13 @@ public class PlayerSessionServiceTests
     {
         var session = new PlayerSessionService();
         var owner   = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1" };
-        var guest   = new MajakPlayer { ConnectionId = "c2", MemberNo = "u2", ChannelId = "ch1" };
+        var guest   = new MajakPlayer
+        {
+            ConnectionId = "c2",
+            MemberNo = "u2",
+            ChannelId = "ch1",
+            IsOutPlayer = true,
+        };
         session.Register(owner);
         session.Register(guest);
         var room = session.CreateRoom("ch1", owner, "", 1, 0, 0, false);
@@ -729,6 +735,10 @@ public class PlayerSessionServiceTests
 
         Assert.True(ok);
         Assert.Equal(room.RoomId, guest.RoomId);
+        Assert.False(guest.IsOutPlayer);
+        Assert.Equal(2, room.ActivePlayerCount);
+        var memberList = MajakServer.Commands.Room.RoomGetMembersCommand.BuildMemberListPayload(room);
+        Assert.Equal(2, Convert.ToInt32(memberList[GKey.Count]));
     }
 
     [Fact]

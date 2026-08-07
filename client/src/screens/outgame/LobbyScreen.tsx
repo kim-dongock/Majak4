@@ -46,7 +46,7 @@ function readAbandonRoomOnEnter(channelId: string) {
   const raw = window.sessionStorage.getItem(ABANDON_ROOM_STORAGE_KEY)
   if (!raw) return null
   try {
-    const value = JSON.parse(raw) as { channelId?: string; roomId?: number }
+    const value = JSON.parse(raw) as { channelId?: string; roomId?: number; fatalRoomError?: boolean }
     if (value.channelId !== channelId || !value.roomId) return null
     return value
   } catch {
@@ -58,7 +58,12 @@ function clearAbandonRoomOnEnter() {
   window.sessionStorage.removeItem(ABANDON_ROOM_STORAGE_KEY)
 }
 
-function buildEnterChannelPayload(channelId: string, player: ReturnType<typeof useAuthStore.getState>['player'], abandonRoomId = 0) {
+function buildEnterChannelPayload(
+  channelId: string,
+  player: ReturnType<typeof useAuthStore.getState>['player'],
+  abandonRoomId = 0,
+  abandonRoomAfterFatalError = false,
+) {
   const subId = channelId.length >= 11 ? channelId.substring(6, 11) : channelId
   const pix = player?.pix ?? ''
   const avatarId = player?.avatarId ?? ''
@@ -80,6 +85,7 @@ function buildEnterChannelPayload(channelId: string, player: ReturnType<typeof u
     tabId: getTabSessionId(),
     abandonPreviousRoom: abandonRoomId > 0,
     abandonRoomId,
+    abandonRoomAfterFatalError,
   }
 }
 
@@ -1881,6 +1887,12 @@ export default function LobbyScreen() {
   const [showPlayerInfo, setShowPlayerInfo] = useState<DlgPlayerInfo | null>(null)
   const [oneToOneChat, setOneToOneChat] = useState<{ target: string; partnerName: string; partnerOnline: boolean; messages: Array<{ sender: string; text: string; system?: boolean }> } | null>(null)
   const [oneToOneChatText, setOneToOneChatText] = useState('')
+  const [oneToOneChatViewport, setOneToOneChatViewport] = useState(() => ({
+    top: 0,
+    left: 0,
+    width: typeof window === 'undefined' ? 0 : window.innerWidth,
+    height: typeof window === 'undefined' ? 0 : window.innerHeight,
+  }))
   const [inviteData,   setInviteData]   = useState<{
     inviterId: string; inviterName: string; roomId: number; roomPwd: string; avatarId?: string
     roomName?: string; roomOption?: string; inviteMessage?: string; inviterSex?: string; inviterRating?: number; inviterLevel?: string
@@ -1913,6 +1925,26 @@ export default function LobbyScreen() {
   /** 麻雀称号名 — channel:entered 原典: keyMajakTitleName */
   const [majakTitleName, setMajakTitleName] = useState<string>('')
   const [rejectInvite, setRejectInvite] = useState(false)
+
+  useEffect(() => {
+    if (!oneToOneChat || layoutMode === 'desktop') return
+    const visualViewport = window.visualViewport
+    const update = () => setOneToOneChatViewport({
+      top: visualViewport?.offsetTop ?? 0,
+      left: visualViewport?.offsetLeft ?? 0,
+      width: visualViewport?.width ?? window.innerWidth,
+      height: visualViewport?.height ?? window.innerHeight,
+    })
+    update()
+    window.addEventListener('resize', update)
+    visualViewport?.addEventListener('resize', update)
+    visualViewport?.addEventListener('scroll', update)
+    return () => {
+      window.removeEventListener('resize', update)
+      visualViewport?.removeEventListener('resize', update)
+      visualViewport?.removeEventListener('scroll', update)
+    }
+  }, [layoutMode, oneToOneChat])
   const [rejectChat, setRejectChat] = useState(false)
   const [tournamentList, setTournamentList] = useState<TournamentEntry[]>([])
   const [tournamentJoinSeqNo, setTournamentJoinSeqNo] = useState(0)
@@ -2322,8 +2354,9 @@ export default function LobbyScreen() {
         const sender = String(sendMember?.pix ?? data.sender ?? '')
         const recipient = String(receiveMember?.pix ?? data.target ?? '')
         const myPix = player?.pix ?? ''
-        const target = sender === myPix ? recipient : sender
-        const partnerName = String((sender === myPix ? receiveMember : sendMember)?.name ?? displayNameForPix(target))
+        if (!myPix || sender !== myPix) return
+        const target = recipient
+        const partnerName = String(receiveMember?.name ?? displayNameForPix(target))
         if (target) setOneToOneChat(current => current?.target === target
           ? { ...current, partnerName, partnerOnline: true }
           : { target, partnerName, partnerOnline: true, messages: [] })
@@ -2337,6 +2370,7 @@ export default function LobbyScreen() {
         const sender = String(sendMember?.pix ?? data.sender ?? '')
         const recipient = String(receiveMember?.pix ?? data.target ?? '')
         const myPix = player?.pix ?? ''
+        if (!myPix || (sender !== myPix && recipient !== myPix)) return
         const target = sender === myPix ? recipient : sender
         const partnerName = String((sender === myPix ? receiveMember : sendMember)?.name ?? displayNameForPix(target))
         const text = String(data.k41e ?? data.string ?? '')
@@ -2663,7 +2697,12 @@ export default function LobbyScreen() {
           return cleanupSignalR
         }
         const abandonRoom = readAbandonRoomOnEnter(channelId ?? '')
-        const enterPayload = buildEnterChannelPayload(channelId ?? '', player, abandonRoom?.roomId ?? 0)
+        const enterPayload = buildEnterChannelPayload(
+          channelId ?? '',
+          player,
+          abandonRoom?.roomId ?? 0,
+          Boolean(abandonRoom?.fatalRoomError),
+        )
         const { password: _password, ...enterLogPayload } = enterPayload
         console.info('[LobbyScreen] sending EnterChannel c1e', enterLogPayload)
         await SignalR.send('c1e', enterPayload)
@@ -3157,7 +3196,18 @@ export default function LobbyScreen() {
       )}
 
       {oneToOneChat && (
-        <div className="majak-one-to-one-chat" role="dialog" aria-modal="true" aria-labelledby="majak-one-to-one-chat-title">
+        <div
+          className={`majak-one-to-one-chat${layoutMode === 'desktop' ? '' : ' is-mobile'}`}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="majak-one-to-one-chat-title"
+          style={layoutMode === 'desktop' ? undefined : {
+            top: oneToOneChatViewport.top,
+            left: oneToOneChatViewport.left,
+            width: oneToOneChatViewport.width,
+            height: oneToOneChatViewport.height,
+          }}
+        >
           <section className="majak-one-to-one-chat__window">
             <header>
               <div><span>{oneToOneChat.partnerOnline ? 'チャット中' : '退室しました'}</span><h2 id="majak-one-to-one-chat-title">{oneToOneChat.partnerName}</h2></div>

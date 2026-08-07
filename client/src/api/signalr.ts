@@ -98,12 +98,15 @@ function stockMessage(cmd: string, data: Record<string, unknown>): void {
   if (!STOCKED_COMMANDS.has(cmd)) return
   stockedMessages.push({ cmd, data, sequence: ++stockedMessageSequence })
   if (stockedMessages.length > MAX_STOCKED_MESSAGES) stockedMessages.splice(0, stockedMessages.length - MAX_STOCKED_MESSAGES)
-  if (DEBUG_SIGNALR) console.warn('[SignalR] stocked packet because no handler is ready', {
+  console.warn('[GameReconnect] SignalR packet stocked because no handler is ready', {
     cmd,
     stockedCount: stockedMessages.length,
     sequence: stockedMessageSequence,
     playType: data?.playType,
     openPos: data?.openPos,
+    resyncSnapshot: data?.resyncSnapshot,
+    paiCount: data?.paiCount,
+    historyCount: data?.historyCount,
     seatOrder: data?.seatOrder,
     actFlags: data?.actFlags,
     playerMode: data?.playerMode,
@@ -114,15 +117,28 @@ function flushStockedMessages(): void {
   while (stockedMessages.length > 0) {
     const next = stockedMessages[0]
     const currentHandlers = [...(handlers.get(next.cmd) ?? [])]
-    if (currentHandlers.length === 0) return
+    if (currentHandlers.length === 0) {
+      console.warn('[GameReconnect] SignalR stocked FIFO blocked by missing handler', {
+        headCommand: next.cmd,
+        headSequence: next.sequence,
+        stockedCount: stockedMessages.length,
+        registeredCommands: [...handlers.entries()]
+          .filter(([, commandHandlers]) => commandHandlers.length > 0)
+          .map(([cmd]) => cmd),
+      })
+      return
+    }
 
     stockedMessages.shift()
-    if (DEBUG_SIGNALR) console.info('[SignalR] replay stocked packet', {
+    console.info('[GameReconnect] SignalR replay stocked packet', {
       cmd: next.cmd,
       remainingCount: stockedMessages.length,
       sequence: next.sequence,
       playType: next.data?.playType,
       openPos: next.data?.openPos,
+      resyncSnapshot: next.data?.resyncSnapshot,
+      paiCount: next.data?.paiCount,
+      historyCount: next.data?.historyCount,
       seatOrder: next.data?.seatOrder,
     })
     dispatchToHandlers(next.cmd, next.data, currentHandlers)
@@ -130,6 +146,18 @@ function flushStockedMessages(): void {
 }
 
 function dispatchToHandlers(cmd: string, data: Record<string, unknown>, currentHandlers: MessageHandler[]): void {
+  if (cmd === 'history' || Boolean(data.resyncSnapshot)) {
+    console.info('[GameReconnect] SignalR packet received for dispatch', {
+      cmd,
+      handlerCount: currentHandlers.length,
+      connectionId: connection?.connectionId,
+      playType: data?.playType,
+      openPos: data?.openPos,
+      resyncSnapshot: data?.resyncSnapshot,
+      paiCount: data?.paiCount,
+      historyCount: data?.historyCount,
+    })
+  }
   if (DEBUG_SIGNALR && isDebugCommand(cmd)) {
     console.info('[SignalR] dispatch', {
       cmd,
@@ -279,6 +307,15 @@ export function on(cmd: string, handler: MessageHandler): void {
   ensureDispatcher(cmd)
   const list = handlers.get(cmd)!
   if (!list.includes(handler)) list.push(handler)
+  if (cmd === 'smmc4e' || cmd === 'history') {
+    console.info('[GameReconnect] SignalR handler registered', {
+      cmd,
+      handlerCount: list.length,
+      stockedCount: stockedMessages.length,
+      stockedHeadCommand: stockedMessages[0]?.cmd,
+      stockedHeadSequence: stockedMessages[0]?.sequence,
+    })
+  }
   flushStockedMessages()
 }
 
@@ -324,10 +361,49 @@ export function offReconnected(handler: ReconnectedHandler): void {
  * Hub.SendCommand(code, payload) に対応
  */
 export async function send(cmd: string, params: Record<string, unknown> = {}): Promise<void> {
+  const traceRoomEntry = cmd === 'c14e' || cmd === 'mjkc6e' || cmd === 'c16e'
   if (!connection || connection.state !== HubConnectionState.Connected) {
+    if (traceRoomEntry) {
+      console.error('[GameReconnect] SignalR SendCommand rejected before invoke', {
+        cmd,
+        connectionState: connection?.state ?? 'missing',
+        roomId: params.roomId ?? params.k42e,
+      })
+    }
     throw new Error('SignalR not connected')
   }
-  await connection.invoke('SendCommand', cmd, params)
+  const invokedConnection = connection
+  if (traceRoomEntry) {
+    console.info('[GameReconnect] SignalR SendCommand invoke start', {
+      cmd,
+      connectionId: invokedConnection.connectionId,
+      roomId: params.roomId ?? params.k42e,
+    })
+  }
+  try {
+    await invokedConnection.invoke('SendCommand', cmd, params)
+    if (traceRoomEntry) {
+      console.info('[GameReconnect] SignalR SendCommand invoke resolved', {
+        cmd,
+        invokedConnectionId: invokedConnection.connectionId,
+        activeConnectionId: connection?.connectionId,
+        connectionChangedDuringInvoke: connection !== invokedConnection,
+        roomId: params.roomId ?? params.k42e,
+      })
+    }
+  } catch (error) {
+    if (traceRoomEntry) {
+      console.error('[GameReconnect] SignalR SendCommand invoke failed', {
+        cmd,
+        invokedConnectionId: invokedConnection.connectionId,
+        activeConnectionId: connection?.connectionId,
+        connectionChangedDuringInvoke: connection !== invokedConnection,
+        roomId: params.roomId ?? params.k42e,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      })
+    }
+    throw error
+  }
 }
 
 export function isConnected(): boolean {
@@ -338,8 +414,42 @@ export function isConnected(): boolean {
  * Hub の直接メソッドを呼び出す
  */
 export async function invoke<T = void>(method: string, ...args: unknown[]): Promise<T> {
+  const traceReconnect = method === 'RequestGameResync' || method === 'NotifyGameClientReady'
   if (!connection || connection.state !== HubConnectionState.Connected) {
+    if (traceReconnect) {
+      console.error('[GameReconnect] SignalR Hub invoke rejected before send', {
+        method,
+        connectionState: connection?.state ?? 'missing',
+      })
+    }
     throw new Error('SignalR not connected')
   }
-  return await connection.invoke<T>(method, ...args)
+  if (traceReconnect) {
+    console.info('[GameReconnect] SignalR Hub invoke start', {
+      method,
+      connectionId: connection.connectionId,
+      roomId: args[0],
+    })
+  }
+  try {
+    const result = await connection.invoke<T>(method, ...args)
+    if (traceReconnect) {
+      console.info('[GameReconnect] SignalR Hub invoke resolved', {
+        method,
+        connectionId: connection.connectionId,
+        roomId: args[0],
+      })
+    }
+    return result
+  } catch (error) {
+    if (traceReconnect) {
+      console.error('[GameReconnect] SignalR Hub invoke failed', {
+        method,
+        connectionId: connection.connectionId,
+        roomId: args[0],
+        errorMessage: error instanceof Error ? error.message : String(error),
+      })
+    }
+    throw error
+  }
 }

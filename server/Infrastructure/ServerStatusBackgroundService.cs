@@ -100,7 +100,7 @@ public class ServerStatusBackgroundService : BackgroundService
         {
             try
             {
-                await RemoveExpiredNoActivePlayingRoomsAsync();
+                await RemoveNoActivePlayingRoomsAsync();
 
                 // サーバールーム数を登録
                 int roomCount = _session.GetTotalRoomCount();
@@ -145,14 +145,11 @@ public class ServerStatusBackgroundService : BackgroundService
         }
     }
 
-    private async Task RemoveExpiredNoActivePlayingRoomsAsync()
+    private async Task RemoveNoActivePlayingRoomsAsync()
     {
-        var graceSeconds = Math.Max(30, _settings.Value.ContinueRoomGraceSeconds);
-        var expiredRooms = _session.RemoveExpiredNoActivePlayingRooms(
-            TimeSpan.FromSeconds(graceSeconds),
-            DateTimeOffset.UtcNow);
+        var emptyRooms = _session.RemoveNoActivePlayingRooms();
 
-        foreach (var room in expiredRooms)
+        foreach (var room in emptyRooms)
         {
             foreach (var player in room.Seats.Where(seat => seat != null).Select(seat => seat!))
                 await _roomRegistry.ClearContinueRoomAsync(player.MemberNo);
@@ -166,10 +163,10 @@ public class ServerStatusBackgroundService : BackgroundService
                     [Key.RoomForceExitReason] = 0,
                 });
             await _hub.Clients.Group($"chanel_{room.ChannelId}")
-                .SendAsync(Cmd.RoomState, RoomStatePayload.BuildEmpty(room.RoomId, "expired"));
+                .SendAsync(Cmd.RoomState, RoomStatePayload.BuildEmpty(room.RoomId, "all_disconnected"));
             _log.LogInformation(
-                "Expired no-active playing room. roomId={RoomId} channelId={ChannelId} graceSeconds={GraceSeconds}",
-                room.RoomId, room.ChannelId, graceSeconds);
+                "Removed no-active playing room. roomId={RoomId} channelId={ChannelId}",
+                room.RoomId, room.ChannelId);
         }
     }
 }

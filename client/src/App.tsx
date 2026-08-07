@@ -8,8 +8,10 @@ import LobbyScreen from './screens/outgame/LobbyScreen'
 import RoomScreen from './screens/outgame/RoomScreen'
 import GameScreen from './screens/ingame/GameScreen'
 import PaifWnd from './screens/ingame/PaifWnd'
+import { warmGameAssetCache } from './game/GameInstance'
 import MajakFrame from './components/MajakFrame'
 import MessageBoxHost from './components/MessageBoxHost'
+import GameReconnectLoading from './components/GameReconnectLoading'
 import RegistrationDlg from './screens/outgame/dialogs/RegistrationDlg'
 import { googleLogin, refreshLogin, saveRegisteredPlayerCache, type MajakPlayer } from './api/auth'
 import { getPlayerContinueRoom } from './api/channel'
@@ -125,37 +127,33 @@ function ContinueRoomBootstrap() {
     startedRef.current = true
 
     let cancelled = false
-    const wait = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms))
 
     async function restore() {
-      for (let attempt = 0; attempt < 3 && !cancelled; attempt += 1) {
-        if (attempt > 0) await wait(700)
-        const room = await getPlayerContinueRoom(player!.pix).catch(() => null)
-        const channelId = room?.channelId ?? room?.chanelId
-        if (!room?.roomId || !channelId || !room.serverUrl) continue
-        const customSkin = useCustomSkinStore.getState()
+      const room = await getPlayerContinueRoom(player!.pix).catch(() => null)
+      if (cancelled) return
+      const channelId = room?.channelId ?? room?.chanelId
+      if (!room?.roomId || !channelId || !room.serverUrl) return
+      const customSkin = useCustomSkinStore.getState()
 
-        navigate(`/channel/${encodeURIComponent(channelId)}/lobby/room/${room.roomId}`, {
-          replace: true,
-          state: {
-            serverUrl: room.serverUrl,
-            mode: 'auto',
-            resumePlaying: true,
-            roomTitle: room.title ?? '',
+      navigate(`/channel/${encodeURIComponent(channelId)}/lobby/room/${room.roomId}`, {
+        replace: true,
+        state: {
+          serverUrl: room.serverUrl,
+          mode: 'auto',
+          resumePlaying: true,
+          roomTitle: room.title ?? '',
+          roomOption: room.roomOption ?? '',
+          customBgId: customSkin.bgId,
+          customHaiId: customSkin.haiId,
+          customBoardType: customSkin.bgType,
+          autoEnterPayload: buildContinueAutoEnterPayload({
+            roomId: room.roomId,
+            pix: player!.pix,
+            title: room.title ?? '',
             roomOption: room.roomOption ?? '',
-            customBgId: customSkin.bgId,
-            customHaiId: customSkin.haiId,
-            customBoardType: customSkin.bgType,
-            autoEnterPayload: buildContinueAutoEnterPayload({
-              roomId: room.roomId,
-              pix: player!.pix,
-              title: room.title ?? '',
-              roomOption: room.roomOption ?? '',
-            }),
-          },
-        })
-        return
-      }
+          }),
+        },
+      })
     }
 
     void restore()
@@ -166,6 +164,10 @@ function ContinueRoomBootstrap() {
 }
 
 function AppLoadingScreen() {
+  const reconnectingToGame = readStoredRouterState().pathname.includes('/room/')
+  if (reconnectingToGame) {
+    return <GameReconnectLoading visible fixed currentStep="server" complete={false} />
+  }
   return (
     <div className="majak-boot-loading">
       <div className="majak-boot-loading__panel">
@@ -174,6 +176,21 @@ function AppLoadingScreen() {
       </div>
     </div>
   )
+}
+
+function GameAssetCacheWarmup() {
+  useEffect(() => {
+    const skin = useCustomSkinStore.getState()
+    void warmGameAssetCache({
+      customBgId: skin.bgId,
+      customBoardType: skin.bgType,
+      customHaiId: skin.haiId,
+    }).catch(error => {
+      console.warn('[GameAssets] initial cache warmup failed', error)
+    })
+  }, [])
+
+  return null
 }
 
 // ── 認証ゲート ──────────────────────────────────────────────────────
@@ -529,6 +546,7 @@ export default function App() {
 
   return (
     <>
+      <GameAssetCacheWarmup />
       <AuthGate>
         <MemoryRouter initialEntries={[initialRoute]}>
           <RouterStatePersistence />

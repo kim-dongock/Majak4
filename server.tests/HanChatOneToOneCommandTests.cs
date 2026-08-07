@@ -42,19 +42,27 @@ public sealed class HanChatOneToOneCommandTests
         var session = new PlayerSessionService();
         var sender = Player("sender-id", "sender-pix", "sender-connection", "channel-1");
         var recipient = Player("recipient-id", "recipient-pix", "recipient-connection", "channel-1");
+        var outsider = Player("outsider-id", "outsider-pix", "outsider-connection", "channel-1");
         session.Register(sender);
         session.Register(recipient);
+        session.Register(outsider);
+        IReadOnlyList<string>? recipients = null;
         var (context, sent) = CommandTestHelper.MakeContext(sender, new()
         {
             ["target"] = recipient.Pix,
             [GKey.String] = "hello",
-        });
+        }, onClients: connectionIds => recipients = connectionIds);
 
         await new HanChatOneToOneStringCommand(session).ExecuteAsync(context);
 
         var packet = CommandTestHelper.ToDict(Assert.Single(sent).packet);
         Assert.Equal(Cmd.HanChatOneToOneString, sent[0].method);
         Assert.Equal("hello", ((JsonElement)packet[GKey.String]!).GetString());
+        Assert.NotNull(recipients);
+        Assert.Equal(
+            new[] { sender.ConnectionId, recipient.ConnectionId }.OrderBy(connectionId => connectionId),
+            recipients.OrderBy(connectionId => connectionId));
+        Assert.DoesNotContain(outsider.ConnectionId, recipients);
     }
 
     [Fact]

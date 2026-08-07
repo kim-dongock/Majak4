@@ -39,12 +39,6 @@ public class ChannelServerSettings
     public bool IsPrimaryServer { get; set; } = true;
 
     /// <summary>
-    /// 対局中に全プレイヤーが切断状態になったルームを、復帰可能状態として保持する秒数。
-    /// ブラウザ更新・一時的な回線断はこの間に同じ座席へ再接続できる。
-    /// </summary>
-    public int ContinueRoomGraceSeconds { get; set; } = 300;
-
-    /// <summary>
     /// Redis に保持するロビー接続リースの TTL。8 秒ごとのハートビートで更新する。
     /// </summary>
     public int LobbySessionLeaseSeconds { get; set; } = 90;

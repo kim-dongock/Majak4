@@ -380,7 +380,6 @@ export default class UIScene extends Phaser.Scene {
   private activeTurnOdr: number | null = null
   private waremeOdr: number | null = null
   private lastMobileHudLayoutKey = ''
-  private mobileHudExpandedLoc: number | null = null
   private readonly reachedOdr = new Set<number>()
 
   constructor() {
@@ -612,6 +611,7 @@ export default class UIScene extends Phaser.Scene {
     this.updateTimerLayout()
     if (this.players.length > 0) this.updatePlayerTexts(this.players)
     if (this.activeTurnOdr !== null) this.updateTurnMarks(this.activeTurnOdr)
+    if (this.waremeOdr !== null) this.updateWareme(this.waremeOdr)
   }
 
   private resolveSkinTextureKey(key: string): string {
@@ -760,14 +760,17 @@ export default class UIScene extends Phaser.Scene {
 
   private toggleMobileHudInfo(loc: number) {
     if (this.layoutMode !== 'mobileLandscape') return
-    this.mobileHudExpandedLoc = this.mobileHudExpandedLoc === loc ? null : loc
+    void loc
     if (this.players.length > 0) this.updatePlayerTexts(this.players)
     this.updateHostMark()
   }
 
   private isMobileHudInfoVisible(loc: number) {
+    return this.isMobileAvatarExpanded(loc)
+  }
+
+  private isMobileAvatarExpanded(loc: number) {
     if (this.layoutMode !== 'mobileLandscape') return true
-    if (this.mobileHudExpandedLoc === loc) return true
     return this.activeTurnOdr !== null && this.odrToLoc(this.activeTurnOdr) === loc
   }
 
@@ -893,7 +896,7 @@ export default class UIScene extends Phaser.Scene {
       const ttl = boardLocalPoint(pos.ttl)
       const trk = boardLocalPoint(pos.trk)
       const mobileInfoVisible = this.isMobileHudInfoVisible(loc)
-      const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(mobileInfoVisible) : this.desktopAvatarSize(p)
+      const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(p)
       const avt = this.layoutMode === 'mobileLandscape'
         ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
         : this.desktopAvatarPoint(baseAvt)
@@ -955,7 +958,7 @@ export default class UIScene extends Phaser.Scene {
       return
     }
     const baseAvt = boardLocalPoint(odrBoxPos(loc).avt)
-    const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(true) : this.desktopAvatarSize(this.players[hostOdr])
+    const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(this.players[hostOdr])
     const avt = this.layoutMode === 'mobileLandscape'
       ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
       : this.desktopAvatarPoint(baseAvt)
@@ -1274,7 +1277,7 @@ export default class UIScene extends Phaser.Scene {
       this.waremeSprite?.setVisible(false)
       return
     }
-    const point = boardLocalPoint(pos)
+    const point = centerInfoContentPoint(pos)
     if (!this.waremeSprite) {
       this.waremeSprite = this.add.image(point.x, point.y, this.resolveSkinTextureKey(pos.key)).setOrigin(0, 0).setDepth(302)
     }

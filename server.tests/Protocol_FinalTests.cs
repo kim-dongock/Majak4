@@ -220,7 +220,7 @@ public class AutoEnterRoomCommandTests
     [Fact]
     public async Task Execute_ValidEntry_SendsAutoEnterRoom()
     {
-        var (hub, _) = BuildHubMock();
+        var (hub, hubSent) = BuildHubMock();
         var owner    = new MajakPlayer { ConnectionId = "c2", MemberNo = "owner", ChannelId = "ch1" };
         _session.Register(owner);
         var room = _session.CreateRoom("ch1", owner, "", 1, 0, 0, false);
@@ -254,6 +254,10 @@ public class AutoEnterRoomCommandTests
         var pkt = CommandTestHelper.ToDict(sent.First(s => s.method == Cmd.AutoEnterRoom).packet);
         Assert.Equal(1, ((JsonElement)pkt["result"]!).GetInt32());
         Assert.Equal(room.RoomId, ((JsonElement)pkt["roomId"]!).GetInt32());
+        Assert.Contains(hubSent, s => s.method == Cmd.AddMember);
+        Mock.Get(hub.Object.Clients).Verify(
+            clients => clients.Group($"room_{room.RoomId}"),
+            Times.Once);
     }
 
     [Fact]
@@ -504,6 +508,9 @@ public class AutoEnterRoomCommandTests
             RoomOption = "120000001000000",
             State = GameRoomState.Playing,
         };
+        var continuedPlayer = new MajakPlayer { MemberNo = player.MemberNo };
+        continueRoom.AddPlayer(continuedPlayer, 0);
+        continuedPlayer.IsOutPlayer = true;
         await registry.RegisterRoomAsync(continueRoom.RoomId, continueRoom.ChannelId, continueRoom.RoomTitle,
             isPrivate: false, memberCnt: 0, memberMax: 4,
             serverUrl: "http://test", roomOption: continueRoom.RoomOption);
@@ -595,6 +602,7 @@ public class AutoEnterRoomCommandTests
         room.Engine.InitHanchan(new MajakServer.Engine.RuleInfo { Kuitan = true, Contest = 0 });
         room.State = GameRoomState.Playing;
         room.PlayHistory.Add(new { test = "resume" });
+        disconnectedPlayer.EngineOrder = 0;
         disconnectedPlayer.ConnectionId = "";
         disconnectedPlayer.IsOutPlayer = true;
 
@@ -621,6 +629,39 @@ public class AutoEnterRoomCommandTests
         Assert.Contains(sent, s => s.method == Cmd.PaiInfoList);
         Assert.Contains(sent, s => s.method == Cmd.History);
         Assert.DoesNotContain(sent, s => s.method == Cmd.ConnectTypeError);
+    }
+
+    [Fact]
+    public async Task Execute_RebindsActivePlayingSeatToNewConnectionAndSendsState()
+    {
+        var (hub, _) = BuildHubMock();
+        var oldPlayer = new MajakPlayer { ConnectionId = "old-connection", MemberNo = "u1", ChannelId = "ch1" };
+        _session.Register(oldPlayer);
+        var room = _session.CreateRoom("ch1", oldPlayer, "", 1, 0, 0, false);
+        room.Engine.InitHanchan(new MajakServer.Engine.RuleInfo { Kuitan = true, Contest = 0 });
+        room.State = GameRoomState.Playing;
+        oldPlayer.EngineOrder = 0;
+
+        var reconnectPlayer = new MajakPlayer { ConnectionId = "new-connection", MemberNo = "u1", ChannelId = "ch1" };
+        _session.Register(reconnectPlayer);
+        var cmd = new AutoEnterRoomCommand(_session, hub.Object, new FakeGameLogicService());
+        var (ctx, sent) = CommandTestHelper.MakeContext(reconnectPlayer,
+            new Dictionary<string, object?>
+            {
+                [GKey.RoomId] = room.RoomId,
+                [GKey.Pix] = "u1",
+                [GKey.ConnectFor] = GKey.ValueConnectForGameJoin,
+                [GKey.PlayerType] = GKey.ValuePlayer,
+            });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Equal("new-connection", room.Seats[0]!.ConnectionId);
+        Assert.False(room.Seats[0]!.IsOutPlayer);
+        Assert.Equal(room.RoomId, reconnectPlayer.RoomId);
+        Assert.Contains(sent, packet => packet.method == Cmd.AutoEnterRoom);
+        Assert.Contains(sent, packet => packet.method == Cmd.PaiInfoList);
+        Assert.DoesNotContain(sent, packet => packet.method == Cmd.ConnectTypeError);
     }
 
     // シナリオ7: 4人全員揃った → AutoStart ブロードキャスト

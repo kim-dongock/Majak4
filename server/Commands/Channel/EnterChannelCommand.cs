@@ -120,6 +120,14 @@ public class EnterChannelCommand : ICommand
         }
         await using var pendingLobbyLease = lobbyLease;
 
+        if (ctx.GetBool("abandonPreviousRoom"))
+            await TryAbandonPreviousRoomAsync(
+                ctx,
+                memberNo,
+                channelId,
+                ctx.GetInt("abandonRoomId"),
+                ctx.GetBool("abandonRoomAfterFatalError"));
+
         var current = _session.GetByConn(ctx.ConnectionId);
         bool sameConnectionSameChannel = current != null && current.MemberNo == memberNo && current.ChannelId == channelId;
         if (sameConnectionSameChannel)
@@ -132,8 +140,9 @@ public class EnterChannelCommand : ICommand
             await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, $"chanel_{channelId}");
             lobbyLease?.Commit();
             _logger.LogInformation(
-                "EnterChannel ignored: same connection is already in channel. channelId={ChannelId} subId={SubId} memberNo={MemberNo} connectionId={ConnectionId}",
+                "EnterChannel refreshing same connection already in channel. channelId={ChannelId} subId={SubId} memberNo={MemberNo} connectionId={ConnectionId}",
                 channelId, ExtractSubId(channelId), memberNo, ctx.ConnectionId);
+            await SendSameConnectionRefreshAsync(ctx, current, channelId);
             return;
         }
 
@@ -662,8 +671,161 @@ public class EnterChannelCommand : ICommand
         }
     }
 
+    private async Task SendSameConnectionRefreshAsync(
+        CommandContext ctx,
+        MajakPlayer player,
+        string channelId)
+    {
+        var channelMembers = _session.GetAllChannelPlayers(channelId).Select(member => new
+        {
+            memberNo = member.Pix,
+            pix = member.Pix,
+            nickname = member.NickName,
+            avatarId = member.AvatarId,
+            rating = member.ActiveRecord.Rating,
+            nlevel = member.NLevel,
+            slevel = member.SLevel,
+            sex = member.Sex,
+            matchCnt = member.ActiveRecord.MatchCnt,
+            winCnt = member.ActiveRecord.WinCnt,
+            defeatCnt = member.ActiveRecord.DefeatCnt,
+            drawCnt = member.ActiveRecord.DrawCnt,
+            roomId = member.RoomId ?? 0,
+            location = FormatMemberLocation(member.RoomId),
+        }).ToArray();
+        var channelRooms = (await _roomRegistry.GetChannelRoomsAsync(channelId))
+            .Select(room => new { registry = room, session = _session.GetRoom(room.RoomId) })
+            .Where(room => room.session is not { HasNoActiveMembers: true }
+                || room.session.State == Models.Game.GameRoomState.Playing)
+            .Select(room => room.session is not null
+                ? GetRoomListCommand.BuildRoomListEntry(room.session, room.registry.ServerUrl)
+                : new Dictionary<string, object?>
+                {
+                    ["roomId"] = room.registry.RoomId,
+                    ["title"] = room.registry.Title,
+                    ["isPrivate"] = room.registry.IsPrivate,
+                    ["memberCnt"] = room.registry.MemberCnt,
+                    ["memberMax"] = room.registry.MemberMax,
+                    ["roomOption"] = room.registry.RoomOption,
+                    ["serverUrl"] = room.registry.ServerUrl,
+                    ["maxViewer"] = room.registry.MaxViewer,
+                    ["state"] = room.registry.State > 0 ? room.registry.State : null,
+                    ["roomPlaying"] = room.registry.RoomPlaying > 0 ? room.registry.RoomPlaying : null,
+                })
+            .ToArray();
+
+        await ctx.Caller.SendAsync(Cmd.EnterChannel, new
+        {
+            result = 1,
+            k1e = GKey.ValueSuccess,
+            memberNo = player.Pix,
+            pix = player.Pix,
+            k3e = player.Pix,
+            avatarId = player.AvatarId,
+            k7e = player.AvatarId,
+            sex = player.Sex,
+            k11e = player.Sex,
+            location = FormatMemberLocation(player.RoomId),
+            k12e = FormatMemberLocation(player.RoomId),
+            gammoney = player.GamMoney,
+            k34e = player.GamMoney,
+            gemcount = player.GemCount,
+            mjkk55e = player.GemCount,
+            cashCount = player.CashCount,
+            matchCnt = player.ActiveRecord.MatchCnt,
+            k26e = player.ActiveRecord.MatchCnt,
+            winCnt = player.ActiveRecord.WinCnt,
+            k27e = player.ActiveRecord.WinCnt,
+            defeatCnt = player.ActiveRecord.DefeatCnt,
+            k28e = player.ActiveRecord.DefeatCnt,
+            drawCnt = player.ActiveRecord.DrawCnt,
+            k29e = player.ActiveRecord.DrawCnt,
+            rating = player.ActiveRecord.Rating,
+            k31e = player.ActiveRecord.Rating,
+            nlevel = player.NLevel,
+            k33e = player.NLevel,
+            slevel = player.SLevel,
+            k32e = player.SLevel,
+            customEquips = player.CustomItems
+                .Where(item => item.Value.Equip == 1)
+                .Select(item => new { customType = item.Value.Kind, customId = item.Key })
+                .ToArray(),
+            members = channelMembers,
+            rooms = channelRooms,
+        });
+    }
+
     private static string First(params string[] values)
         => values.FirstOrDefault(value => !string.IsNullOrEmpty(value)) ?? "";
+
+    private async Task<bool> TryAbandonPreviousRoomAsync(
+        CommandContext ctx,
+        string memberNo,
+        string channelId,
+        int roomId,
+        bool allowActiveMember)
+    {
+        if (roomId <= 0) return false;
+
+        var room = _session.GetRoom(roomId);
+        if (room == null
+            || room.ChannelId != channelId
+            || (!allowActiveMember && room.State != Models.Game.GameRoomState.Playing))
+            return false;
+
+        var continuedPlayer = room.Seats.FirstOrDefault(
+            seat => seat?.MemberNo == memberNo && (allowActiveMember || seat.IsOutPlayer));
+        var continuedViewer = allowActiveMember
+            ? room.Viewers.FirstOrDefault(viewer => viewer.MemberNo == memberNo)
+            : null;
+        var abandoningMember = continuedPlayer ?? continuedViewer;
+        if (abandoningMember == null) return false;
+
+        bool isViewer = continuedViewer != null;
+        int seatPos = isViewer ? room.Viewers.IndexOf(continuedViewer!) : Array.IndexOf(room.Seats, continuedPlayer);
+        string roomHost = room.Seats
+            .Where(seat => seat != null && seat.MemberNo != memberNo && !seat.IsOutPlayer)
+            .Select(seat => seat!.MemberNo)
+            .FirstOrDefault() ?? "";
+
+        _session.RemovePendingMatchMember(roomId, memberNo);
+        if (abandoningMember.RoomId == roomId)
+        {
+            _session.LeaveRoom(abandoningMember);
+        }
+        else
+        {
+            if (isViewer)
+                room.RemoveViewer(memberNo);
+            else
+                room.RemovePlayer(memberNo);
+            if (room.IsEmpty) _session.RemoveRoom(roomId);
+        }
+        abandoningMember.RoomId = null;
+        abandoningMember.IsOutPlayer = false;
+        await _roomRegistry.ClearContinueRoomAsync(memberNo);
+
+        await ctx.Clients.Group($"room_{roomId}")
+            .SendAsync(Cmd.DeleteMember, Commands.Room.RoomGetMembersCommand.BuildDeleteMemberPayload(
+                roomHost, abandoningMember, isViewer ? GKey.ValueViewer : GKey.ValuePlayer, seatPos));
+        if (!string.IsNullOrWhiteSpace(abandoningMember.ConnectionId))
+            await ctx.Groups.RemoveFromGroupAsync(abandoningMember.ConnectionId, $"room_{roomId}");
+
+        var updatedRoom = _session.GetRoom(roomId);
+        var roomState = updatedRoom == null
+            ? RoomStatePayload.BuildEmpty(roomId, "abandoned")
+            : RoomStatePayload.Build(updatedRoom, "abandoned");
+        if (updatedRoom == null)
+            await _roomRegistry.RemoveRoomAsync(roomId, channelId);
+        else
+            await _roomRegistry.UpdateMemberCountAsync(roomId, channelId, updatedRoom.ActivePlayerCount);
+
+        await ctx.Clients.Group($"chanel_{channelId}").SendAsync(Cmd.RoomState, roomState);
+        _logger.LogInformation(
+            "Abandoned room member. channelId={ChannelId} roomId={RoomId} memberNo={MemberNo} allowActiveMember={AllowActiveMember} roomRemoved={RoomRemoved}",
+            channelId, roomId, memberNo, allowActiveMember, updatedRoom == null);
+        return true;
+    }
 
     private async Task RemoveSameTabPreviousSessionAsync(
         CommandContext ctx,

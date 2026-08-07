@@ -108,11 +108,11 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 |----------|------|--------|
 | ルーム作成時 | `room:{roomId}` SET + `channel:{chanelId}:rooms` SADD | `RoomRegistryService.RegisterRoomAsync()` |
 | プレイヤー入退室時 | `room:{roomId}` の MemberCnt を更新 (TTL リセット) | `RoomRegistryService.UpdateMemberCountAsync()` |
-| 対局中プレイヤー切断時 | `continue:{memberId}:room` SET。値は `room:{roomId}` の ServerUrl / RoomOption を参照する | `MajakGameHub.HandleRoomDisconnectAsync()` / `RoomExitRoomCommand` |
+| 対局中プレイヤーのネットワーク切断時 | `continue:{memberId}:room` SET。値は `room:{roomId}` の ServerUrl / RoomOption を参照する。明示退室では作成しない | `MajakGameHub.HandleRoomDisconnectAsync()` |
 | 続行プレイヤー復帰時 | `continue:{memberId}:room` DEL | `AutoEnterRoomCommand` / `RoomEnterRoomCommand` |
-| ゲーム終了・無人対局ルーム期限切れ | 対象席の `continue:{memberId}:room` DEL | `GameLogicService` / `ServerStatusBackgroundService` |
+| ゲーム終了・無人対局ルーム即時削除 | 対象席の `continue:{memberId}:room` DEL | `GameLogicService` / `RoomRegistryService` / `MajakGameHub` / `ServerStatusBackgroundService` |
 | **8 秒ごと** | 全アクティブルームの TTL を 30 秒にリセット、アクティブチャンネルの room-index SET TTL を 90 秒にリセット (ハートビート) | `ServerStatusBackgroundService` → `RoomRegistryService.RefreshTtlBatchAsync()` / `RefreshChannelSetTtlBatchAsync()` |
-| **8 秒ごと** | 対局中 `IsOutPlayer=true` の席について `continue:{memberId}:room` TTL を 30 秒にリセット | `ServerStatusBackgroundService` → `RoomRegistryService.RefreshContinueRoomsAsync()` |
+| **8 秒ごと** | 対局中 `IsOutPlayer=true` の座席について、ゲーム終了まで `continue:{memberId}:room` の TTL を 30 秒へ更新する | `ServerStatusBackgroundService` → `RoomRegistryService.RefreshContinueRoomsAsync()` |
 | ルーム解散時 | `room:{roomId}` DEL + `channel:{chanelId}:rooms` SREM | `RoomRegistryService.RemoveRoomAsync()` |
 | グレースフルシャットダウン | 担当全ルームを即削除 | `ServerStatusBackgroundService` → `RoomRegistryService.RemoveAllRoomsAsync()` |
 

@@ -157,6 +157,9 @@ public class RoomEnterRoomCommandTests
             RoomOption = "120000001000000",
             State = GameRoomState.Playing,
         };
+        var continuedPlayer = new MajakPlayer { MemberNo = player.MemberNo };
+        continueRoom.AddPlayer(continuedPlayer, 0);
+        continuedPlayer.IsOutPlayer = true;
         await registry.RegisterRoomAsync(continueRoom.RoomId, continueRoom.ChannelId, continueRoom.RoomTitle,
             isPrivate: false, memberCnt: 0, memberMax: 4,
             serverUrl: "http://test", roomOption: continueRoom.RoomOption);
@@ -268,6 +271,7 @@ public class RoomEnterRoomCommandTests
         var room = session.CreateRoom("ch1", player, "", 1, 0, 0, false);
         room.Engine.InitHanchan(new MajakServer.Engine.RuleInfo { Kuitan = true, Contest = 0 });
         room.State = GameRoomState.Playing;
+        player.EngineOrder = 0;
         room.PlayHistory.Add(new { test = 1 });
 
         var cmd = new RoomEnterRoomCommand(session, new FakeGameLogicService());
@@ -292,6 +296,7 @@ public class RoomEnterRoomCommandTests
         var room = session.CreateRoom("ch1", oldPlayer, "", 1, 0, 0, false);
         room.Engine.InitHanchan(new MajakServer.Engine.RuleInfo { Kuitan = true, Contest = 0 });
         room.State = GameRoomState.Playing;
+        oldPlayer.EngineOrder = 0;
         room.PlayHistory.Add(new { test = 1 });
         oldPlayer.ConnectionId = "";
         oldPlayer.IsOutPlayer = true;
@@ -314,6 +319,31 @@ public class RoomEnterRoomCommandTests
     }
 
     [Fact]
+    public async Task Execute_PlayingRoomRebindsActiveSeatToNewConnection()
+    {
+        var session = new PlayerSessionService();
+        var oldPlayer = new MajakPlayer { ConnectionId = "old", MemberNo = "u1", ChannelId = "ch1", EngineOrder = 0 };
+        session.Register(oldPlayer);
+        var room = session.CreateRoom("ch1", oldPlayer, "", 1, 0, 0, false);
+        room.Engine.InitHanchan(new MajakServer.Engine.RuleInfo { Kuitan = true, Contest = 0 });
+        room.State = GameRoomState.Playing;
+
+        var reconnectPlayer = new MajakPlayer { ConnectionId = "new", MemberNo = "u1", ChannelId = "ch1" };
+        session.Register(reconnectPlayer);
+        var cmd = new RoomEnterRoomCommand(session, new FakeGameLogicService());
+        var (ctx, sent) = CommandTestHelper.MakeContext(reconnectPlayer,
+            new Dictionary<string, object?> { [GKey.RoomId] = room.RoomId });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Equal("new", room.Seats[0]!.ConnectionId);
+        Assert.False(room.Seats[0]!.IsOutPlayer);
+        Assert.Equal(room.RoomId, reconnectPlayer.RoomId);
+        Assert.Contains(sent, packet => packet.method == Cmd.EnterRoomCmd);
+        Assert.DoesNotContain(sent, packet => packet.method == Cmd.ConnectTypeError);
+    }
+
+    [Fact]
     public async Task Execute_PlayingTrainingRoomReconnectsHumanWithoutFillingAiSeats()
     {
         var session = new PlayerSessionService();
@@ -322,6 +352,7 @@ public class RoomEnterRoomCommandTests
         var room = session.CreateRoom("ch1", disconnectedPlayer, "", 1, 0, 0, false, subId: "00T5A");
         room.Engine.InitHanchan(new MajakServer.Engine.RuleInfo { Kuitan = true, Contest = 0 });
         room.State = GameRoomState.Playing;
+        disconnectedPlayer.EngineOrder = 0;
         disconnectedPlayer.ConnectionId = "";
         disconnectedPlayer.IsOutPlayer = true;
 
@@ -590,11 +621,38 @@ public class RoomAlterRoomCommandTests
 public class RoomExitRoomCommandTests
 {
     [Fact]
+    public async Task Execute_LastPlayingPlayerExit_RemovesRoomAndBroadcastsEmptyState()
+    {
+        var session = new PlayerSessionService();
+        var owner = new MajakPlayer { ConnectionId = "c1", MemberNo = "owner", ChannelId = "ch1", EngineOrder = 0 };
+        session.Register(owner);
+        var room = session.CreateRoom("ch1", owner, "", 1, 0, long.MaxValue, false);
+        room.State = GameRoomState.Playing;
+        var registry = new RoomRegistryService(TestMasterCacheFactory.CreateRedisService());
+        await registry.RegisterRoomAsync(room.RoomId, room.ChannelId, room.RoomTitle,
+            room.IsPrivate, room.ActivePlayerCount, room.LimitCnt, "http://test", room.RoomOption);
+        await registry.SetContinueRoomAsync(owner.MemberNo, room);
+        var cmd = new RoomExitRoomCommand(session, registry, new FakeGameLogicService());
+        var (ctx, sent) = CommandTestHelper.MakeContext(owner);
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Null(owner.RoomId);
+        Assert.Null(session.GetRoom(room.RoomId));
+        Assert.Null(await registry.GetContinueRoomAsync(owner.MemberNo));
+        Assert.Empty(await registry.GetChannelRoomsAsync(room.ChannelId));
+        var roomState = sent.Last(packet => packet.method == Cmd.RoomState);
+        var payload = CommandTestHelper.ToDict(roomState.packet);
+        Assert.Equal(0, ((JsonElement)payload[GKey.MemberCnt]!).GetInt32());
+        Assert.Equal(0, ((JsonElement)payload[GKey.OpMemberCnt]!).GetInt32());
+    }
+
+    [Fact]
     public async Task Execute_PlayingPlayerExit_KeepsOutPlayerSeatAndSendsLegacyDeleteMember()
     {
         var session = new PlayerSessionService();
         var owner = new MajakPlayer { ConnectionId = "c1", MemberNo = "owner", ChannelId = "ch1", EngineOrder = 0 };
-        var player = new MajakPlayer { ConnectionId = "c2", MemberNo = "u2", ChannelId = "ch1", EngineOrder = 1 };
+        var player = new MajakPlayer { ConnectionId = "c2", MemberNo = "u2", ChannelId = "ch1" };
         session.Register(owner);
         session.Register(player);
         var room = session.CreateRoom("ch1", owner, "", 1, 0, long.MaxValue, false);
@@ -611,13 +669,13 @@ public class RoomExitRoomCommandTests
         Assert.Null(player.RoomId);
         Assert.True(player.IsOutPlayer);
         Assert.Same(player, room.Seats[(int)player.SeatPos]);
-        Assert.Equal(1, room.LimitCnt);
+        Assert.Equal(4, room.LimitCnt);
         var deleteMember = sent.First(s => s.method == Cmd.DeleteMember);
         var packet = CommandTestHelper.ToDict(deleteMember.packet);
         Assert.Equal("owner", ((JsonElement)packet[GKey.RoomHost]!).GetString());
         Assert.Equal(GKey.ValuePlayer, ((JsonElement)packet[GKey.PlayerType]!).GetString());
         Assert.Equal((int)player.SeatPos, ((JsonElement)packet[GKey.PlayerPos]!).GetInt32());
-        Assert.Equal("u2", ((JsonElement)packet[GKey.Pix]!).GetString());
+        Assert.Equal(player.Pix, ((JsonElement)packet[GKey.Pix]!).GetString());
     }
 
     [Fact]

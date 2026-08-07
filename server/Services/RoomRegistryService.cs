@@ -124,6 +124,12 @@ public class RoomRegistryService
     public async Task SetContinueRoomAsync(string memberNo, GameRoom room)
     {
         if (string.IsNullOrWhiteSpace(memberNo)) return;
+        var continuedSeat = room.Seats.FirstOrDefault(seat => seat?.MemberNo == memberNo && seat.IsOutPlayer);
+        if (continuedSeat == null || room.State != GameRoomState.Playing)
+        {
+            await ClearContinueRoomAsync(memberNo);
+            return;
+        }
         var roomEntry = await GetRoomEntryAsync(room.RoomId, room.ChannelId)
             ?? new RoomRedisEntry
             {

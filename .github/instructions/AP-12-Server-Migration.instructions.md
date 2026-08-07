@@ -54,8 +54,8 @@ description: "C++ レガシーサーバーを .NET Core へ移植する際の重
 - サーバーメモリ内のゴーストルーム判定は Redis TTL 判定と混同してはならない。
   - `GameRoom.IsEmpty == true` は削除可能な空ルームである。
   - `room.State != Playing && room.HasNoActiveMembers == true` は対局外の無人ルームとして削除/非表示対象である。
-  - `room.State == Playing && room.HasNoActiveMembers == true` はゴーストではなく続行猶予ルームである。`NoActiveMembersSince` を記録し、`ChannelServerSettings.ContinueRoomGraceSeconds` 経過後に `ServerStatusBackgroundService` が session / Redis room / continue key をまとめて削除する。
-  - `room.State == Playing` で一部 seat だけ `IsOutPlayer=true` の場合は正常進行中ルームであり、座席を削除してはならない。切断者は continue player として保持する。
+  - `room.State == Playing && room.HasNoActivePlayers == true` は即時削除する。接続中の観戦者には `commandMajAutoExitRoom` を送り、session / Redis room / continue key をまとめて削除する。
+  - `room.State == Playing` で一部 seat だけ `IsOutPlayer=true` の場合は正常進行中ルームであり、座席を削除してはならない。切断者は対局終了まで continue player として元ルームへの復帰だけを許可し、別ルームの作成・入室・観戦を拒否する。エンジン用座席と continue key はゲーム終了まで保持する。
 - Redis の `room:{roomId}` TTL は「担当ゲームサーバーが生存しているか」の判定であり、サーバーメモリ内の Playing 続行猶予を短絡して削除する根拠ではない。
 - `continue:{memberId}:room` が生存しているユーザーは、必ずその room へ復帰させる。`CreateRoomCommand`、`RoomEnterRoomCommand`、`AutoEnterRoomCommand` は別 roomId の作成・入室・観戦を拒否し、続行対象 roomId への復帰だけを許可する。
 

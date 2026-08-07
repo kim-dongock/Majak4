@@ -1167,7 +1167,7 @@ public class EnterChannelPauseTests
     }
 
     [Fact]
-    public async Task Execute_SameConnectionSameChannel_ReturnsSilentlyLikeLegacy()
+    public async Task Execute_SameConnectionSameChannel_SendsRefreshResponseWithoutReloadingPlayer()
     {
         const string channelId = "MAJAK200000001";
         var repo = CreateEnterRepoLoadCommonFails();
@@ -1185,7 +1185,12 @@ public class EnterChannelPauseTests
 
         await cmd.ExecuteAsync(ctx);
 
-        Assert.Empty(sent);
+        Assert.Single(sent);
+        Assert.Equal(Cmd.EnterChannel, sent[0].method);
+        Assert.Equal(1, CommandTestHelper.GetResult(sent[0].packet));
+        var packet = CommandTestHelper.ToDict(sent[0].packet);
+        Assert.True(packet.ContainsKey("members"));
+        Assert.True(packet.ContainsKey("rooms"));
         repo.Verify(r => r.LoadCommonRatAsync(It.IsAny<MajakPlayer>()), Times.Never);
     }
 
@@ -1228,7 +1233,9 @@ public class EnterChannelPauseTests
 
         await cmd.ExecuteAsync(ctx);
 
-        Assert.Empty(sent);
+        Assert.Single(sent);
+        Assert.Equal(Cmd.EnterChannel, sent[0].method);
+        Assert.Equal(1, CommandTestHelper.GetResult(sent[0].packet));
         Assert.Same(existing, session.GetByConn("conn1"));
         Assert.Same(existing, room.Seats[0]);
         Assert.Equal(7, session.GetByConn("conn1")!.RoomId);
@@ -1267,6 +1274,50 @@ public class EnterChannelPauseTests
     }
 
     [Fact]
+    public async Task Execute_AbandonDisconnectedPlayingRoom_RemovesSeatAndAllowsLobbyEntry()
+    {
+        const string channelId = "MAJAK200000001";
+        var repo = CreateEnterRepoLoadCommonFails();
+        var session = new PlayerSessionService();
+        var owner = new MajakPlayer
+        {
+            ConnectionId = "old",
+            MemberNo = "user01",
+            ChannelId = channelId,
+            TabId = "test-tab",
+        };
+        var room = session.CreateRoom(channelId, owner, "", 1, 0, 0, false);
+        room.State = GameRoomState.Playing;
+        owner.IsOutPlayer = true;
+        session.Register(owner);
+        var cmd = CreateEnterChannelCommand(session, repo.Object);
+        var (ctx, sent) = CommandTestHelper.MakeContext(new MajakPlayer { ConnectionId = "new" }, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.Pix] = "user01",
+            [GKey.Name] = "User",
+            [GKey.AvatarId] = "avatar01",
+            ["tabId"] = "test-tab",
+            ["abandonPreviousRoom"] = true,
+            ["abandonRoomId"] = room.RoomId,
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Null(owner.RoomId);
+        Assert.Null(session.GetRoom(room.RoomId));
+        Assert.DoesNotContain(sent, packet =>
+        {
+            var dict = CommandTestHelper.ToDict(packet.packet);
+            return dict.TryGetValue("error", out var error)
+                && error is System.Text.Json.JsonElement element
+                && element.GetString() == "USER_MULTI_LOGIN";
+        });
+        Assert.Contains(sent, packet => packet.method == Cmd.RoomState);
+        Assert.Contains(sent, packet => packet.method == Cmd.EnterChannel);
+    }
+
+    [Fact]
     public async Task Execute_AbandonPreviousRoom_DoesNotOverrideActivePlayingSession()
     {
         const string channelId = "MAJAK200000001";
@@ -1300,6 +1351,57 @@ public class EnterChannelPauseTests
                 && error is System.Text.Json.JsonElement element
                 && element.GetString() == "USER_MULTI_LOGIN";
         });
+    }
+
+    [Fact]
+    public async Task Execute_FatalRoomErrorAbandon_RemovesRoomAfterLastActivePlayerLeaves()
+    {
+        const string channelId = "MAJAK200000001";
+        var repo = CreateEnterRepoLoadCommonFails();
+        var session = new PlayerSessionService();
+        var first = new MajakPlayer { ConnectionId = "c1", MemberNo = "user01", ChannelId = channelId, TabId = "tab-1" };
+        var second = new MajakPlayer { ConnectionId = "c2", MemberNo = "user02", ChannelId = channelId, TabId = "tab-2" };
+        session.Register(first);
+        var room = session.CreateRoom(channelId, first, "", 2, 0, 0, false);
+        session.Register(second);
+        Assert.True(session.JoinRoom(room.RoomId, second));
+        room.State = GameRoomState.Playing;
+        var cmd = CreateEnterChannelCommand(session, repo.Object);
+
+        var (firstCtx, _) = CommandTestHelper.MakeContext(first, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.Pix] = first.MemberNo,
+            [GKey.Name] = "First",
+            [GKey.AvatarId] = "avatar01",
+            ["tabId"] = first.TabId,
+            ["abandonPreviousRoom"] = true,
+            ["abandonRoomId"] = room.RoomId,
+            ["abandonRoomAfterFatalError"] = true,
+        });
+        await cmd.ExecuteAsync(firstCtx);
+
+        Assert.Null(first.RoomId);
+        Assert.Same(room, session.GetRoom(room.RoomId));
+        Assert.Equal(1, room.PlayerCount);
+
+        var (secondCtx, sent) = CommandTestHelper.MakeContext(second, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.Pix] = second.MemberNo,
+            [GKey.Name] = "Second",
+            [GKey.AvatarId] = "avatar02",
+            ["tabId"] = second.TabId,
+            ["abandonPreviousRoom"] = true,
+            ["abandonRoomId"] = room.RoomId,
+            ["abandonRoomAfterFatalError"] = true,
+        });
+        await cmd.ExecuteAsync(secondCtx);
+
+        Assert.Null(second.RoomId);
+        Assert.Null(session.GetRoom(room.RoomId));
+        Assert.Contains(sent, packet => packet.method == Cmd.RoomState);
+        Assert.Contains(sent, packet => packet.method == Cmd.EnterChannel);
     }
 
     [Fact]

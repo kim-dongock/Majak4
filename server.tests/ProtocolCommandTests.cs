@@ -20,7 +20,11 @@ public static class CommandTestHelper
     /// 送信されたパケットを captured に記録する。
     /// </summary>
     public static (CommandContext ctx, List<(string method, object packet)> sent)
-        MakeContext(MajakPlayer player, Dictionary<string, object?>? payload = null, Action<string>? onAbort = null)
+        MakeContext(
+            MajakPlayer player,
+            Dictionary<string, object?>? payload = null,
+            Action<string>? onAbort = null,
+            Action<IReadOnlyList<string>>? onClients = null)
     {
         payload ??= new();
         payload.TryAdd("tabId", "test-tab");
@@ -51,7 +55,9 @@ public static class CommandTestHelper
 
         clientsMock.Setup(c => c.Group(It.IsAny<string>())).Returns(groupProxy.Object);
         clientsMock.Setup(c => c.Client(It.IsAny<string>())).Returns(singleClientProxy.Object);
-        clientsMock.Setup(c => c.Clients(It.IsAny<IReadOnlyList<string>>())).Returns(groupProxy.Object);
+        clientsMock.Setup(c => c.Clients(It.IsAny<IReadOnlyList<string>>()))
+            .Callback<IReadOnlyList<string>>(connectionIds => onClients?.Invoke(connectionIds))
+            .Returns(groupProxy.Object);
         clientsMock.Setup(c => c.GroupExcept(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>())).Returns(groupProxy.Object);
         clientsMock.Setup(c => c.OthersInGroup(It.IsAny<string>())).Returns(groupProxy.Object);
         groupsMock.Setup(g => g.AddToGroupAsync(It.IsAny<string>(), It.IsAny<string>(), default))

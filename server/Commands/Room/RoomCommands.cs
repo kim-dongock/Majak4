@@ -530,7 +530,7 @@ public class RoomEnterRoomCommand : ICommand
         bool hasExistingViewer = room.Viewers.Any(v => v.MemberNo == player.MemberNo);
         bool isPlayingSeatReconnect = room.State == GameRoomState.Playing && hasExistingSeat;
         bool isContinuePlayer = room.State == GameRoomState.Playing
-            && room.Seats.Any(s => s?.MemberNo == player.MemberNo && s.IsOutPlayer);
+            && _session.CanReconnectToRoom(room, player.MemberNo);
         bool shouldAnnounceRejoin = isContinuePlayer;
 
         if (!alreadyInRoom && !isPlayingSeatReconnect && !isContinuePlayer
@@ -562,11 +562,12 @@ public class RoomEnterRoomCommand : ICommand
             }
         }
 
-        bool joined = alreadyInRoom || isPlayingSeatReconnect
-            ? room.RefreshPlayerConnection(player)
-            : isContinuePlayer
-                ? _session.ReconnectToRoom(requestRoomId, player) >= 0
-                : _session.JoinRoom(requestRoomId, player);
+        bool joined = room.State == GameRoomState.Playing
+            && (alreadyInRoom || isPlayingSeatReconnect || isContinuePlayer)
+                ? _session.RebindPlayingRoomPlayer(requestRoomId, player) >= 0
+                : alreadyInRoom
+                    ? room.RefreshPlayerConnection(player)
+                    : _session.JoinRoom(requestRoomId, player);
         if (!joined)
         {
             await SendRoomConnectError(ctx, requestRoomId, "", LegacyErrorCode.MajAutoEnterRoomFailed);
@@ -747,8 +748,7 @@ public class RoomExitRoomCommand : ICommand
         {
             player.IsOutPlayer = true;
             if (_roomRegistry is not null)
-                await _roomRegistry.SetContinueRoomAsync(player.MemberNo, room);
-            room.LimitCnt = room.Seats.Count(s => s != null && !s.IsOutPlayer);
+                await _roomRegistry.ClearContinueRoomAsync(player.MemberNo);
 
             if (await room.EngineLock.WaitAsync(TimeSpan.FromSeconds(5)))
             {
@@ -782,7 +782,21 @@ public class RoomExitRoomCommand : ICommand
             var updatedRoom = _session.GetRoom(roomId);
             if (updatedRoom != null && _roomRegistry != null)
             {
-                await _roomRegistry.UpdateMemberCountAsync(roomId, channelId, updatedRoom.ActivePlayerCount);
+                if (updatedRoom.HasNoActiveMembers)
+                {
+                    _session.RemoveRoom(roomId);
+                    _session.ExpirePendingMatch(roomId);
+                    foreach (var continuedPlayer in updatedRoom.Seats.Where(seat => seat != null).Select(seat => seat!))
+                    {
+                        continuedPlayer.RoomId = null;
+                        await _roomRegistry.ClearContinueRoomAsync(continuedPlayer.MemberNo);
+                    }
+                    await _roomRegistry.RemoveRoomAsync(roomId, channelId);
+                }
+                else
+                {
+                    await _roomRegistry.UpdateMemberCountAsync(roomId, channelId, updatedRoom.ActivePlayerCount);
+                }
             }
             return;
         }

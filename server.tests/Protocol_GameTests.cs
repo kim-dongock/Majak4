@@ -479,12 +479,13 @@ public class RoomStateCommandTests
     {
         var session = new PlayerSessionService();
         var p0 = new MajakPlayer { ConnectionId = "c0", MemberNo = "u0", ChannelId = "ch1" };
-        var p1 = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1", IsOutPlayer = true };
+        var p1 = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1" };
         session.Register(p0);
         session.Register(p1);
         var room = session.CreateRoom("ch1", p0, "", 1, 0, 0, false, roomId: 12);
         room.AddPlayer(p1, 1);
         room.State = GameRoomState.Playing;
+        p1.IsOutPlayer = true;
 
         var packet = RoomStatePayload.Build(room);
 
@@ -499,17 +500,44 @@ public class RoomStateCommandTests
     }
 
     [Fact]
+    public void BuildRoomStatePayload_ReconnectedPlayerReturnsToActiveMembers()
+    {
+        var session = new PlayerSessionService();
+        var p0 = new MajakPlayer { ConnectionId = "c0", MemberNo = "u0", ChannelId = "ch1" };
+        var p1 = new MajakPlayer { ConnectionId = "old", MemberNo = "u1", ChannelId = "ch1" };
+        session.Register(p0);
+        session.Register(p1);
+        var room = session.CreateRoom("ch1", p0, "", 1, 0, 0, false, roomId: 14);
+        room.AddPlayer(p1, 1);
+        room.State = GameRoomState.Playing;
+        p1.IsOutPlayer = true;
+
+        var reconnected = new MajakPlayer { ConnectionId = "new", MemberNo = "u1", ChannelId = "ch1" };
+        session.Register(reconnected);
+        Assert.Equal(1, session.ReconnectToRoom(room.RoomId, reconnected));
+
+        var packet = RoomStatePayload.Build(room, "joined");
+
+        Assert.Equal(2, packet[GKey.MemberCnt]);
+        Assert.Equal(0, packet[GKey.OpMemberCnt]);
+        Assert.Equal(p1.Pix, packet[$"{GKey.Pix}1"]);
+        Assert.False(packet.ContainsKey($"{GKey.OpPix}0"));
+    }
+
+    [Fact]
     public void BuildRoomStatePayload_AllOutPlayersRemainVisibleAsContinueMembers()
     {
         var room = new GameRoom { RoomId = 13, ChannelId = "ch1", State = GameRoomState.Playing };
         for (int seat = 0; seat < 4; seat++)
         {
-            room.AddPlayer(new MajakPlayer
+            var player = new MajakPlayer
             {
                 MemberNo = $"u{seat}",
+                Pix = $"u{seat}",
                 ChannelId = "ch1",
-                IsOutPlayer = true,
-            }, seat);
+            };
+            room.AddPlayer(player, seat);
+            player.IsOutPlayer = true;
         }
 
         var packet = RoomStatePayload.Build(room);

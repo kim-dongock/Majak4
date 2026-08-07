@@ -344,28 +344,24 @@ public class AutoEnterRoomCommand : ICommand
 
 
                 bool isContinue = room.State == GameRoomState.Playing
-                    && room.Seats.Any(s => s?.MemberNo == player.MemberNo && s.IsOutPlayer);
+                    && _session.CanReconnectToRoom(room, player.MemberNo);
 
                 if (isContinue)
                 {
 
-                    int seatIdx = _session.ReconnectToRoom(roomId, player);
+                    int seatIdx = _session.RebindPlayingRoomPlayer(roomId, player);
                     if (seatIdx < 0)
                     {
                         await SendConnectError(ctx, roomId, "Seat not found for continue player", LegacyErrorCode.MajAutoEnterRoomFailed);
                         return;
                     }
 
-
-                    room.LimitCnt = room.Seats.Count(s => s != null && !s.IsOutPlayer);
-                    if (!room.Seats.Any(s => s != null && s.IsOutPlayer))
-                        room.LimitCnt = 0;
                     if (_roomRegistry != null)
                         await _roomRegistry.ClearContinueRoomAsync(player.MemberNo);
                 }
                 else if (isPlayingSeatReconnect)
                 {
-                    if (!room.RefreshPlayerConnection(player))
+                    if (_session.RebindPlayingRoomPlayer(roomId, player) < 0)
                     {
                         await SendConnectError(ctx, roomId, "Seat not found for reconnect player", LegacyErrorCode.MajAutoEnterRoomFailed);
                         return;
@@ -414,7 +410,7 @@ public class AutoEnterRoomCommand : ICommand
 
 
 
-            await _hub.Clients.GroupExcept($"room_{roomId}", ctx.ConnectionId)
+            await _hub.Clients.Group($"room_{roomId}")
                 .SendAsync(Cmd.AddMember, MajakServer.Commands.Room.RoomGetMembersCommand.BuildAddMemberPayload(
                     room, player, isViewer ? GKey.ValueViewer : GKey.ValuePlayer));
 

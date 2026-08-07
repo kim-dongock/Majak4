@@ -755,10 +755,11 @@ public class GameRoomModelTests
     {
         var room = new GameRoom { RoomId = 1 };
         var p1 = new MajakPlayer { MemberNo = "u1" };
-        var p2 = new MajakPlayer { MemberNo = "u2", IsOutPlayer = true };
+        var p2 = new MajakPlayer { MemberNo = "u2" };
 
         room.AddPlayer(p1, 0);
         room.AddPlayer(p2, 1);
+        p2.IsOutPlayer = true;
 
         Assert.Equal(2, room.PlayerCount);
         Assert.Equal(1, room.ActivePlayerCount);
@@ -769,9 +770,10 @@ public class GameRoomModelTests
     public void HasNoActiveMembers_WhenOnlyOutPlayersRemain()
     {
         var room = new GameRoom { RoomId = 1 };
-        var p1 = new MajakPlayer { MemberNo = "u1", IsOutPlayer = true };
+        var p1 = new MajakPlayer { MemberNo = "u1" };
 
         room.AddPlayer(p1, 0);
+        p1.IsOutPlayer = true;
 
         Assert.Equal(1, room.PlayerCount);
         Assert.Equal(0, room.ActivePlayerCount);
@@ -779,7 +781,7 @@ public class GameRoomModelTests
     }
 
     [Fact]
-    public void RemoveExpiredNoActivePlayingRooms_KeepsWithinGraceAndRemovesAfterGrace()
+    public void RemovePlayingRoomIfNoActivePlayers_RemovesImmediatelyEvenWithViewer()
     {
         var session = new PlayerSessionService();
         var player = new MajakPlayer
@@ -787,46 +789,35 @@ public class GameRoomModelTests
             ConnectionId = "c1",
             MemberNo = "u1",
             ChannelId = "ch1",
-            IsOutPlayer = true,
         };
+        var viewer = new MajakPlayer { ConnectionId = "v1", MemberNo = "viewer1", ChannelId = "ch1" };
         var room = session.CreateRoom("ch1", player, "", 1, 0, 0, false);
         room.State = GameRoomState.Playing;
+        Assert.True(room.AddViewer(viewer));
+        player.IsOutPlayer = true;
 
-        var now = DateTimeOffset.UtcNow;
-        var firstPass = session.RemoveExpiredNoActivePlayingRooms(TimeSpan.FromMinutes(5), now);
-        var secondPass = session.RemoveExpiredNoActivePlayingRooms(TimeSpan.FromMinutes(5), now.AddMinutes(4));
-        var expired = session.RemoveExpiredNoActivePlayingRooms(TimeSpan.FromMinutes(5), now.AddMinutes(5).AddSeconds(1));
+        var removed = session.RemovePlayingRoomIfNoActivePlayers(room.RoomId);
 
-        Assert.Empty(firstPass);
-        Assert.Empty(secondPass);
-        Assert.Single(expired);
+        Assert.Same(room, removed);
         Assert.Null(session.GetRoom(room.RoomId));
     }
 
     [Fact]
-    public void RemoveExpiredNoActivePlayingRooms_RemovesPlayingRoomWithOnlyOutPlayersAndViewer()
+    public void RemovePlayingRoomIfNoActivePlayers_KeepsRoomWhenPlayerRemains()
     {
         var session = new PlayerSessionService();
-        var player = new MajakPlayer
-        {
-            ConnectionId = "c1",
-            MemberNo = "u1",
-            ChannelId = "ch1",
-            IsOutPlayer = true,
-        };
-        var room = session.CreateRoom("ch1", player, "", 1, 0, 0, false);
+        var owner = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1" };
+        var disconnected = new MajakPlayer { ConnectionId = "c2", MemberNo = "u2", ChannelId = "ch1" };
+        var room = session.CreateRoom("ch1", owner, "", 1, 0, 0, false);
+        Assert.True(session.JoinRoom(room.RoomId, disconnected));
         room.State = GameRoomState.Playing;
-        Assert.True(room.AddViewer(new MajakPlayer { ConnectionId = "v1", MemberNo = "viewer1", ChannelId = "ch1" }));
+        disconnected.IsOutPlayer = true;
 
-        var now = DateTimeOffset.UtcNow;
-        var firstPass = session.RemoveExpiredNoActivePlayingRooms(TimeSpan.FromMinutes(5), now);
-        var expired = session.RemoveExpiredNoActivePlayingRooms(TimeSpan.FromMinutes(5), now.AddMinutes(5).AddSeconds(1));
+        var removed = session.RemovePlayingRoomIfNoActivePlayers(room.RoomId);
 
-        Assert.Empty(firstPass);
-        Assert.Equal(1, room.ViewerCount);
-        Assert.True(room.HasNoActivePlayers);
-        Assert.Single(expired);
-        Assert.Null(session.GetRoom(room.RoomId));
+        Assert.Null(removed);
+        Assert.Same(room, session.GetRoom(room.RoomId));
+        Assert.Same(disconnected, room.Seats[(int)disconnected.SeatPos]);
     }
 
     [Fact]
@@ -838,10 +829,10 @@ public class GameRoomModelTests
             ConnectionId = "old",
             MemberNo = "u1",
             ChannelId = "ch1",
-            IsOutPlayer = true,
         };
         var room = session.CreateRoom("ch1", oldPlayer, "", 1, 0, 0, false);
         room.State = GameRoomState.Playing;
+        oldPlayer.IsOutPlayer = true;
         room.NoActiveMembersSince = DateTimeOffset.UtcNow.AddMinutes(-1);
 
         var newPlayer = new MajakPlayer { ConnectionId = "new", MemberNo = "u1", ChannelId = "ch1" };
@@ -853,6 +844,119 @@ public class GameRoomModelTests
     }
 
     [Fact]
+    public void ReconnectToRoom_AllowsOutPlayerWhilePlayingRoomExists()
+    {
+        var session = new PlayerSessionService();
+        var oldPlayer = new MajakPlayer
+        {
+            ConnectionId = "old",
+            MemberNo = "u1",
+            ChannelId = "ch1",
+        };
+        var room = session.CreateRoom("ch1", oldPlayer, "", 1, 0, 0, false);
+        room.State = GameRoomState.Playing;
+        oldPlayer.IsOutPlayer = true;
+
+        var newPlayer = new MajakPlayer { ConnectionId = "new", MemberNo = "u1", ChannelId = "ch1" };
+        int seat = session.ReconnectToRoom(room.RoomId, newPlayer);
+
+        Assert.Equal(0, seat);
+        Assert.False(oldPlayer.IsOutPlayer);
+        Assert.Same(oldPlayer, room.Seats[0]);
+        Assert.Equal(GameRoomState.Playing, room.State);
+    }
+
+    [Fact]
+    public void RebindPlayingRoomPlayer_ReplacesActiveSeatConnection()
+    {
+        var session = new PlayerSessionService();
+        var oldPlayer = new MajakPlayer
+        {
+            ConnectionId = "old",
+            MemberNo = "u1",
+            ChannelId = "ch1",
+            EngineOrder = 2,
+        };
+        session.Register(oldPlayer);
+        var room = session.CreateRoom("ch1", oldPlayer, "", 1, 0, 0, false);
+        room.State = GameRoomState.Playing;
+        oldPlayer.EngineOrder = 2;
+
+        var newPlayer = new MajakPlayer { ConnectionId = "new", MemberNo = "u1", ChannelId = "ch1" };
+        session.Register(newPlayer);
+
+        int seat = session.RebindPlayingRoomPlayer(room.RoomId, newPlayer);
+
+        Assert.Equal(0, seat);
+        Assert.Equal("new", room.Seats[0]!.ConnectionId);
+        Assert.False(room.Seats[0]!.IsOutPlayer);
+        Assert.Equal(room.RoomId, newPlayer.RoomId);
+        Assert.Equal((uint)0, newPlayer.SeatPos);
+        Assert.Equal(2, newPlayer.EngineOrder);
+        Assert.Same(newPlayer, session.GetByMember("u1"));
+    }
+
+    [Fact]
+    public void DisconnectFromRoom_StaleConnectionDoesNotDetachReboundSeat()
+    {
+        var session = new PlayerSessionService();
+        var oldPlayer = new MajakPlayer
+        {
+            ConnectionId = "old",
+            MemberNo = "u1",
+            ChannelId = "ch1",
+            EngineOrder = 1,
+        };
+        session.Register(oldPlayer);
+        var room = session.CreateRoom("ch1", oldPlayer, "", 1, 0, 0, false);
+        room.State = GameRoomState.Playing;
+
+        var newPlayer = new MajakPlayer { ConnectionId = "new", MemberNo = "u1", ChannelId = "ch1" };
+        session.Register(newPlayer);
+        Assert.Equal(0, session.RebindPlayingRoomPlayer(room.RoomId, newPlayer));
+
+        bool disconnected = session.DisconnectFromRoom(oldPlayer, "old");
+
+        Assert.False(disconnected);
+        Assert.Equal("new", room.Seats[0]!.ConnectionId);
+        Assert.False(room.Seats[0]!.IsOutPlayer);
+        Assert.Equal(room.RoomId, newPlayer.RoomId);
+        Assert.Same(newPlayer, session.GetByMember("u1"));
+    }
+
+    [Fact]
+    public async Task ContinueRoom_OutPlayerInPlayingRoomIsReturnedWithoutDeadline()
+    {
+        var registry = new RoomRegistryService(TestMasterCacheFactory.CreateRedisService());
+        var player = new MajakPlayer
+        {
+            MemberNo = "u1",
+            IsOutPlayer = true,
+        };
+        var room = new GameRoom
+        {
+            RoomId = 1235,
+            ChannelId = "ch1",
+            RoomTitle = "continue room",
+            RoomOption = "opt",
+            State = GameRoomState.Playing,
+        };
+        room.Seats[0] = player;
+
+        await registry.RegisterRoomAsync(room.RoomId, room.ChannelId, room.RoomTitle,
+            isPrivate: false, memberCnt: 0, memberMax: 4,
+            serverUrl: "http://server-a", roomOption: room.RoomOption);
+        await registry.SetContinueRoomAsync(player.MemberNo, room);
+
+        var continuedRoom = await registry.GetContinueRoomAsync(player.MemberNo);
+
+        Assert.NotNull(continuedRoom);
+        Assert.Equal(room.RoomId, continuedRoom.RoomId);
+        Assert.Same(player, room.Seats[0]);
+        Assert.Equal(GameRoomState.Playing, room.State);
+    }
+
+    [Fact]
     public void DisconnectFromRoom_AfterReconnectMarksRoomSeatOut()
     {
         var session = new PlayerSessionService();
@@ -861,10 +965,10 @@ public class GameRoomModelTests
             ConnectionId = "old",
             MemberNo = "u1",
             ChannelId = "ch1",
-            IsOutPlayer = true,
         };
         var room = session.CreateRoom("ch1", oldPlayer, "", 1, 0, 0, false);
         room.State = GameRoomState.Playing;
+        oldPlayer.IsOutPlayer = true;
 
         var newPlayer = new MajakPlayer { ConnectionId = "new", MemberNo = "u1", ChannelId = "ch1" };
         session.Register(newPlayer);
@@ -872,12 +976,12 @@ public class GameRoomModelTests
 
         session.DisconnectFromRoom(newPlayer);
         var noActiveSince = room.NoActiveMembersSince;
-        var expired = session.RemoveExpiredNoActivePlayingRooms(TimeSpan.FromMinutes(5), noActiveSince!.Value.AddMinutes(6));
+        var removed = session.RemovePlayingRoomIfNoActivePlayers(room.RoomId);
 
         Assert.True(room.Seats[0]?.IsOutPlayer);
         Assert.True(room.HasNoActiveMembers);
         Assert.NotNull(noActiveSince);
-        Assert.Single(expired);
+        Assert.Same(room, removed);
         Assert.Null(session.GetRoom(room.RoomId));
     }
 
@@ -885,6 +989,11 @@ public class GameRoomModelTests
     public async Task ContinueRoom_FallbackRequiresLiveRoomEntry()
     {
         var registry = new RoomRegistryService(TestMasterCacheFactory.CreateRedisService());
+        var player = new MajakPlayer
+        {
+            MemberNo = "u1",
+            IsOutPlayer = true,
+        };
         var room = new GameRoom
         {
             RoomId = 1234,
@@ -893,20 +1002,21 @@ public class GameRoomModelTests
             RoomOption = "opt",
             State = GameRoomState.Playing,
         };
+        room.Seats[0] = player;
 
         await registry.RegisterRoomAsync(room.RoomId, room.ChannelId, room.RoomTitle,
             isPrivate: false, memberCnt: 0, memberMax: 4,
             serverUrl: "http://server-a", roomOption: room.RoomOption);
-        await registry.SetContinueRoomAsync("u1", room);
+        await registry.SetContinueRoomAsync(player.MemberNo, room);
 
-        var found = await registry.GetContinueRoomAsync("u1");
+        var found = await registry.GetContinueRoomAsync(player.MemberNo);
         Assert.NotNull(found);
         Assert.Equal(room.RoomId, found.RoomId);
         Assert.Equal("http://server-a", found.ServerUrl);
 
         await registry.RemoveRoomAsync(room.RoomId, room.ChannelId);
 
-        Assert.Null(await registry.GetContinueRoomAsync("u1"));
+        Assert.Null(await registry.GetContinueRoomAsync(player.MemberNo));
     }
 
     // シナリオ2: IsEmpty — 全席空なら true

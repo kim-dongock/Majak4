@@ -42,6 +42,9 @@ public class CreateRoomCommandTests
             RoomOption = "120000001000000",
             State = GameRoomState.Playing,
         };
+        var continuedPlayer = new MajakPlayer { MemberNo = player.MemberNo };
+        continueRoom.AddPlayer(continuedPlayer, 0);
+        continuedPlayer.IsOutPlayer = true;
         await registry.RegisterRoomAsync(continueRoom.RoomId, channelId, continueRoom.RoomTitle,
             isPrivate: false, memberCnt: 0, memberMax: 4,
             serverUrl: "http://test", roomOption: continueRoom.RoomOption);

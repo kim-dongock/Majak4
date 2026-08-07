@@ -135,7 +135,7 @@ public class GameRoom
     public SemaphoreSlim EngineLock { get; } = new SemaphoreSlim(1, 1);
 
     // 座席→エンジン順のマッピング (StartGameLogic で設定)
-    public int[] SeatToEngineOrder { get; } = new int[4];
+    public int[] SeatToEngineOrder { get; } = new[] { -1, -1, -1, -1 };
 
     // Web クライアント入力要求の deadline / sequence (AP-14)
     private long _actionSeq;
@@ -201,6 +201,7 @@ public class GameRoom
     public void AddPlayer(MajakPlayer player, int seat)
     {
         Seats[seat] = player;
+        player.IsOutPlayer = false;
         player.SeatPos = (uint)seat;
         player.EngineOrder = GameConst.PlayerMaxCount;
         player.RoomId  = RoomId;

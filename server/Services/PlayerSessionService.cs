@@ -185,6 +185,10 @@ public class PlayerSessionService
         return null;
     }
 
+    public bool IsCurrentConnection(string memberNo, string connectionId)
+        => _memberToConn.TryGetValue(memberNo, out var currentConnectionId)
+            && currentConnectionId == connectionId;
+
     public string IssuePix(string memberNo)
     {
         if (string.IsNullOrWhiteSpace(memberNo)) return string.Empty;
@@ -358,28 +362,27 @@ public class PlayerSessionService
     public bool RemoveRoom(int roomId)
         => _rooms.TryRemove(roomId, out _);
 
-    public IReadOnlyList<GameRoom> RemoveExpiredNoActivePlayingRooms(
-        TimeSpan gracePeriod,
-        DateTimeOffset now)
+    public GameRoom? RemovePlayingRoomIfNoActivePlayers(int roomId)
     {
-        var removed = new List<GameRoom>();
-        foreach (var room in _rooms.Values)
+        if (!_rooms.TryGetValue(roomId, out var room)) return null;
+        lock (room)
         {
             if (room.State != GameRoomState.Playing || !room.HasNoActivePlayers)
-            {
-                room.NoActiveMembersSince = null;
-                continue;
-            }
+                return null;
+            if (!_rooms.TryRemove(roomId, out var removed))
+                return null;
+            ExpirePendingMatch(roomId);
+            return removed;
+        }
+    }
 
-            room.NoActiveMembersSince ??= now;
-            if (now - room.NoActiveMembersSince.Value < gracePeriod)
-                continue;
-
-            if (_rooms.TryRemove(room.RoomId, out var expired))
-            {
-                ExpirePendingMatch(expired.RoomId);
-                removed.Add(expired);
-            }
+    public IReadOnlyList<GameRoom> RemoveNoActivePlayingRooms()
+    {
+        var removed = new List<GameRoom>();
+        foreach (var room in _rooms.Values.ToArray())
+        {
+            var emptyRoom = RemovePlayingRoomIfNoActivePlayers(room.RoomId);
+            if (emptyRoom != null) removed.Add(emptyRoom);
         }
         return removed;
     }
@@ -409,7 +412,11 @@ public class PlayerSessionService
     public bool IsContinuePlayerInChannel(string channelId, string memberNo)
         => _rooms.Values.Any(room => room.ChannelId == channelId
             && room.State == GameRoomState.Playing
-            && room.Seats.Any(seat => seat?.MemberNo == memberNo && seat.IsOutPlayer));
+            && CanReconnectToRoom(room, memberNo));
+
+    public bool CanReconnectToRoom(GameRoom room, string memberNo)
+        => room.State == GameRoomState.Playing
+            && room.Seats.Any(seat => seat?.MemberNo == memberNo && seat.IsOutPlayer);
 
     /// <summary>
     /// チャンネル内で現在セッションが把握している最大ルーム番号を返す。
@@ -482,35 +489,68 @@ public class PlayerSessionService
     ///   通常の LeaveRoom と異なり、座席からは除去しない。
     ///   IsOutPlayer フラグを立て、メンバーID→接続IDのマッピングのみ解除する。
     /// </summary>
-    public void DisconnectFromRoom(MajakPlayer player)
+    public bool DisconnectFromRoom(MajakPlayer player, string disconnectedConnectionId)
     {
-        string connectionId = player.ConnectionId;
+        bool detachedSeat = false;
         if (player.RoomId is int roomId && _rooms.TryGetValue(roomId, out var room))
         {
-            var roomPlayer = room.Seats.FirstOrDefault(seat => seat?.MemberNo == player.MemberNo);
-            if (roomPlayer != null)
+            lock (room)
             {
-                roomPlayer.IsOutPlayer = true;
-                roomPlayer.ConnectionId = "";
+                var roomPlayer = room.Seats.FirstOrDefault(seat => seat?.MemberNo == player.MemberNo);
+                if (roomPlayer != null && roomPlayer.ConnectionId == disconnectedConnectionId)
+                {
+                    roomPlayer.IsOutPlayer = true;
+                    roomPlayer.ConnectionId = "";
+                    detachedSeat = true;
+                }
+                if (room.HasNoActivePlayers)
+                    room.NoActiveMembersSince ??= DateTimeOffset.UtcNow;
+                else
+                    room.NoActiveMembersSince = null;
             }
-            if (room.HasNoActivePlayers)
-                room.NoActiveMembersSince ??= DateTimeOffset.UtcNow;
-            else
-                room.NoActiveMembersSince = null;
         }
-        player.IsOutPlayer = true;
-        if (!string.IsNullOrEmpty(connectionId))
+        if (detachedSeat)
         {
-            Remove(connectionId);
-            player.ConnectionId = "";
+            player.IsOutPlayer = true;
+            if (player.ConnectionId == disconnectedConnectionId)
+                player.ConnectionId = "";
         }
-        else
-        {
-            ((ICollection<KeyValuePair<string, string>>)_memberToConn)
-                .Remove(new KeyValuePair<string, string>(player.MemberNo, connectionId));
-        }
+        Remove(disconnectedConnectionId);
         // RoomId は保持したまま (IsOutPlayer=true で座席に残る)
         // player.IsOutPlayer はHub側で設定済み
+        return detachedSeat;
+    }
+
+    public bool DisconnectFromRoom(MajakPlayer player)
+        => DisconnectFromRoom(player, player.ConnectionId);
+
+    public int RebindPlayingRoomPlayer(int roomId, MajakPlayer player)
+    {
+        var room = GetRoom(roomId);
+        if (room?.State != GameRoomState.Playing) return -1;
+
+        lock (room)
+        {
+            int seatIndex = Array.FindIndex(room.Seats, seat => seat?.MemberNo == player.MemberNo);
+            if (seatIndex < 0) return -1;
+
+            var seat = room.Seats[seatIndex]!;
+            seat.ConnectionId = player.ConnectionId;
+            seat.NickName = player.NickName;
+            seat.AvatarId = player.AvatarId;
+            seat.Password = player.Password;
+            seat.IpAddress = player.IpAddress;
+            seat.ChannelId = player.ChannelId;
+            seat.IsOutPlayer = false;
+
+            player.RoomId = roomId;
+            player.SeatPos = seat.SeatPos;
+            player.EngineOrder = seat.EngineOrder;
+            player.IsOutPlayer = false;
+            room.NoActiveMembersSince = null;
+            _memberToConn[player.MemberNo] = player.ConnectionId;
+            return seatIndex;
+        }
     }
 
     /// <summary>
@@ -527,25 +567,9 @@ public class PlayerSessionService
         lock (room)
         {
             // 同一 MemberNo で IsOutPlayer=true の席を検索
-            for (int i = 0; i < room.Seats.Length; i++)
-            {
-                var seat = room.Seats[i];
-                if (seat != null && seat.MemberNo == player.MemberNo && seat.IsOutPlayer)
-                {
-                    // 同一オブジェクトを更新 (ConnectionId が変わっているため上書き)
-                    seat.ConnectionId = player.ConnectionId;
-                    seat.IsOutPlayer  = false;
-                    player.RoomId     = roomId;
-                    player.SeatPos    = seat.SeatPos;
-                    player.EngineOrder = seat.EngineOrder;
-                    room.NoActiveMembersSince = null;
-
-                    // 新しい ConnectionId で登録
-                    _memberToConn[player.MemberNo] = player.ConnectionId;
-                    return i;
-                }
-            }
-            return -1;
+            bool hasDisconnectedSeat = room.Seats.Any(
+                seat => seat?.MemberNo == player.MemberNo && seat.IsOutPlayer);
+            return hasDisconnectedSeat ? RebindPlayingRoomPlayer(roomId, player) : -1;
         }
     }
 
