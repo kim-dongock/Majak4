@@ -165,7 +165,7 @@ function getMessage(reason: PopupReason, gamMoney = 0, callerMessage = ''): stri
     case POPUP_REASON.EVENTENTRY:
       return '大会に対局するためにはGPアイテムの購入が必要になります。'
     case POPUP_REASON.EVENTENTRY2:
-      return '予選（無料）の予選通過条件を満たしていない場合は、\nキャッシュでGPアイテムを購入する必要があります'
+      return '予選（無料）の予選通過条件を満たしていない場合は、\nMPでGPアイテムを購入する必要があります'
     default:
       return ''
   }

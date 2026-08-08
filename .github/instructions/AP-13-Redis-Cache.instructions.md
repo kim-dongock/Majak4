@@ -8,9 +8,10 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 ## 概要
 
 - Redis 接続は `RedisService` (Singleton) が `StackExchange.Redis` で保持する。
-- Redis 未接続時はすべてのキーがメモリまたは Oracle/MySQL フォールバックで動作する。
+- Redis 未接続時は対応する機能がプロセスメモリまたはMySQLフォールバックで動作する。
 - シリアライズは `System.Text.Json` (JSON 形式)。
 - キー定数は `MasterCacheService` (static フィールド) と各サービスの `private const` で管理する。
+- Redisキーの `{memberNo}` はサーバー内部の永続 `player_account.member_no` を表す。クライアントへその値を公開せず、wire上のプレイヤー識別には `pix` を使う。
 
 ---
 
@@ -78,8 +79,10 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 | キーパターン | 型 | TTL | DB テーブル | 用途 |
 |-------------|----|-----|-------------|------|
 | `majak2:ranking:grade:{rankDate}:{rankKind}:{maxCnt}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | グレードランキングリスト (最大 maxCnt 件) |
-| `majak2:ranking:grade:self:{rankDate}:{memberId}:{grade}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | プレイヤー自身のランキング情報 || `majak2:graderank:counts:{rankDate}` | STRING (JSON) | **5 分** | `MJK_GRADERANK` | グレード別プレイヤー数 (全サーバー共有) |
-| `majak2:mast:proplayers` | STRING (JSON) | **1 時間** | `EVTUSERMAST` (EVTCODE='5333') | プロプレイヤーリスト (全サーバー共有) || `majak2:cup:topscore:{channelId}` | STRING (JSON) | **1 分** | `MAJAKCUPRAT` | カップチャンネルの最高スコア |
+| `majak2:ranking:grade:self:{rankDate}:{memberNo}:{grade}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | プレイヤー自身のランキング情報 |
+| `majak2:graderank:counts:{rankDate}` | STRING (JSON) | **5 分** | `MJK_GRADERANK` | グレード別プレイヤー数 (全サーバー共有) |
+| `majak2:mast:proplayers` | STRING (JSON) | **1 時間** | `EVTUSERMAST` (EVTCODE='5333') | プロプレイヤーリスト (全サーバー共有) |
+| `majak2:cup:topscore:{channelId}` | STRING (JSON) | **1 分** | `MAJAKCUPRAT` | カップチャンネルの最高スコア |
 
 > `{rankDate}` = `YYYYMM` 形式の整数 (例: `202606`)
 
@@ -100,7 +103,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 |-------------|----|-----|------|
 | `room:{roomId}` | STRING (JSON) | **30 秒** | ルーム情報 (RoomId, ChanelId, Title, IsPrivate, MemberCnt, MemberMax, ServerUrl, RoomOption) |
 | `channel:{chanelId}:rooms` | SET | **90 秒** | チャンネル内のルーム ID セット |
-| `continue:{memberId}:room` | STRING (JSON) | **30 秒** | 対局中切断プレイヤーの続行先ルーム (MemberId, RoomId, ChanelId, Title, ServerUrl, RoomOption, UpdatedAt) |
+| `continue:{memberNo}:room` | STRING (JSON) | **30 秒** | 対局中切断プレイヤーの続行先ルーム。キーと内部値の会員IDは `member_no` |
 
 ### 書き込み / 更新 / 削除タイミング
 
@@ -108,16 +111,16 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 |----------|------|--------|
 | ルーム作成時 | `room:{roomId}` SET + `channel:{chanelId}:rooms` SADD | `RoomRegistryService.RegisterRoomAsync()` |
 | プレイヤー入退室時 | `room:{roomId}` の MemberCnt を更新 (TTL リセット) | `RoomRegistryService.UpdateMemberCountAsync()` |
-| 対局中プレイヤーのネットワーク切断時 | `continue:{memberId}:room` SET。値は `room:{roomId}` の ServerUrl / RoomOption を参照する。明示退室では作成しない | `MajakGameHub.HandleRoomDisconnectAsync()` |
-| 続行プレイヤー復帰時 | `continue:{memberId}:room` DEL | `AutoEnterRoomCommand` / `RoomEnterRoomCommand` |
-| ゲーム終了・無人対局ルーム即時削除 | 対象席の `continue:{memberId}:room` DEL | `GameLogicService` / `RoomRegistryService` / `MajakGameHub` / `ServerStatusBackgroundService` |
+| 対局中プレイヤーのネットワーク切断時 | `continue:{memberNo}:room` SET。値は `room:{roomId}` の ServerUrl / RoomOption を参照する。明示退室では作成しない | `MajakGameHub.HandleRoomDisconnectAsync()` |
+| 続行プレイヤー復帰時 | `continue:{memberNo}:room` DEL | `AutoEnterRoomCommand` / `RoomEnterRoomCommand` |
+| ゲーム終了・無人対局ルーム即時削除 | 対象席の `continue:{memberNo}:room` DEL | `GameLogicService` / `RoomRegistryService` / `MajakGameHub` / `ServerStatusBackgroundService` |
 | **8 秒ごと** | 全アクティブルームの TTL を 30 秒にリセット、アクティブチャンネルの room-index SET TTL を 90 秒にリセット (ハートビート) | `ServerStatusBackgroundService` → `RoomRegistryService.RefreshTtlBatchAsync()` / `RefreshChannelSetTtlBatchAsync()` |
-| **8 秒ごと** | 対局中 `IsOutPlayer=true` の座席について、ゲーム終了まで `continue:{memberId}:room` の TTL を 30 秒へ更新する | `ServerStatusBackgroundService` → `RoomRegistryService.RefreshContinueRoomsAsync()` |
+| **8 秒ごと** | 対局中 `IsOutPlayer=true` の座席について、ゲーム終了まで `continue:{memberNo}:room` の TTL を 30 秒へ更新する | `ServerStatusBackgroundService` → `RoomRegistryService.RefreshContinueRoomsAsync()` |
 | ルーム解散時 | `room:{roomId}` DEL + `channel:{chanelId}:rooms` SREM | `RoomRegistryService.RemoveRoomAsync()` |
 | グレースフルシャットダウン | 担当全ルームを即削除 | `ServerStatusBackgroundService` → `RoomRegistryService.RemoveAllRoomsAsync()` |
 
 > **ゴーストルーム防止**: サーバーがクラッシュすると TTL 更新が止まり、最大 30 秒後に `room:{roomId}` が自動消滅する。
-> **続行先の整合性**: `/api/player/continue-room` は `continue:{memberId}:room` が存在しても、対応する `room:{roomId}` が存在しない場合は continue key を削除して未検出として返す。
+> **続行先の整合性**: `/api/player/continue-room` はJWTの `member_no` を正本に検索する。対応する `room:{roomId}` が存在しない場合は `continue:{memberNo}:room` を削除して未検出として返す。
 
 ---
 
@@ -125,7 +128,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キーパターン | 型 | TTL | 用途 |
 |-------------|----|-----|------|
-| `channel:{chanelId}:members` | HASH | **90 秒** | memberId → JSON `{memberId, nickname, rating, sex, avatarId}` |
+| `channel:{chanelId}:members` | HASH | **90 秒** | サーバー管理のfield → JSON `{memberNo: pix, pix, nickname, rating, sex, avatarId}`。GET応答は内部fieldを公開しない |
 
 ### 書き込み / 削除タイミング
 
@@ -221,23 +224,23 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 ---
 
-## 9. 플레이어별 미션/보상 캐시
+## 9. プレイヤー別ミッション・報酬キャッシュ
 
-| 키 패턴 | 형식 | TTL | DB 테이블 | 용도 |
+| キーパターン | 型 | TTL | DBテーブル | 用途 |
 |---------|------|-----|-----------|------|
-| `majak2:player:{memberId}:daily:{yyyyMMdd}` | STRING (JSON) | **자정까지** | `MJK_DAILYMISSIONLIST` | 당일 데일리 미션 달성 상태 (missionId → state) |
-| `majak2:player:{memberId}:weekly:{monDate}` | STRING (JSON) | **다음 월요일까지** | `MJK_WEEKLYREWARDLIST` | 이번 주 주간 보상 수령 상태 (rewardId → status) |
-| `majak2:player:{memberId}:weeklypoint:{monDate}` | STRING (JSON) | **다음 월요일까지** | `MJK_DAILYMISSIONLIST` + `MJK_DAILYMISSIONMAST` | 이번 주 누적 포인트 합계 (int) |
+| `majak2:player:{memberNo}:daily:{yyyyMMdd}` | STRING (JSON) | **当日終了まで** | `MJK_DAILYMISSIONLIST` | 当日のデイリーミッション達成状態 (missionId → state) |
+| `majak2:player:{memberNo}:weekly:{monDate}` | STRING (JSON) | **次の月曜日まで** | `MJK_WEEKLYREWARDLIST` | 今週の週間報酬受取状態 (rewardId → status) |
+| `majak2:player:{memberNo}:weeklypoint:{monDate}` | STRING (JSON) | **次の月曜日まで** | `MJK_DAILYMISSIONLIST` + `MJK_DAILYMISSIONMAST` | 今週の累積ポイント (int) |
 
-> `{monDate}` = 이번 주 월요일의 yyyyMMdd (예: `20260622`)
+> `{monDate}` は対象週の月曜日を `yyyyMMdd` で表した値 (例: `20260622`)。
 
-### 쓰기 / 무효화 타이밍
+### 書き込み / 無効化タイミング
 
-| 키 | 쓰기 | 무효화 |
+| キー | 書き込み | 無効化 |
 |----|------|--------|
-| `…:daily:{today}` | `GetDailyMissionListAsync` 캐시미스 시 DB 조회 후 기록 | `SetDailyMissionAsync` (MERGE 완료 후 즉시 삭제) |
-| `…:weekly:{monDate}` | `GetWeeklyRewardListAsync` 캐시미스 시 DB 조회 후 기록 | `TryReceiveWeeklyRewardAsync` (MERGE 성공 후 즉시 삭제) |
-| `…:weeklypoint:{monDate}` | `GetWeeklyPointAsync` 캐시미스 시 DB 조회 후 기록 | `SetDailyMissionAsync` (미션 상태 변경 시 즉시 삭제) |
+| `…:daily:{today}` | `GetDailyMissionListAsync` のキャッシュミス時にDB照会後記録 | `SetDailyMissionAsync` の更新完了直後に削除 |
+| `…:weekly:{monDate}` | `GetWeeklyRewardListAsync` のキャッシュミス時にDB照会後記録 | `TryReceiveWeeklyRewardAsync` の成功直後に削除 |
+| `…:weeklypoint:{monDate}` | `GetWeeklyPointAsync` のキャッシュミス時にDB照会後記録 | `SetDailyMissionAsync` の状態変更直後に削除 |
 
 - `MasterCacheService` のキー定数 (`KeyTitles` 等) を文字列でハードコードしてはならない。必ずクラスの `const` / `static string` を参照すること。
 - Redis 書き込みエラーは `catch { }` で握りつぶして正常系を継続する (可用性優先)。

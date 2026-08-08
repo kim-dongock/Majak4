@@ -2,6 +2,7 @@ using MajakServer.Commands.Channel;
 using MajakServer.Infrastructure;
 using MajakServer.Models.Protocol;
 using MajakServer.Repositories.MySQL;
+using MajakServer.Repositories.MySQL.Entities;
 
 namespace MajakServer.Tests;
 
@@ -33,6 +34,25 @@ public class PlayerRepositoryTests
         };
 
         Assert.Equal(expected, PlayerRepository.ShouldRepairInitialGradeRating(stats));
+    }
+
+    [Fact]
+    public void FilterGradeRankQuery_AlwaysUsesRequestedRankKind()
+    {
+        var month = new DateOnly(2026, 8, 1);
+        var rows = new[]
+        {
+            new PlayerGradeRankEntity { RankDate = month, RankKind = 99, MemberNo = 1, GradeLevel = 10 },
+            new PlayerGradeRankEntity { RankDate = month, RankKind = 10, MemberNo = 2, GradeLevel = 99 },
+            new PlayerGradeRankEntity { RankDate = month, RankKind = 0, MemberNo = 3, GradeLevel = 0 },
+            new PlayerGradeRankEntity { RankDate = month.AddMonths(-1), RankKind = 99, MemberNo = 4, GradeLevel = 10 },
+        }.AsQueryable();
+
+        var overall = PlayerRepository.FilterGradeRankQuery(rows, month, GameConst.RatingRankAll).ToList();
+        var gradeZero = PlayerRepository.FilterGradeRankQuery(rows, month, 0).ToList();
+
+        Assert.Equal(1UL, Assert.Single(overall).MemberNo);
+        Assert.Equal(3UL, Assert.Single(gradeZero).MemberNo);
     }
 
     [Theory]

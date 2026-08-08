@@ -1979,10 +1979,16 @@ public class GameLogicHelperTests
         Assert.Equal(new[] { 25000, 26000, 27000, 28000 }, ((JsonElement)packet["memberPoints"]!).EnumerateArray().Select(e => e.GetInt32()).ToArray());
         Assert.Equal(new[] { true, false, true, false }, ((JsonElement)packet["yakitori"]!).EnumerateArray().Select(e => e.GetBoolean()).ToArray());
         Assert.Equal(new[] { 5, 6, 7, 8 }, ((JsonElement)packet["tip"]!).EnumerateArray().Select(e => e.GetInt32()).ToArray());
+        Assert.Equal(new[] { 20000, 20000, 20000, 20000 }, ((JsonElement)packet["timeBankMs"]!).EnumerateArray().Select(e => e.GetInt32()).ToArray());
+        Assert.Equal(22000, ((JsonElement)packet["timeFullMs"]!).GetInt32());
+        Assert.Equal(2000, ((JsonElement)packet["timeTurnMs"]!).GetInt32());
+        Assert.Equal(2000, ((JsonElement)packet["timeFuroMs"]!).GetInt32());
+        Assert.Equal(100, ((JsonElement)packet["timeKeepMs"]!).GetInt32());
 
-        Assert.Equal(2, room.PlayHistory.Count);
+        Assert.Equal(3, room.PlayHistory.Count);
         Assert.Equal("MJPID_INIHAN", ((JsonElement)CommandTestHelper.ToDict(room.PlayHistory[0])["playType"]!).GetString());
-        Assert.Equal("MJPID_INIKYO", ((JsonElement)CommandTestHelper.ToDict(room.PlayHistory[1])["playType"]!).GetString());
+        Assert.Equal(Cmd.PaiInfoList, ((JsonElement)CommandTestHelper.ToDict(room.PlayHistory[1])["cmd"]!).GetString());
+        Assert.Equal("MJPID_INIKYO", ((JsonElement)CommandTestHelper.ToDict(room.PlayHistory[2])["playType"]!).GetString());
     }
 
     [Theory]
@@ -2113,6 +2119,38 @@ public class GameLogicHelperTests
         var report = await InvokeMakeGameReport(room);
 
         Assert.Equal(100L, report.Users[0]!.MoneyChange);
+    }
+
+    [Theory]
+    [InlineData(1, 20, 1, 0, 0)]
+    [InlineData(2, 0, 0, 0, 1)]
+    [InlineData(3, -20, 0, 1, 0)]
+    public async Task MakeGameReport_WinLossDrawUsesSetTotalSign(
+        int setRank,
+        int setTotal,
+        int expectedWin,
+        int expectedDefeat,
+        int expectedDraw)
+    {
+        var room = new GameRoom { RoomId = 14, ChannelId = "ch1" };
+        room.AddPlayer(new MajakPlayer
+        {
+            MemberNo = "seat0",
+            NickName = "P0",
+            ConnectionId = "c0",
+        }, 0);
+        room.Engine.InitHanchan(new RuleInfo());
+        room.Engine.HanchanInfo.Player = new[] { 0, 1, 2, 3 };
+        Array.Fill(room.SeatToEngineOrder, -1);
+        room.SeatToEngineOrder[0] = 0;
+        room.Engine.Player[0].SetRank = setRank;
+        room.Engine.Player[0].SetTotal = setTotal;
+
+        var report = await InvokeMakeGameReport(room);
+
+        Assert.Equal(expectedWin, report.Users[0]!.WinCnt);
+        Assert.Equal(expectedDefeat, report.Users[0]!.DefeatCnt);
+        Assert.Equal(expectedDraw, report.Users[0]!.DrawCnt);
     }
 
     [Fact]
@@ -3238,6 +3276,123 @@ public class GameLogicHelperTests
         Assert.Empty(((JsonElement)packet["tapCandidates"]!).EnumerateArray());
         Assert.Equal(456, ((JsonElement)packet["actionSeq"]!).GetInt64());
         Assert.True(((JsonElement)packet["deadlineAt"]!).GetInt64() > ((JsonElement)packet["serverNow"]!).GetInt64());
+    }
+
+    [Fact]
+    public async Task ExtendActionTimeBank_ExtendsFuroPromptOnceWithRemainingBank()
+    {
+        var room = new GameRoom { RoomId = 83 };
+        var player = new MajakPlayer { MemberNo = "p0", EngineOrder = 0 };
+        room.Engine.Player[0].Mode = PlayerMode.Furo;
+        room.KyokuTimeBankMs[0] = 20_000;
+        var issuedAt = DateTimeOffset.UtcNow;
+        room.PendingActions[0] = new PendingActionPrompt
+        {
+            ActionSeq = 901,
+            SeatOrder = 0,
+            PlayerMode = PlayerMode.Furo,
+            IssuedAt = issuedAt,
+            DeadlineAt = issuedAt.AddMilliseconds(2_000),
+            BaseTimeMs = 2_000,
+            KeepTimeMs = 100,
+            TimeBankMsAtIssue = 0,
+            UsesTimeBank = false,
+        };
+        var callerSent = new List<object>();
+        var callerProxy = new Mock<IClientProxy>();
+        callerProxy.Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default))
+            .Callback<string, object?[], CancellationToken>((method, args, _) =>
+            {
+                if (method == Cmd.GamePlay) callerSent.Add(args[0]!);
+            })
+            .Returns(Task.CompletedTask);
+        var ctx = new CommandContext
+        {
+            Player = player,
+            Caller = callerProxy.Object,
+            Payload = new Dictionary<string, object?>
+            {
+                ["seatOrder"] = 0,
+                ["actionSeq"] = 901L,
+            },
+        };
+
+        var service = BuildService();
+        await service.ExtendActionTimeBankAsync(room, ctx);
+        await service.ExtendActionTimeBankAsync(room, ctx);
+
+        var prompt = Assert.IsType<PendingActionPrompt>(room.PendingActions[0]);
+        Assert.True(prompt.UsesTimeBank);
+        Assert.Equal(20_000, prompt.TimeBankMsAtIssue);
+        Assert.Equal(issuedAt.AddMilliseconds(22_000), prompt.DeadlineAt);
+        var packet = CommandTestHelper.ToDict(Assert.Single(callerSent));
+        Assert.Equal("MJPID_TIME_BANK_EXTENDED", ((JsonElement)packet["playType"]!).GetString());
+        Assert.Equal(901, ((JsonElement)packet["actionSeq"]!).GetInt64());
+        Assert.Equal(20_000, ((JsonElement)packet["timeBankMs"]!).GetInt32());
+        Assert.True(((JsonElement)packet["timeBankEnabled"]!).GetBoolean());
+    }
+
+    [Fact]
+    public async Task ExtendActionTimeBank_IgnoresTurnPrompt()
+    {
+        var room = new GameRoom { RoomId = 84 };
+        var player = new MajakPlayer { MemberNo = "p0", EngineOrder = 0 };
+        room.Engine.Player[0].Mode = PlayerMode.Turn;
+        room.KyokuTimeBankMs[0] = 20_000;
+        var prompt = new PendingActionPrompt
+        {
+            ActionSeq = 902,
+            SeatOrder = 0,
+            PlayerMode = PlayerMode.Turn,
+            IssuedAt = DateTimeOffset.UtcNow,
+            DeadlineAt = DateTimeOffset.UtcNow.AddSeconds(2),
+            BaseTimeMs = 2_000,
+        };
+        room.PendingActions[0] = prompt;
+        var callerProxy = new Mock<IClientProxy>(MockBehavior.Strict);
+        var ctx = new CommandContext
+        {
+            Player = player,
+            Caller = callerProxy.Object,
+            Payload = new Dictionary<string, object?>
+            {
+                ["seatOrder"] = 0,
+                ["actionSeq"] = 902L,
+            },
+        };
+
+        await BuildService().ExtendActionTimeBankAsync(room, ctx);
+
+        Assert.Same(prompt, room.PendingActions[0]);
+        Assert.False(prompt.UsesTimeBank);
+    }
+
+    [Theory]
+    [InlineData(1_500, 20_000)]
+    [InlineData(2_750, 19_250)]
+    [InlineData(22_000, 0)]
+    public void ConsumePromptTimeBank_ConsumesOnlyElapsedTimeBeyondBase(int elapsedMs, int expectedBankMs)
+    {
+        var room = new GameRoom();
+        room.KyokuTimeBankMs[0] = 20_000;
+        var issuedAt = DateTimeOffset.UtcNow;
+        var prompt = new PendingActionPrompt
+        {
+            ActionSeq = 903,
+            SeatOrder = 0,
+            PlayerMode = PlayerMode.Turn,
+            IssuedAt = issuedAt,
+            DeadlineAt = issuedAt.AddMilliseconds(22_000),
+            BaseTimeMs = 2_000,
+            TimeBankMsAtIssue = 20_000,
+            UsesTimeBank = true,
+        };
+        var method = typeof(GameLogicService)
+            .GetMethod("ConsumePromptTimeBank", BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        method.Invoke(null, new object[] { room, prompt, issuedAt.AddMilliseconds(elapsedMs) });
+
+        Assert.Equal(expectedBankMs, room.KyokuTimeBankMs[0]);
     }
 
     // シナリオ: Furo/Chan の pass-only 応答待ちはクライアント入力を出さずサーバー側で PAS 解決する

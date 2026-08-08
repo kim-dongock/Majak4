@@ -1,5 +1,5 @@
 /**
- * BuyHanCoinItemDlg — CMJBuyItemDlg 相当のキャッシュ購入確認ダイアログ (AP-09 §3-2-4)
+ * BuyHanCoinItemDlg — CMJBuyItemDlg 相当のMP購入確認ダイアログ (AP-09 §3-2-4)
  * レガシー: legacy/client/HgMajak2/MJBuyItemDlg.h/cpp
  *
  * ウィンドウ: MoveWindow(0,0,390,470) → 390×470px, CenterWindow(GetParent())
@@ -33,7 +33,7 @@
  */
 import { useRef, useEffect, useState } from 'react'
 import * as SignalR from '../../../api/signalr'
-import { showError, buyMajItemErrorMessage } from '../../../utils/msgbox'
+import { showError, showMessage, buyMajItemErrorMessage } from '../../../utils/msgbox'
 import HanCoinReceiptDlg from './HanCoinReceiptDlg'
 import LotSlotDlg from './LotSlotDlg'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
@@ -44,7 +44,7 @@ const SHOP_RECEIPT_BUY_BTN = `${IMG}/_ShopReceiptBuyBtn.png?v=opaque`
 const DIALOG_W = 390
 const DIALOG_H = 470
 
-/** キャッシュ購入アイテム情報 (CMajakShopItemData 相当) */
+/** MP購入アイテム情報 (CMajakShopItemData 相当) */
 export interface HanCoinShopItemData {
   itemCode: string
   sellCode: string
@@ -242,11 +242,11 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
   }
 
   /**
-  * OnBtnReceiptBuy() — キャッシュ追加購入
-  * 外部購入ページへ遷移
+  * OnBtnReceiptBuy() — MP追加購入
+  * 決済機能を接続するまでは準備中メッセージを表示する。
    */
   const handleBuy = () => {
-    window.open('https://coin.hangame.co.jp/', '_blank', 'noopener,noreferrer')
+    void showMessage('MP購入機能は準備中です。')
   }
 
   /**
@@ -275,7 +275,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
         description={item.description}
         imageUrl={item.imageUrl}
         costs={[{ label: '購入合計', value: yen(totalPrice) }]}
-        balances={[{ label: '購入後のキャッシュ', value: yen(receipt.coinAfter) }]}
+        balances={[{ label: '購入後のMP', value: yen(receipt.coinAfter) }]}
         complete
         onCancel={() => { onBuyOK?.(receipt.coinAfter); onClose() }}
       />
@@ -287,7 +287,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
       description={item.description}
       imageUrl={item.imageUrl}
       costs={[{ label: '単価', value: yen(item.price) }, { label: '購入合計', value: yen(totalPrice) }]}
-      balances={[{ label: '所持キャッシュ', value: yen(coinBalance) }, { label: '購入後のキャッシュ', value: yen(Math.max(0, coinBalance - totalPrice)) }]}
+      balances={[{ label: '所持MP', value: yen(coinBalance) }, { label: '購入後のMP', value: yen(Math.max(0, coinBalance - totalPrice)) }]}
       quantity={item.isLottery ? undefined : count}
       onQuantityChange={setCount}
       confirmDisabled={!yesEnabled}
@@ -492,7 +492,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
           frameW={123} frameH={20}
           x={260} y={370}
           onClick={handleBuy}
-            title="キャッシュ購入"
+            title="MP購入"
         />
 
         {/* ================================================================

@@ -156,7 +156,7 @@ export default function ResponsiveItemShopDlg({
 
           <nav className="responsive-shop__tabs" aria-label="ショップ分類">
             {([
-              ['cash', 'キャッシュ購入'],
+              ['cash', 'MP購入'],
               ['custom', 'カスタム'],
               ['item', '便利アイテム'],
               ['exchange', '龍珠交換'],
@@ -174,7 +174,7 @@ export default function ResponsiveItemShopDlg({
                   const bonus = Math.max(0, product.cashAmount - product.priceJpy)
                   return (
                     <article className="shop-card shop-card--cash" key={product.productId}>
-                      <span className="shop-card__tag">キャッシュ</span>
+                      <span className="shop-card__tag">MP</span>
                       <h3>{format(product.cashAmount, 'MP')}</h3>
                       {bonus > 0 && <p className="shop-card__bonus">+{format(bonus, 'MP ボーナス')}</p>}
                       <div className="shop-card__footer">
@@ -184,8 +184,8 @@ export default function ResponsiveItemShopDlg({
                     </article>
                   )
                 })}
-                {cashProducts.length === 0 && !cashLoadFailed && <p className="responsive-shop__empty">キャッシュ商品を読み込んでいます。</p>}
-                {cashLoadFailed && <p className="responsive-shop__empty">キャッシュ商品を読み込めませんでした。</p>}
+                {cashProducts.length === 0 && !cashLoadFailed && <p className="responsive-shop__empty">MP商品を読み込んでいます。</p>}
+                {cashLoadFailed && <p className="responsive-shop__empty">MP商品を読み込めませんでした。</p>}
               </div>
             )}
 
@@ -255,7 +255,7 @@ export default function ResponsiveItemShopDlg({
           <footer className="responsive-shop__footer">
             <div className="responsive-shop__balances" aria-label="所持残高">
               <span className="responsive-shop__balance-title">所持残高</span>
-              <span className="responsive-shop__balance responsive-shop__balance--cash"><i aria-hidden="true" /><span>キャッシュ</span><strong>{cashPrice(currentCash)}</strong></span>
+              <span className="responsive-shop__balance responsive-shop__balance--cash"><i aria-hidden="true" /><span>MP</span><strong>{cashPrice(currentCash)}</strong></span>
               <span className="responsive-shop__balance responsive-shop__balance--gem"><i aria-hidden="true" /><span>龍珠</span><strong>{format(currentGem, '個')}</strong></span>
               <span className="responsive-shop__balance responsive-shop__balance--money"><i aria-hidden="true" /><span>GP</span><strong>{moneyPrice(currentMoney)}</strong></span>
             </div>

@@ -15,6 +15,7 @@ public class MajakPlayer
     public string NickName     { get; set; } = "";
     public string AvatarId     { get; set; } = "";
     public string Sex          { get; set; } = "";
+    public int    Age          { get; set; }
     public string TabId        { get; set; } = "";
     public string ChannelId    { get; set; } = "";
     public int?   RoomId       { get; set; }

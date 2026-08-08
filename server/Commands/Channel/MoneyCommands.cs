@@ -29,7 +29,7 @@ public class MoneyReplenishmentCommand : ICommand
 
         var packet = new Dictionary<string, object>
         {
-            ["memberNo"]              = player.Pix,
+            ["memberNo"]              = player.MemberNo,
             ["pix"]                   = player.Pix,
             ["result"]               = ok ? "success" : "failure",
             ["rating"]               = player.Rating,                 // G::keyRating

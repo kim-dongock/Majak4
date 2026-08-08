@@ -7,6 +7,7 @@ public sealed class PlayerAccountEntity
     public string? Email { get; set; }
     public string? GoogleSub { get; set; }
     public string SexCode { get; set; } = "U";
+    public ushort? BirthYear { get; set; }
     public string AvatarId { get; set; } = string.Empty;
     public DateTime? TermsAgreedAt { get; set; }
     public DateTime? ApprovedAt { get; set; }

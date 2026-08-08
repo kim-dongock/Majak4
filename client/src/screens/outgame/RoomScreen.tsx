@@ -32,11 +32,22 @@ import PlayerInfoWnd, { type PlayerInfo as PlayerInfoDialogData } from './dialog
 import ViewerListWnd, { type ViewerEntry } from '../ingame/ViewerListWnd'
 import SlideAnnounce, { type SlideAnnounceData } from '../ingame/SlideAnnounce'
 import HanRes, { type HanResPlayer } from '../ingame/HanRes'
+import { LegacyKyoRes, type KyoResData } from '../ingame/KyoRes'
 import MiniChannelWnd from './MiniChannelWnd'
 import { getDefaultAvatarUrl, getGameAvatarUrl } from '../../utils/resources'
 import { configureMajakSound, playMajakChat, playMajakSid, SID_EXIT, SID_JOIN } from '../../utils/majakSound'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
+import {
+  GAME_AUTO_CONTROL_EVENT,
+  GAME_KYOKU_STARTED_EVENT,
+  GAME_LOCAL_REACH_EVENT,
+  enableAutoTapAfterReach,
+  resetAutoControlForNewKyoku,
+  shouldEnableAutoPassAtKyokuStart,
+  type AutoControlState,
+} from '../../game/autoControl'
 import { GAME_LOAD_PROGRESS_EVENT, GAME_LOAD_STEPS, type GameLoadStep } from '../../game/gameLoadProgress'
+import { finalizePaifuRecording } from '../../game/paifuRecording'
 import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyFullUiSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 
@@ -44,14 +55,13 @@ const IMG = '/assets/images/game'
 const CUSTOM_BOARD_DEFAULT = 100000
 const CMD_USE_EMOTICON = 'mjkc24e'
 const CMD_GAME_PLAY = 'playing'
-const ACT_PAS = 0
+const ACT_PAS = 1
 const KEY_EMOTICON_ID = 'mjkk63e'
 const KEY_EMOTICON_AVATAR_ID = 'mjkk64e'
 const EMOTICON_COUNT = 6
 const EMOTICON_FRAME_MS = 33
 const EMOTICON_LEGACY_IDS = [1, 3, 5, 7, 8, 11]
 const ABANDON_ROOM_STORAGE_KEY = 'majak:abandonRoomOnNextLobbyEnter'
-const GAME_AUTO_CONTROL_EVENT = 'majak:auto-control'
 const GAME_STATUS_EVENT = 'majak:game-status'
 const GAME_FOCUS_CHAT_EVENT = 'majak:game-focus-chat'
 const GAME_SYNC_EVENT = 'majak:game-sync'
@@ -91,13 +101,6 @@ function getDocumentNavigationType() {
   return entry?.type ?? ''
 }
 const MAX_ROOM_LOG_MESSAGES = 200
-
-type GameAutoControlState = {
-  prox: boolean
-  autoTap: boolean
-  autoPass: boolean
-  autoHora: boolean
-}
 
 type ActiveEmoticon = {
   id: string
@@ -774,8 +777,16 @@ export default function RoomScreen() {
   const [gameLoadComplete, setGameLoadComplete] = useState(false)
   const [hanResData, setHanResData] = useState<HanResPlayer[] | null>(null)
   const [hanResFlags, setHanResFlags] = useState({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
+  const [kyoResData, setKyoResData] = useState<KyoResData | null>(null)
+  const [kyoResultAction, setKyoResultAction] = useState<{
+    roomId: string
+    seatOrder: number
+    actionSeq?: number
+    localDeadlineAt?: number
+  } | null>(null)
   const [roomActionPending, setRoomActionPending] = useState(true)
-  const [autoControl, setAutoControl] = useState<GameAutoControlState>({ prox: false, autoTap: false, autoPass: false, autoHora: false })
+  const [autoControl, setAutoControl] = useState<AutoControlState>({ prox: false, autoTap: false, autoPass: false, autoHora: false })
+  const autoControlRef = useRef(autoControl)
   const [viewerHandHidden, setViewerHandHidden] = useState(false)
   const [hasChanceItem, setHasChanceItem] = useState(false)
   const [chanceReserved, setChanceReserved] = useState(false)
@@ -904,7 +915,11 @@ export default function RoomScreen() {
     setRoomActionPending(false)
     setIsReady(false)
     setPlayers(prev => prev.map(player => ({ ...player, ready: false })))
-    setAutoControl({ prox: false, autoTap: false, autoPass: false, autoHora: false })
+    const resetAutoControl = { prox: false, autoTap: false, autoPass: false, autoHora: false }
+    autoControlRef.current = resetAutoControl
+    setAutoControl(resetAutoControl)
+    setKyoResData(null)
+    setKyoResultAction(null)
     setMobileIngameChatOpen(false)
     setMobileIngameToolOpen(false)
   }
@@ -1040,11 +1055,13 @@ export default function RoomScreen() {
       mode: 'game',
       layoutMode: ingameLayoutMode,
       roomId: roomId ?? '',
+      roomName: roomTitle,
       myOdr: me?.pos,
       isViewer,
       players: playersRef.current as unknown as Array<Record<string, unknown>>,
       roomOption: currentRoomOption,
       inputConfig: { nSelPasKey: roomCfg.nSelPasKey },
+      recordPaifuMode: roomCfg.nChkREC,
       assistConfig: {
         bChkTap: roomCfg.bChkTap,
         bChkPai: roomCfg.bChkPai,
@@ -1545,7 +1562,15 @@ export default function RoomScreen() {
     const onRoomState = (_data: Record<string, unknown>) => {
       if (!mounted) return
       const action = String(_data.action ?? '')
-      if (action === 'game_ended') finishInlineGame('mjkroom game_ended')
+      if (action !== 'game_ended') return
+      finalizePaifuRecording({ roomName: roomTitle })
+      if (autoControlRef.current.prox) {
+        const myPix = useAuthStore.getState().player?.pix ?? ''
+        const seatPos = playersRef.current.find(player => player.playerId === myPix)?.pos
+        void exitRoomToLobby(seatPos)
+        return
+      }
+      finishInlineGame('mjkroom game_ended')
     }
     SignalR.on('mjkroom', onRoomState)
 
@@ -1563,7 +1588,19 @@ export default function RoomScreen() {
       }
       const myPix = useAuthStore.getState().player?.pix ?? ''
       const players = readHanResPlayers(data, myPix)
+      const shouldAutoExit = autoControlRef.current.prox
+      const seatPos = playersRef.current.find(player => player.playerId === myPix)?.pos
+      const myResult = players.find(player => player.isMe)
+      finalizePaifuRecording({
+        roomName: roomTitle,
+        result: myResult ? `${myResult.rank + 1}位` : '',
+        members: players.map(player => ({ name: player.name, result: `${player.rank + 1}位` })),
+      })
       finishInlineGame('c32e game report')
+      if (shouldAutoExit) {
+        void exitRoomToLobby(seatPos)
+        return
+      }
       setHanResFlags({
         hasTor: Boolean(data.hasTor),
         hasTip: Boolean(data.hasTip),
@@ -1576,6 +1613,18 @@ export default function RoomScreen() {
       setHanResData(players)
     }
     SignalR.on('c32e', onGameReport)
+
+    const onGamePlay = (data: Record<string, unknown>) => {
+      if (!mounted) return
+      if (data.playType === 'MJPID_INIHAN' || data.playType === 'MJPID_INIKYO') {
+        setKyoResData(null)
+        setKyoResultAction(null)
+        return
+      }
+      if (data.playType !== 'MJPID_ENDKYO' || !Array.isArray(data.players)) return
+      setKyoResData(data as unknown as KyoResData)
+    }
+    SignalR.on(CMD_GAME_PLAY, onGamePlay)
 
     /**
      * chat:relay (Cmd.HanChatRelay) — チャットメッセージ
@@ -2128,6 +2177,7 @@ export default function RoomScreen() {
       SignalR.off('c6e',              onMemberLeft)
       SignalR.off('mjkroom',             onRoomState)
       SignalR.off('c32e',             onGameReport)
+      SignalR.off(CMD_GAME_PLAY,      onGamePlay)
       SignalR.off('mjkc5e',              onAutoExitRoom)
       SignalR.off('hc1e',            onChat)
       SignalR.off(CMD_USE_EMOTICON,  onUseEmoticon)
@@ -2318,16 +2368,30 @@ export default function RoomScreen() {
       void exitRoomToLobby(undefined, true)
     }
   }
-  const dispatchAutoControl = (state: GameAutoControlState) => {
+  const dispatchAutoControl = (state: AutoControlState) => {
     window.dispatchEvent(new CustomEvent(GAME_AUTO_CONTROL_EVENT, { detail: state }))
   }
-  const updateAutoControl = (updater: (prev: GameAutoControlState) => GameAutoControlState) => {
+  const updateAutoControl = (updater: (prev: AutoControlState) => AutoControlState) => {
     setAutoControl(prev => {
       const next = updater(prev)
+      autoControlRef.current = next
       dispatchAutoControl(next)
       return next
     })
   }
+  useEffect(() => {
+    const onKyokuStarted = () => updateAutoControl(prev => resetAutoControlForNewKyoku(
+      prev,
+      shouldEnableAutoPassAtKyokuStart(roomCfg.nChkPAS, currentRoomOption),
+    ))
+    window.addEventListener(GAME_KYOKU_STARTED_EVENT, onKyokuStarted)
+    return () => window.removeEventListener(GAME_KYOKU_STARTED_EVENT, onKyokuStarted)
+  }, [currentRoomOption, roomCfg.nChkPAS])
+  useEffect(() => {
+    const onLocalReach = () => updateAutoControl(prev => enableAutoTapAfterReach(prev, roomCfg.bChkAUT))
+    window.addEventListener(GAME_LOCAL_REACH_EVENT, onLocalReach)
+    return () => window.removeEventListener(GAME_LOCAL_REACH_EVENT, onLocalReach)
+  }, [roomCfg.bChkAUT])
   const onSetProx = () => updateAutoControl(prev => {
     const prox = !prev.prox
     return { prox, autoTap: prox, autoPass: prox, autoHora: prox }
@@ -2350,20 +2414,36 @@ export default function RoomScreen() {
       if (inlineGameEndedRef.current) return
       if (isViewerUser) return
       const detail = (event as CustomEvent<{ roomId?: string; seatOrder?: number; actionSeq?: number; localDeadlineAt?: number }>).detail ?? {}
-      const localDeadlineAt = Number(detail.localDeadlineAt ?? 0)
-      if (localDeadlineAt > 0 && performance.now() >= localDeadlineAt) return
-      void SignalR.send(CMD_GAME_PLAY, {
-        playType: 'MJPID_ACTION',
+      setKyoResultAction({
         roomId: String(detail.roomId ?? roomId ?? ''),
         seatOrder: Number(detail.seatOrder ?? me?.pos ?? 0),
-        action: ACT_PAS,
-        bipaiIndex: [],
         actionSeq: Number(detail.actionSeq ?? 0) || undefined,
-      }).catch(() => {})
+        localDeadlineAt: Number(detail.localDeadlineAt ?? 0) || undefined,
+      })
     }
     window.addEventListener(KYO_RESULT_ACTION_EVENT, onKyoResultAction)
     return () => window.removeEventListener(KYO_RESULT_ACTION_EVENT, onKyoResultAction)
   }, [isViewerUser, me?.pos, roomId])
+  const sendKyoResultAction = async () => {
+    const request = kyoResultAction
+    setKyoResData(null)
+    setKyoResultAction(null)
+    if (!request) return
+    if (request.localDeadlineAt !== undefined && performance.now() >= request.localDeadlineAt) return
+    await SignalR.send(CMD_GAME_PLAY, {
+      playType: 'MJPID_ACTION',
+      roomId: request.roomId,
+      seatOrder: request.seatOrder,
+      action: ACT_PAS,
+      bipaiIndex: [],
+      actionSeq: request.actionSeq,
+    }).catch(() => {})
+  }
+  useEffect(() => {
+    if (!autoControl.prox || !kyoResData || !kyoResultAction) return
+    const timer = window.setTimeout(() => { void sendKyoResultAction() }, 3000)
+    return () => window.clearTimeout(timer)
+  }, [autoControl.prox, kyoResData, kyoResultAction])
   const onReserveChance = async () => {
     if (!chanceButtonSendAllowed || !hasChanceItem) return
     const reserveChance = !chanceReserved
@@ -2610,6 +2690,17 @@ export default function RoomScreen() {
       <div style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: '#000' }}>
         <div ref={inlineGameRef} style={{ position: 'absolute', left: 0, top: -31, width: GAME_WIDTH, height: GAME_HEIGHT }} />
         <GameReconnectLoading visible={!isMobileIngame && inlineGameLoading} currentStep={gameLoadStep} complete={gameLoadComplete} />
+
+        {kyoResData && !hanResData && (
+          <div style={{ position: 'absolute', left: 0, top: -31, width: GAME_WIDTH, height: GAME_HEIGHT, zIndex: 350 }}>
+            <LegacyKyoRes
+              data={kyoResData}
+              myOdr={kyoResData.players.find(player => player.pix === myPix)?.seatPos ?? 0}
+              canContinue={Boolean(kyoResultAction)}
+              onClose={() => { void sendKyoResultAction() }}
+            />
+          </div>
+        )}
 
         <div style={{ position: 'absolute', left: 0, top: 0, width: ROOM_W, height: ROOM_H, zIndex: 24, pointerEvents: 'none' }}>
           {activeEmoticons.map(item => <EmoticonAnimation key={item.id} item={item} now={emoticonNow} />)}

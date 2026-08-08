@@ -17,12 +17,10 @@ public static class GameConst
     public const long DefaultMoney        = 1000L;
     public const long DefaultMoneyNetCafe = 2000L;
     public const long AllinMoney          = 1000L;
-    public const long AllinMoney2Dan      = 2000L;
     public const long YakumanBonusMoney   = 200L;
 
     // オールイン
-    public const int AllinCountMax       = 1;
-    public const int AllinCountMaxNetCafe = 2;
+    public const int AllinCountMax = 1;
 
     // グレードモード
     public const int Grade2Dan           = 11;

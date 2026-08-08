@@ -68,6 +68,7 @@ public sealed class GameDataContext : DbContext
             entity.Property(x => x.Email).HasColumnName("email").HasMaxLength(254);
             entity.Property(x => x.GoogleSub).HasColumnName("google_sub").HasMaxLength(64);
             entity.Property(x => x.SexCode).HasColumnName("sex_code").HasMaxLength(1);
+            entity.Property(x => x.BirthYear).HasColumnName("birth_year");
             entity.Property(x => x.AvatarId).HasColumnName("avatar_id").HasMaxLength(255);
             entity.Property(x => x.TermsAgreedAt).HasColumnName("terms_agreed_at");
             entity.Property(x => x.ApprovedAt).HasColumnName("approved_at");

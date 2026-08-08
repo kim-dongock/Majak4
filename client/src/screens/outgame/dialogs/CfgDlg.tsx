@@ -53,6 +53,7 @@
  */
 import { useState } from 'react'
 import { GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig } from '../../../game/assistConfig'
+import { GAME_PAIFU_RECORDING_CONFIG_EVENT } from '../../../game/paifuRecording'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 // DU→px 変換 (9pt "MS UI Gothic" @96dpi: baseX=6px → 6/4=1.5, baseY=13px → 13/8=1.625)
@@ -129,6 +130,9 @@ export function saveMajakConfig(cfg: MJConfig): void {
   }
   window.dispatchEvent(new CustomEvent(GAME_ASSIST_CONFIG_EVENT, {
     detail: toGameAssistConfig(normalized),
+  }))
+  window.dispatchEvent(new CustomEvent(GAME_PAIFU_RECORDING_CONFIG_EVENT, {
+    detail: normalized.nChkREC,
   }))
 }
 

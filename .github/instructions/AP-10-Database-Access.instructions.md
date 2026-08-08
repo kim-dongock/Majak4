@@ -124,7 +124,7 @@ description: "MySQLゲームDB・ログDBのアクセス境界、Repository責�
 
 ## 8. レガシー参照の扱い
 
-`server/legacy/server/HMajDBObject.cpp`、`HMajLogDBObject.cpp`、旧プロシージャ定義は挙動確認用の
+`Majak4_legacy/server/server/HMajDBObject.cpp`、`HMajLogDBObject.cpp`、旧プロシージャ定義は挙動確認用の
 資料である。移植時は入力、出力、条件分岐、更新順、履歴項目を確認し、現行のMySQLテーブルと
 Repositoryへ対応付ける。レガシーDB名やプラットフォーム基盤テーブルを現行ランタイム依存として
 再導入してはならない。

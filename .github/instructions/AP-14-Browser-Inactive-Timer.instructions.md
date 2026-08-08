@@ -81,7 +81,11 @@ Web 版の `MJPID_ACTIONS` には、従来の UI 用情報に加えて以下を�
   timeLimit: number,
   actionSeq: number,
   serverNow: number,
-  deadlineAt: number
+  deadlineAt: number,
+  baseTimeMs: number,
+  keepTimeMs: number,
+  timeBankMs: number,
+  timeBankEnabled: boolean
 }
 ```
 
@@ -89,6 +93,23 @@ Web 版の `MJPID_ACTIONS` には、従来の UI 用情報に加えて以下を�
 - `serverNow`: サーバーの現在時刻 (Unix epoch milliseconds)。
 - `deadlineAt`: この入力要求の締切時刻 (Unix epoch milliseconds)。
 - `timeLimit`: 表示用の秒数。判定には `deadlineAt` を使う。
+- `baseTimeMs`: 手番または鳴き応答ごとの基本時間。`keepTimeMs` を内包する。
+- `keepTimeMs`: 基本時間の先頭にある共通待機時間。
+- `timeBankMs`: prompt 発行時点の局持ち時間残量。
+- `timeBankEnabled`: この prompt の deadline が局持ち時間を含むか。`Turn` は最初から `true`、`Furo` / `Chan` は明示的な拡張操作後だけ `true`。
+
+`Furo` / `Chan` で局持ち時間を使う場合、クライアントは期限前に次を送る。
+
+```ts
+{
+  playType: "MJPID_EXTEND_TIME_BANK",
+  roomId: string | number,
+  seatOrder: number,
+  actionSeq: number
+}
+```
+
+サーバーは送信者の engine order、現在の `actionSeq`、`Furo` / `Chan` mode、未拡張であることを検証し、同じ prompt の deadline を延長して `MJPID_TIME_BANK_EXTENDED` を返す。クライアントは返された `deadlineAt - serverNow` を新しい monotonic local deadline に変換する。
 
 ### 3-2. サーバー側 pending state
 
@@ -207,9 +228,9 @@ currentActionSeatOrder = null
 
 - `RoomScreen.exitRoomToLobby` は `c9e` 送信に失敗したら `sessionStorage` に `{ channelId, roomId }` を保存する。
 - `LobbyScreen` は次回 `c1e` (`EnterChannel`) payload に `abandonPreviousRoom=true` と `abandonRoomId` を含める。
-- `EnterChannelCommand` は、該当 room が同一 channel の Playing room で、同一 memberId の座席を持つ場合だけ abandon を許可する。
+- `EnterChannelCommand` は、該当roomが同一channelのPlaying roomで、JWT本人と同じ内部 `member_no` の座席を持つ場合だけabandonを許可する。
 - abandon 時、サーバーは座席を削除せず `IsOutPlayer=true` とし、古い connection/member mapping を外してロビー入場を許可する。`USER_MULTI_LOGIN` を返してタイトルへ戻してはならない。
-- abandon 指定がない場合、同一 memberId が active player として残っていれば従来通り duplicate login として扱う。`IsOutPlayer=true` の同一 memberId は復帰対象である。
+- abandon指定がない場合、同じ内部 `member_no` のactive playerが残っていれば従来通りduplicate loginとして扱う。`IsOutPlayer=true` の同一人物は復帰対象である。
 
 ### 5-3. snapshot の構成
 
@@ -229,7 +250,7 @@ snapshot は受信者の公開範囲に合わせて構築する。
     renChanCnt: number,
     players: Array<{
       seatOrder: number,
-      memberId: string,
+      memberId: string, // 互換フィールド名。値は公開セッションID pix
       score: number,
       handCount: number,
       discards: unknown[],
@@ -288,7 +309,7 @@ snapshot は受信者の公開範囲に合わせて構築する。
 - `GamePlayCommand.ExecuteAsync` から engine 処理へ入る前に `actionSeq` / deadline / current mode を検証する。
 - timeout task は `ProxyPlayAsync` と同じ既定アクション経路で処理する。
 - 復帰 snapshot API または SignalR hub method を追加し、受信者別公開範囲で `PaiInfo` / `history` / `currentPrompt` を返す。
-- `PlayerSessionService.Remove(connectionId)` は、削除対象 connectionId が現在の member mapping と一致する場合だけ `memberId -> connectionId` を削除する。古い切断イベントが新しい接続を消す race を作ってはならない。
+- `PlayerSessionService.Remove(connectionId)` は、削除対象connectionIdが現在のmember mappingと一致する場合だけ内部 `member_no -> connectionId` を削除する。古い切断イベントが新しい接続を消すraceを作ってはならない。
 - `PlayerSessionService.DisconnectFromRoom` は対局中プレイヤーの座席/`RoomId` を保持し、古い connection mapping だけを切り離す。復帰は元座席へ戻す。
 
 ### client

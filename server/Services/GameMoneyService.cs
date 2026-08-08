@@ -76,14 +76,7 @@ public class GameMoneyService
     }
 
     /// <summary>
-    /// オールイン (MoneyReplenishment) 処理
-    /// — ProcessCommand_MoneyReplenishment 移植
-    ///
-    /// 原典ロジック:
-    ///   allInMoney = (GradeLevel >= GRADE_2_DAN) ? 2000 : 1000
-    ///   if (GamMoney >= allInMoney) → 補充不要 (bResult=false)
-    ///   llAllinMoney = allInMoney - GamMoney  ← ★ 差分のみ補充
-    ///   GamMoney += llAllinMoney              ← 目標額ピッタリになる
+    /// 無料GP補充。公式Webマニュアル 5_3 に従い、1日1回、1,000 GP未満を1,000 GPまで補充する。
     /// </summary>
     public async Task<(bool Ok, long NewMoney, long LentMoney, int RestAllIn, int ReplenishmentType)>
         ReplenishAsync(MajakPlayer player, int repType)
@@ -92,16 +85,11 @@ public class GameMoneyService
         int originalAllinCnt = player.AllinCnt;
         DateTime? originalLastAllinDt = player.LastAllinDt;
 
-        UpdateAllInInfo(player);
+        DateTime currentTime = DateTime.Now;
+        RefreshReplenishmentDay(player, currentTime);
 
-        // 原典: allInMoney = GradeLevel >= GRADE_2_DAN ? ALLINMONEY_OVER_2_DAN : ALLINMONEY
-        long allinTarget = player.GradeRecord.Grade >= GameConst.Grade2Dan
-            ? GameConst.AllinMoney2Dan
-            : GameConst.AllinMoney;
-
-        int maxCount = player.IsNetCafeIp
-            ? GameConst.AllinCountMaxNetCafe
-            : GameConst.AllinCountMax;
+        long allinTarget = GameConst.AllinMoney;
+        int maxCount = GameConst.AllinCountMax;
 
         int restAllIn = Math.Max(0, maxCount - player.AllinCnt);
 
@@ -121,7 +109,7 @@ public class GameMoneyService
 
         player.GamMoney  = allinTarget;   // 目標額ピッタリにする
         player.AllinCnt++;
-        player.LastAllinDt = DateTime.Now;
+        player.LastAllinDt = currentTime;
 
         _ratingService.UpdatePlayerLevel(player);
 
@@ -157,9 +145,8 @@ public class GameMoneyService
         return (true, player.GamMoney, 0L, restAllIn, 2);
     }
 
-    private static void UpdateAllInInfo(MajakPlayer player)
+    public static void RefreshReplenishmentDay(MajakPlayer player, DateTime currentTime)
     {
-        DateTime currentTime = DateTime.Now;
         DateTime nowTime = currentTime.AddHours(-6);
         DateTime? lastAllin = player.LastAllinDt?.AddHours(-6);
         if (lastAllin == null || lastAllin.Value.Date != nowTime.Date)

@@ -10,6 +10,7 @@ CREATE TABLE player_account (
     email              VARCHAR(254) NULL,
     google_sub         VARCHAR(64)  NULL,
     sex_code           CHAR(1)      NOT NULL DEFAULT 'U',
+    birth_year         SMALLINT UNSIGNED NULL,
     avatar_id          VARCHAR(255) NOT NULL DEFAULT '',
     terms_agreed_at    DATETIME(3)  NULL,
     approved_at        DATETIME(3)  NULL,

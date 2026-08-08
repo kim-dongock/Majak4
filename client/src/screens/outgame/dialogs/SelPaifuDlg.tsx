@@ -9,6 +9,7 @@
  * OnDblclkPaifulist(): OnOK()
  */
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { loadLastUsedPaifuFileName, saveLastUsedPaifuFileName } from '../../../game/paifuRecording'
 
 const IMG = '/assets/images/game'
 const FONT = 'var(--majak-font-family-ui)'
@@ -130,7 +131,7 @@ export default function SelPaifuDlg({ entries = EMPTY_PAIFU_ENTRIES, onSelect, o
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [sortKey, setSortKey] = useState<SortKey>('date')
   const [applyEnabled, setApplyEnabled] = useState(false)
-  const [fileName, setFileName] = useState('Majak2Paifu.txt')
+  const [fileName, setFileName] = useState(() => loadLastUsedPaifuFileName())
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [memberFilter, setMemberFilter] = useState('')
@@ -189,7 +190,6 @@ export default function SelPaifuDlg({ entries = EMPTY_PAIFU_ENTRIES, onSelect, o
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    setFileName(file.name)
     setSelectedId(null)
     file.text().then(text => {
       const firstBreak = text.search(/\r?\n/)
@@ -214,6 +214,8 @@ export default function SelPaifuDlg({ entries = EMPTY_PAIFU_ENTRIES, onSelect, o
         option: '',
         data,
       }
+      setFileName(file.name)
+      saveLastUsedPaifuFileName(file.name)
       setLocalEntries([loadedEntry])
       setApplyEnabled(false)
     }).catch(() => {

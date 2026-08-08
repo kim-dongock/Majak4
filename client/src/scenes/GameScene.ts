@@ -30,10 +30,28 @@ import * as SignalR from '../api/signalr'
 import type { CreateGameOptions } from '../game/GameInstance'
 import { DEFAULT_GAME_ASSIST_CONFIG, GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig, type GameAssistConfig } from '../game/assistConfig'
 import { assistTileMask, decideDiscardSource, decideTouchTileAction, waitGuideWorldY } from '../game/assistLogic'
-import { resolveAutoControlAction } from '../game/autoControl'
+import {
+  GAME_AUTO_PASS_HOLD_EVENT,
+  GAME_AUTO_CONTROL_EVENT,
+  GAME_KYOKU_STARTED_EVENT,
+  GAME_LOCAL_REACH_EVENT,
+  getAutoControlDelayMs,
+  resolveAutoControlAction,
+  shouldSuspendAutoPassForPrompt,
+  type AutoControlState,
+} from '../game/autoControl'
 import { emitGameLoadProgress } from '../game/gameLoadProgress'
 import { DESKTOP_INGAME_LAYOUT, getIngameLayout, type IngameLayoutMode } from '../game/ingameLayout'
 import { MOBILE_PLAYFIELD_OFFSET_Y, mobileCenterHudOffset, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey } from '../game/mobileIngameViewport'
+import {
+  beginPaifuRecording,
+  cancelPaifuRecording,
+  GAME_PAIFU_RECORDING_CONFIG_EVENT,
+  interruptPaifuRecording,
+  recordPaifuPacket,
+  replaceRecordedPaifuPackets,
+  setPaifuRecordingMode,
+} from '../game/paifuRecording'
 import { useAuthStore } from '../store/authStore'
 import { getDefaultAvatarUrl, getGameAvatarUrl } from '../utils/resources'
 import { getUiFontFamily, getUiFontSize } from '../utils/typography'
@@ -50,7 +68,6 @@ const DEBUG_GAME = import.meta.env.VITE_DEBUG_GAME === '1'
 const ASK_END_SET_EVENT = 'majak:ask-end-set'
 const KYO_RESULT_ACTION_EVENT = 'majak:kyo-result-action'
 const GAME_FOCUS_CHAT_EVENT = 'majak:game-focus-chat'
-const GAME_AUTO_CONTROL_EVENT = 'majak:auto-control'
 const GAME_STATUS_EVENT = 'majak:game-status'
 const GAME_SYNC_EVENT = 'majak:game-sync'
 const GAME_FLOW_TRACE_PREFIX = '[GameFlow]'
@@ -65,13 +82,6 @@ const CUSTOM_ITEM_TYPE_BG_TENGOKU = 12
 const CUSTOM_DEFAULT_ID_COSTUME = 100011
 const AVAILABLE_COSTUME_IDS = new Set([9, 10, 11])
 const TIME_WARNING_START_MS = 5000
-
-type GameAutoControlState = {
-  prox: boolean
-  autoTap: boolean
-  autoPass: boolean
-  autoHora: boolean
-}
 
 /* ========================================================================
  * 定数
@@ -639,6 +649,10 @@ interface ActionPromptState {
   seatOrder: number
   playerMode: string
   promptSerial: number
+  baseTimeMs: number
+  keepTimeMs: number
+  timeBankMs: number
+  timeBankEnabled: boolean
 }
 
 interface MeldTileState {
@@ -829,6 +843,8 @@ export default class GameScene extends Phaser.Scene {
   private gameResyncHistoryApplied = false
   private pendingAction: { seatOrder: number; action: number; actionSeq?: number } | null = null
   private currentActionPrompt: ActionPromptState | null = null
+  private timeBankExtensionInFlight = false
+  private kyokuTimeFullMs = 0
   private keyboardActionIndex = -1
   private keyboardHandler?: (event: KeyboardEvent) => void
   private contextMenuHandler?: (event: MouseEvent) => void
@@ -871,8 +887,14 @@ export default class GameScene extends Phaser.Scene {
   private replayHandOpenHandler?: EventListener
   private replayGraphHandler?: EventListener
   private autoControlHandler?: EventListener
+  private autoPassHoldHandler?: EventListener
   private assistConfigHandler?: EventListener
-  private autoControl: GameAutoControlState = { prox: false, autoTap: false, autoPass: false, autoHora: false }
+  private paifuConfigHandler?: EventListener
+  private paifuConnectionLostHandler?: () => void
+  private paifuRecordMode = 0
+  private paifuRoomName = ''
+  private paifuNeedsReconnectSeed = false
+  private autoControl: AutoControlState = { prox: false, autoTap: false, autoPass: false, autoHora: false }
   private inputConfig = { nSelPasKey: 0 }
   private assistConfig: GameAssistConfig = { ...DEFAULT_GAME_ASSIST_CONFIG }
   private customBgId = 0
@@ -924,6 +946,7 @@ export default class GameScene extends Phaser.Scene {
     this.layoutMode = data.layoutMode ?? 'desktop'
     applyIngameLayout(this.layoutMode)
     this.roomId = data.roomId ?? ''
+    this.paifuRoomName = data.roomName ?? this.roomId
     this.myOdr  = data.myOdr  ?? 0
     this.roomPosToOdr = [0, 1, 2, 3]
     this.memberOdrById.clear()
@@ -947,6 +970,8 @@ export default class GameScene extends Phaser.Scene {
     this.gameResyncHistoryApplied = false
     this.inputConfig = { nSelPasKey: data.inputConfig?.nSelPasKey === 1 ? 1 : 0 }
     this.assistConfig = toGameAssistConfig(data.assistConfig)
+    this.paifuRecordMode = Number(data.recordPaifuMode ?? 0)
+    this.paifuNeedsReconnectSeed = false
     if (DEBUG_GAME) console.info('[GameScene] init', {
       roomId: this.roomId,
       myOdr: this.myOdr,
@@ -959,6 +984,16 @@ export default class GameScene extends Phaser.Scene {
       data.players.forEach(player => this.mergePlayerInfo(player))
     }
     this.paifuGraphRound.roomOption = data.roomOption ?? this.paifuGraphRound.roomOption
+    if (!this.isReplay) {
+      beginPaifuRecording({
+        mode: this.paifuRecordMode,
+        isViewer: this.isViewer,
+        roomId: this.roomId,
+        roomName: this.paifuRoomName,
+        roomOption: this.paifuGraphRound.roomOption,
+        members: this.players.map(player => ({ name: player.name })),
+      })
+    }
   }
 
   create() {
@@ -1018,6 +1053,7 @@ export default class GameScene extends Phaser.Scene {
     this.setupReplayControlEvents()
     this.setupAutoControlEvents()
     this.setupAssistConfigEvents()
+    this.setupPaifuRecordingEvents()
     this.setupKeyboardEvents()
     this.setupContextMenuEvents()
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onScenePointerDown, this)
@@ -1032,6 +1068,7 @@ export default class GameScene extends Phaser.Scene {
     this.teardownReplayControlEvents()
     this.teardownAutoControlEvents()
     this.teardownAssistConfigEvents()
+    this.teardownPaifuRecordingEvents()
     this.teardownKeyboardEvents()
     this.teardownContextMenuEvents()
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onScenePointerDown, this)
@@ -1039,6 +1076,7 @@ export default class GameScene extends Phaser.Scene {
     this.boardMaskGraphics?.destroy()
     this.boardMaskGraphics = undefined
     this.boardMask = undefined
+    if (!this.isReplay) cancelPaifuRecording()
   }
 
   private createBoardMask() {
@@ -1118,6 +1156,7 @@ export default class GameScene extends Phaser.Scene {
         }
         return
       }
+      if (!this.isReplayApplyingHistory && !isResyncSnapshot) recordPaifuPacket('smmc4e', data)
       const openPos = Number(data.openPos ?? this.myOdr)
       const isPlayerOpenPos = openPos >= 0 && (openPos < this.players.length || openPos === VIEWER_OPEN_POS)
       const isInit = Boolean(data.bInit ?? data.init)
@@ -1217,6 +1256,7 @@ export default class GameScene extends Phaser.Scene {
     const handleGamePlay: SignalR.MessageHandler = data => {
       if (!this.canHandleSignalR()) return
       const playType = String(data.playType ?? '')
+      if (!this.isReplayApplyingHistory) recordPaifuPacket('playing', data)
       this.traceGameFlow('rx playing', {
         playType,
         seatOrder: data.seatOrder,
@@ -1268,7 +1308,9 @@ export default class GameScene extends Phaser.Scene {
         return
       }
       if (isInitKyokuPacket) {
+        if (!this.isReplay) window.dispatchEvent(new Event(GAME_KYOKU_STARTED_EVENT))
         this.clearLiveActionState('init kyoku')
+        this.kyokuTimeFullMs = Math.max(0, Number(data.timeFullMs ?? 0))
         const kyokuCnt = Number(data.kyokuCnt ?? 0)
         const oyaOrder = ((this.chicha + kyokuCnt) % this.players.length + this.players.length) % this.players.length
         const dice = Array.isArray(data.dice) ? data.dice.map(Number) : []
@@ -1344,6 +1386,32 @@ export default class GameScene extends Phaser.Scene {
         return
       }
 
+      if (playType === 'MJPID_TIME_BANK_EXTENDED') {
+        const prompt = this.currentActionPrompt
+        const actionSeq = Number(data.actionSeq ?? 0)
+        const seatOrder = Number(data.seatOrder ?? -1)
+        if (!prompt || prompt.actionSeq !== actionSeq || prompt.seatOrder !== seatOrder) return
+        const serverNow = Number(data.serverNow ?? 0)
+        const deadlineAt = Number(data.deadlineAt ?? 0)
+        const remainingMs = Math.max(0, deadlineAt - serverNow)
+        if (!Number.isFinite(remainingMs) || remainingMs <= 0) return
+
+        this.timeBankExtensionInFlight = false
+        this.currentActionPrompt = {
+          ...prompt,
+          deadlineAt,
+          localDeadlineAt: performance.now() + remainingMs,
+          baseTimeMs: Math.max(0, Number(data.baseTimeMs ?? prompt.baseTimeMs)),
+          keepTimeMs: Math.max(0, Number(data.keepTimeMs ?? prompt.keepTimeMs)),
+          timeBankMs: Math.max(0, Number(data.timeBankMs ?? prompt.timeBankMs)),
+          timeBankEnabled: true,
+        }
+        this.clearTimeWarningTimers()
+        this.scheduleTimeWarnings(remainingMs, prompt.promptSerial)
+        this.emitToUiScene('actionPromptStart', this.buildActionPromptTimerPayload(remainingMs))
+        return
+      }
+
       const actionOffers = this.extractActionOffers(data)
       if (playType === 'MJPID_ACTIONS') {
         const seatOrder = Number(data.seatOrder ?? this.myOdr)
@@ -1357,6 +1425,10 @@ export default class GameScene extends Phaser.Scene {
           ? Math.max(0, deadlineAt - serverNow)
           : timeLimitMs
         const playerMode = String(data.playerMode ?? '')
+        const baseTimeMs = Math.max(0, Number(data.baseTimeMs ?? timeLimitMs))
+        const keepTimeMs = Math.max(0, Number(data.keepTimeMs ?? 0))
+        const timeBankMs = Math.max(0, Number(data.timeBankMs ?? 0))
+        const timeBankEnabled = Boolean(data.timeBankEnabled)
         const isRepeatedCurrentPrompt = isForLocalPlayer
           && this.currentActionPrompt !== null
           && Number.isFinite(actionSeq)
@@ -1379,7 +1451,18 @@ export default class GameScene extends Phaser.Scene {
         if (isForLocalPlayer) this.actionPromptSerial++
         const actionPromptSerial = this.actionPromptSerial
         this.currentActionPrompt = isForLocalPlayer && Number.isFinite(actionSeq) && actionSeq > 0 && remainingMs > 0
-          ? { actionSeq, deadlineAt, localDeadlineAt: performance.now() + remainingMs, seatOrder, playerMode, promptSerial: actionPromptSerial }
+          ? {
+              actionSeq,
+              deadlineAt,
+              localDeadlineAt: performance.now() + remainingMs,
+              seatOrder,
+              playerMode,
+              promptSerial: actionPromptSerial,
+              baseTimeMs,
+              keepTimeMs,
+              timeBankMs,
+              timeBankEnabled,
+            }
           : null
         this.clearTimeWarningTimers()
         this.currentActionSeatOrder = isForLocalPlayer ? seatOrder : null
@@ -1408,10 +1491,7 @@ export default class GameScene extends Phaser.Scene {
         if (isForLocalPlayer && remainingMs > 0 && hasInputWarningMode && !this.shouldSuppressLivePlayback()) this.scheduleTimeWarnings(remainingMs, actionPromptSerial)
         const shouldStartActionPromptTimer = isForLocalPlayer && remainingMs > 0 && hasInputWarningMode
         if (shouldStartActionPromptTimer && !isTurnMode) {
-          this.emitToUiScene('actionPromptStart', {
-            timeLimit: remainingMs,
-            viewOdr: this.myOdr,
-          })
+          this.emitToUiScene('actionPromptStart', this.buildActionPromptTimerPayload(remainingMs))
         }
         if (DEBUG_GAME) console.info('[GameScene] MJPID_ACTIONS resolved', {
           seatOrder,
@@ -1475,10 +1555,7 @@ export default class GameScene extends Phaser.Scene {
             viewOdr: this.myOdr,
           })
           if (shouldStartActionPromptTimer) {
-            this.emitToUiScene('actionPromptStart', {
-              timeLimit: remainingMs,
-              viewOdr: this.myOdr,
-            })
+            this.emitToUiScene('actionPromptStart', this.buildActionPromptTimerPayload(remainingMs))
           }
         }
         if (actionOffers.length > 0 && this.isLocalPlayerOdr(this.currentActionSeatOrder)) {
@@ -1562,6 +1639,18 @@ export default class GameScene extends Phaser.Scene {
           this.logResyncProbe('history ignored: no packets', { dataKeys: isRecord(data) ? Object.keys(data) : [] })
           return
         }
+        if (this.paifuNeedsReconnectSeed) {
+          beginPaifuRecording({
+            mode: this.paifuRecordMode,
+            isViewer: this.isViewer,
+            roomId: this.roomId,
+            roomName: this.paifuRoomName,
+            roomOption: this.paifuGraphRound.roomOption,
+            members: this.players.map(player => ({ name: player.name })),
+          })
+          this.paifuNeedsReconnectSeed = false
+        }
+        replaceRecordedPaifuPackets(packets)
         const pendingSeedInitPaiInfo = this.findPendingSeedInitPaiInfo()
         if (!this.canApplyLiveHistoryPackets(packets, pendingSeedInitPaiInfo)) {
           this.logResyncProbe('history ignored: incomplete init sequence', { packetCount: packets.length })
@@ -1983,7 +2072,7 @@ export default class GameScene extends Phaser.Scene {
     this.teardownAutoControlEvents()
     if (this.isReplay) return
     this.autoControlHandler = (event: Event) => {
-      const detail = (event as CustomEvent<Partial<GameAutoControlState>>).detail ?? {}
+      const detail = (event as CustomEvent<Partial<AutoControlState>>).detail ?? {}
       const previous = this.autoControl
       this.autoControl = {
         prox: Boolean(detail.prox),
@@ -2004,12 +2093,19 @@ export default class GameScene extends Phaser.Scene {
       }
     }
     window.addEventListener(GAME_AUTO_CONTROL_EVENT, this.autoControlHandler)
+    this.autoPassHoldHandler = () => this.suspendAutoPassForCurrentPrompt()
+    window.addEventListener(GAME_AUTO_PASS_HOLD_EVENT, this.autoPassHoldHandler)
   }
 
   private teardownAutoControlEvents() {
-    if (!this.autoControlHandler) return
-    window.removeEventListener(GAME_AUTO_CONTROL_EVENT, this.autoControlHandler)
-    this.autoControlHandler = undefined
+    if (this.autoControlHandler) {
+      window.removeEventListener(GAME_AUTO_CONTROL_EVENT, this.autoControlHandler)
+      this.autoControlHandler = undefined
+    }
+    if (this.autoPassHoldHandler) {
+      window.removeEventListener(GAME_AUTO_PASS_HOLD_EVENT, this.autoPassHoldHandler)
+      this.autoPassHoldHandler = undefined
+    }
   }
 
   private setupAssistConfigEvents() {
@@ -2030,6 +2126,32 @@ export default class GameScene extends Phaser.Scene {
     if (!this.assistConfigHandler) return
     window.removeEventListener(GAME_ASSIST_CONFIG_EVENT, this.assistConfigHandler)
     this.assistConfigHandler = undefined
+  }
+
+  private setupPaifuRecordingEvents() {
+    this.teardownPaifuRecordingEvents()
+    if (this.isReplay) return
+    this.paifuConfigHandler = ((event: CustomEvent<number>) => {
+      this.paifuRecordMode = Number(event.detail ?? 0)
+      setPaifuRecordingMode(this.paifuRecordMode, this.isViewer)
+    }) as EventListener
+    window.addEventListener(GAME_PAIFU_RECORDING_CONFIG_EVENT, this.paifuConfigHandler)
+    this.paifuConnectionLostHandler = () => {
+      interruptPaifuRecording()
+      this.paifuNeedsReconnectSeed = true
+    }
+    SignalR.onConnectionLost(this.paifuConnectionLostHandler)
+  }
+
+  private teardownPaifuRecordingEvents() {
+    if (this.paifuConfigHandler) {
+      window.removeEventListener(GAME_PAIFU_RECORDING_CONFIG_EVENT, this.paifuConfigHandler)
+      this.paifuConfigHandler = undefined
+    }
+    if (this.paifuConnectionLostHandler) {
+      SignalR.offConnectionLost(this.paifuConnectionLostHandler)
+      this.paifuConnectionLostHandler = undefined
+    }
   }
 
   private resolveSkinTextureKey(key: string): string {
@@ -3099,7 +3221,11 @@ export default class GameScene extends Phaser.Scene {
         break
       case 'ArrowDown':
       case 'Numpad2':
-        if (this.moveKeyboardActionSelection(1)) event.preventDefault()
+        {
+          const heldAutoPass = this.suspendAutoPassForCurrentPrompt()
+          const movedSelection = this.moveKeyboardActionSelection(1)
+          if (heldAutoPass || movedSelection) event.preventDefault()
+        }
         break
       case 'ArrowUp':
       case 'Numpad8':
@@ -3517,14 +3643,60 @@ export default class GameScene extends Phaser.Scene {
   private scheduleAutoControl(acts: string[], promptSerial = this.actionPromptSerial) {
     this.clearAutoControlTimer()
     if (this.isReplay) return
-    if (!resolveAutoControlAction(this.autoControl, acts)) return
-    this.autoControlTimer = this.time.delayedCall(50, () => {
+    const autoAction = resolveAutoControlAction(this.autoControl, acts)
+    if (!autoAction) return
+    const delayMs = getAutoControlDelayMs(autoAction, this.paifuGraphRound.roomOption)
+    this.autoControlTimer = this.time.delayedCall(delayMs, () => {
       if (promptSerial !== this.actionPromptSerial) return
       if (!this.isLocalPlayerOdr(this.currentActionSeatOrder)) return
       if (!this.canSendCurrentPrompt('auto control')) return
       if (!resolveAutoControlAction(this.autoControl, acts)) return
       this.applyAutoControl(acts)
     })
+  }
+
+  private suspendAutoPassForCurrentPrompt() {
+    const isTurnMode = this.currentActionPrompt?.playerMode === 'Turn' || this.canDiscardOnTileClick
+    const heldAutoPass = shouldSuspendAutoPassForPrompt(this.autoControl, this.currentActionOffers, isTurnMode)
+    if (heldAutoPass) this.clearAutoControlTimer()
+    const requestedTimeBank = this.requestTimeBankForCurrentPrompt()
+    return heldAutoPass || requestedTimeBank
+  }
+
+  private requestTimeBankForCurrentPrompt() {
+    const prompt = this.currentActionPrompt
+    if (!prompt || this.timeBankExtensionInFlight || prompt.timeBankEnabled || prompt.timeBankMs <= 0) return false
+    if (prompt.playerMode !== 'Furo' && prompt.playerMode !== 'Chan') return false
+    if (performance.now() >= prompt.localDeadlineAt) {
+      this.expireCurrentActionPrompt('time bank extension expired')
+      return false
+    }
+
+    this.timeBankExtensionInFlight = true
+    void SignalR.send('playing', {
+      playType: 'MJPID_EXTEND_TIME_BANK',
+      roomId: this.roomId,
+      seatOrder: prompt.seatOrder,
+      actionSeq: prompt.actionSeq,
+    }).catch(error => {
+      this.timeBankExtensionInFlight = false
+      if (this.isConnectionSendError(error)) this.expireCurrentActionPrompt('time bank extension connection lost')
+      else console.error('[GameScene] time bank extension failed', error)
+    })
+    return true
+  }
+
+  private buildActionPromptTimerPayload(remainingMs: number) {
+    const prompt = this.currentActionPrompt
+    return {
+      timeLimit: remainingMs,
+      baseTimeMs: prompt?.baseTimeMs ?? remainingMs,
+      keepTimeMs: prompt?.keepTimeMs ?? 0,
+      timeBankMs: prompt?.timeBankMs ?? 0,
+      timeBankEnabled: prompt?.timeBankEnabled ?? false,
+      maxTimeMs: this.kyokuTimeFullMs,
+      viewOdr: this.myOdr,
+    }
   }
 
   private scheduleAutoDiscard(timeLimitSeconds: number, promptSerial = this.actionPromptSerial) {
@@ -3617,6 +3789,7 @@ export default class GameScene extends Phaser.Scene {
     this.currentActionOffers = []
     this.currentActionSeatOrder = null
     this.currentActionPrompt = null
+    this.timeBankExtensionInFlight = false
     this.canDiscardOnTileClick = false
     this.selectedIdx = -1
     this.clearTenpaiMarkers()
@@ -3675,6 +3848,7 @@ export default class GameScene extends Phaser.Scene {
     this.actionSendInFlight = false
     this.pendingAction = null
     this.currentActionPrompt = null
+    this.timeBankExtensionInFlight = false
     this.currentActionSeatOrder = null
     this.canDiscardOnTileClick = false
     this.selectedIdx = -1
@@ -4069,6 +4243,7 @@ export default class GameScene extends Phaser.Scene {
     if (action === Act.Ric) {
       this.players[odr].isReach = true
       this.emitToUiScene('reach', { odr, viewOdr: this.myOdr })
+      if (!this.isReplay && this.isLocalPlayerOdr(odr)) window.dispatchEvent(new Event(GAME_LOCAL_REACH_EVENT))
       if (!suppressLivePlayback && materializedDiscard) {
         this.playReachBgm()
         playMajakSid(SID_RICSTK, this.soundSkinOptions())

@@ -10,11 +10,13 @@ namespace MajakServer.Services;
 /// </summary>
 public class TitleService
 {
+    public sealed record CollectionTitle(string TitleId, string TitleName, bool IsEquipped);
+
     private readonly PlayerRepository  _playerRepo;
     private readonly MasterCacheService _masterCache;
 
-    // 起動時インプロセスキャッシュ (Redis 未接続時のフォールバック)
-    private Dictionary<string, string> _titleCache = new();
+    // TitleService は scoped のため、起動時にロードしたスナップショットを全 scope で共有する。
+    private static IReadOnlyDictionary<string, string> _titleCache = new Dictionary<string, string>();
 
     public TitleService(PlayerRepository playerRepo, MasterCacheService masterCache)
     {
@@ -42,6 +44,60 @@ public class TitleService
             : $"mjk{(titleType == 0 ? 's' : 't')}{titleCode:000}";
         return _titleCache.TryGetValue(titleId, out var name) ? name : "";
     }
+
+    public async Task<(List<CollectionTitle> MajakTitles, List<CollectionTitle> TrickTitles)>
+        GetCollectionAsync(MajakPlayer player)
+    {
+        var ownedTitleIds = await _playerRepo.GetTitleListAsync(player.MemberNo);
+        var majakTitles = new List<CollectionTitle>();
+        var trickTitles = new List<CollectionTitle>();
+        foreach (string titleId in ownedTitleIds.Distinct().OrderBy(titleId => titleId))
+        {
+            if (!_titleCache.TryGetValue(titleId, out string? titleName)) continue;
+            if (IsTrickTitle(titleId))
+                trickTitles.Add(new CollectionTitle(titleId, titleName, titleId == player.TrickTitle));
+            else if (IsMajakTitle(titleId))
+                majakTitles.Add(new CollectionTitle(titleId, titleName, titleId == player.MajakTitle));
+        }
+        return (majakTitles, trickTitles);
+    }
+
+    public async Task<bool> EquipOwnedTitleAsync(MajakPlayer player, bool isTrick, string? titleId)
+    {
+        string normalizedTitleId = titleId?.Trim() ?? "";
+        if (normalizedTitleId.Length > 0)
+        {
+            if (isTrick ? !IsTrickTitle(normalizedTitleId) : !IsMajakTitle(normalizedTitleId)) return false;
+            if (!_titleCache.ContainsKey(normalizedTitleId)) return false;
+            if (!await _playerRepo.HasActiveTitleAsync(player.MemberNo, normalizedTitleId)) return false;
+        }
+
+        if (!await _playerRepo.UpdateEquippedTitleAsync(player.MemberNo, isTrick, normalizedTitleId)) return false;
+        if (isTrick)
+        {
+            player.TrickTitle = normalizedTitleId;
+            player.TrickTitleId = ToTitleCode(normalizedTitleId, "mjks");
+        }
+        else
+        {
+            player.MajakTitle = normalizedTitleId;
+            player.MajakTitleId = normalizedTitleId.StartsWith("mjkc", StringComparison.Ordinal)
+                ? 1000 + ToTitleCode(normalizedTitleId, "mjkc")
+                : ToTitleCode(normalizedTitleId, "mjkt");
+        }
+        return true;
+    }
+
+    private static bool IsTrickTitle(string titleId)
+        => titleId.StartsWith("mjks", StringComparison.Ordinal);
+
+    private static bool IsMajakTitle(string titleId)
+        => titleId.StartsWith("mjkt", StringComparison.Ordinal)
+            || titleId.StartsWith("mjkc", StringComparison.Ordinal);
+
+    private static int ToTitleCode(string titleId, string prefix)
+        => titleId.StartsWith(prefix, StringComparison.Ordinal)
+            && int.TryParse(titleId[prefix.Length..], out int code) ? code : 0;
 
     /// <summary>
     /// 称号取得処理 — ProcessCommand_GetTitle 移植

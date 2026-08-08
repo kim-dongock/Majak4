@@ -179,7 +179,7 @@ public class BuyCustomItemCommand : ICommand
 
     private static string CustomItemErrorMessage(int resultCode) => resultCode switch
     {
-        Val.CustomCoinless => "GEMが足りません",
+        Val.CustomCoinless => "MPが足りません",
         Val.CustomOwned    => "既に所持しているアイテムです",
         Val.CustomIdError  => "IDが不正です",
         Val.CustomDbError  => "接続エラー",

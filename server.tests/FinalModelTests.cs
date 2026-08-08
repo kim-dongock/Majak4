@@ -435,14 +435,9 @@ public class NLevelTableTests
 // ═══════════════════════════════════════════════════════════════════════════
 public class GameConstAdditionalTests
 {
-    // 原典: ALLINMONEY = 1000
+    // 公式Webマニュアル 5_3: 無料補充は1,000 GPまで、1日1回
     [Fact] public void AllinMoney_Is1000()         => Assert.Equal(1000L, GameConst.AllinMoney);
-    // 原典: ALLINMONEY_OVER_2_DAN = 2000
-    [Fact] public void AllinMoney2Dan_Is2000()     => Assert.Equal(2000L, GameConst.AllinMoney2Dan);
-    // 原典: ALLINCOUNT_MAX = 1
     [Fact] public void AllinCountMax_Is1()         => Assert.Equal(1, GameConst.AllinCountMax);
-    // 原典: ALLINCOUNT_MAX_NETCAFE = 2
-    [Fact] public void AllinCountMaxNetCafe_Is2()  => Assert.Equal(2, GameConst.AllinCountMaxNetCafe);
     // 原典: YAKUMANBONUS_MONEY = 200
     [Fact] public void YakumanBonusMoney_Is200()   => Assert.Equal(200L, GameConst.YakumanBonusMoney);
     // 原典: DEFAULT_MONEY = 1000

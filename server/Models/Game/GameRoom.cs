@@ -141,6 +141,7 @@ public class GameRoom
     private long _actionSeq;
     private int _gameActionsStarted;
     public PendingActionPrompt?[] PendingActions { get; } = new PendingActionPrompt?[4];
+    public int[] KyokuTimeBankMs { get; } = new int[4];
 
     // Result settlement idempotency guard. 0=not started, 1=processing, 2=completed.
     private int _gameReportProcessState;
@@ -304,6 +305,10 @@ public class PendingActionPrompt
     public PlayerMode PlayerMode { get; init; }
     public DateTimeOffset IssuedAt { get; init; }
     public DateTimeOffset DeadlineAt { get; init; }
+    public int BaseTimeMs { get; init; }
+    public int KeepTimeMs { get; init; }
+    public int TimeBankMsAtIssue { get; init; }
+    public bool UsesTimeBank { get; init; }
 }
 
 /// <summary>

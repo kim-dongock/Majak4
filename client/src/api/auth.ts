@@ -24,6 +24,7 @@ export interface MajakPlayer {
   accessToken?: string
   name:      string
   sex:       '' | 'M' | 'F'
+  birthYear?: number | null
   avatarId:  string
   password:  string       // Legacy Hangame compatibility field; empty for Google auth.
   isTestEnv: boolean
@@ -38,6 +39,7 @@ export interface RegisteredPlayerCache {
   pix:                   string
   name:                  string
   sex:                   'M' | 'F'
+  birthYear?:            number | null
   avatarId:              string
   isTestEnv:             boolean
   accountStatus?:        number
@@ -107,6 +109,7 @@ export function saveRegisteredPlayerCache(player: MajakPlayer): void {
     pix:        player.pix,
     name:       player.name,
     sex:        player.sex,
+    birthYear:  player.birthYear,
     avatarId:   player.avatarId,
     isTestEnv:  player.isTestEnv,
     accountStatus: player.accountStatus,
@@ -126,6 +129,7 @@ export function cachedToPlayer(cache: RegisteredPlayerCache): MajakPlayer {
     pix:                 cache.pix,
     name:                cache.name,
     sex:                 cache.sex,
+    birthYear:           cache.birthYear,
     avatarId:            cache.avatarId,
     password:            '',
     isTestEnv:           cache.isTestEnv,
@@ -232,6 +236,7 @@ export async function googleRegister(
   idToken:     string,
   displayName: string,
   sex:         'M' | 'F',
+  birthYear:   number,
   avatarId:    string,
 ): Promise<MajakPlayer> {
   let res: Response
@@ -240,7 +245,7 @@ export async function googleRegister(
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body:    JSON.stringify({ idToken, displayName, sex, avatarId }),
+      body:    JSON.stringify({ idToken, displayName, sex, birthYear, avatarId }),
     })
   } catch (err) {
     throw new AuthError('network', String(err))

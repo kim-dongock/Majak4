@@ -1,3 +1,205 @@
+.majak-lobby-collection-button {
+  position: absolute;
+  left: 864px;
+  top: 109px;
+  width: 144px;
+  height: 25px;
+  border: 1px solid #7f9aa7;
+  border-radius: 4px;
+  background: #eef4f5;
+  color: #07516d;
+  font-family: var(--majak-font-family-ui);
+  font-size: calc(11px * var(--majak-type-scale));
+  cursor: pointer;
+}
+
+.majak-collection-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 950;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(17, 24, 27, 0.72);
+}
+
+.majak-collection-dialog {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  width: min(760px, 100%);
+  max-height: min(680px, calc(100dvh - 40px));
+  overflow: hidden;
+  border: 1px solid #53656a;
+  border-radius: 8px;
+  background: #f4f1e8;
+  color: #202729;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+}
+
+.majak-collection-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #c8c2b4;
+  background: #263438;
+  color: #fff;
+}
+
+.majak-collection-header span {
+  color: #d8b864;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.majak-collection-header h2 {
+  margin: 3px 0 0;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.majak-collection-header button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.majak-collection-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 10px 20px 0;
+  background: #e4e8e5;
+}
+
+.majak-collection-tabs button {
+  min-height: 40px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #536267;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.majak-collection-tabs button.is-active {
+  border-bottom-color: #b28a24;
+  color: #1d282b;
+}
+
+.majak-collection-content {
+  min-height: 260px;
+  overflow: auto;
+  padding: 18px 20px;
+}
+
+.majak-collection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.majak-collection-item {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 88px;
+  padding: 8px;
+  border: 1px solid #c5c0b4;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.majak-collection-item.is-equipped {
+  border-color: #188070;
+  box-shadow: inset 4px 0 #188070;
+}
+
+.majak-collection-image {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  overflow: hidden;
+  background: #edf0ec;
+}
+
+.majak-collection-image img {
+  max-width: 100%;
+  max-height: 100%;
+  image-rendering: pixelated;
+}
+
+.majak-collection-item-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.majak-collection-item-copy strong {
+  overflow-wrap: anywhere;
+}
+
+.majak-collection-item-copy span {
+  color: #697477;
+  font-size: 11px;
+}
+
+.majak-collection-item > button,
+.majak-collection-footer button {
+  min-height: 34px;
+  border: 1px solid #52666d;
+  border-radius: 4px;
+  background: #fff;
+  color: #263438;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.majak-collection-item > button {
+  padding: 0 10px;
+}
+
+.majak-collection-item > button:disabled,
+.majak-collection-footer button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.majak-collection-status {
+  padding: 48px 12px;
+  text-align: center;
+  color: #5b676a;
+}
+
+.majak-collection-status.is-error {
+  color: #a32620;
+}
+
+.majak-collection-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid #c8c2b4;
+  background: #e4e8e5;
+}
+
+.majak-collection-footer button {
+  min-width: 110px;
+  padding: 0 14px;
+}
+
+@media (max-width: 640px) {
+  .majak-collection-overlay { padding: 8px; }
+  .majak-collection-dialog { max-height: calc(100dvh - 16px); }
+  .majak-collection-grid { grid-template-columns: 1fr; }
+  .majak-collection-item { grid-template-columns: 60px minmax(0, 1fr) auto; }
+  .majak-collection-image { width: 52px; height: 52px; }
+}
 /* ゲーム全体のベーススタイル */
 :root {
   --game-width: 1019px;
@@ -2941,6 +3143,59 @@ body:has(.majak-game-screen) {
   border: 1px solid #7d8e80;
   border-radius: 0;
   background: #e8ede4;
+}
+
+.majak-member-filter {
+  flex: 0 0 auto;
+  border: 1px solid #aeb9aa;
+  background: #f7f8f3;
+}
+
+.majak-member-filter summary {
+  padding: 5px 7px;
+  color: #263c34;
+  font-size: var(--majak-font-11);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.majak-member-filter-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+}
+
+.majak-member-filter-controls label {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  color: #35453f;
+  font-size: var(--majak-font-10);
+  font-weight: 700;
+}
+
+.majak-member-filter-controls select {
+  min-width: 0;
+  width: 100%;
+  height: 27px;
+  border: 1px solid #7f9186;
+  border-radius: 2px;
+  background: #ffffff;
+  color: #17221e;
+  font-family: var(--majak-font-family-ui);
+  font-size: var(--majak-font-11);
+}
+
+.majak-desktop-member-filter-popover {
+  position: absolute;
+  z-index: 30;
+  top: 40px;
+  left: 4px;
+  right: 4px;
+  border: 1px solid #61776a;
+  background: #e8ede4;
+  box-shadow: 0 3px 8px rgba(22, 44, 35, 0.28);
 }
 
 .majak-mobile-lobby-member {

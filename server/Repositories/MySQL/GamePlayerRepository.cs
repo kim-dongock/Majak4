@@ -81,6 +81,7 @@ public class GamePlayerRepository
         string googleSub,
         string displayName,
         string sexCode,
+        ushort birthYear,
         string avatarId)
     {
         await using var strategyDb = await _db.CreateAsync();
@@ -89,7 +90,7 @@ public class GamePlayerRepository
         {
             await using var db = await _db.CreateAsync();
             await using var tx = await db.Database.BeginTransactionAsync();
-            var memberNo = await InsertGoogleAccountAsync(db, displayName, sexCode, avatarId, googleSub);
+            var memberNo = await InsertGoogleAccountAsync(db, displayName, sexCode, birthYear, avatarId, googleSub);
             AddRelatedPlayerRows(db, memberNo);
             await db.SaveChangesAsync();
             await tx.CommitAsync();
@@ -126,6 +127,7 @@ public class GamePlayerRepository
         GameDataContext db,
         string displayName,
         string sexCode,
+        ushort birthYear,
         string avatarId,
         string googleSub)
     {
@@ -138,16 +140,17 @@ public class GamePlayerRepository
         cmd.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
         cmd.CommandText = @"
             INSERT INTO player_account
-                (display_name, email, google_sub, sex_code, avatar_id,
+                (display_name, email, google_sub, sex_code, birth_year, avatar_id,
                  terms_agreed_at, account_status, source_environment,
                  first_login_at, last_login_at, created_at, updated_at)
             VALUES
-                (@displayName, @email, @googleSub, @sexCode, @avatarId,
+                (@displayName, @email, @googleSub, @sexCode, @birthYear, @avatarId,
                  @now, 0, 'google', @now, @now, @now, @now)";
         AddParameter(cmd, "@displayName", displayName ?? string.Empty);
         AddParameter(cmd, "@email", null);
         AddParameter(cmd, "@googleSub", googleSub);
         AddParameter(cmd, "@sexCode", sexCode);
+        AddParameter(cmd, "@birthYear", birthYear);
         AddParameter(cmd, "@avatarId", avatarId);
         AddParameter(cmd, "@now", now);
         await cmd.ExecuteNonQueryAsync();
@@ -241,6 +244,7 @@ public class GamePlayerRepository
         => new(
             account.DisplayName,
             account.SexCode,
+            account.BirthYear,
             account.AvatarId,
             account.AccountStatus,
             account.TermsAgreedAt)
@@ -266,6 +270,7 @@ public class GamePlayerRepository
 public sealed record GamePlayerAccount(
     string DisplayName,
     string SexCode,
+    ushort? BirthYear,
     string AvatarId,
     int AccountStatus,
     DateTime? TermsAgreedAt)

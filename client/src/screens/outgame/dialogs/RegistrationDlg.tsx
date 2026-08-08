@@ -19,6 +19,7 @@ export default function RegistrationDlg({ idToken, onComplete }: Props) {
   const [nicknameMsg,  setNicknameMsg]  = useState<{ ok: boolean; text: string } | null>(null)
   const [checking,     setChecking]     = useState(false)
   const [sex,          setSex]          = useState<'M' | 'F'>('M')
+  const [birthYear,    setBirthYear]    = useState('')
   const [avatarIdx,    setAvatarIdx]    = useState(0)
   const [submitting,   setSubmitting]   = useState(false)
   const [error,        setError]        = useState('')
@@ -52,13 +53,15 @@ export default function RegistrationDlg({ idToken, onComplete }: Props) {
 
   const selectSex = (next: 'M' | 'F') => { setSex(next); setAvatarIdx(0) }
   const avatars   = sex === 'M' ? MALE_AVATARS : FEMALE_AVATARS
+  const currentYear = new Date().getFullYear()
+  const birthYears = Array.from({ length: currentYear - 1899 }, (_, index) => currentYear - index)
 
   const submit = async () => {
     if (submitting || !canProceedNickname) return
     setSubmitting(true)
     setError('')
     try {
-      const player = await googleRegister(idToken, nickname, sex, avatars[avatarIdx])
+      const player = await googleRegister(idToken, nickname, sex, Number(birthYear), avatars[avatarIdx])
       onComplete(player)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -191,8 +194,9 @@ export default function RegistrationDlg({ idToken, onComplete }: Props) {
             これによって生じた損害について、運営者は責任を負いません。<br /><br />
 
             第5条（個人情報の取扱い）<br />
-            本サービスは Google 認証によって取得したメールアドレスおよびユーザー識別子を
-            アカウント管理目的でのみ使用し、第三者への提供は行いません。<br /><br />
+            本サービスは Google 認証によって取得したメールアドレスおよびユーザー識別子と、
+            登録時に入力された出生年をアカウント管理およびロビーの年齢帯フィルターに使用し、
+            第三者への提供は行いません。<br /><br />
 
             第6条（免責事項）<br />
             本サービスはゲームの継続的な提供を保証するものではありません。
@@ -321,6 +325,18 @@ export default function RegistrationDlg({ idToken, onComplete }: Props) {
           </div>
         )}
 
+        <label style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, marginBottom: isMobile ? 6 : 14, fontSize: isMobile ? 'var(--majak-font-12)' : 'var(--majak-font-15)' }}>
+          <span>出生年</span>
+          <select
+            value={birthYear}
+            onChange={event => setBirthYear(event.currentTarget.value)}
+            style={{ minWidth: 112, minHeight: isMobile ? 28 : 34, font: 'inherit' }}
+          >
+            <option value="">選択してください</option>
+            {birthYears.map(year => <option key={year} value={year}>{year}年</option>)}
+          </select>
+        </label>
+
         {/* アバターグリッド
             モバイル: 自然高さ・正方形セル / デスクトップ: 3/4 縦長セル */}
         <div style={isMobile ? {
@@ -366,12 +382,12 @@ export default function RegistrationDlg({ idToken, onComplete }: Props) {
             style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: isMobile ? 'var(--majak-font-12)' : 'var(--majak-font-14)', padding: '0 14px' }}>
             ← 戻る
           </button>
-          <button type="button" disabled={submitting} onClick={() => void submit()}
+          <button type="button" disabled={submitting || birthYear === ''} onClick={() => void submit()}
             style={{
               minWidth: isMobile ? 100 : 140, minHeight: isMobile ? 30 : 38,
               fontSize: isMobile ? 'var(--majak-font-13)' : 'var(--majak-font-15)', padding: '0 20px',
-              background: '#1769aa', color: '#fff', border: 'none',
-              borderRadius: 3, cursor: 'pointer',
+              background: birthYear === '' ? '#aaa' : '#1769aa', color: '#fff', border: 'none',
+              borderRadius: 3, cursor: birthYear === '' ? 'default' : 'pointer',
             }}>
             {submitting ? '登録中...' : '登録する'}
           </button>

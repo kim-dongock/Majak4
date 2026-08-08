@@ -122,12 +122,18 @@ public class PlayerRepository
             from wallet in db.PlayerWallets.AsNoTracking()
             join profile in db.PlayerProfiles.AsNoTracking()
                 on wallet.MemberNo equals profile.MemberNo
+            join account in db.PlayerAccounts.AsNoTracking()
+                on wallet.MemberNo equals account.MemberNo
             where wallet.MemberNo == memberNoValue
-            select new { Wallet = wallet, Profile = profile })
+            select new { Wallet = wallet, Profile = profile, Account = account })
             .SingleOrDefaultAsync();
         if (state is null) return false;
 
         player.Rating = state.Profile.CommonRating;
+        player.Sex = state.Account.SexCode;
+        player.Age = state.Account.BirthYear is ushort birthYear
+            ? Math.Max(0, DateTime.UtcNow.Year - birthYear)
+            : 0;
         player.GamMoney = state.Wallet.GameMoney;
         player.LastGameDate = state.Profile.LastPlayedAt?.ToString("yyyy/MM/dd HH:mm:ss") ?? string.Empty;
         player.EarnedMoney = state.Wallet.EarnedGameMoney;
@@ -844,6 +850,20 @@ public class PlayerRepository
             .ToListAsync();
     }
 
+    public virtual async Task<bool> UpdateEquippedTitleAsync(string memberNo, bool isTrick, string titleId)
+    {
+        var memberNoValue = ParseMemberNo(memberNo);
+        await using var db = await RequireGameDb().CreateAsync();
+        var profile = await db.PlayerProfiles.SingleOrDefaultAsync(item => item.MemberNo == memberNoValue);
+        if (profile is null) return false;
+
+        if (isTrick) profile.TrickTitleCode = string.IsNullOrEmpty(titleId) ? null : titleId;
+        else profile.MajakTitleCode = string.IsNullOrEmpty(titleId) ? null : titleId;
+        profile.UpdatedAt = DateTime.Now;
+        await db.SaveChangesAsync();
+        return true;
+    }
+
     private const string SelectSerialMastsSql = @"
         SELECT /*+ INDEX(A EVTCODEMAST_IX1) */
                A.EVTCODE, A.EVTNO, A.EVTSTARTDT, A.EVTENDDT,
@@ -1002,8 +1022,7 @@ public class PlayerRepository
 
         await using var db = await RequireGameDb().CreateAsync();
         var month = RankMonth(rankDate);
-        var query = db.PlayerGradeRanks.AsNoTracking().Where(rank => rank.RankDate == month);
-        if (rankKind > 0) query = query.Where(rank => rank.GradeLevel == rankKind);
+        var query = FilterGradeRankQuery(db.PlayerGradeRanks.AsNoTracking(), month, rankKind);
         var rows = await query.OrderByDescending(rank => rank.Rating)
             .ThenBy(rank => rank.LastPlayedAt)
             .Take(maxCnt)
@@ -1021,6 +1040,13 @@ public class PlayerRepository
 
         await Redis.SetJsonAsync(cacheKey, list, MasterCacheService.TtlRanking);
         return list;
+    }
+
+    internal static IQueryable<PlayerGradeRankEntity> FilterGradeRankQuery(
+        IQueryable<PlayerGradeRankEntity> query, DateOnly month, int rankKind)
+    {
+        byte kind = checked((byte)rankKind);
+        return query.Where(rank => rank.RankDate == month && rank.RankKind == kind);
     }
 
     /// <summary>Loads the current player's grade rank.</summary>

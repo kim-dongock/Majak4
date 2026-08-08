@@ -29,7 +29,7 @@ description: "使用条件: MySQLゲーム・ログDBのテーブル、カラム
 
 | テーブル | カラム数 |
 |---|---:|
-| `player_account` | 16 |
+| `player_account` | 17 |
 | `player_wallet` | 11 |
 | `player_profile` | 17 |
 | `player_mode_stats` | 37 |
@@ -143,6 +143,7 @@ description: "使用条件: MySQLゲーム・ログDBのテーブル、カラム
 | `email` | `VARCHAR(254) NULL` |
 | `google_sub` | `VARCHAR(64) NULL` |
 | `sex_code` | `CHAR(1) NOT NULL DEFAULT 'U'` |
+| `birth_year` | `SMALLINT UNSIGNED NULL` |
 | `avatar_id` | `VARCHAR(255) NOT NULL DEFAULT ''` |
 | `terms_agreed_at` | `DATETIME(3) NULL` |
 | `approved_at` | `DATETIME(3) NULL` |

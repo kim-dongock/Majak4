@@ -21,6 +21,7 @@
  *   legacy/client/HgMajak2/MJTblDraw2.cpp CMJTblDraw::mempos
  */
 import Phaser from 'phaser'
+import { calculateTimeBankSegments, GAME_AUTO_PASS_HOLD_EVENT } from '../game/autoControl'
 import { getIngameLayout, type IngameLayoutMode } from '../game/ingameLayout'
 import MobileAvatarLayer from '../game/MobileAvatarLayer'
 import { mobileCenterHudOffset, mobileVisibleWorldBounds } from '../game/mobileIngameViewport'
@@ -28,6 +29,15 @@ import { isTengokuBoardSkin } from '../utils/legacySkinPalette'
 import { getUiFontFamily, getUiFontSize, getUiFontSizePx } from '../utils/typography'
 
 interface HudPoint { x: number; y: number }
+interface ActionPromptTimerData {
+  timeLimit?: number
+  baseTimeMs?: number
+  keepTimeMs?: number
+  timeBankMs?: number
+  timeBankEnabled?: boolean
+  maxTimeMs?: number
+  viewOdr?: number
+}
 interface OdrBoxPos {
   avt: HudPoint
   hst: HudPoint
@@ -357,6 +367,8 @@ export default class UIScene extends Phaser.Scene {
   private waremeSprite?: Phaser.GameObjects.Image
   private timerBack!: Phaser.GameObjects.Rectangle
   private timerBar!: Phaser.GameObjects.Rectangle
+  private timerTurnBar!: Phaser.GameObjects.Rectangle
+  private timerKeepBar!: Phaser.GameObjects.Rectangle
   private diceRollDelay?: Phaser.Time.TimerEvent
   private diceRollTimer?: Phaser.Time.TimerEvent
   private callSprites: Phaser.GameObjects.Image[] = []
@@ -365,6 +377,10 @@ export default class UIScene extends Phaser.Scene {
   /* タイマー */
   private timerMaxMs = 0
   private timerEndAt = 0
+  private timerBaseTimeMs = 0
+  private timerKeepTimeMs = 0
+  private timerBankMs = 0
+  private timerBankEnabled = false
   private timerEvent?: Phaser.Time.TimerEvent
   private flowTraceSerial = 0
   private players: PlayerHudState[] = []
@@ -519,9 +535,18 @@ export default class UIScene extends Phaser.Scene {
 
     /* ── タイマー (CMJObjTimBar: 493×6) ── */
     this.timerBack = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, 0x000000)
-      .setOrigin(0, 0).setDepth(1001).setVisible(false)
+      .setOrigin(0, 0).setDepth(1001).setVisible(false).setInteractive()
     this.timerBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, 0x0000ff)
-      .setOrigin(0, 0).setDepth(1002).setVisible(false)
+      .setOrigin(0, 0).setDepth(1002).setVisible(false).setInteractive()
+    this.timerTurnBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, 0x0080ff)
+      .setOrigin(0, 0).setDepth(1003).setVisible(false).setInteractive()
+    this.timerKeepBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, 0x00ffff)
+      .setOrigin(0, 0).setDepth(1004).setVisible(false).setInteractive()
+    const holdAutoPass = () => window.dispatchEvent(new Event(GAME_AUTO_PASS_HOLD_EVENT))
+    this.timerBack.on('pointerover', holdAutoPass)
+    this.timerBar.on('pointerover', holdAutoPass)
+    this.timerTurnBar.on('pointerover', holdAutoPass)
+    this.timerKeepBar.on('pointerover', holdAutoPass)
     this.updateTimerLayout()
     if (this.layoutMode === 'mobileLandscape' && !this.isViewer) this.showInactiveTimerBar()
 
@@ -569,10 +594,10 @@ export default class UIScene extends Phaser.Scene {
       this.updateTurnMarks(data.odr)
     })
 
-    gs.events.on('actionPromptStart', (data: { timeLimit?: number; viewOdr?: number }) => {
+    gs.events.on('actionPromptStart', (data: ActionPromptTimerData) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.traceUiFlow('actionPromptStart event', data)
-      if (Number.isFinite(data.timeLimit) && Number(data.timeLimit) > 0) this.startTimer(Number(data.timeLimit))
+      if (Number.isFinite(data.timeLimit) && Number(data.timeLimit) > 0) this.startTimer(data)
     })
 
     gs.events.on('actionPromptEnd', (data: { viewOdr?: number }) => {
@@ -817,7 +842,7 @@ export default class UIScene extends Phaser.Scene {
       myOdr: this.myOdr,
       activeTurnOdr: this.activeTurnOdr,
       timerMaxMs: this.timerMaxMs,
-      timerRemainingMs: this.timerEndAt > 0 ? Math.max(0, Math.round(this.timerEndAt - this.time.now)) : 0,
+      timerRemainingMs: this.timerEndAt > 0 ? Math.max(0, Math.round(this.timerEndAt - performance.now())) : 0,
       ...details,
     })
   }
@@ -1290,6 +1315,8 @@ export default class UIScene extends Phaser.Scene {
     const y = bounds ? bounds.bottom - MOBILE_TIMBAR_BOTTOM_INSET : BOARD_Y + Y_TIMBAR
     this.timerBack?.setPosition(x, y)
     this.timerBar?.setPosition(x, y)
+    this.timerTurnBar?.setPosition(x, y)
+    this.timerKeepBar?.setPosition(x, y)
   }
 
   private showInactiveTimerBar() {
@@ -1297,15 +1324,19 @@ export default class UIScene extends Phaser.Scene {
     this.updateTimerLayout()
     this.timerBack.setVisible(true)
     this.timerBar.setVisible(true).setDisplaySize(W_TIMBAR, H_TIMBAR).setFillStyle(0x203a8f)
+    this.timerTurnBar.setVisible(false)
+    this.timerKeepBar.setVisible(false)
   }
 
   /* ======================================================================
    * タイマー (CMJRoomWnd WM_TIMER 相当)
    * ======================================================================*/
-  private startTimer(timeLimit: number) {
+  private startTimer(data: ActionPromptTimerData) {
     if (this.isViewer) {
       this.timerBack.setVisible(false)
       this.timerBar.setVisible(false)
+      this.timerTurnBar.setVisible(false)
+      this.timerKeepBar.setVisible(false)
       return
     }
     if (this.timerEvent || this.timerBack.visible || this.timerBar.visible) {
@@ -1316,21 +1347,44 @@ export default class UIScene extends Phaser.Scene {
       this.timerEndAt = 0
       this.timerBack.setVisible(false)
       this.timerBar.setVisible(false)
+      this.timerTurnBar.setVisible(false)
+      this.timerKeepBar.setVisible(false)
     }
-    const limitMs = timeLimit > 1000 ? Math.trunc(timeLimit) : Math.trunc(timeLimit * 1000)
-    this.traceUiFlow('timer start', { timeLimit, limitMs })
-    this.timerMaxMs = Math.max(1, limitMs)
-    this.timerEndAt = this.time.now + this.timerMaxMs
+    const timeLimit = Number(data.timeLimit ?? 0)
+    const limitMs = Math.max(0, Math.trunc(timeLimit))
+    this.timerBaseTimeMs = Math.max(0, Number(data.baseTimeMs ?? limitMs))
+    this.timerKeepTimeMs = Math.max(0, Number(data.keepTimeMs ?? 0))
+    this.timerBankMs = Math.max(0, Number(data.timeBankMs ?? 0))
+    this.timerBankEnabled = Boolean(data.timeBankEnabled)
+    this.timerMaxMs = Math.max(1, Number(data.maxTimeMs ?? 0), this.timerBaseTimeMs + this.timerBankMs)
+    this.timerEndAt = performance.now() + Math.max(1, limitMs)
+    this.traceUiFlow('timer start', { ...data, limitMs })
     this.updateTimerLayout()
     this.timerBack.setVisible(true)
-    this.timerBar.setVisible(true).setDisplaySize(W_TIMBAR, H_TIMBAR).setFillStyle(0x0000ff)
     const redrawTimer = () => {
-      const remainMs = Math.max(0, this.timerEndAt - this.time.now)
-      const ratio = remainMs / this.timerMaxMs
-      this.timerBar.setDisplaySize(Math.max(0, Math.round(W_TIMBAR * ratio)), H_TIMBAR)
-      this.timerBar.setFillStyle(remainMs <= 5000 ? 0xff0000 : 0x0000ff)
+      const remainMs = Math.max(0, this.timerEndAt - performance.now())
+      const segments = calculateTimeBankSegments(
+        remainMs,
+        this.timerBaseTimeMs,
+        this.timerKeepTimeMs,
+        this.timerBankMs,
+        this.timerBankEnabled,
+      )
+      const scale = W_TIMBAR / this.timerMaxMs
+      const bankWidth = Math.max(0, Math.round(segments.bankMs * scale))
+      const turnWidth = Math.max(0, Math.round(segments.turnMs * scale))
+      const keepWidth = Math.max(0, Math.round(segments.keepMs * scale))
+      const x = this.timerBack.x
+      const y = this.timerBack.y
+      this.timerBar.setPosition(x, y).setDisplaySize(bankWidth, H_TIMBAR)
+        .setFillStyle(this.timerBankEnabled ? 0x0000ff : 0xff0000).setVisible(bankWidth > 0)
+      this.timerTurnBar.setPosition(x + bankWidth, y).setDisplaySize(turnWidth, H_TIMBAR)
+        .setFillStyle(0x0080ff).setVisible(turnWidth > 0)
+      this.timerKeepBar.setPosition(x + bankWidth + turnWidth, y).setDisplaySize(keepWidth, H_TIMBAR)
+        .setFillStyle(0x00ffff).setVisible(keepWidth > 0)
       if (remainMs <= 0) this.stopTimer()
     }
+    redrawTimer()
     this.timerEvent = this.time.addEvent({
       delay: 50,
       loop: true,
@@ -1344,11 +1398,17 @@ export default class UIScene extends Phaser.Scene {
     this.timerEvent = undefined
     this.timerMaxMs = 0
     this.timerEndAt = 0
+    this.timerBaseTimeMs = 0
+    this.timerKeepTimeMs = 0
+    this.timerBankMs = 0
+    this.timerBankEnabled = false
     if (this.layoutMode === 'mobileLandscape' && !this.isViewer) {
       this.showInactiveTimerBar()
     } else {
       this.timerBack.setVisible(false)
       this.timerBar.setVisible(false)
+      this.timerTurnBar.setVisible(false)
+      this.timerKeepBar.setVisible(false)
     }
   }
 }

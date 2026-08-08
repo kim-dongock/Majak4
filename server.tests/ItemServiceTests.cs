@@ -12,7 +12,7 @@ namespace MajakServer.Tests;
 /// ItemService テスト
 ///
 /// 検証シナリオ:
-///   - BuyCustomItemAsync: 成功 / アイテム不存在 / 既所持 / GEM 不足 (プロシージャエラー)
+///   - BuyCustomItemAsync: 成功 / アイテム不存在 / 既所持 / MP 不足 (リポジトリエラー)
 ///   - EquipCustomItemAsync: 成功 / 未所持アイテム
 ///   - GetShopCatalog / GetCustomItemList: 構造確認
 ///   - BuyCustomItemCommand (mjkc41e): レスポンスパケット検証
@@ -101,13 +101,13 @@ public class ItemServiceTests
         Assert.Equal(Val.CustomIdError, resultCode);
     }
 
-    // シナリオ3: プロシージャが -1101 (GEM 不足) → CustomCoinless
+    // シナリオ3: リポジトリエラー -1101 (MP 不足) → CustomCoinless
     [Fact]
-    public async Task BuyCustomItemAsync_GemShortage_ReturnsCustomCoinless()
+    public async Task BuyCustomItemAsync_MpShortage_ReturnsCustomCoinless()
     {
         _itemRepoMock.Setup(s => s.BuyCustomItemAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .ReturnsAsync((-1101, "GEM Not Enough"));
+            .ReturnsAsync((-1101, "MP Not Enough"));
         _itemRepoMock.Setup(r => r.GetCustomShopMastAsync())
             .ReturnsAsync(new List<CustomShopItemInfo>
             {
@@ -366,9 +366,9 @@ public class BuyCustomItemCommandTests
         Assert.False(dict.ContainsKey("message"));
     }
 
-    // シナリオ2: 購入失敗 (GEM 不足) → mjkc42e に失敗コード
+    // シナリオ2: 購入失敗 (MP 不足) → mjkc42e に失敗コード
     [Fact]
-    public async Task Execute_GemShortage_SendsFailureResponse()
+    public async Task Execute_MpShortage_SendsFailureResponse()
     {
         var (_, cmd) = BuildCommand(spReturnVal: -1101);
         var player   = new MajakPlayer { MemberNo = "user01" };
@@ -382,7 +382,7 @@ public class BuyCustomItemCommandTests
 
         var dict = CommandTestHelper.AsDict(sent[0].packet);
         Assert.Equal(Val.CustomCoinless, (int)dict[GKey.Result]);
-        Assert.Equal("GEMが足りません", (string)dict[GKey.Message]);
+        Assert.Equal("MPが足りません", (string)dict[GKey.Message]);
     }
 
     [Fact]

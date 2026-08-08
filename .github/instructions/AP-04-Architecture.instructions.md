@@ -1,3 +1,8 @@
+---
+applyTo: "server/**,server.tests/**,client/**,scripts/**"
+description: "麻雀4のサーバー構成、チャンネル階層、SignalR接続、ロビー入場、サービス間責務を確認・変更するときに参照する"
+---
+
 # AP-04 アーキテクチャ / チャンネルサーバー構成
 
 ## 1. サービス識別子
@@ -131,12 +136,12 @@ HMajRootServer               ルートサーバー (1 プロセス)
 | タイマー [501] AutoMatching | `AutoMatchingBackgroundService` |
 | タイマー [502] ChnlCtrl (Cup) | `CupChannelBackgroundService` |
 | タイマー [503〜505] Tournament | `TournamentBackgroundService` |
-| `HMajDBObject` (Oracle 直接) | `PlayerRepository` / `TournamentRepository` 等 |
+| `HMajDBObject` (レガシーDBアクセス) | `PlayerRepository` / `TournamentRepository` 等のMySQL Repository |
 | ルームセッション管理 | `PlayerSessionService._rooms` (ConcurrentDictionary) |
 
 ---
 
-## 6. WebSocket 接続フロー
+## 6. SignalR接続フロー
 
 ### 接続エンドポイント
 ```
@@ -149,11 +154,11 @@ ws://{host}:{port}/hubs/majak
 ```
 クライアント                           サーバー (MajakGameHub)
     |                                         |
-    |── WebSocket 接続 ──────────────────────>|  OnConnectedAsync: ConnectionId 発行
-    |                                         |  ※ この時点では memberId 未確定
+  |── SignalR接続 + access_token ──────────>|  OnConnectedAsync: JWT検証
+  |                                         |  member_no / pix / ConnectionIdを対応付け
     |                                         |
-    |── EnterChannel(chanelId,                |  MySQLからプレイヤー状態・戦績をロード
-    |      memberId, nickname, avatarId) ────>|  Groups.AddToGroupAsync("chanel_{chanelId}")
+  |── SendCommand("c1e", {pix, ...}) ─────>|  JWTのmember_noを正本としてDBロード
+  |                                         |  pix整合性検証 + Groups.AddToGroupAsync
     |<── channel:entered                      |  rooms[], members[], 所持金, レベル等を返す
     |<── channel:member_joined (他メンバーへ)  |  旧チャンネルがあれば自動退出
     |                                         |
@@ -175,10 +180,10 @@ ws://{host}:{port}/hubs/majak
 ### SignalR グループ命名規則
 | グループ名 | 対象 |
 |-----------|------|
-| `chanel_{chanelId}` | そのチャンネルに WebSocket 接続中の全プレイヤー (ルーム内含む) |
+| `chanel_{chanelId}` | そのチャンネルにSignalR接続中の全プレイヤー (ルーム内含む) |
 | `room_{roomId}` | ルーム内の全接続 |
 
-> **設計方針 (確定)**: ロビー入室時に WebSocket を接続する (レガシー設計準拠)。
+> **設計方針 (確定)**: ロビー入室時にSignalRを接続する。WebSocketは利用可能な場合のトランスポートであり、アプリケーション境界はSignalR Hubとする。
 > `chanel_*` グループにはロビー滞在中も含む全プレイヤーが参加する。
 > オートマッチング等のリアルタイムプッシュはこの接続を通じて配信される。
 
@@ -218,10 +223,10 @@ ws://{host}:{port}/hubs/majak
 
 | 項目 | 内容 |
 |------|------|
-| **チャンネル** | Oracle DB のカテゴリ情報のみ。特定サーバーに紐付かない |
+| **チャンネル** | MySQLゲームDBのカテゴリ情報。特定サーバーに固定しない |
 | **チャンネル→サーバー割り当て** | **Redis 動的リース** — `channel:{chanelId}:server` (TTL=60s) で管理。起動サーバー数・負荷に応じて自動割り当て |
-| **ロビー (チャンネル画面)** | **WebSocket 接続あり** (レガシー設計準拠)。`GET /api/channel/{id}/server` → Redis リースから担当サーバー取得 → SignalR 接続 |
-| **ルーム入室/作成** | ロビーの WebSocket 接続を再利用 (同一サーバーなら再接続不要) |
+| **ロビー (チャンネル画面)** | **SignalR接続あり** (レガシー設計準拠)。`GET /api/channel/{id}/server` → Redisリースから担当サーバー取得 → SignalR接続 |
+| **ルーム入室/作成** | ロビーのSignalR接続を再利用 (同一サーバーなら再接続不要) |
 | **チャンネルユーザーリスト** | Redis HASH (`channel:{chanelId}:members`) で管理。複数サーバー間で共有 |
 | **ルームリスト** | Redis TTL (30秒) で管理。ゲームサーバーが書き込み、8秒ごとにリフレッシュ |
 | **ルーム作成時サーバー選択** | Redis のルーム数カウントを参照し、最小ルーム数のサーバーに動的に振り分ける |
@@ -231,7 +236,7 @@ ws://{host}:{port}/hubs/majak
 
 | キー | 型 | TTL | 書き込み主体 | 内容 |
 |------|----|-----|-------------|------|
-| `channel:{chanelId}:members` | HASH | なし | REST API | memberId → JSON メンバー情報 |
+| `channel:{chanelId}:members` | HASH | **90s** | REST / SignalR同期 | HASH fieldはサーバー内部識別子、公開JSONの `memberNo` / `pix` は `pix` |
 | `channel:{chanelId}:server` | STRING | **60s** | `ServerLoadService.ClaimChannelAsync()` | このチャンネルを担当するサーバー URL (動的リース) |
 | `game:server:channelcounts` | HASH | なし | `ServerLoadService` | serverUrl → 担当チャンネル数 |
 | `room:{roomId}` | STRING | **30s** | `MajakGameHub` + `ServerStatusBackgroundService` | JSON ルーム情報 (serverUrl 含む) |
@@ -265,14 +270,14 @@ ws://{host}:{port}/hubs/majak
 
 ```
 ChannelSelectScreen          REST API
-    |── GET /api/channels ──>|  Oracle CHANELMAST から取得
+    |── GET /api/channels ──>|  MySQLチャンネルマスターから取得
     |<── [{chanelId, ...}]   |
 
-LobbyScreen (レガシー設計準拠: ロビー入室時に WebSocket 接続)
+LobbyScreen (レガシー設計準拠: ロビー入室時にSignalR接続)
     |── GET /api/channel/{id}/server ─>|  Redis channel:{id}:server から担当サーバー URL 取得
     |                                  |  未割り当てなら alive サーバーのうちチャンネル数最小に動的割り当て
-    |── SignalR.connect(serverUrl) ───>|  WebSocket 接続
-    |── invoke("EnterChannel", ...) ──>|  DB ロード + chanel_* グループ登録
+    |── SignalR.connect(serverUrl, JWT)>|  JWT検証 + Hub接続
+    |── send("c1e", {pix, ...}) ─────>|  JWTのmember_noでDBロード + chanel_*登録
     |<── channel:entered             |  Redis リース登録 (ClaimChannelAsync)
     |── POST /api/channel/{id}/enter >|  Redis メンバーリスト登録
     |── GET  /api/channel/{id}/rooms >|  ルーム一覧 (3秒ポーリング)
@@ -286,7 +291,7 @@ LobbyScreen (レガシー設計準拠: ロビー入室時に WebSocket 接続)
     |── GET /api/room/best-server ────>|  Redis でルーム数最小サーバーを選択
     |<── { serverUrl: "http://..." }       |
 
-RoomScreen (WebSocket 再利用 or 再接続)
+RoomScreen (SignalR接続を再利用または再接続)
     |── SignalR.connect(serverUrl) ───>|  同一 URL ならスキップ (ロビー接続を再利用)
     |                                  |  別 URL なら再接続 (マルチサーバー構成)
     |── invoke("CreateRoom", ...) ────>|  ルーム作成
@@ -320,7 +325,7 @@ GET /api/room/best-server
 
 | メソッド | パス | 説明 |
 |---------|------|------|
-| `GET`  | `/api/channels` | チャンネル一覧 (Oracle CHANELMAST) |
+| `GET`  | `/api/channels` | チャンネル一覧 (MySQLゲームDB) |
 | `GET`  | `/api/channel/{chanelId}/server` | ルーム数最小サーバー URL (best-server と同じ) |
 | `POST` | `/api/channel/{chanelId}/enter` | ロビー入室 (Redis 登録) |
 | `POST` | `/api/channel/{chanelId}/leave` | ロビー退室 (Redis 削除) |
@@ -343,89 +348,7 @@ GET /api/room/best-server
 | アルファ | `.env.alpha` | `http://alpha-game.majak2.jp` | `vite build --mode alpha` |
 | 本番 | `.env.production` | `https://game.majak2.jp` | `vite build` |
 
-### 8-2. Redis データ構造
-
-| キー | 型 | 書き込み主体 | 内容 |
-|------|----|-------------|------|
-| `channel:{chanelId}:members` | HASH | REST API (`POST /api/channel/{id}/enter|leave`) | memberId → JSON メンバー情報 |
-| `game:servers` | ZSET | `ServerStatusBackgroundService` (8秒ごと) | score = lastSeenUnixTime |
-| `game:server:roomcounts` | HASH | `ServerStatusBackgroundService` (8秒ごと) | serverUrl → roomCount |
-
-**ゴーストルーム防止策 (方案1)**:
-- ルームリストは Redis に保存せず、各サーバーのメモリ (`PlayerSessionService`) から直接返す
-- サーバーが停止すると応答しなくなる → 構造的にゴーストルームが発生しない
-- `game:servers` ZSET で 30 秒以内に更新がないサーバーを「死亡」と判定し、`best-server` 選択から除外する
-- **グレースフルシャットダウン時**: `IHostApplicationLifetime.ApplicationStopping` フックで Redis エントリを即座に削除する
-
-### 8-3. クライアント接続フロー
-
-```
-ChannelSelectScreen          REST API
-    |── GET /api/channels ──>|  チャンネル一覧取得
-    |<── [{chanelId, ...}]   |
-
-LobbyScreen (WebSocket なし — REST ポーリングのみ)
-    |── POST /api/channel/{id}/enter ──>|  Redis にユーザー登録
-    |── GET  /api/channel/{id}/rooms ──>|  PlayerSessionService から取得 (3秒ごと)
-    |── GET  /api/channel/{id}/members >|  Redis から取得 (3秒ごと)
-    |── POST /api/channel/{id}/leave ──>|  Redis からユーザー削除 (画面離脱時)
-
-    ↓ ユーザーが「ルーム作成」をクリック
-    |── GET /api/room/best-server ──────>|  Redis でルーム数最小サーバーを選択
-    |<── { serverUrl: "http://..." }     |
-
-RoomScreen (WebSocket 接続)
-    |── SignalR.connect(serverUrl + "/hubs/majak")
-    |── invoke("EnterChannel", chanelId, memberId, nickname, avatarId)
-    |<── channel:entered (プレイヤー個人情報のみ)
-
-    ルーム作成モード:
-    |── invoke("CreateRoom", roomOption, moneyRate, ...)
-    |<── room:created { result:1, roomId }
-
-    ルーム入室モード (roomの serverUrl を使用):
-    |── send("room:enter", { roomId })
-    |<── room:enter { result:1, ... }
-```
-
-### 8-4. ルーム作成時のサーバー選択ロジック (`ServerLoadService`)
-
-```
-GET /api/room/best-server
-  1. ZRANGEBYSCORE game:servers {now-30} +inf   → 生存サーバー一覧
-  2. HMGET game:server:roomcounts {servers...}   → 各サーバーのルーム数取得
-  3. ルーム数が最小のサーバー URL を返す
-  フォールバック: Redis 利用不可 or 生存サーバーなし → ChannelServerSettings.ServerUrl
-```
-
-### 8-5. REST API 一覧 (AP-04 §8 関連)
-
-| メソッド | パス | 説明 |
-|---------|------|------|
-| `GET`  | `/api/channels` | チャンネル一覧 (Oracle CHANELMAST) |
-| `GET`  | `/api/channel/{chanelId}/server` | チャンネルのゲームサーバー URL |
-| `POST` | `/api/channel/{chanelId}/enter` | ロビー入室 (Redis 登録) |
-| `POST` | `/api/channel/{chanelId}/leave` | ロビー退室 (Redis 削除) |
-| `GET`  | `/api/channel/{chanelId}/members` | チャンネルメンバー一覧 (Redis) |
-| `GET`  | `/api/channel/{chanelId}/rooms` | ルーム一覧 (サーバーメモリ直接) |
-| `GET`  | `/api/room/best-server` | ルーム数最小サーバー URL |
-
-### 8-6. 環境別構成
-
-| 環境 | `ASPNETCORE_ENVIRONMENT` | `ServerUrl` | Redis | 起動方法 |
-|------|--------------------------|-------------|-------|---------|
-| 開発 | `Development` | `http://localhost:5000` | `localhost:6379` (Docker) | `docker compose up -d` |
-| アルファ | `Alpha` | `http://alpha-game.majak2.jp` | `alpha-redis.majak2.jp:6379` | サーバー設定 |
-| 本番 | `Production` | `https://game.majak2.jp` | `redis-prod.majak2.jp:6379` (SSL) | サーバー設定 |
-
-#### クライアント Vite 環境変数 (`VITE_API_BASE_URL` → `__API_BASE__` に注入)
-| 環境 | `.env` ファイル | 値 | ビルドコマンド |
-|------|---------------|-----|--------------|
-| 開発 | `.env.development` | `` (空) | `vite dev` |
-| アルファ | `.env.alpha` | `http://alpha-game.majak2.jp` | `vite build --mode alpha` |
-| 本番 | `.env.production` | `https://game.majak2.jp` | `vite build` |
-
-### 8-7. 開発環境セットアップ
+### 8-9. 開発環境セットアップ
 
 ```bash
 # Redis を Docker で起動 (初回のみ)

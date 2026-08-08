@@ -12,7 +12,7 @@ namespace MajakServer.Tests;
 ///
 /// 検証シナリオ:
 ///   - AddMoneyAsync: コイン加算・減算・ゼロ以下クランプ・レベル更新・プロシージャ呼び出し
-///   - ReplenishAsync: 成功 / コイン十分で不要 / オールイン回数超過 / 2段ボーナス
+///   - ReplenishAsync: 成功 / コイン十分で不要 / 1日1回制限 / 午前6時の日次切替
 ///   - ApplyEarnedMoneyAsync: 成功 / GAMMONEY_U あり / EarnedMoney ゼロ
 ///   - GiveYakumanBonusAsync: 役満ボーナス金額
 /// </summary>
@@ -127,6 +127,29 @@ public class GameMoneyServiceTests
     }
 
     [Fact]
+    public async Task ReplenishAsync_WritesExactFreeGpHistory()
+    {
+        var player = new MajakPlayer
+        {
+            MemberNo = "user01",
+            GamMoney = 250,
+            AllinCnt = 0,
+            IpAddress = "1.2.3.4",
+        };
+
+        var (ok, _, _, _, _) = await _svc.ReplenishAsync(player, 0);
+
+        Assert.True(ok);
+        _histMock.Verify(r => r.InsertGameMoneyHistAsync(
+            "user01",
+            GameConst.EvtCodeFreeMoney,
+            750,
+            250,
+            1000,
+            "1.2.3.4"), Times.Once);
+    }
+
+    [Fact]
     public async Task ReplenishAsync_SufficientMoney_ReturnsFalse()
     {
         var player = new MajakPlayer { MemberNo = "user01", GamMoney = 1000, AllinCnt = 0 };
@@ -153,7 +176,7 @@ public class GameMoneyServiceTests
     }
 
     [Fact]
-    public async Task ReplenishAsync_Grade2Dan_UsesHigherTarget()
+    public async Task ReplenishAsync_Grade2Dan_UsesOfficialTarget()
     {
         var player = new MajakPlayer
         {
@@ -165,11 +188,11 @@ public class GameMoneyServiceTests
         var (ok, newMoney, _, _, _) = await _svc.ReplenishAsync(player, 0);
 
         Assert.True(ok);
-        Assert.Equal(GameConst.AllinMoney2Dan, newMoney);   // 2000
+        Assert.Equal(GameConst.AllinMoney, newMoney);
     }
 
     [Fact]
-    public async Task ReplenishAsync_NetCafe_AllowsTwoReplenishments()
+    public async Task ReplenishAsync_NetCafeStillLimitedToOncePerDay()
     {
         var player = new MajakPlayer
         {
@@ -181,9 +204,37 @@ public class GameMoneyServiceTests
         };
         var (ok, newMoney, _, restAllIn, _) = await _svc.ReplenishAsync(player, 0);
 
-        Assert.True(ok);
-        Assert.Equal(1000, newMoney);
+        Assert.False(ok);
+        Assert.Equal(0, newMoney);
         Assert.Equal(0, restAllIn);
+    }
+
+    [Fact]
+    public void RefreshReplenishmentDay_BeforeSix_DoesNotResetSameBusinessDay()
+    {
+        var player = new MajakPlayer
+        {
+            AllinCnt = 1,
+            LastAllinDt = new DateTime(2026, 8, 8, 6, 0, 0),
+        };
+
+        GameMoneyService.RefreshReplenishmentDay(player, new DateTime(2026, 8, 9, 5, 59, 59));
+
+        Assert.Equal(1, player.AllinCnt);
+    }
+
+    [Fact]
+    public void RefreshReplenishmentDay_AtSix_ResetsForNewBusinessDay()
+    {
+        var player = new MajakPlayer
+        {
+            AllinCnt = 1,
+            LastAllinDt = new DateTime(2026, 8, 8, 6, 0, 0),
+        };
+
+        GameMoneyService.RefreshReplenishmentDay(player, new DateTime(2026, 8, 9, 6, 0, 0));
+
+        Assert.Equal(0, player.AllinCnt);
     }
 
     [Fact]

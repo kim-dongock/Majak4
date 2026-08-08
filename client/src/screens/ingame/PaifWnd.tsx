@@ -23,6 +23,7 @@ import { useDesktopScreenScale } from '../../hooks/useDesktopScreenScale'
 import * as SignalR from '../../api/signalr'
 import SelPaifuDlg, { type PaifuEntry } from '../outgame/dialogs/SelPaifuDlg'
 import PaifuSaveDlg from '../outgame/dialogs/PaifuSaveDlg'
+import { loadLastUsedPaifuFileName, loadRecordedPaifuEntries, saveLastUsedPaifuFileName } from '../../game/paifuRecording'
 
 const IMG = '/assets/images/game'
 const CMD_REPLAY_NAVI = 'repnavi'
@@ -116,7 +117,7 @@ export default function PaifWnd() {
   const location     = useLocation()
   const navState = location.state as { paifu?: PaifuSource; paifuEntries?: PaifuEntry[] } | null
   const initialSource = navState?.paifu
-  const paifuEntries = navState?.paifuEntries ?? []
+  const paifuEntries = navState?.paifuEntries ?? loadRecordedPaifuEntries()
 
   /** m_btnPaifuPlay / m_btnPaifuHide のチェック状態 */
   const [isPlaying, setIsPlaying] = useState(false)
@@ -253,6 +254,7 @@ export default function PaifWnd() {
     anchor.download = fileName
     anchor.click()
     URL.revokeObjectURL(url)
+    saveLastUsedPaifuFileName(fileName)
     setShowSaveDlg(false)
   }
 
@@ -375,7 +377,7 @@ export default function PaifWnd() {
 
       {showSaveDlg && (
         <PaifuSaveDlg
-          defaultFileName={source?.title ? `${source.title}.txt` : 'Majak2Paifu.txt'}
+          defaultFileName={source?.title ? `${source.title}.txt` : loadLastUsedPaifuFileName()}
           initialComment={source?.comment ?? ''}
           onSave={savePaifu}
           onCancel={() => setShowSaveDlg(false)}

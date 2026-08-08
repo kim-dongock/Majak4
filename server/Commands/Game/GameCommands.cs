@@ -54,12 +54,14 @@ public class GamePlayCommand : ICommand
             return;
         }
 
+        string playType = ctx.GetString("playType");
+        bool isTimeBankExtension = playType == "MJPID_EXTEND_TIME_BANK";
         if (!ctx.Payload.ContainsKey("playType")
             || !ctx.Payload.ContainsKey("seatOrder")
-            || !ctx.Payload.ContainsKey("action")
-            || ctx.GetString("playType") != "MJPID_ACTION")
+            || (!isTimeBankExtension && !ctx.Payload.ContainsKey("action"))
+            || (playType != "MJPID_ACTION" && !isTimeBankExtension))
         {
-            ctx.AbortConnectionWithReason($"ProcessCommand_GamePlay invalid action packet. memberNo={player.MemberNo} playType={ctx.GetString("playType")}");
+            ctx.AbortConnectionWithReason($"ProcessCommand_GamePlay invalid action packet. memberNo={player.MemberNo} playType={playType}");
             return;
         }
 
@@ -83,6 +85,12 @@ public class GamePlayCommand : ICommand
                 ctx.AbortConnectionWithReason($"ProcessCommand_GamePlay nOrder error. memberNo={player.MemberNo} seatOrder={order} engineOrder={player.EngineOrder}");
                 return;
             }
+        }
+
+        if (isTimeBankExtension)
+        {
+            await _gameLogic.ExtendActionTimeBankAsync(room, ctx);
+            return;
         }
 
         await _gameLogic.GamePlayProcessAsync(room, ctx);

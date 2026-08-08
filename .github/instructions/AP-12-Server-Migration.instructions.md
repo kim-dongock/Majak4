@@ -1,18 +1,18 @@
 ---
 applyTo: "server/**,server.tests/**"
-description: "C++ レガシーサーバーを .NET Core へ移植する際の重要ポイント (試行錯誤から得た知見)"
+description: "C++レガシーサーバーをASP.NET Core/.NET 8へ移植する際の重要ポイント"
 ---
 
 # AP-12 サーバー移植 効率化ガイド
 
-レガシー C++ サーバー (`server/legacy/server/`) を .NET Core C# サーバー (`server/`) へ移植する際の
+レガシーC++サーバー (`Majak4_legacy/server/server/`) をASP.NET Core/.NET 8サーバー (`server/`) へ移植する際の
 **全体戦略と実装手順**。試行錯誤を通じて得た実践的な知見をまとめる。
 
 ---
 
 ## 1-1. 推測実装の禁止 (最重要)
 
-サーバー移植では、レガシー C++ サーバー (`server/legacy/server/`) を唯一の仕様根拠とする。
+サーバー移植では、レガシーC++サーバー (`Majak4_legacy/server/server/`) を唯一の実装根拠とする。ゲーム仕様について公式Webマニュアルと矛盾する場合はAP-15を優先する。
 **推測・既存 C# 実装の都合・一般的な Web/API 設計・見た目の挙動からロジックを作ってはならない**。
 
 - 変更前に、必ず対応するレガシーのコマンド、関数、プロトコルキー、DB アクセス、定数、分岐条件、送信タイミングを特定する。
@@ -49,15 +49,15 @@ description: "C++ レガシーサーバーを .NET Core へ移植する際の重
 - `SendPaiInfoToAll()` は各 player の engine order を `nOpenPos` として `SendPaiInfo()` する。room/player position を open mask に使ってはならない。
 - 接続中ユーザーの `MODE_FURO` / `MODE_CHAN` をサーバーが pass-only という理由で送信直後に自動 `PAS` にしてはならない。レガシーではクライアントが期限到達または自動パス設定で `MJPID_ACTION(PAS)` を送る。Web 版では AP-14 の server timeout fallback により、deadline 到達時だけ `PAS` 相当を engine に適用する。
 - `ProxyPlay(nOrder)` の `nOrder` は engine order である。disconnect / exit / continue player 処理で room seat から呼ぶ場合は、必ず `nPlayer` / `SeatToEngineOrder` で engine order に変換してから呼ぶ。
-- 対局中切断は完全退室ではない。C# では `IsOutPlayer=true` として元座席/`RoomId` を保持し、古い SignalR connection mapping だけを外す。`Remove(connectionId)` は古い切断イベントが新しい同一 memberId の connection mapping を消さないよう、現在 mapping が同じ connectionId の場合だけ削除する。
-- 接続断後にユーザーが明示退室し、`c9e` を送れなかった場合、次の `c1e` は `abandonPreviousRoom=true` / `abandonRoomId` を含める。`EnterChannelCommand` は同一 channel・同一 room・同一 memberId の Playing 座席だけを abandon 対象にし、ロビー入場を `USER_MULTI_LOGIN` で拒否してはならない。
+- 対局中切断は完全退室ではない。C#では `IsOutPlayer=true` として元座席/`RoomId` を保持し、古いSignalR connection mappingだけを外す。`Remove(connectionId)` は古い切断イベントが新しい同一 `member_no` のconnection mappingを消さないよう、現在mappingが同じconnectionIdの場合だけ削除する。
+- 接続断後にユーザーが明示退室し、`c9e` を送れなかった場合、次の `c1e` は `abandonPreviousRoom=true` / `abandonRoomId` を含める。`EnterChannelCommand` はJWT本人と同じ `member_no` を持つ、同一channel・同一roomのPlaying座席だけをabandon対象にし、ロビー入場を `USER_MULTI_LOGIN` で拒否してはならない。
 - サーバーメモリ内のゴーストルーム判定は Redis TTL 判定と混同してはならない。
   - `GameRoom.IsEmpty == true` は削除可能な空ルームである。
   - `room.State != Playing && room.HasNoActiveMembers == true` は対局外の無人ルームとして削除/非表示対象である。
   - `room.State == Playing && room.HasNoActivePlayers == true` は即時削除する。接続中の観戦者には `commandMajAutoExitRoom` を送り、session / Redis room / continue key をまとめて削除する。
   - `room.State == Playing` で一部 seat だけ `IsOutPlayer=true` の場合は正常進行中ルームであり、座席を削除してはならない。切断者は対局終了まで continue player として元ルームへの復帰だけを許可し、別ルームの作成・入室・観戦を拒否する。エンジン用座席と continue key はゲーム終了まで保持する。
 - Redis の `room:{roomId}` TTL は「担当ゲームサーバーが生存しているか」の判定であり、サーバーメモリ内の Playing 続行猶予を短絡して削除する根拠ではない。
-- `continue:{memberId}:room` が生存しているユーザーは、必ずその room へ復帰させる。`CreateRoomCommand`、`RoomEnterRoomCommand`、`AutoEnterRoomCommand` は別 roomId の作成・入室・観戦を拒否し、続行対象 roomId への復帰だけを許可する。
+- `continue:{memberNo}:room` が生存しているユーザーは、必ずそのroomへ復帰させる。`memberNo` はJWTから確定した内部 `member_no` である。`CreateRoomCommand`、`RoomEnterRoomCommand`、`AutoEnterRoomCommand` は別roomIdの作成・入室・観戦を拒否し、続行対象roomIdへの復帰だけを許可する。
 
 ---
 
@@ -344,7 +344,7 @@ C++ でサブ関数に見えるものの多くは「.NET の別手段で自動�
 
 ### 12-1. 問題の背景
 
-`server/legacy/server/` 以下の C++ ファイル (`HMajCommon.h`, `HMajRatingCommon.cpp` 等) は
+`Majak4_legacy/server/server/` 以下のC++ファイル (`HMajCommon.h`, `HMajRatingCommon.cpp` 等) は
 **Shift-JIS (CP932) エンコード**で保存されている。
 VS Code や grep で開くと日本語文字が `'庶民'` → `'���ꕶ'` のように文字化けする。
 
@@ -360,25 +360,25 @@ VS Code や grep で開くと日本語文字が `'庶民'` → `'���ꕶ'` 
 
 ```powershell
 # SJIS ファイルの特定キーワードを正しく読む
-Get-Content "server/legacy/server/HMajCommon.h" -Encoding Default | Select-String "SLevel\|s_sz"
-Get-Content "server/legacy/server/HMajRatingCommon.cpp" -Encoding Default | Select-String "GetSLevel\|return"
+Get-Content "Majak4_legacy/server/server/HMajCommon.h" -Encoding Default | Select-String "SLevel\|s_sz"
+Get-Content "Majak4_legacy/server/server/HMajRatingCommon.cpp" -Encoding Default | Select-String "GetSLevel\|return"
 ```
 
 **手段 B: 同じ文字列を使っている SQL ストアドプロシージャを参照する**
 
-`server/legacy/server/PROCEDURE/*.sql` は同じ SJIS だが、
+`Majak4_legacy/server/server/PROCEDURE/*.sql` は同じSJISだが、
 PowerShell `-Encoding Default` で正常に読める。
 同一の定数が SQL にも存在することが多い (例: `PC_MAJAK2_HIST.sql` の `V_SLEVEL`)。
 
 ```powershell
-Get-Content "server/legacy/server/PROCEDURE/PC_MAJAK2_HIST.sql" -Encoding Default |
+Get-Content "Majak4_legacy/server/server/PROCEDURE/PC_MAJAK2_HIST.sql" -Encoding Default |
     Select-String "SLEVEL"
 ```
 
 **手段 C: `.sql` に存在しない場合 — Python で SJIS デコード**
 
 ```python
-with open("server/legacy/server/HMajCommon.h", encoding="cp932", errors="replace") as f:
+with open("Majak4_legacy/server/server/HMajCommon.h", encoding="cp932", errors="replace") as f:
     for line in f:
         if "SLevel" in line or "s_sz" in line:
             print(line, end="")

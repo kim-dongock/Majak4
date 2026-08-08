@@ -543,8 +543,8 @@ public class EnterChannelCommand : ICommand
         string trickTitleName = _titleService.GetTitleName(player.TrickTitle) ?? "";
         string majakTitleName = _titleService.GetTitleName(player.MajakTitle) ?? "";
         var now = DateTime.Now;
-        int restAllInCnt = Math.Max(0,
-            (player.IsNetCafeIp ? GameConst.AllinCountMaxNetCafe : GameConst.AllinCountMax) - player.AllinCnt);
+        GameMoneyService.RefreshReplenishmentDay(player, now);
+        int restAllInCnt = Math.Max(0, GameConst.AllinCountMax - player.AllinCnt);
         string eventCode = isHiEventCup ? Majak2CupEventCode : "";
         int eventNo = isHiEventCup ? thisCup!.CupId : 0;
         string skinInfo = string.Concat(player.SkinList.Select(s =>

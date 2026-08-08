@@ -7,14 +7,14 @@ description: "クライアント画面一覧 (アウトゲーム / インゲー�
 
 ## 参照ソース
 
-- `legacy/client/HgMajak2/` — メインゲームクライアント (Majak3.exe)
-- `legacy/client/HgChnlM/` — チャンネルウィンドウ
+- `Majak4_legacy/client/client/HgMajak2/` — メインゲームクライアント (Majak3.exe)
+- `Majak4_legacy/client/client/HgChnlM/` — チャンネルウィンドウ
 
 ---
 
 ## 1. レガシー ↔ 新 Web 実装 画面対応表
 
-画面移植・監査では、まずこの表で **レガシー画面名 / レガシークラス / 新 Web 実装名** を対応させてから、各画面の座標・画像・イベント・通信を比較する。
+画面移植・監査では、まずこの表で **レガシー画面名 / レガシークラス / 新 Web 実装名** を対応させる。アウトゲームは機能・表示条件・イベント・通信を比較し、レイアウトは現行 Web のレスポンシブ UI に合わせる。インゲームは座標・画像を含めてレガシーと比較する。
 
 ### 1-1. アウトゲーム / ロビー / ルーム
 
@@ -67,11 +67,11 @@ description: "クライアント画面一覧 (アウトゲーム / インゲー�
 | 10 | アイテムショップ | `CItemShopDlg` | `ItemShopDlg.h/cpp` | `ItemShopDlg` | `client/src/screens/outgame/dialogs/ItemShopDlg.tsx` | ショップ親画面 |
 | 11 | アイテムポップアップ | `CItemPopupDlg` | `ItemPopupDlg.h/cpp` | `ItemPopupDlg` | `client/src/screens/outgame/dialogs/ItemPopupDlg.tsx` | 状況別案内 |
 | 12 | カスタムショップ | `CMajakCustomDlg` | `MajakCustomDlg.h/cpp` | `CustomDlg` | `client/src/screens/outgame/dialogs/CustomDlg.tsx` | カスタムアイテムショップ |
-| 13 | ハンコインアイテム購入確認 | `CMJBuyItemDlg` | `MJBuyItemDlg.h/cpp` | `BuyHanCoinItemDlg` | `client/src/screens/outgame/dialogs/BuyHanCoinItemDlg.tsx` | 通常 HanCoin 購入確認 |
-| 14 | 交換 / 龍宝石系アイテム購入確認 | `CMJBuyItemDlg2` | `MJBuyItemDlg2.h/cpp` | `BuyExchangeItemDlg` | `client/src/screens/outgame/dialogs/BuyExchangeItemDlg.tsx` | 第2タイプ購入確認 |
+| 13 | MP便利アイテム購入確認 | `CMJBuyItemDlg` | `MJBuyItemDlg.h/cpp` | `BuyHanCoinItemDlg` | `client/src/screens/outgame/dialogs/BuyHanCoinItemDlg.tsx` | クラス名は互換、表示と価格単位はMP |
+| 14 | 龍珠交換アイテム購入確認 | `CMJBuyItemDlg2` | `MJBuyItemDlg2.h/cpp` | `BuyExchangeItemDlg` | `client/src/screens/outgame/dialogs/BuyExchangeItemDlg.tsx` | 龍珠交換の確認 |
 | 15 | カスタムアイテム購入 | `CMJBuyCustomItemDlg` | `MJBuyCustomItemDlg.h/cpp` | `BuyCustomItemDlg` | `client/src/screens/outgame/dialogs/BuyCustomItemDlg.tsx` | カスタム購入確認 |
 | 16 | アイテム購入最終確認 | `CMJConfirmItemDlg` | `MJConfirmItemDlg.h/cpp` | `ConfirmItemDlg` | `client/src/screens/outgame/dialogs/ConfirmItemDlg.tsx` | 有効期間 / 所持確認 |
-| 17 | ハンコイン購入レシート | `CMJReceiptDlg` | `MJReceiptDlg.h/cpp` | `HanCoinReceiptDlg` | `client/src/screens/outgame/dialogs/HanCoinReceiptDlg.tsx` | HanCoin 購入完了 |
+| 17 | MPアイテム購入レシート | `CMJReceiptDlg` | `MJReceiptDlg.h/cpp` | `HanCoinReceiptDlg` | `client/src/screens/outgame/dialogs/HanCoinReceiptDlg.tsx` | クラス名は互換、表示はMP購入完了 |
 | 18 | 交換系購入レシート | `CMJReceiptDlg2` | `MJReceiptDlg2.h/cpp` | `ExchangeItemReceiptDlg` | `client/src/screens/outgame/dialogs/ExchangeItemReceiptDlg.tsx` | 第2タイプレシート |
 | 19 | カスタムレシート | `CMJCustomReceiptDlg` | `MJCustomReceiptDlg.h/cpp` | `CustomReceiptDlg` | `client/src/screens/outgame/dialogs/CustomReceiptDlg.tsx` | カスタム購入完了 |
 | 20 | 抽選スロット | `CMJLotSlotDlg` | `MJLotSlotDlg.h/cpp` | `LotSlotDlg` | `client/src/screens/outgame/dialogs/LotSlotDlg.tsx` | 抽選演出 |

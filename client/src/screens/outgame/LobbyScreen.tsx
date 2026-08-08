@@ -33,11 +33,14 @@ import ItemShopDlg from './dialogs/ItemShopDlg'
 import ConfirmItemDlg, { normalizeRawMajItem, type RawMajItem } from './dialogs/ConfirmItemDlg'
 import CustomDlg from './dialogs/CustomDlg'
 import MissionDlg from './dialogs/MissionDlg'
+import CollectionDlg from './dialogs/CollectionDlg'
 import RankingDlg, { type RankingData } from './dialogs/RankingDlg'
 import TournamentRegistDlg, { type TournamentRegistPayload } from './dialogs/TournamentRegistDlg'
 import AccuseDlg from './dialogs/AccuseDlg'
 import { MAJAK_ACCUSE_EVENT, MAJAK_EXIT_REQUEST_EVENT } from '../../components/MajakFrame'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
+import { DEFAULT_MEMBER_FILTER, isMemberFilterActive, matchesMemberFilter, type MemberFilterValue } from './memberFilter'
+import { gpReplenishmentFailureMessage, isOwnGpReplenishmentResponse } from './gpReplenishment'
 
 const IMG = '/assets/images/game'
 const ABANDON_ROOM_STORAGE_KEY = 'majak:abandonRoomOnNextLobbyEnter'
@@ -877,6 +880,7 @@ interface MemberEntry {
   loseCount: number
   drawCount: number
   sex: 'male' | 'female'
+  age: number
   avatarId: string
   roomId: number
 }
@@ -898,6 +902,7 @@ function readMemberEntry(m: Record<string, unknown>): MemberEntry {
     loseCount: Number(m.k28e ?? m.defeatCnt ?? m.loseCount ?? 0),
     drawCount: Number(m.k29e ?? m.drawCnt ?? m.drawCount ?? 0),
     sex:      (m.k11e === 'F' || m.sex === 'F' || m.sex === 'female' ? 'female' : 'male') as 'male' | 'female',
+    age:      Number(m.k10e ?? m.age ?? 0),
     avatarId: String(m.k7e ?? m.avatarId ?? ''),
     roomId,
   }
@@ -927,6 +932,7 @@ function readLegacyMemberInfo(raw: unknown): MemberEntry | null {
       avatarId: parts[1] ?? '',
       name: parts[2] || parts[27] || parts[0] || '',
       sex: (parts[3] === 'F' ? 'female' : 'male') as 'male' | 'female',
+      age: Number(parts[4] ?? 0),
       location: parts[5] || 'ロビー',
       rating: Number(parts[12] ?? 0),
       slevel: parts[13] === ' ' ? '' : parts[13] ?? '',
@@ -943,6 +949,7 @@ function readLegacyMemberInfo(raw: unknown): MemberEntry | null {
       avatarId: '',
       name: parts[17] && parts[17] !== ' ' ? parts[17] : parts[0] ?? '',
       sex: (parts[1] === 'F' ? 'female' : 'male') as 'male' | 'female',
+      age: 0,
       location: parts[2] || 'ロビー',
       rating: Number(parts[7] ?? 0),
       slevel: '',
@@ -999,14 +1006,73 @@ function inviteResponseMessage(displayName: string, yesNo: unknown) {
   return `${displayName}さんから応答がありませんでした。\n『また今 度誘ってね！』`
 }
 
+const REGULAR_LEVEL_OPTIONS = [
+  '無一文', '金欠', '庶民', '平民', '一般人', '中流', '上流', '金持ち', '富豪', '大富豪', '財閥',
+]
+
+const DANI_LEVEL_OPTIONS = [
+  '10級', '9級', '8級', '7級', '6級', '5級', '4級', '3級', '2級', '1級',
+  '初段', '二段', '三段', '四段', '五段', '六段', '七段', '八段', '九段',
+]
+
+function MemberFilterControls({
+  filter,
+  isDani,
+  onChange,
+}: {
+  filter: MemberFilterValue
+  isDani: boolean
+  onChange: (filter: MemberFilterValue) => void
+}) {
+  const levelOptions = isDani
+    ? DANI_LEVEL_OPTIONS.map((label, index) => ({ value: index + 1, label }))
+    : REGULAR_LEVEL_OPTIONS.map((label, value) => ({ value, label }))
+
+  return (
+    <div className="majak-member-filter-controls">
+      <label>
+        <span>性別</span>
+        <select value={filter.sex} onChange={event => onChange({ ...filter, sex: event.currentTarget.value as MemberFilterValue['sex'] })}>
+          <option value="all">すべて</option>
+          <option value="male">男性</option>
+          <option value="female">女性</option>
+        </select>
+      </label>
+      <label>
+        <span>年齢</span>
+        <select value={filter.age} onChange={event => onChange({ ...filter, age: event.currentTarget.value as MemberFilterValue['age'] })}>
+          <option value="all">すべて</option>
+          <option value="10s">10代</option>
+          <option value="20s">20代</option>
+          <option value="30s">30代</option>
+          <option value="40plus">40代以上</option>
+        </select>
+      </label>
+      <label>
+        <span>{isDani ? '段位' : '資産'}</span>
+        <select value={filter.level ?? ''} onChange={event => onChange({ ...filter, level: event.currentTarget.value === '' ? null : Number(event.currentTarget.value) })}>
+          <option value="">すべて</option>
+          {levelOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+        </select>
+      </label>
+    </div>
+  )
+}
+
 function MobileMemberListPanel({
   members,
   selectedMember,
+  filter,
+  isDani,
+  onFilterChange,
   onSelectMember,
   onViewProfile,
 }: {
   members: MemberEntry[]
   selectedMember: string | null
+  filter: MemberFilterValue
+  isDani: boolean
+  onFilterChange: (filter: MemberFilterValue) => void
   onSelectMember: (pix: string) => void
   onViewProfile: (pix: string) => void
 }) {
@@ -1028,6 +1094,10 @@ function MobileMemberListPanel({
 
   return (
     <aside className="majak-mobile-lobby-members">
+      <details className="majak-member-filter">
+        <summary>フィルター{isMemberFilterActive(filter) ? ` (${members.length}名)` : ''}</summary>
+        <MemberFilterControls filter={filter} isDani={isDani} onChange={onFilterChange} />
+      </details>
       {members.map(member => (
         <button
           key={member.pix}
@@ -1057,20 +1127,25 @@ function MobileMemberListPanel({
 
 function MemberListPanel({
   members,
+  totalMemberCount,
   selectedMember,
   isDani,
+  filter,
+  onFilterChange,
   onSelectMember,
   onViewProfile,
 }: {
   members: MemberEntry[]
+  totalMemberCount: number
   selectedMember: string | null
   isDani: boolean
+  filter: MemberFilterValue
+  onFilterChange: (filter: MemberFilterValue) => void
   onSelectMember: (pix: string) => void
   onViewProfile: (pix: string) => void
 }) {
-  /** CMJMemberListFilter 相当: 条件設定ダイアログ未移植のため、現状は条件なしを保持 */
-  const [filterMode, setFilterMode] = useState<'all' | 'filter'>('all')
-  const filteredMembers = members
+  const [showFilter, setShowFilter] = useState(false)
+  const filterActive = isMemberFilterActive(filter)
 
   /** フィルターボタンのフレーム状態 */
   const [filterFi, setFilterFi] = useState(0)
@@ -1107,15 +1182,15 @@ function MemberListPanel({
         fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(10px * var(--majak-type-scale))', color: '#000',
         textAlign: 'right', lineHeight: '12px',
       }}>
-        <div>全体</div>
+        <div>全体:{totalMemberCount}名</div>
         <div style={{ marginTop: 3 }}>現在:{members.length}名</div>
       </div>
 
       {/* フィルターボタン */}
       <button
-        onClick={() => setFilterMode('filter')}
+        onClick={() => setShowFilter(current => !current)}
         onMouseEnter={() => setFilterFi(2)}
-        onMouseLeave={() => setFilterFi(filterMode === 'filter' ? 3 : 0)}
+        onMouseLeave={() => setFilterFi(filterActive ? 3 : 0)}
         onMouseDown={() => setFilterFi(3)}
         onMouseUp={() => setFilterFi(2)}
         title="フィルター表示"
@@ -1124,7 +1199,7 @@ function MemberListPanel({
           transform: 'translate(3px, 3px)',
           width: 21, height: 36,
           backgroundImage: `url(${IMG}/mj_btn_userlist_filter.png)`,
-          backgroundPosition: `${-(filterMode === 'filter' ? 3 : filterFi) * 21}px 0`,
+          backgroundPosition: `${-(filterActive ? 3 : filterFi) * 21}px 0`,
           backgroundRepeat: 'no-repeat',
           border: 'none', padding: 0, cursor: 'pointer',
           outline: 'none', imageRendering: 'pixelated',
@@ -1137,9 +1212,9 @@ function MemberListPanel({
           選択中 = frame3 (pressed 状態)
           ================================================================ */}
       <button
-        onClick={() => setFilterMode('all')}
+        onClick={() => { onFilterChange(DEFAULT_MEMBER_FILTER); setShowFilter(false) }}
         onMouseEnter={() => setAllFi(2)}
-        onMouseLeave={() => setAllFi(filterMode === 'all' ? 3 : 0)}
+        onMouseLeave={() => setAllFi(filterActive ? 0 : 3)}
         onMouseDown={() => setAllFi(3)}
         onMouseUp={() => setAllFi(2)}
         title="全て表示"
@@ -1148,12 +1223,18 @@ function MemberListPanel({
           transform: 'translate(6px, 3px)',
           width: 21, height: 36,
           backgroundImage: `url(${IMG}/mj_btn_userlist_all.png)`,
-          backgroundPosition: `${-(filterMode === 'all' ? 3 : allFi) * 21}px 0`,
+          backgroundPosition: `${-(filterActive ? allFi : 3) * 21}px 0`,
           backgroundRepeat: 'no-repeat',
           border: 'none', padding: 0, cursor: 'pointer',
           outline: 'none', imageRendering: 'pixelated',
         }}
       />
+
+      {showFilter && (
+        <div className="majak-desktop-member-filter-popover">
+          <MemberFilterControls filter={filter} isDani={isDani} onChange={onFilterChange} />
+        </div>
+      )}
 
       {/* メンバーリスト本体 — レガシー: rcListWnd=CRect(1,43,335,402), CHgListCtrl */}
       <div style={{
@@ -1184,7 +1265,7 @@ function MemberListPanel({
           boxSizing: 'border-box',
         }}
       >
-        {filteredMembers.map((member, index) => (
+        {members.map((member, index) => (
           <div
             key={`${member.pix}-${index}`}
             onClick={() => onSelectMember(member.pix)}
@@ -1858,6 +1939,7 @@ export default function LobbyScreen() {
   const [chatText, setChatText] = useState('')
   const [notice, setNotice] = useState<NoticeDisplay | null>(null)
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
+  const [memberFilter, setMemberFilter] = useState<MemberFilterValue>(DEFAULT_MEMBER_FILTER)
   const chatLogRef = useRef<HTMLDivElement>(null)
   const mutedPixesRef = useRef<Set<string>>(new Set())
   const lastAccuseOpenedAtRef = useRef(0)
@@ -1872,6 +1954,7 @@ export default function LobbyScreen() {
   const [showOpt,      setShowOpt]      = useState(false)
   const [showCfg,      setShowCfg]      = useState(false)
   const [showCustom,   setShowCustom]   = useState(false)
+  const [showCollection, setShowCollection] = useState(false)
   const [showShop,     setShowShop]     = useState(false)
   const [showConfirm,  setShowConfirm]  = useState(false)
   const [showMission,  setShowMission]  = useState(false)
@@ -1954,7 +2037,8 @@ export default function LobbyScreen() {
   const [tournamentDetails, setTournamentDetails] = useState<TournamentDetailEntry[]>([])
   const tournamentDetailActionRef = useRef<'select' | 'page' | null>(null)
   const player = useAuthStore.getState().player
-  const displayMembers = membersWithSelfFirst(members, player?.pix ?? '')
+  const allDisplayMembers = membersWithSelfFirst(members, player?.pix ?? '')
+  const displayMembers = allDisplayMembers.filter(member => matchesMemberFilter(member, memberFilter))
   const autoMatchingChannel = isAutoMatchingChannel(channelId)
   const daniChannel = isDaniChannel(channelId)
   const trainingChannel = isTrainingChannel(channelId)
@@ -1965,6 +2049,14 @@ export default function LobbyScreen() {
   const showMissionButton = !trainingChannel && !daniChannel && !tournamentChannel
   const showFreeChargeButton = !trainingChannel && !tournamentChannel
   const selectedTournamentFromList = tournamentList.find(item => item.seqNo === selectedTournamentSeqNo) ?? null
+
+  useEffect(() => {
+    if (selectedMember && !displayMembers.some(member => member.pix === selectedMember)) setSelectedMember(null)
+  }, [displayMembers, selectedMember])
+
+  useEffect(() => {
+    setMemberFilter(DEFAULT_MEMBER_FILTER)
+  }, [channelId])
 
   useEffect(() => {
     setIsLobbyDataReady(false)
@@ -2508,9 +2600,15 @@ export default function LobbyScreen() {
        */
       const onMoneyReplenishment = (data: Record<string, unknown>) => {
         if (!mounted) return
-        if (!checkResult(data, 'GP補充に失敗しました')) return
+        const currentPix = useAuthStore.getState().player?.pix ?? ''
+        if (!isOwnGpReplenishmentResponse(data, currentPix)) return
+        if (!isOk(data)) {
+          showMessage(gpReplenishmentFailureMessage(data))
+          return
+        }
         // 原典: ProcessMoneyReplenishmentCommand → pData->m_llGamMoney を更新
-        if (typeof data.gammoney === 'number') setGamMoney(data.gammoney as number)
+        const nextMoney = Number(data.gammoney ?? data.k34e)
+        if (Number.isFinite(nextMoney)) setGamMoney(nextMoney)
       }
       SignalR.on('mjkc17e', onMoneyReplenishment)
 
@@ -3144,6 +3242,16 @@ export default function LobbyScreen() {
         />
       )}
 
+      {showCollection && (
+        <CollectionDlg
+          onClose={() => setShowCollection(false)}
+          onEquipChange={collection => {
+            setMajakTitleName(collection.majakTitles.find(title => title.isEquipped)?.titleName ?? '')
+            setTrickTitleName(collection.trickTitles.find(title => title.isEquipped)?.titleName ?? '')
+          }}
+        />
+      )}
+
       {/* CItemShopDlg: IDC_BTN_ITEMSHOP 押下時表示 */}
       {showShop && (
         <ItemShopDlg
@@ -3362,6 +3470,7 @@ export default function LobbyScreen() {
             <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>
             <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>
             <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>
+            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
             <button
               type="button"
               className="majak-mobile-lobby-header-button"
@@ -3385,6 +3494,9 @@ export default function LobbyScreen() {
               <MobileMemberListPanel
                 members={displayMembers}
                 selectedMember={selectedMember}
+                filter={memberFilter}
+                isDani={daniChannel}
+                onFilterChange={setMemberFilter}
                 onSelectMember={setSelectedMember}
                 onViewProfile={openMemberProfile}
               />
@@ -3462,6 +3574,7 @@ export default function LobbyScreen() {
             {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>}
             {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>}
             {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>}
+            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
             <button type="button" className="majak-mobile-lobby-header-button" onClick={onChangeLobby}>ロビー変更</button>
           </div>
         </section>
@@ -3509,6 +3622,9 @@ export default function LobbyScreen() {
             <MobileMemberListPanel
               members={displayMembers}
               selectedMember={selectedMember}
+              filter={memberFilter}
+              isDani={daniChannel}
+              onFilterChange={setMemberFilter}
               onSelectMember={setSelectedMember}
               onViewProfile={openMemberProfile}
             />
@@ -3535,7 +3651,7 @@ export default function LobbyScreen() {
         tournamentPage === 'match' ? (
         <>
           <TournamentMatchPanel tournament={selectedTournament} details={tournamentDetails} memberNameByPix={memberNameByPix} onWatch={onTournamentWatch} />
-          <MemberListPanel members={displayMembers} selectedMember={selectedMember} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
+          <MemberListPanel members={displayMembers} totalMemberCount={allDisplayMembers.length} selectedMember={selectedMember} isDani={daniChannel} filter={memberFilter} onFilterChange={setMemberFilter} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
         </>
         ) : (
         <>
@@ -3554,7 +3670,7 @@ export default function LobbyScreen() {
           <RoomListPanel rooms={rooms} members={members} slotCount={roomSlotCount} channelId={channelId} onEnter={onEnterRoom} onCreateRoom={onCreateRoom} directRoomActionDisabled={autoMatchingChannel} />
 
           {/* ── メンバーリスト (CHgMemberListWnd) MoveWindow(678,212,336×403) ── */}
-          <MemberListPanel members={displayMembers} selectedMember={selectedMember} isDani={daniChannel} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
+          <MemberListPanel members={displayMembers} totalMemberCount={allDisplayMembers.length} selectedMember={selectedMember} isDani={daniChannel} filter={memberFilter} onFilterChange={setMemberFilter} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
         </>
       )}
 
@@ -3762,6 +3878,7 @@ export default function LobbyScreen() {
       {/* 技 (X_TRICK=912,Y_TRICK=122) → content(912,91) */}
       <div style={{ position: 'absolute', left: 864, top: 91, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>技</div>
       <div style={{ position: 'absolute', left: 912, top: 91, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{trickTitleName ? ` : ${trickTitleName}` : ' :'}</div>
+      <button type="button" className="majak-lobby-collection-button" onClick={() => setShowCollection(true)}>コレクション</button>
 
       {/* ── アイコンボタン群 y=622 ── */}
 

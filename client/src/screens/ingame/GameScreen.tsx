@@ -12,7 +12,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
 import * as SignalR from '../../api/signalr'
 import HanRes, { type HanResPlayer } from './HanRes'
-import KyoRes, { type KyoResData } from './KyoRes.tsx'
+import { LegacyKyoRes, type KyoResData } from './KyoRes.tsx'
 import SlideAnnounce, { type SlideAnnounceData } from './SlideAnnounce'
 import ViewerListWnd, { type ViewerEntry } from './ViewerListWnd'
 import AskEndDlg from '../outgame/dialogs/AskEndDlg'
@@ -23,6 +23,7 @@ import { useCustomSkinStore } from '../../store/customSkinStore'
 import { getAvatarUrl, getDefaultAvatarUrl } from '../../utils/resources'
 import { getChannelServerUrl } from '../../api/channel'
 import { getTabSessionId } from '../../utils/tabSession'
+import { GAME_AUTO_CONTROL_EVENT, GAME_KYOKU_STARTED_EVENT } from '../../game/autoControl'
 import { playMajakChat, playMajakSfx, playMajakSid, SID_DRAW, SID_EXIT, SID_JOIN, stopMajakBgm } from '../../utils/majakSound'
 import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 import { useDesktopScreenScale } from '../../hooks/useDesktopScreenScale'
@@ -45,7 +46,6 @@ const KEY_TOURNAMENT_TOTAL_REPORT = 'mjkk97e'
 const KEY_GEM_GAME = 'mjkk56e'
 const ASK_END_SET_EVENT = 'majak:ask-end-set'
 const KYO_RESULT_ACTION_EVENT = 'majak:kyo-result-action'
-const GAME_AUTO_CONTROL_EVENT = 'majak:auto-control'
 const GAME_STATUS_EVENT = 'majak:game-status'
 const GAME_SYNC_EVENT = 'majak:game-sync'
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
@@ -791,6 +791,16 @@ export default function GameScreen() {
       },
     }))
   }, [proxyPlay, autoTsumoGiri, autoPass, autoHora])
+  useEffect(() => {
+    const onKyokuStarted = () => {
+      if (proxyPlay) return
+      setAutoTsumoGiri(false)
+      setAutoPass(false)
+      setAutoHora(false)
+    }
+    window.addEventListener(GAME_KYOKU_STARTED_EVENT, onKyokuStarted)
+    return () => window.removeEventListener(GAME_KYOKU_STARTED_EVENT, onKyokuStarted)
+  }, [proxyPlay])
   const statusLogRef = useRef<HTMLDivElement>(null)
   const chatLogRef = useRef<HTMLDivElement>(null)
   const callAvatarTimersRef = useRef<number[]>([])
@@ -1563,12 +1573,12 @@ export default function GameScreen() {
   }, [gameState?.myOdr, roomId])
 
   useEffect(() => {
-    if (!kyoResData || !kyoResultAction || kyoResultAction.timeLimit <= 0) return
+    if (!proxyPlay || !kyoResData || !kyoResultAction) return
     const id = window.setTimeout(() => {
       void sendKyoResultAction()
-    }, kyoResultAction.timeLimit * 1000)
+    }, 3000)
     return () => window.clearTimeout(id)
-  }, [kyoResData, kyoResultAction])
+  }, [proxyPlay, kyoResData, kyoResultAction])
 
   const sendAskEndSetAction = async (action: number) => {
     const request = askEndSet
@@ -1601,17 +1611,6 @@ export default function GameScreen() {
     }).catch(() => {})
   }
 
-  useEffect(() => {
-    if (!kyoResData || !kyoResultAction) return
-    const onKyoContKeyDown = (event: KeyboardEvent) => {
-      if (event.code !== 'Enter' && event.code !== 'Space' && event.code !== 'Numpad0') return
-      event.preventDefault()
-      void sendKyoResultAction()
-    }
-    window.addEventListener('keydown', onKyoContKeyDown)
-    return () => window.removeEventListener('keydown', onKyoContKeyDown)
-  }, [kyoResData, kyoResultAction])
-
   const onToggleProxyPlay = () => {
     setProxyPlay(prev => {
       const next = !prev
@@ -1640,6 +1639,11 @@ export default function GameScreen() {
     if (returnChannelId) navigate(`/channel/${returnChannelId}/lobby`, { replace: true })
     else navigate(-1)
   }
+
+  useEffect(() => {
+    if (!proxyPlay || !hanResData) return
+    void exitGameToLobby()
+  }, [proxyPlay, hanResData])
 
   const closeInviteDialog = () => {
     setShowInviteDialog(false)
@@ -1999,7 +2003,7 @@ export default function GameScreen() {
 
       {/* ── CMJKyoRes: 1局終了結果 (playing/MJPID_ENDKYO 受信時に表示) ── */}
       {kyoResData && !hanResData && (
-        <KyoRes
+        <LegacyKyoRes
           data={kyoResData}
           myOdr={effectiveMyOdr ?? 0}
           canContinue={Boolean(kyoResultAction)}

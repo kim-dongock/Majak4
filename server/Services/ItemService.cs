@@ -170,7 +170,7 @@ public class ItemService
             // リポジトリエラーコードを Val.Custom* にマッピング
             return rtnVal switch
             {
-                -1101 => (Val.CustomCoinless, 0),   // GEM 不足
+                -1101 => (Val.CustomCoinless, 0),   // MP 不足
                 -1102 => (Val.CustomIdError,  0),   // ユーザー/アイテム情報エラー
                 -1104 => (Val.CustomError,    0),   // 配布失敗
                 -1105 => (Val.CustomIdError,  0),   // アイテム情報エラー

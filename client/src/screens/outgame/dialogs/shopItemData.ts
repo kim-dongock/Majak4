@@ -22,7 +22,7 @@ const IMG = '/assets/images/game/items'
 
 /** ============================================================
  * BUY_ITEM タブ用 (CMajakShopItemData)
- * GEM購入アイテム (11件)
+ * MP購入アイテム (11件)
  * ============================================================ */
 export interface BuyItemData {
   itemIndex:    number
@@ -30,7 +30,7 @@ export interface BuyItemData {
   procId:       string         // gmbsysmajakgma
   name:         string         // m_strItemName[0]
   nameSub:      string
-  hancoinPrice: number          // 旧互換名: GEM価格
+  hancoinPrice: number          // 旧互換名: ハンコイン価格。現行表示はMP
   gameMoney:    number
   nameSub2:     string         // 表示用 (例: "2倍", "3倍")
   sellCode:     string

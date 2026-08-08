@@ -23,6 +23,8 @@ export interface CreateGameOptions {
   layoutMode?: IngameLayoutMode
   /** 通常対局時のルームID */
   roomId?: string
+  /** 牌譜に保存するルーム名 */
+  roomName?: string
   /** 自分の席順 */
   myOdr?: number
   /** 観戦者として表示する */
@@ -35,6 +37,8 @@ export interface CreateGameOptions {
   inputConfig?: {
     nSelPasKey?: number
   }
+  /** 牌譜の自動記録設定 (0=なし, 1=自分の対局, 2=観戦を含む) */
+  recordPaifuMode?: number
   /** アシスト設定 (CMJConfig::m_bChkTap/Pai/Tnp/Hor) */
   assistConfig?: Partial<GameAssistConfig>
   /** 装備中カスタム背景 (CUSTOMITEM_BOARD_*) */
@@ -67,10 +71,12 @@ function sameGameOptions(a: CreateGameOptions, b: CreateGameOptions): boolean {
   return a.mode === b.mode &&
     a.layoutMode === b.layoutMode &&
     a.roomId === b.roomId &&
+    a.roomName === b.roomName &&
     a.myOdr === b.myOdr &&
     a.isViewer === b.isViewer &&
     a.roomOption === b.roomOption &&
     a.inputConfig?.nSelPasKey === b.inputConfig?.nSelPasKey &&
+    a.recordPaifuMode === b.recordPaifuMode &&
     a.assistConfig?.bChkTap === b.assistConfig?.bChkTap &&
     a.assistConfig?.bChkPai === b.assistConfig?.bChkPai &&
     a.assistConfig?.bChkTnp === b.assistConfig?.bChkTnp &&

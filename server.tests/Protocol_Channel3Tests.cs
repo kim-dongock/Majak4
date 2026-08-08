@@ -571,7 +571,7 @@ public class GetMemberListCommandTests
     public async Task Execute_FieldsIncluded()
     {
         var session = new PlayerSessionService();
-        var p1 = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", NickName = "Alice", ChannelId = "ch1", RoomId = null };
+        var p1 = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", NickName = "Alice", ChannelId = "ch1", RoomId = null, Age = 28 };
         session.Register(p1);
 
         var cmd = new GetMemberListCommand(session);
@@ -584,6 +584,8 @@ public class GetMemberListCommandTests
         Assert.Equal(p1.Pix, members[0]["memberNo"].GetString());
         Assert.NotEqual(p1.MemberNo, members[0]["memberNo"].GetString());
         Assert.Equal("Alice", members[0]["nickname"].GetString());
+        Assert.Equal(28, members[0]["age"].GetInt32());
+        Assert.Equal(28, members[0][GKey.Age].GetInt32());
         Assert.Equal("ロビー", members[0]["location"].GetString());
     }
 

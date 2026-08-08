@@ -40,7 +40,7 @@
  */
 import { useRef, useEffect, useState } from 'react'
 import * as SignalR from '../../../api/signalr'
-import { showError } from '../../../utils/msgbox'
+import { showError, showMessage } from '../../../utils/msgbox'
 import CustomReceiptDlg from './CustomReceiptDlg'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 import ResponsiveShopTransactionDlg from './ResponsiveShopTransactionDlg'
@@ -53,7 +53,7 @@ const DIALOG_H = 500
 
 /** エラーコード (CUSTOM_ERROR_CODE_*) */
 const ERROR_CODE: Record<number, string> = {
-  1:  'キャッシュが足りません',
+  1:  'MPが足りません',
   2:  '既に所持しているアイテムです',
   11: 'IDが不正です',
   12: '接続エラー',
@@ -65,7 +65,7 @@ export interface CustomShopItem {
   itemName: string
   itemType: string
   itemDesc: string
-  /** 価格 (キャッシュ) */
+  /** 価格 (MP) */
   price:    number
   shopNo:   number
   gameMoney: number
@@ -228,9 +228,9 @@ export default function BuyCustomItemDlg({
     })
   }
 
-  /** IDC_BTN_HANCOINBUY — 追加購入ページを外部で開く */
+  /** IDC_BTN_HANCOINBUY — MP追加購入 (決済接続前は準備中表示) */
   const handleBuy = () => {
-    window.open('https://coin.hangame.co.jp/', '_blank', 'noopener,noreferrer')
+    void showMessage('MP購入機能は準備中です。')
   }
 
   const textStyle = {
@@ -249,7 +249,7 @@ export default function BuyCustomItemDlg({
         itemKind={item.itemType}
         imageUrl={`${IMG_ITEM}/mj_custom_${String(item.itemId).padStart(2, '0')}.png`}
         costs={[{ label: '購入価格', value: yen(item.price) }]}
-        balances={[{ label: '購入後のキャッシュ', value: yen(receipt.coinAfter) }]}
+        balances={[{ label: '購入後のMP', value: yen(receipt.coinAfter) }]}
         complete
         onCancel={() => { onBuyOK?.(receipt.coinAfter); onClose() }}
       />
@@ -261,7 +261,7 @@ export default function BuyCustomItemDlg({
       description={[item.itemDesc]}
       imageUrl={`${IMG_ITEM}/mj_custom_${String(item.itemId).padStart(2, '0')}.png`}
       costs={[{ label: '価格', value: yen(item.price) }]}
-      balances={[{ label: '所持キャッシュ', value: yen(coinBalance) }, { label: '購入後のキャッシュ', value: yen(Math.max(0, coinBalance - item.price)) }]}
+      balances={[{ label: '所持MP', value: yen(coinBalance) }, { label: '購入後のMP', value: yen(Math.max(0, coinBalance - item.price)) }]}
       confirmDisabled={yesDis}
       onConfirm={handleYes}
       onCancel={onClose}
@@ -353,7 +353,7 @@ export default function BuyCustomItemDlg({
           frameW={123} frameH={20}
           x={235} y={377}
           onClick={handleBuy}
-          title="キャッシュで購入"
+          title="MPで購入"
         />
 
         {/* ── Yes ボタン mj_shp_btn_yes.png (340×29, 4フレーム 85×29) at (99, 458) ── */}

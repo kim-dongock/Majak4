@@ -1,5 +1,5 @@
 /**
- * HanCoinReceiptDlg — CMJReceiptDlg 相当のキャッシュ購入レシート (AP-09 §3-2-8)
+ * HanCoinReceiptDlg — CMJReceiptDlg 相当のMP購入レシート (AP-09 §3-2-8)
  * レガシー: legacy/client/HgMajak2/MJReceiptDlg.h/cpp
  *
  * ウィンドウ: MoveWindow(0,0,390,470) → 390×470px, CenterWindow(GetParent())

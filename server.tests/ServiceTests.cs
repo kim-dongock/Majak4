@@ -31,8 +31,8 @@ public class TitleServiceTests
         typeof(TitleService)
             .GetField("_titleCache",
                 System.Reflection.BindingFlags.NonPublic |
-                System.Reflection.BindingFlags.Instance)!
-            .SetValue(svc, titleCache ?? new Dictionary<string, string>
+                System.Reflection.BindingFlags.Static)!
+            .SetValue(null, titleCache ?? new Dictionary<string, string>
             {
                 ["mjkt100"] = "初心者",
                 ["mjks013"] = "雀士",
@@ -118,6 +118,17 @@ public class TitleServiceTests
     }
 
     [Fact]
+    public void GetTitleName_SeparateServiceInstance_UsesSharedStartupCache()
+    {
+        BuildService(new Dictionary<string, string> { ["mjkt100"] = "初心者" });
+        var requestScopedService = new TitleService(
+            _playerRepoMock.Object,
+            TestMasterCacheFactory.Create(playerRepo: _playerRepoMock.Object));
+
+        Assert.Equal("初心者", requestScopedService.GetTitleName("mjkt100"));
+    }
+
+    [Fact]
     public void GetTitleName_TypeAndCode_BuildsLegacyTitleIds()
     {
         var svc = BuildService(new Dictionary<string, string>
@@ -131,6 +142,66 @@ public class TitleServiceTests
         Assert.Equal("玄人", svc.GetTitleName(1, 103));
         Assert.Equal("大会王者", svc.GetTitleName(1, 1001));
         Assert.Equal("", svc.GetTitleName(1, 999));
+    }
+
+    [Fact]
+    public async Task GetCollectionAsync_SeparatesOwnedTitlesAndSkills()
+    {
+        _playerRepoMock.Setup(r => r.GetTitleListAsync("u1"))
+            .ReturnsAsync(["mjkt100", "mjks013", "unknown"]);
+        var player = new MajakPlayer
+        {
+            MemberNo = "u1",
+            MajakTitle = "mjkt100",
+            TrickTitle = "mjks013",
+        };
+
+        var (majakTitles, trickTitles) = await BuildService().GetCollectionAsync(player);
+
+        Assert.Equal("mjkt100", Assert.Single(majakTitles).TitleId);
+        Assert.True(majakTitles[0].IsEquipped);
+        Assert.Equal("mjks013", Assert.Single(trickTitles).TitleId);
+        Assert.True(trickTitles[0].IsEquipped);
+    }
+
+    [Fact]
+    public async Task EquipOwnedTitleAsync_RejectsUnownedTitle()
+    {
+        _playerRepoMock.Setup(r => r.HasActiveTitleAsync("u1", "mjkt103")).ReturnsAsync(false);
+        var player = new MajakPlayer { MemberNo = "u1" };
+
+        bool ok = await BuildService().EquipOwnedTitleAsync(player, false, "mjkt103");
+
+        Assert.False(ok);
+        _playerRepoMock.Verify(r => r.UpdateEquippedTitleAsync(
+            It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task EquipOwnedTitleAsync_EquipsOwnedSkillAndUpdatesRuntimeState()
+    {
+        _playerRepoMock.Setup(r => r.HasActiveTitleAsync("u1", "mjks013")).ReturnsAsync(true);
+        _playerRepoMock.Setup(r => r.UpdateEquippedTitleAsync("u1", true, "mjks013")).ReturnsAsync(true);
+        var player = new MajakPlayer { MemberNo = "u1" };
+
+        bool ok = await BuildService().EquipOwnedTitleAsync(player, true, "mjks013");
+
+        Assert.True(ok);
+        Assert.Equal("mjks013", player.TrickTitle);
+        Assert.Equal(13, player.TrickTitleId);
+    }
+
+    [Fact]
+    public async Task EquipOwnedTitleAsync_AllowsUnequip()
+    {
+        _playerRepoMock.Setup(r => r.UpdateEquippedTitleAsync("u1", false, "")).ReturnsAsync(true);
+        var player = new MajakPlayer { MemberNo = "u1", MajakTitle = "mjkt100", MajakTitleId = 100 };
+
+        bool ok = await BuildService().EquipOwnedTitleAsync(player, false, null);
+
+        Assert.True(ok);
+        Assert.Equal("", player.MajakTitle);
+        Assert.Equal(0, player.MajakTitleId);
     }
 
     // シナリオ6: EnsureInitialGradeTitleAsync — 10級称号を DB 登録

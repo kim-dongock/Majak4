@@ -760,7 +760,7 @@ app.MapPost("/auth/majak-register", async Task<IResult> (
             sexCode,
             body.AvatarId!,
             isTest);
-account = new GamePlayerAccount(displayName ?? string.Empty, sexCode, body.AvatarId!, 0, null);
+account = new GamePlayerAccount(displayName ?? string.Empty, sexCode, null, body.AvatarId!, 0, null);
     }
     await playerRepo.SetDailyMissionAsync(memberNo, conditionType: 1, progressIncrement: 1);
     var pix = sessions.IssuePix(memberNo);
@@ -772,6 +772,7 @@ account = new GamePlayerAccount(displayName ?? string.Empty, sexCode, body.Avata
         memberNo = pix,
         name = displayName ?? account.DisplayName,
         sex = account.SexCode,
+        birthYear = account.BirthYear,
         avatarId = account.AvatarId,
         isTestEnv = isTest,
         requiresRegistration = false,
@@ -939,8 +940,52 @@ app.MapGet("/api/player/profile", async (HttpContext ctx, string? memberNo, Play
     });
 });
 
+app.MapGet("/api/player/collection", async (HttpContext ctx, PlayerRepository playerRepo, TitleService titleService, PlayerSessionService sessions, GameAuthTokenService gameAuth) =>
+{
+    var auth = RequireGameAuth(ctx, gameAuth);
+    if (auth is null) return Results.Unauthorized();
+
+    var activePlayer = sessions.GetByMember(auth.MemberNo);
+    var player = activePlayer ?? new MajakServer.Models.Player.MajakPlayer { MemberNo = auth.MemberNo };
+    if (activePlayer is null && !await playerRepo.LoadCommonRatAsync(player))
+        return Results.NotFound(new { error = "PLAYER_PROFILE_NOT_FOUND" });
+    var (majakTitles, trickTitles) = await titleService.GetCollectionAsync(player);
+    return Results.Ok(new
+    {
+        majakTitles,
+        trickTitles,
+        equippedMajakTitle = player.MajakTitle,
+        equippedTrickTitle = player.TrickTitle,
+    });
+});
+
+app.MapPost("/api/player/collection/equip", async (HttpContext ctx, CollectionEquipRequest? body, PlayerRepository playerRepo, TitleService titleService, PlayerSessionService sessions, GameAuthTokenService gameAuth) =>
+{
+    var auth = RequireGameAuth(ctx, gameAuth);
+    if (auth is null) return Results.Unauthorized();
+    bool isTrick = string.Equals(body?.Category, "trick", StringComparison.Ordinal);
+    bool isMajak = string.Equals(body?.Category, "majak", StringComparison.Ordinal);
+    if (!isTrick && !isMajak) return Results.BadRequest(new { error = "INVALID_TITLE_CATEGORY" });
+
+    var activePlayer = sessions.GetByMember(auth.MemberNo);
+    var player = activePlayer ?? new MajakServer.Models.Player.MajakPlayer { MemberNo = auth.MemberNo };
+    if (activePlayer is null && !await playerRepo.LoadCommonRatAsync(player))
+        return Results.NotFound(new { error = "PLAYER_PROFILE_NOT_FOUND" });
+    if (!await titleService.EquipOwnedTitleAsync(player, isTrick, body?.TitleId))
+        return Results.BadRequest(new { error = "TITLE_NOT_OWNED" });
+
+    var (majakTitles, trickTitles) = await titleService.GetCollectionAsync(player);
+    return Results.Ok(new
+    {
+        majakTitles,
+        trickTitles,
+        equippedMajakTitle = player.MajakTitle,
+        equippedTrickTitle = player.TrickTitle,
+    });
+});
+
 // GET /api/shop/cash-products
-// キャッシュ購入画面向け。ゲーム認証済みユーザーに有効な Web 商品だけを公開する。
+// MP購入画面向け。ゲーム認証済みユーザーに有効な Web 商品だけを公開する。
 app.MapGet("/api/shop/cash-products", async (HttpContext ctx, AdminRepository adminRepo, GameAuthTokenService gameAuth) =>
 {
     if (RequireGameAuth(ctx, gameAuth) is null) return Results.Unauthorized();
@@ -1147,6 +1192,7 @@ app.MapPost("/auth/google-login", async Task<IResult> (
         memberNo             = pix,
         name                 = account.DisplayName,
         sex                  = account.SexCode,
+        birthYear            = account.BirthYear,
         avatarId             = account.AvatarId,
         requiresRegistration = false,
         accountStatus        = account.AccountStatus,
@@ -1197,6 +1243,7 @@ app.MapPost("/auth/refresh", async Task<IResult> (
         memberNo             = pix,
         name                 = account.DisplayName,
         sex                  = account.SexCode,
+        birthYear            = account.BirthYear,
         avatarId             = account.AvatarId,
         requiresRegistration = false,
         accountStatus        = account.AccountStatus,
@@ -1263,6 +1310,9 @@ app.MapPost("/auth/google-register", async Task<IResult> (
     var sexCode = body.Sex?.ToUpperInvariant() ?? string.Empty;
     if (sexCode is not ("M" or "F"))
         return Results.BadRequest(new { error = "INVALID_SEX" });
+    var currentYear = DateTime.UtcNow.Year;
+    if (body.BirthYear is null || body.BirthYear < 1900 || body.BirthYear > currentYear)
+        return Results.BadRequest(new { error = "INVALID_BIRTH_YEAR" });
     if (string.IsNullOrWhiteSpace(body.AvatarId) || !AvatarCatalog.IsValid(sexCode, body.AvatarId))
         return Results.BadRequest(new { error = "INVALID_AVATAR" });
 
@@ -1284,6 +1334,7 @@ app.MapPost("/auth/google-register", async Task<IResult> (
             memberNo             = existingPix,
             name                 = existing.DisplayName,
             sex                  = existing.SexCode,
+            birthYear            = existing.BirthYear,
             avatarId             = existing.AvatarId,
             requiresRegistration = false,
             accountStatus        = existing.AccountStatus,
@@ -1291,7 +1342,7 @@ app.MapPost("/auth/google-register", async Task<IResult> (
         });
     }
 
-    var memberNo = (await gamePlayers.RegisterGoogleAsync(googleSub, nickname, sexCode, body.AvatarId!))
+    var memberNo = (await gamePlayers.RegisterGoogleAsync(googleSub, nickname, sexCode, (ushort)body.BirthYear.Value, body.AvatarId!))
         .ToString(System.Globalization.CultureInfo.InvariantCulture);
     await playerRepo.SetDailyMissionAsync(memberNo, conditionType: 1, progressIncrement: 1);
     var pix = sessions.IssuePix(memberNo);
@@ -1310,6 +1361,7 @@ app.MapPost("/auth/google-register", async Task<IResult> (
         memberNo = pix,
         name                 = nickname,
         sex                  = sexCode,
+        birthYear            = body.BirthYear,
         avatarId             = body.AvatarId,
         requiresRegistration = false,
         accountStatus        = 0,
@@ -1352,6 +1404,8 @@ internal sealed record MajakRegisterRequest(
     [property: System.Text.Json.Serialization.JsonPropertyName("avatarId")]
     string? AvatarId
 );
+
+internal sealed record CollectionEquipRequest(string Category, string? TitleId);
 
 internal static partial class LegacyLaunchPassword
 {
@@ -1412,5 +1466,7 @@ internal sealed record GooglePlayerRegisterRequest(
     string? DisplayName,
     [property: System.Text.Json.Serialization.JsonPropertyName("sex")]
     string? Sex,
+    [property: System.Text.Json.Serialization.JsonPropertyName("birthYear")]
+    int? BirthYear,
     [property: System.Text.Json.Serialization.JsonPropertyName("avatarId")]
     string? AvatarId);

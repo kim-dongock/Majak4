@@ -1,119 +1,90 @@
 ---
-applyTo: 'server/**,client/**,scripts/**'
+applyTo: "server/**,server.tests/**,client/**,scripts/**"
+description: "麻雀4のレーティング、GP資産レベル、段位、段位戦卓の入場条件を確認・変更するときに参照する"
 ---
 
 # AP-07 レーティング / レベル制限ルール
 
-レガシー (`legacy/typing/`) 由来のユーザーレベル / レーティングに基づく UI 制限ルールをまとめる。
-新しい画面・機能を実装する際は **必ずこのファイルを参照** し、レガシー挙動と差異が出ないようにすること。
+本ドキュメントは麻雀4のレーティング、GP資産レベル、段位、段位戦卓の入場条件を定義する。
+ゲーム仕様はAP-15、通貨名称はAP-16を優先し、実装値は `RatingService` と `GradeLevelTable` を同時に確認する。
 
 ---
 
-## 1. レーティングシステム概要
+## 1. 3つの値を混同しない
 
-- ユーザーのレーティングは `typing_rat` テーブル (`Rating` / `NLevel` / `SLevel` / `MatchCnt` 列) に保持する。
-- レガシーソース: `legacy/typing/Server/source/HTpgRatingCommon.cpp` の `s_nTypingNLevel[]`
-  - 28段階 (Level 0 〜 27) のしきい値配列。Level 5 (アーティスト) の境界が **30000**。
-- 初回ログイン時は `Rating = 0`, `NLevel = 0` で `typing_rat` レコードを作成する。
+| 値 | 意味 | 主な保存先 | 判定 |
+|---|---|---|---|
+| `Rating` | 対局モードごとの実力レーティング | `player_mode_stats.rating` | 対局結果とモード別計算 |
+| `NLevel` / `SLevel` | 所持GPに基づく資産レベル・表示名 | `player_profile` と実行時 `MajakPlayer` | `RatingService.GetNLevel` / `GetSLevel` |
+| `GradeLevel` / `GradePoint` | 段位戦の10級〜九段と昇段ポイント | `player_mode_stats` のgradeモード | `GradeLevelTable` と段位戦結果 |
 
-### サーバ → クライアント
-
-- `POST /auth/majak-login` のレスポンスに以下を **必ず含める**:
-  - `rating`   (int) — `typing_rat.Rating`
-  - `nLevel`   (int) — `typing_rat.NLevel`
-  - `sLevel`   (int) — `typing_rat.SLevel`
-  - `matchCnt` (int) — `typing_rat.MatchCnt`
-- クライアント `App.tsx` のログインハンドラはこれらを `Player` オブジェクトにマップする。
-  ハードコード値 (`rating: 0` 等) を残してはならない。
+- レーティング、資産レベル、段位は別概念であり、相互の代替値として使わない。
+- `SLevel` は段位名ではなく、GP所持額による資産称号である。
+- ロビーや対局情報に `rating`、`nlevel`、`slevel` を送る場合は、DBまたはサーバー計算値を使い、クライアントで仮の固定値を作らない。
 
 ---
 
-## 2. チャンネルグループ進入制限
+## 2. GP資産レベル (`NLevel` / `SLevel`)
 
-### 唯一のソース・オブ・トゥルース
+`RatingService` は現在の `GamMoney` から次の11段階を計算する。
 
-レガシー `legacy/typing/Resource/ClientSettingFiles/typinghgc.hsp` の `[List]` セクション:
+| NLevel | SLevel | GP下限 |
+|---:|---|---:|
+| 0 | 無一文 | 0 |
+| 1 | 金欠 | 1 |
+| 2 | 庶民 | 500 |
+| 3 | 平民 | 1,500 |
+| 4 | 一般人 | 3,000 |
+| 5 | 中流 | 10,000 |
+| 6 | 上流 | 30,000 |
+| 7 | 金持ち | 100,000 |
+| 8 | 富豪 | 500,000 |
+| 9 | 大富豪 | 1,000,000 |
+| 10 | 財閥 | 5,000,000 |
 
-```ini
-NUM = 4
-1=0091A,初心者ロビー,0,0,0,0,A
-2=0090A,自由ロビー,0,0,0,0,A
-3=0090B,自由ロビー2,0,0,0,0,A
-4=00R3A,上級者ロビー,30000,0,0,0,A
-```
-
-フォーマット: `GroupId, GroupName, MinRating, MaxRating, MinAge, MaxAge, Sex`
-
-⚠️ **注意**: DB の `typing_chanel_mast` には `min_rating` / `max_rating` 列は **存在しない**。
-レガシー仕様どおり、サーバ側ハードコード (hsp の値の写し) で管理する。
-
-### サーバ実装 (`server/src/Program.cs` `/api/channels`)
-
-```csharp
-// hsp [List] セクションの写し。新しいグループ追加時はここを更新すること。
-static (int min, int max) GetGroupRatingThresholds(string subid) => subid switch
-{
-    "0091A" => (0,     0),   // 初心者ロビー
-    "0090A" => (0,     0),   // 自由ロビー
-    "0090B" => (0,     0),   // 自由ロビー2
-    "00R3A" => (30000, 0),   // 上級者ロビー (Level 5 アーティスト以上)
-    _       => (0,     0),
-};
-```
-
-`/api/channels` のレスポンスは各グループに `minRating`, `maxRating`, `chanelType` を含む。
-
-### クライアント判定ロジック
-
-レガシー `Msg_JoinValidate` / `JPChannelGrpListCtrl::OnCheckChannelGrpState` と等価:
-
-```ts
-function isEnterable(group: { minRating: number; maxRating: number }, rating: number): boolean {
-  if (group.minRating > 0 && rating < group.minRating) return false
-  if (group.maxRating > 0 && rating > group.maxRating) return false
-  return true
-}
-```
-
-- `minRating === 0` → 下限なし
-- `maxRating === 0` → 上限なし (`m_bEnterable` 判定でも 0 は無制限を意味)
-
-### UI 表示ルール
-
-- 進入不可グループ:
-  - ボタンは `disabled` 属性 + `channelButtonDisabled` (グレー pill) スタイル
-  - クリックは無視 (state を変更しない)
-  - `title` ツールチップで必要レーティングを表示
-- 画面初期化時は **進入可能な最初のグループ** を自動選択する (`data.find(g => isEnterable(g, rating))`)
-  - 全グループ進入不可時のみ先頭グループを選択
+- `UpdatePlayerLevel` は現在のGPから常に再計算するため、GPが減れば実行時レベルも下がり得る。
+- GPの増減、表示、履歴、無料補充はAP-16に従う。
+- 資産レベルを新規機能の利用権限に転用する場合は、公式仕様または明示的な要件が必要である。
 
 ---
 
-## 3. 制限の適用範囲 (重要)
+## 3. 段位と昇段ポイント
 
-レガシー調査結果に基づき、**レベル / レーティング基準で制限される UI は以下のみ**:
-
-| UI 要素                   | 制限種別          | 備考                                      |
-|---------------------------|-------------------|-------------------------------------------|
-| チャンネルグループ進入    | レーティング基準  | 本ドキュメントの第 2 節を参照             |
-| 楽曲リストのコスト消費    | TPoint 残高基準   | レベル制限ではない (`cost_t_point`)       |
-| ショップアイテム購入      | 所持金 / TPoint  | レベル制限ではない                        |
-| ミッション開始            | 状態ベース        | 進行中ミッションの有無のみ                |
-| ショップボタン            | 状態ベース        | レベル制限なし                            |
-
-⚠️ **レベルや段位 (NLevel/SLevel) でボタンを非活性化するレガシー仕様は存在しない**。
-新しい画面で「レベル X 以上で解放」のような独自仕様を勝手に追加してはいけない。
-追加が必要な場合は必ずレガシーソース (`legacy/typing/Client/GAME/source/` または `.hml` / `.hsp`) で
-裏付けを取ること。
+- `GradeLevel` は `0=10級` から `9=1級`、`10=初段` から `18=九段` とする。
+- `GradeLevelTable.GetMaxPoint` の昇段ポイントは次の順である。
+  - 10級〜7級: 30
+  - 6級〜4級: 60
+  - 3級〜1級: 90
+  - 初段: 600
+  - 二段〜三段: 1,200
+  - 四段〜六段: 2,400
+  - 七段〜九段: 4,800
+- gradeモードの初期レーティングは `GameConst.RatingGradeModeInit=1500` とする。
+- 段位名、必要ポイント、レーティング更新をクライアントだけで確定せず、サーバー応答を正本とする。
 
 ---
 
-## 4. 関連ファイル
+## 4. 段位戦卓の入場条件
 
-- サーバ: [server/src/Program.cs](../../server/src/Program.cs) `/api/channels`, `/auth/majak-login`
-- サーバ DB: [server/src/Infrastructure/TypingDbContext.cs](../../server/src/Infrastructure/TypingDbContext.cs) `TypingRat`
-- クライアント型: [client/src/types/game.ts](../../client/src/types/game.ts) `ChannelGroup`, `Player`
-- クライアント画面: [client/src/components/lobby/ChannelLobby.tsx](../../client/src/components/lobby/ChannelLobby.tsx)
-- レガシー設定: `legacy/typing/Resource/ClientSettingFiles/typinghgc.hsp` `[List]` セクション
-- レガシーレベル配列: `legacy/typing/Server/source/HTpgRatingCommon.cpp` `s_nTypingNLevel[]`
-- レガシー進入判定: `JPChannelGrpListCtrl::OnCheckChannelGrpState`, `CChannelstGroupData::m_bEnterable`
+`RatingService.CheckEnterGradeMode(gradeLevel, gamMoney, subId)` をサーバー側の正本とする。
+
+| SubID末尾 | 卓 | GradeLevel | GP下限 |
+|---|---|---:|---:|
+| `A` | 通常卓 | 0〜12 (10級〜三段) | 500 |
+| `B` | 段位卓 | 10〜18 (初段〜九段) | 5,000 |
+| `C` | 高段位卓 | 13〜18 (四段〜九段) | 10,000 |
+| `D` | 十段位卓 | 16〜18 (七段〜九段) | 30,000 |
+
+- 実際の対局開始同意時にもサーバーが条件を再検証する。
+- クライアントのボタン非活性化や説明は補助表示であり、権限制御の代わりにしない。
+- 初心者卓は別条件として通常戦績の対局数とGPを確認する。段位戦条件へ混ぜない。
+- 公式仕様にない「レベルXでショップ解放」等の独自制限を追加しない。
+
+## 5. 関連実装
+
+- `server/Services/RatingService.cs`: GP資産レベル、gradeレーティング、段位戦入場条件
+- `server/Models/Protocol/GradeLevelTable.cs`: 段位ごとの最大ポイント
+- `server/Models/Protocol/GameConst.cs`: grade初期値と共通定数
+- `server/Commands/Room/RoomCommands.cs`: 対局開始時の最終入場条件確認
+- `server/Repositories/MySQL/PlayerRepository.cs`: mode別レーティング・段位データの永続化
+- `server.tests/RatingServiceTests.cs`: GP境界と段位戦卓境界の回帰テスト

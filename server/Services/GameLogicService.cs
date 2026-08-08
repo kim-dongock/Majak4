@@ -382,6 +382,7 @@ public class GameLogicService
             return;
         }
 
+        ConsumePromptTimeBank(room, room.PendingActions[order], DateTimeOffset.UtcNow);
         room.PendingActions[order] = null;
 
 
@@ -824,15 +825,30 @@ public class GameLogicService
         IReadOnlyList<string> targetConnectionIds,
         string reason)
     {
-        int timeLimitSeconds = GetActionTimeLimitSeconds(room, actions);
+        var speed = GetLegacySpeed(room);
+        var playerMode = room.Engine.Player[order].Mode;
+        int baseTimeMs = playerMode switch
+        {
+            Engine.PlayerMode.Furo or Engine.PlayerMode.Chan => speed.Furo,
+            Engine.PlayerMode.Kyo or Engine.PlayerMode.Aga => speed.KyoRes,
+            _ => speed.Turn,
+        };
+        bool usesTimeBank = playerMode == Engine.PlayerMode.Turn;
+        int timeBankMs = Math.Max(0, room.KyokuTimeBankMs[order]);
+        int timeLimitMs = baseTimeMs + (usesTimeBank ? timeBankMs : 0);
+        int timeLimitSeconds = Math.Max(1, (int)Math.Ceiling(timeLimitMs / 1000.0));
         var issuedAt = DateTimeOffset.UtcNow;
         var prompt = new PendingActionPrompt
         {
             ActionSeq = room.IssueActionSeq(),
             SeatOrder = order,
-            PlayerMode = room.Engine.Player[order].Mode,
+            PlayerMode = playerMode,
             IssuedAt = issuedAt,
-            DeadlineAt = issuedAt.AddSeconds(timeLimitSeconds),
+            DeadlineAt = issuedAt.AddMilliseconds(timeLimitMs),
+            BaseTimeMs = baseTimeMs,
+            KeepTimeMs = speed.Keep,
+            TimeBankMsAtIssue = timeBankMs,
+            UsesTimeBank = usesTimeBank,
         };
         room.PendingActions[order] = prompt;
         long serverNow = prompt.IssuedAt.ToUnixTimeMilliseconds();
@@ -865,6 +881,10 @@ public class GameLogicService
                     actionSeq = prompt.ActionSeq,
                     serverNow,
                     deadlineAt,
+                    baseTimeMs = prompt.BaseTimeMs,
+                    keepTimeMs = prompt.KeepTimeMs,
+                    timeBankMs = prompt.TimeBankMsAtIssue,
+                    timeBankEnabled = prompt.UsesTimeBank,
                 });
         }
 
@@ -884,6 +904,10 @@ public class GameLogicService
                     actionSeq = prompt.ActionSeq,
                     serverNow,
                     deadlineAt,
+                    baseTimeMs = prompt.BaseTimeMs,
+                    keepTimeMs = prompt.KeepTimeMs,
+                    timeBankMs = prompt.TimeBankMsAtIssue,
+                    timeBankEnabled = prompt.UsesTimeBank,
                 });
         }
 
@@ -949,6 +973,17 @@ public class GameLogicService
         return IsActionCurrentlyAllowed(actions, act, bipaiIndex);
     }
 
+    private static void ConsumePromptTimeBank(GameRoom room, PendingActionPrompt? prompt, DateTimeOffset completedAt)
+    {
+        if (prompt == null || !prompt.UsesTimeBank) return;
+        int order = prompt.SeatOrder;
+        if (order < 0 || order >= room.KyokuTimeBankMs.Length) return;
+
+        double elapsedMs = Math.Max(0, (completedAt - prompt.IssuedAt).TotalMilliseconds);
+        int consumedMs = Math.Max(0, (int)Math.Ceiling(elapsedMs - prompt.BaseTimeMs));
+        room.KyokuTimeBankMs[order] = Math.Max(0, room.KyokuTimeBankMs[order] - consumedMs);
+    }
+
     private static bool IsActionCurrentlyAllowed(ValidActions actions, Engine.Act act, int[] bipaiIndex)
     {
         return act switch
@@ -971,6 +1006,64 @@ public class GameLogicService
 
     private static bool ContainsSameIndices(IEnumerable<int[]> candidates, int[] bipaiIndex)
         => candidates.Any(candidate => candidate.Length == bipaiIndex.Length && !candidate.Except(bipaiIndex).Any() && !bipaiIndex.Except(candidate).Any());
+
+    public async Task ExtendActionTimeBankAsync(GameRoom room, CommandContext ctx)
+    {
+        var player = ctx.Player;
+        if (player == null) return;
+
+        int order = ctx.GetInt("seatOrder", -1);
+        long actionSeq = ctx.GetLong("actionSeq");
+        if (order != player.EngineOrder || order < 0 || order >= GameConst.PlayerMaxCount) return;
+
+        await room.EngineLock.WaitAsync();
+        try
+        {
+            var prompt = room.PendingActions[order];
+            var now = DateTimeOffset.UtcNow;
+            if (prompt == null || prompt.ActionSeq != actionSeq || prompt.DeadlineAt <= now) return;
+            if (prompt.PlayerMode is not (Engine.PlayerMode.Furo or Engine.PlayerMode.Chan)) return;
+            if (room.Engine.Player[order].Mode != prompt.PlayerMode || prompt.UsesTimeBank) return;
+
+            int timeBankMs = Math.Max(0, room.KyokuTimeBankMs[order]);
+            if (timeBankMs <= 0) return;
+            var extendedDeadline = prompt.IssuedAt.AddMilliseconds(prompt.BaseTimeMs + timeBankMs);
+            if (extendedDeadline <= now) return;
+
+            var extendedPrompt = new PendingActionPrompt
+            {
+                ActionSeq = prompt.ActionSeq,
+                SeatOrder = prompt.SeatOrder,
+                PlayerMode = prompt.PlayerMode,
+                IssuedAt = prompt.IssuedAt,
+                DeadlineAt = extendedDeadline,
+                BaseTimeMs = prompt.BaseTimeMs,
+                KeepTimeMs = prompt.KeepTimeMs,
+                TimeBankMsAtIssue = timeBankMs,
+                UsesTimeBank = true,
+            };
+            room.PendingActions[order] = extendedPrompt;
+
+            await ctx.Caller.SendAsync(Cmd.GamePlay, new
+            {
+                playType = "MJPID_TIME_BANK_EXTENDED",
+                seatOrder = order,
+                playerMode = prompt.PlayerMode.ToString(),
+                actionSeq = prompt.ActionSeq,
+                serverNow = now.ToUnixTimeMilliseconds(),
+                deadlineAt = extendedDeadline.ToUnixTimeMilliseconds(),
+                baseTimeMs = prompt.BaseTimeMs,
+                keepTimeMs = prompt.KeepTimeMs,
+                timeBankMs,
+                timeBankEnabled = true,
+            });
+            ScheduleActionTimeout(room, ctx, extendedPrompt);
+        }
+        finally
+        {
+            room.EngineLock.Release();
+        }
+    }
 
     public async Task SendCurrentActionPromptAsync(GameRoom room, CommandContext ctx, MajakPlayer player)
     {
@@ -1029,6 +1122,10 @@ public class GameLogicService
             actionSeq = prompt.ActionSeq,
             serverNow = now.ToUnixTimeMilliseconds(),
             deadlineAt = prompt.DeadlineAt.ToUnixTimeMilliseconds(),
+            baseTimeMs = prompt.BaseTimeMs,
+            keepTimeMs = prompt.KeepTimeMs,
+            timeBankMs = room.KyokuTimeBankMs[order],
+            timeBankEnabled = prompt.UsesTimeBank,
         });
     }
 
@@ -1126,6 +1223,10 @@ public class GameLogicService
                 actionSeq = prompt.ActionSeq,
                 serverNow = now.ToUnixTimeMilliseconds(),
                 deadlineAt = prompt.DeadlineAt.ToUnixTimeMilliseconds(),
+                baseTimeMs = prompt.BaseTimeMs,
+                keepTimeMs = prompt.KeepTimeMs,
+                timeBankMs = room.KyokuTimeBankMs[order],
+                timeBankEnabled = prompt.UsesTimeBank,
             });
             return;
         }
@@ -1146,7 +1247,7 @@ public class GameLogicService
                 if (order < 0 || order >= GameConst.PlayerMaxCount) return;
                 if (PauseAutoProgressWhenNoActivePlayers(room, "action timeout")) return;
                 var currentPrompt = room.PendingActions[order];
-                if (currentPrompt == null || currentPrompt.ActionSeq != prompt.ActionSeq) return;
+                if (!ReferenceEquals(currentPrompt, prompt)) return;
                 if (room.Engine.Player[order].Mode != prompt.PlayerMode) return;
 
                 var actions = room.Engine.GetValidActions(order);
@@ -1158,6 +1259,7 @@ public class GameLogicService
 
                 var result = room.Engine.ProcessAction(order, timeoutAct, bipaiIdx, bipaiIdx.Length);
                 if (result != Engine.ActionResult.Ok) return;
+                ConsumePromptTimeBank(room, currentPrompt, DateTimeOffset.UtcNow);
                 room.PendingActions[order] = null;
 
                 var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
@@ -1289,10 +1391,10 @@ public class GameLogicService
     {
         return speedNo switch
         {
-            0 => (7500, 20000, 2000, 2000, 100, 8000),
-            1 => (9000, 25000, 2500, 2000, 500, 10000),
-            2 => (10000, 30000, 3000, 2500, 1000, 15000),
-            _ => (15000, 45000, 4500, 3500, 1200, 20000),
+            0 => (22000, 20000, 2000, 2000, 100, 8000),
+            1 => (27500, 25000, 2500, 2000, 500, 10000),
+            2 => (33000, 30000, 3000, 2500, 1000, 15000),
+            _ => (49500, 45000, 4500, 3500, 1200, 20000),
         };
     }
 
@@ -1358,6 +1460,8 @@ public class GameLogicService
             room.Engine.GetBipaiCount());
 
 
+        var speed = GetLegacySpeed(room);
+        Array.Fill(room.KyokuTimeBankMs, speed.Init);
         room.PlayHistory.Clear();
 
 
@@ -1386,6 +1490,11 @@ public class GameLogicService
             memberPoints = room.Engine.Player.Select(p => p.GamePoint).ToArray(),
             yakitori     = room.Engine.Player.Select(p => p.IsYakitori).ToArray(),
             tip          = room.Engine.Player.Select(p => p.Tip).ToArray(),
+            timeBankMs   = room.KyokuTimeBankMs.ToArray(),
+            timeFullMs   = speed.Full,
+            timeTurnMs   = speed.Turn,
+            timeFuroMs   = speed.Furo,
+            timeKeepMs   = speed.Keep,
         };
         room.PlayHistory.Add(kyokuInfo);
         await ctx.Clients.Group($"room_{room.RoomId}")
@@ -2599,9 +2708,9 @@ public class GameLogicService
                 DaidaCnt       = ep.ResultRecord.DaidaCnt,
 
                 TurnCnt        = s?.TurnCnt  ?? ep.ResultRecord.TurnCnt,
-                WinCnt         = ep.SetRank == 0 ? 1 : 0,
-                DefeatCnt      = ep.SetRank == GameConst.PlayerMaxCount - 1 ? 1 : 0,
-                DrawCnt        = 0,
+                WinCnt         = ep.SetTotal > 0 ? 1 : 0,
+                DefeatCnt      = ep.SetTotal < 0 ? 1 : 0,
+                DrawCnt        = ep.SetTotal == 0 ? 1 : 0,
                 MatchCnt       = 1,
                 PrevNLevel     = seat.NLevel,
 

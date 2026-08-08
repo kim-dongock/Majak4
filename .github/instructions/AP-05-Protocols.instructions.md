@@ -1,23 +1,30 @@
 ---
 applyTo: "server/**,client/**,scripts/**"
+description: "麻雀4のSignalR・RESTプロトコル、レガシー互換キー、認証済みID、対局開始・復帰シーケンスを確認・変更するときに参照する"
 ---
 
 # AP-05 プロトコル定義 (Legacy Majak2)
 
 ## 目的
 
-- レガシー Majak2 サーバー (C++) の通信プロトコルを .NET Core 移植向けに整理する。
+- レガシーMajak2サーバー (C++) の通信プロトコルをASP.NET Core/.NET 8移植向けに整理する。
 - コマンド一覧、主なリクエストパラメータ、主なレスポンス/戻り値を明文化する。
 - 本ドキュメントは実装仕様の一次資料として扱い、差分が出た場合はコード優先で更新する。
 
+### ID表現
+
+- レガシーのプロトコルキー名 `G::keyMemberId` / `keyMemberId{i}` は互換のため変更しないが、現行Webでクライアントへ送受信する値は原則 `pix` である。
+- DB・Redisキー・サーバー内部セッションで本人を表す値は `player_account.member_no` であり、JWTの `member_no` から確定する。
+- コマンドpayloadの `memberId` / `memberNo` / `pix` を内部 `member_no` と同一視してはならない。本人操作は `CommandContext.AuthMemberNo`、公開識別は `AuthPix` を使う。
+
 ## 参照ソース
 
-- `legacy/server/HMajProtocol.h`
-- `legacy/server/HMajProtocol.cpp`
-- `legacy/server/HMajChnlServer.cpp` / `HMajChnlServer.h`
-- `legacy/server/HMajRoomServer.cpp` / `HMajRoomServer.h`
-- `legacy/server/HMajChnlInfo.h`
-- `legacy/server/MajakDef.h`
+- `Majak4_legacy/server/server/HMajProtocol.h`
+- `Majak4_legacy/server/server/HMajProtocol.cpp`
+- `Majak4_legacy/server/server/HMajChnlServer.cpp` / `HMajChnlServer.h`
+- `Majak4_legacy/server/server/HMajRoomServer.cpp` / `HMajRoomServer.h`
+- `Majak4_legacy/server/server/HMajChnlInfo.h`
+- `Majak4_legacy/server/server/MajakDef.h`
 
 ---
 
@@ -112,6 +119,29 @@ applyTo: "server/**,client/**,scripts/**"
 | `mjkc35e` ShopItemRequest | (なし) | `mjkc36e` で応答 (カスタムショップ一覧) | — |
 | `mjkc41e` BuyCustomItem | `keyCustomId`, `keyShopNo` | `mjkc42e` で応答 (`G::keyResult`, `keyItemQuantity`) | — |
 
+#### 無料GP補充 (`mjkc17e`)
+
+- 公式Webマニュアル `5_3` を優先し、プレイヤーの段位、接続元、ネットカフェ判定による例外を設けない。
+- 所持GPが1,000未満で、午前6時を境界とする当日分を未使用の場合だけ成功する。
+- 成功時は差額だけを付与して残高を正確に1,000 GPとし、当日の使用回数を1にする。
+- `keyReplenishmentType` は成功時 `2`、当日使用済みの場合 `3` とする。
+- 成功応答はチャンネルへ配信されるため、クライアントは応答の対象 `pix` がログイン中の本人の場合だけ自身のGP残高を更新する。
+
+#### コレクション REST API
+
+- `GET /api/player/collection` はゲームJWTの本人について、獲得済みの麻雀称号 (`mjkt*` / `mjkc*`) と技 (`mjks*`) および各装着状態を返す。
+- `POST /api/player/collection/equip` は `{ category: "majak" | "trick", titleId: string | null }` を受け取る。`titleId=null` は指定カテゴリの装着解除を表す。
+- リクエストの会員番号は受け取らず、ゲームJWTから確定する。装着できるのは本人が有効な状態で獲得済みの、指定カテゴリに一致する称号または技だけとする。
+- 麻雀称号と技はそれぞれ最大1つを装着でき、変更時はDBと接続中の `MajakPlayer` を同時に更新する。
+- `mjkc19e` は対局中の新規獲得通知専用であり、コレクションの参照・装着変更には使用しない。
+
+#### ロビーメンバー一覧 (`c7e`)
+
+- 構造化 `members[]` は `sex` / `k11e`、`age` / `k10e`、`nlevel` / `k33e` を含める。
+- `age` はサーバーが `player_account.birth_year` と現在年から算出する。出生年そのものを他プレイヤーへ送らない。
+- 出生年未設定の既存会員は `age=0` とし、「すべて」では表示するが特定の年齢帯フィルターには一致させない。
+- クライアントの性別・年齢帯・資産レベル／段位フィルターは、指定された全条件を AND で適用する。
+
 ### ゲーム進行系 (ルーム内)
 
 | コマンド | 主処理 |
@@ -132,7 +162,7 @@ applyTo: "server/**,client/**,scripts/**"
 
 レガシー根拠:
 
-- サーバー開始同意: `server/legacy/server/HMajRoomServer.cpp::ProcessCommand_PushOkButton`
+- サーバー開始同意: `Majak4_legacy/server/server/HMajRoomServer.cpp::ProcessCommand_PushOkButton`
   - OK 状態更新後 `SendOkButtonState()` (`smmc1e`) を送信。
   - 送信者へ `smmc2e` 応答を返す。
   - 全員 OK 後に `StartGameProcess()` → `StartGameLogic()` をこの順で呼ぶ。
@@ -146,7 +176,7 @@ applyTo: "server/**,client/**,scripts/**"
   - `FindPlayerByOrder(nOrder)` で `m_stHanchanInfo.m_nPlayer[nOrder]` (room/player position) に対応する `HMajPlayer` を探し、各プレイヤーの `m_nSeatPos = nOrder` (engine order) を確定
   - `smmc4e` (`SendPaiInfoToAll`, 初回は `bInit=true`)
   - `playing` / `MJPID_INIKYO` (`OnInitKyoku`)
-- クライアント受信: `client/legacy/client/HgMajak2/MJRoomWnd3.cpp::DispatchServices`
+- クライアント受信: `Majak4_legacy/client/client/HgMajak2/MJRoomWnd3.cpp::DispatchServices`
   - `mjkc4e` は `ProcessRoomStartNewGameCommand()` で `MODE_PLAYING` に入り、卓を準備する。
   - `playing` は `m_tbl.OnRecvPlay()` へ渡す。
   - `smmc4e` は `m_tbl.OnRecvPaiInfo()` へ渡す。
@@ -190,6 +220,9 @@ applyTo: "server/**,client/**,scripts/**"
 - 切断プレイヤーや CPU/NPC などクライアントから入力が返らない場合だけ `ProxyPlay` 相当を使う。レガシー server `ProxyPlay` は `MODE_TURN` なら手牌末尾を `TAP`、`MODE_FURO` / `MODE_CHAN` / `MODE_KYO` / `MODE_AGA` なら `PAS` を実行する。`ProxyPlay(nOrder)` の `nOrder` は engine order であり、room/player position ではない。
 - 親交代はタイマー単体ではなく、engine が局終了・次局開始に到達して次の `MJPID_INIKYO` を送った時に確定する。クライアントは `MJPID_INIKYO.nKyokuCnt` と保存済み `nChicha` から `m_nOyaOdr = (m_nChicha + m_nCurKyo) % 4` を再計算する。
 - Web 版で `MJPID_ACTIONS.timeLimit` を使う場合、`timeLimit` は表示用であり判定は `deadlineAt` / `actionSeq` を使う。クライアントが期限前に `MJPID_ACTION` を送れない場合でも、server timeout が同じ既定アクションを適用するため、ゲーム進行をクライアント timer に依存させてはならない。
+- Web 版の `MJPID_ACTIONS` は `baseTimeMs`, `keepTimeMs`, `timeBankMs`, `timeBankEnabled` も送る。`Turn` は発行時から局持ち時間を使用可能とし、deadline は `baseTimeMs + timeBankMs` とする。`Furo` / `Chan` は最初は基本時間だけを deadline とし、局持ち時間を使う場合は C->S `playing / MJPID_EXTEND_TIME_BANK` (`seatOrder`, `actionSeq`) を明示的に送る。
+- S->C `playing / MJPID_TIME_BANK_EXTENDED` は同じ `actionSeq` の新しい `serverNow`, `deadlineAt` と timing fields を返す。拡張は同一 prompt につき1回だけ許可し、古い timeout task は prompt identity の不一致により無効化する。
+- 局持ち時間は操作完了までの経過時間から `baseTimeMs` を超えた分だけ差し引く。基本時間内の操作では消費せず、局開始時に speed preset の `full - turn` へリセットする。
 
 順序の読み方:
 
@@ -233,7 +266,7 @@ S->C: playing / MJPID_ACTIONS (次に操作可能なプレイヤーへの Web �
 - `MJPID_TURN` のような Web 独自の手番 packet を追加してはならない。手番表示は `MJPID_INIKYO` の親・現在局情報と `MJPID_ACTIONS.playerMode == Turn` から導出する。
 - Web 版で Phaser/React の準備待ち ACK を追加する場合でも、ACK は送信開始タイミングを遅らせるだけの Web 移植補助であり、レガシー順序そのものを変更してはならない。
 - クライアントで `playing` と `smmc4e` を一時保存する場合、コマンド別キューで再生してはならない。サーバー到着順を保つ単一 FIFO キューで再生する。
-- `smmc4e.openPos` は「この PaiInfo が開示された engine order」であり、常に自分の表示基準 (`myOdr`) ではない。自分の `memberId` と一致することを確認せず `myOdr` を上書きしてはならない。
+- `smmc4e.openPos` は「この PaiInfo が開示された engine order」であり、常に自分の表示基準 (`myOdr`) ではない。受信対象が自分の `pix` と一致することを確認せず `myOdr` を上書きしてはならない。
 - ルーム画面内で `mjkc4e` を受けてインライン卓を起動する場合、卓起動直後に `c14e` (`EnterRoom`) を再送してはならない。対局中の `c14e` は落ち戻り/再入室系の経路であり、サーバーは `smmc4e(bInit=true)` と `history` を再送するため、通常開始シーケンスに混ぜると初期配牌・履歴が二重適用される。
 - `history` は通常開始シーケンスではない。対局中再入室・観戦・復帰時の再構築用として扱う。
 - `MJPID_ACTIONS` は Web 移植で追加した UI 用の有効操作通知であり、レガシーの `MJPID_ACTION` 実行通知とは別物として扱う。`MJPID_ACTIONS` を受けても実行アクション履歴に追加してはならない。
@@ -244,20 +277,20 @@ S->C: playing / MJPID_ACTIONS (次に操作可能なプレイヤーへの Web �
 
 レガシー根拠:
 
-- クライアント room socket close: `client/legacy/client/HgMajak2/MJRoomWnd1.cpp::CMJRoomWnd::OnSocketClose`
+- クライアント room socket close: `Majak4_legacy/client/client/HgMajak2/MJRoomWnd1.cpp::CMJRoomWnd::OnSocketClose`
   - `CHgGameWnd::OnSocketClose()` がエラーを返した場合は `ForceExit()` する。
   - Web 版でもルーム画面に留めず、現在チャンネルのトップへ戻す。通信が切れている画面を操作可能に見せてはならない。
-- サーバー room socket close: `server/legacy/server/HMajRoomServer.cpp::DispatchRoomSocketClose`
+- サーバー room socket close: `Majak4_legacy/server/server/HMajRoomServer.cpp::DispatchRoomSocketClose`
   - 対局中 (`PS_PLAY` / `PS_CONTINUE`) の異常切断は完全退室ではない。
   - プレイヤーは out/continue player として保持し、通常の空席扱いにしない。
-- チャンネル再入場: `client/legacy/client/HgChnlM/HgChannelWnd.cpp::SendEnterChannel`
+- チャンネル再入場: `Majak4_legacy/client/client/HgChnlM/HgChannelWnd.cpp::SendEnterChannel`
   - `MAJ::keyIsContinue` (`mjkk33e`) を送る。
-- ルーム一覧処理: `client/legacy/client/HgChnlM/HgChannelWnd.cpp::SetRoomInfo`
+- ルーム一覧処理: `Majak4_legacy/client/client/HgChnlM/HgChannelWnd.cpp::SetRoomInfo`
   - `G::keyOpMemberCnt` / `G::keyOpMemberId{i}` / `G::keyOpMemberPos{i}` を読み、切断中プレイヤー座席を検出する。
   - 自分の memberId が op member に含まれ、復帰待ち状態 (`keyRoomPlaying == 3`) なら `m_bContinuPlay = TRUE` とし、復帰対象 roomId を保持する。
 - チャンネル入場完了後: `CHgChannelWnd::CompleteJoinChannel`
   - `m_bContinuPlay` が true なら `SendGameJoinRoom(m_nCpRoomId, "")` を自動送信する。
-- サーバー復帰入室: `server/legacy/server/HMajRoomServer.cpp::AutoJoinRoom`
+- サーバー復帰入室: `Majak4_legacy/server/server/HMajRoomServer.cpp::AutoJoinRoom`
   - `IsContinuePlayer(memberId)` → `FindContinuePlayer(memberId)` で元座席を特定する。
   - `RemoveContinuePlayer(pos)`、`ClearOutPlayer(memberId)` を行い、元座席に `AddPlayer()` する。
   - 全員復帰したら room state を `ReEnter()` で通常進行へ戻す。
@@ -269,13 +302,13 @@ S->C: playing / MJPID_ACTIONS (次に操作可能なプレイヤーへの Web �
 - `mjkroom` / `c12e` の room info には active player と continue player を分けて含める。
   - active player: `keyMemberCnt`, `keyMemberId{i}`, `keyMemberPos{i}`
   - continue player: `keyOpMemberCnt`, `keyOpMemberId{i}`, `keyOpMemberPos{i}`
-- ロビー/チャンネル再入場後、クライアントは room info の continue player に自分の memberId があるか確認する。
+- ロビー/チャンネル再入場後、クライアントは room info の continue player に自分の `pix` があるか確認する。
 - 自分が continue player なら、ユーザー操作を待たずに該当 roomId へ `mjkc6e` (`commandMajAutoEnterRoom`) / GameJoin 相当で自動復帰する。
-- 自分の continue room が生存している間、別ルームの作成・通常入室・観戦入室を許可してはならない。サーバーは `continue:{memberId}:room` / room info を確認し、要求 roomId が continue roomId と異なる場合は拒否する。
+- 自分の continue room が生存している間、別ルームの作成・通常入室・観戦入室を許可してはならない。サーバーはJWT由来の `continue:{memberNo}:room` とroom infoを確認し、要求roomIdがcontinue roomIdと異なる場合は拒否する。
 - 復帰入室では新規空席割り当てをしてはならない。必ず元座席へ戻す。
-- 同一 memberId が active player として既にいる場合は duplicate として扱うが、`IsOutPlayer` / continue player の同一 memberId は復帰対象として扱う。
-- ユーザーが接続断後に明示的に「退室」を選び、`c9e` を送れなかった場合、Web クライアントは次の `c1e` に `abandonPreviousRoom=true` と `abandonRoomId` を付ける。サーバーは該当 room が同一 channel の Playing room で同一 memberId の座席を持つ場合、古い接続を `IsOutPlayer` として切り離し、ロビー入場を `USER_MULTI_LOGIN` で拒否してはならない。
-- 古い connection の `OnDisconnectedAsync` / `Remove(connectionId)` が遅れて到着しても、新しい connection の `memberId -> connectionId` mapping を消してはならない。削除は connectionId が現在の mapping と一致する場合だけ行う。
+- 同一内部 `member_no` がactive playerとして既にいる場合はduplicateとして扱うが、`IsOutPlayer` / continue playerの同一人物は復帰対象として扱う。
+- ユーザーが接続断後に明示的に「退室」を選び、`c9e` を送れなかった場合、Webクライアントは次の `c1e` に `abandonPreviousRoom=true` と `abandonRoomId` を付ける。サーバーは該当roomが同一channelのPlaying roomでJWT本人の座席を持つ場合だけ古い接続を `IsOutPlayer` として切り離し、ロビー入場を `USER_MULTI_LOGIN` で拒否してはならない。
+- 古いconnectionの `OnDisconnectedAsync` / `Remove(connectionId)` が遅れて到着しても、新しいconnectionの `member_no -> connectionId` mappingを消してはならない。削除はconnectionIdが現在のmappingと一致する場合だけ行う。
 - `keyOpMember*` を通常メンバー数やルーム満員判定から消してはならない。レガシーでは落ち戻り座席としてルーム表示・復帰判定に使う。
 - このフローは WebSocket/SignalR の自動再接続とは別物である。接続が復旧しても、レガシー互換の復帰は room info と `mjkc6e` によって成立する。
 
@@ -535,24 +568,12 @@ S->C: playing / MJPID_ACTIONS (次に操作可能なプレイヤーへの Web �
 | `DEFAULT_MONEY` | `1000` | デフォルトコイン |
 | `ALLINCOUNT_MAX` | `1` | オールイン最大回数 (通常) |
 | `YAKUMANBONUS_MONEY` | `200` | 役満ボーナスコイン |
-- `TypingCheck` では追加の装飾用キー（`keyTypingBunyaCount`, `keyTypingRareBunyaPtn`）を応答。
-- `MusicDLStart` は異常時に `commandTypingMusicDLEnd` コマンドで応答。
 
-## .NET Core 移植メモ
-
-### 優先実装順
-1. **必須（ゲーム進行）**：`tpgc1e, tpgc2e, tpgc3e, tpgc5e, tpgc10e, tpgc11e, tpgc25e, tpgc26e, tpgc27e`
-2. **サポート（ショップ）**：`tpgc8e, tpgc7e, tpgc9e, tpgc13e, tpgc14e`
-3. **オプション（ミッション）**：`tpgc17e, tpgc18e, tpgc19e, tpgc20e, tpgc21e, tpgc24e`
-4. **補助**：`tpgc16e, tpgc22e, tpgc23e, tpgc28e`
+## ASP.NET Core/.NET 8移植メモ
 
 ### プロトコル実装仕様
 - プロトコル形状：「service + command + key-value」
-- 通信方式：URL エンコード → 圧縮 → 暗号化パーサ
-- パーサ実装：`GMetpParser` ベース（キー入出力時に `GetValue/AddValue` を使用）
-- 互換性維持：キーコード（`tpgk*e`）、コマンドコード（`tpgc*e`）、値コード（`tpgv*e`）は絶対変更禁止。
-
-### クライアント側の確認項目
-- `commandTypingStart`, `commandTypingItemGet`, `commandTypingUserStateChange` の実装状況確認。
-- ページ遷移時の Out 判定ロジック（`ProcessCommand_TypingPageChange` 本文確認必要）。
-- イベントミッション（`_EVENT_MISSION` コンパイルフラグ）の有効期間。
+- SignalRは `/hubs/majak` を使用し、接続時にゲームJWTを必須とする。
+- 本人確認はJWTから設定された `CommandContext.AuthMemberNo` / `AuthPix` を正本とし、ペイロードのIDだけを信頼しない。
+- レガシー互換を維持するキーは麻雀4の `mjkk*e` / `smmk*e`、コマンドは `mjkc*e` / `smmc*e`、値は `mjkv*e` 系である。
+- 新しいWeb専用機能は認証済みREST APIを追加できるが、既存の獲得通知や対局コマンドを別用途へ転用しない。

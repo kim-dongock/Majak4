@@ -21,6 +21,7 @@ CREATE DATABASE majak_log  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 
 - 4つのSQLファイルは新規構築用の最終基準であり、既存の運用DBには再適用しない。
 - 既存運用DBには、作成番号順に追加マイグレーションを1回だけ適用する。
+- 出生年を持たない既存ゲームDBは、`game/004_add_player_birth_year.sql` を1回だけ適用する。
 - ゲームDB・ログDBともに外部キー制約を使用しない。
 - ログDB用ユーザーにはゲームDBへの権限を付与しない。
 - ゲームDB用ユーザーにはゲーム状態の読み書きを許可する。

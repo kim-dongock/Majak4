@@ -1,22 +1,33 @@
+---
+applyTo: "client/**,server/**,server.tests/**,scripts/**,admin/**"
+description: "麻雀4プロジェクトの目的、現行構成、認証・ID・データ・主要サービスの全体像を確認するときに参照する"
+---
+
 # AP-01 ゲーム概要 / 麻雀4 (HgMajak2)
 
-## 0. 作業時の注意
+## 0. 適用範囲と正本
 
+- 本ドキュメント群はオンライン対戦麻雀ゲーム「麻雀4」だけを対象とする。
+- 他ゲームのDB、通信コード、サービス、アセット、ゲームルールを根拠として持ち込まない。
+- ゲーム仕様は AP-15、通貨は AP-16、DBは AP-03、通信は AP-05、セキュリティとIDは AP-02を正本とする。
+- 旧Win32版は移植時の参考資料であり、認証、会員登録、課金、Web UIは現行ソースを優先する。
 - ユーザーが明示的に依頼した場合を除き、検証・確認目的で `git diff` を実行しない。
-- 変更後の確認は、対象テスト、`dotnet test` / `dotnet build`、`get_errors`、または対象ファイルの読み取り・検索で行う。
+- 変更後は対象テスト、診断、検索など、変更範囲に合った方法で検証する。
 
 ## 1. ゲームコンセプト
 
-hange プラットフォーム上で動作するオンライン対戦麻雀ゲーム。
-最大 4 人のリアルタイムマルチプレイヤー対戦。
-レガシー Win32 クライアント (HgMajak2.exe) を React + Phaser 3 の Web クライアントに移植するプロジェクト。
+- 最大4人で対局するリアルタイムオンラインリーチ麻雀ゲーム。
+- レガシーWin32クライアント `HgMajak2.exe` とC++サーバーを、React、Phaser 3、ASP.NET Coreへ移植する。
+- アウトゲームは現行WebのレスポンシブUI、インゲームはレガシー対局画面と挙動を基準にする。
 
 ---
 
 ## 2. 全体フロー
 
 ```
-ログイン (hange クッキー認証 — login クッキー hangame= / hangametest=)
+認証 (Googleログインを基本とし、レガシーhange起動は互換経路として保持)
+  ↓
+未登録時は会員登録 (ニックネーム / 性別 / 出生年 / アバター / 規約同意)
   ↓
 ゲームスタート画面 (CMJSelGroupWnd)
   → 交流戦 / 段位戦 / 大会 / 牌譜再生 を選択
@@ -73,7 +84,7 @@ hange プラットフォーム上で動作するオンライン対戦麻雀ゲ�
 ## 5. 勝敗と報酬
 
 - 局終了ごとに点棒を精算、半荘/東風 終了時に最終順位確定
-- **場代 (gam_money)**: 卓種別に設定 (基本卓 500 円 / ハイ卓 3,000 円)
+- **場代 (GP / `game_money`)**: 卓種別に設定 (基本卓 500 GP / ハイ卓 3,000 GP)
 - **龍珠 (ryuju / ドラゴンジェム)**: 順位に応じて付与 (ハイ卓 1位 +5 等)
 - **レーティング**: 段位戦のみ上下
 
@@ -90,11 +101,13 @@ hange プラットフォーム上で動作するオンライン対戦麻雀ゲ�
 
 ## 7. アイテム / カスタム
 
-- **麻雀コイン (gam_money)**: ゲーム内通貨。場代消費 / 無料補充 (1日1回)
-- **ハンコイン**: 課金通貨 (HanCoin GSC API経由)
-- **龍珠 (gem)**: 課金通貨2種目 (交換専用)
+- **GP (`game_money`)**: 公式Webマニュアルの「麻雀コイン」に相当するゲームマネー。場代、対局精算、無料補充、所持額称号に使用する。
+- **MP (`cash_count`)**: 有料アイテム用のプレミアム通貨。現行は残高・消費・管理者調整を実装済みで、外部決済による直接購入は未実装。
+- **龍珠 (`gem_count`)**: プレイ報酬・交換用通貨。MPとは別の残高として扱う。
 - **アイテムショップ** (`CItemShopDlg`): 保険 / 通常 / 期間限定アイテム
 - **カスタムショップ** (`CMajakCustomDlg`): 牌デザイン / 背景 / キャラクター変更
+
+通貨名称と用途の正本は AP-16 を参照する。
 
 ---
 
@@ -105,53 +118,55 @@ hange プラットフォーム上で動作するオンライン対戦麻雀ゲ�
 | クライアント (アウトゲーム) | React 18 + TypeScript + Vite |
 | クライアント (インゲーム) | Phaser 3.88 (WebGL/Canvas) |
 | 通信 | SignalR WebSocket (`/hubs/majak`) |
-| 認証 | Majak 認証 → `POST /auth/majak-login` |
-| サーバー | ASP.NET Core + Oracle + MySQL |
-| 環境 | production: `majak2.hange.jp` / alpha: `alpha-majak2.hange.jp` |
-
-- アイテムマスターは `typing_item_mast` / `typing_item_change_t` テーブルで管理
-- ショップ開放 → 購入 → インベントリ反映の流れで処理
+| 認証 | Google ID Token、ゲームJWT、HttpOnly Refresh Cookie。レガシーhange Cookieは互換経路のみ |
+| サーバー | ASP.NET Core / .NET 8 |
+| 永続化 | MySQL 8 (ゲームDB・ログDBを分離) |
+| キャッシュ | Redis |
 
 ---
 
-## 8. プレイヤーデータ (typing_rat)
+## 9. プレイヤーデータとID
 
-| データ | 内容 |
-|--------|------|
-| memberId | hange ユーザー ID (PK) |
-| rating | 累積レーティング |
-| nLevel / sLevel | ランク番号 / 称号文字列 |
-| matchCount / winCount / defeatCount / drawCount | 対戦統計 |
-| gam_money | グアラ (試合報酬) |
-| game_t_point | T-Point (楽曲購入に使用) |
-| premium_point | プレミアムポイント |
-| missionExp | ミッション経験値 |
-| clearMusicList | クリア済み楽曲リスト |
-| joinDate / lastDate | 初回ログイン日 / 最終ログイン日 |
+| 区分 | 正本 | 用途 |
+|---|---|---|
+| 内部会員ID | `player_account.member_no` | DB主キー、JWTの `sub` / `member_no`、サーバー内部処理 |
+| 公開セッションID | `pix` | クライアント、SignalR、ロビー・ルーム内の公開識別 |
+| アカウント | `player_account` | Google subject、表示名、性別、出生年、アバター、規約・承認状態 |
+| 残高 | `player_wallet` | GP、MP、有償・無償MP、龍珠 |
+| ゲーム状態 | `player_profile` | レーティング、経験値、称号、最終対局など |
+
+- `member_no` は永続する内部IDであり、他プレイヤーや通常のクライアント表示へ公開しない。
+- `pix` は `PlayerSessionService` が発行する非永続のランダムIDであり、DB主キーではない。
+- 認証レスポンスの互換フィールド `memberNo` には内部IDではなく `pix` を返す。
+- 詳細な信頼境界とライフサイクルは AP-02を参照する。
 
 ---
 
-## 9. ゲームを構成するサービス一覧
+## 10. 主要サービス
 
 | サービス | 役割 |
-|----------|------|
-| `TypingGameCommandService` | メインゲームコマンド処理 (楽曲選択・入力判定・リザルト) |
-| `GameLogicService` | スコア計算・レベル計算・勝敗判定ロジック |
-| `ShopCommandService` | アイテムショップ処理 |
-| `MusicCommandService` | 楽曲情報取得・楽曲キャンセル |
-| `RoomSessionManager` | ルーム/チャンネルのメモリ上セッション管理 |
-| `MusicTokenService` | 楽曲ストリーム署名付きトークン発行・検証 |
-| `ChannelRegistrationService` | 起動時チャンネル情報を DB から Redis に登録 |
-| `HangameCookieDecryptor` | Hangame ログインクッキー復号・ユーザー ID 抽出 |
+|---|---|
+| `GameAuthTokenService` | ゲームJWTの発行・検証 |
+| `AuthRefreshSessionService` | Refresh Tokenの発行・ローテーション・失効 |
+| `PlayerSessionService` | SignalR接続、内部会員ID、`pix`、チャンネルの対応管理 |
+| `GamePlayerRepository` | アカウント検索、Google会員登録、ログイン更新 |
+| `PlayerRepository` | プロフィール、残高、称号、統計等のゲームDBアクセス |
+| `GameLogicService` | 対局進行、和了、精算、ミッション・称号判定 |
+| `RatingService` | レーティング、段位、資産レベル判定 |
+| `GameMoneyService` | GPの作成・補充・履歴 |
+| `ItemService` / `MajItemService` | MP・龍珠商品の購入、所持品、装着 |
+| `MasterCacheService` | マスターデータのRedisキャッシュとDBフォールバック |
 
 ---
 
-## 10. 関連ドキュメント
+## 11. 関連ドキュメント
 
 | ドキュメント | 内容 |
 |-------------|------|
-| AP-02-Security | Hangame 認証フロー・楽曲ファイル保護 |
+| AP-02-Security | Google認証、会員登録、JWT、Refresh Cookie、`member_no` / `pix`、課金セキュリティ |
 | AP-03-Database-Schema | DB テーブル定義・シードデータ |
-| AP-04-Architecture | チャンネルサーバー構成・Redis・WebSocket 接続フロー |
-| AP-05-Protocols | WebSocket コマンドコード一覧 (tpgc コマンド) |
+| AP-04-Architecture | チャンネルサーバー構成・Redis・SignalR接続フロー |
+| AP-05-Protocols | 麻雀4のSignalR・REST通信契約 (`mjkc*e`, `smmc*e`) |
 | AP-06-Resource | 静的リソース構成・公開ディレクトリ |
+| AP-15-Official-Web-Manual | 公式Webマニュアルに基づくゲーム仕様 |
+| AP-16-Currency-Economy | GP・MP・龍珠、商品、残高、購入の正本 |
