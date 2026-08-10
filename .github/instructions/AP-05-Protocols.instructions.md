@@ -96,6 +96,18 @@ description: "麻雀4のSignalR・RESTプロトコル、レガシー互換キー
 | commandReplayNavi | `repnavi` | リプレイナビ |
 | Web forced logout | `forcedLogout` | Web 版のサーバー主導ログアウト通知 |
 
+### 3) ロビーチャットコマンド (`hc*e`)
+
+| シンボル名 | コード | 主処理 |
+|---|---|---|
+| commandHanChatString | `hc1e` | 公開チャット／ささやき中継 |
+| commandHanChatReject | `hc5e` | チャット拒否応答。`rejectType=2` は全体拒否、`rejectType=4` は個人拒否 |
+| commandHanChatOneToOneChat | `hc6e` | 1:1チャット開始 |
+| commandHanChatOneToOneChatString | `hc7e` | 1:1チャット本文中継 |
+| commandHanChatOneToOneChatEnd | `hc8e` | 1:1チャット終了 |
+
+`チャット拒否` が有効なクライアントは `hc1e` の公開チャット／ささやきを表示せず、受信した `hc6e` または `hc7e` に対して `hc5e` (`rejectType=2`) を返して1:1チャットを開かない。設定はレガシー同様にチャンネル画面のローカル状態とし、DBへ永続化しない。
+
 ---
 
 ## 主要コマンド仕様 (移植対象)

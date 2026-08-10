@@ -61,11 +61,7 @@ public struct PaiCode : IEquatable<PaiCode>
     public int  BipaiIndex { get => _bipaiIndex; set => _bipaiIndex = (byte)value; }
 
     /// <summary>Serial index 0-33:  kind*9 + number-1</summary>
-    public int GetSerial()
-    {
-        if (!IsValid) return -1;
-        return _code - (_code >> 4) * 7 - 1;   // same formula as C++ GetSerial()
-    }
+    public int GetSerial() => _code - (_code >> 4) * 7 - 1;
 
     public int GetSerialRed() => _isRed ? 34 + (int)GetKind() : GetSerial();
 

@@ -52,11 +52,14 @@ public sealed class LegacyTrainingAiEvaluator : ITrainingAiEvaluator
         {
             foreach (FuroBlock furo in visiblePlayer.Furo)
             {
-                // Open furo stores the called discard at index 0. That tile is
-                // already present in Sutehai, matching ComTurn's ptr=1 policy.
-                int firstVisibleTile = furo.Act == Act.Ank ? 0 : 1;
-                for (int index = firstVisibleTile; index < furo.Tiles.Count; index++)
-                    rest[furo.Tiles[index].GetSerial()]--;
+                for (int index = 0; index < furo.Tiles.Count; index++)
+                {
+                    bool isCalledTile = furo.Act != Act.Ank
+                        && (furo.CalledBipaiIndex >= 0
+                            ? furo.Tiles[index].BipaiIndex == furo.CalledBipaiIndex
+                            : index == 0);
+                    if (!isCalledTile) rest[furo.Tiles[index].GetSerial()]--;
+                }
             }
 
             foreach (PaiCode tile in visiblePlayer.Sutehai)

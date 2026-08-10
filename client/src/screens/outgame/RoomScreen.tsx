@@ -32,7 +32,9 @@ import PlayerInfoWnd, { type PlayerInfo as PlayerInfoDialogData } from './dialog
 import ViewerListWnd, { type ViewerEntry } from '../ingame/ViewerListWnd'
 import SlideAnnounce, { type SlideAnnounceData } from '../ingame/SlideAnnounce'
 import HanRes, { type HanResPlayer } from '../ingame/HanRes'
-import { LegacyKyoRes, type KyoResData } from '../ingame/KyoRes'
+import { FORCED_HAN_RESULT, FORCE_HAN_RESULT_FOR_TEST } from '../ingame/forcedHanResult'
+import KyoRes, { type KyoResData } from '../ingame/KyoRes'
+import { FORCED_KYO_RESULT, FORCE_KYO_RESULT_FOR_TEST } from '../ingame/forcedKyoResult'
 import MiniChannelWnd from './MiniChannelWnd'
 import { getDefaultAvatarUrl, getGameAvatarUrl } from '../../utils/resources'
 import { configureMajakSound, playMajakChat, playMajakSid, SID_EXIT, SID_JOIN } from '../../utils/majakSound'
@@ -89,11 +91,6 @@ function roomEnterErrorMessage(data: Record<string, unknown>): string {
 
   const failCode = Number(data.failcode ?? data.failCode)
   return ROOM_ENTER_ERROR_MESSAGES[failCode] ?? 'ルームへの入室に失敗しました。'
-}
-
-function isFatalRoomEntryError(data: Record<string, unknown>): boolean {
-  const rawMessage = data.k2e ?? data.message
-  return typeof rawMessage !== 'string' || !rawMessage.trim() || rawMessage.trim() === 'エラー'
 }
 
 function getDocumentNavigationType() {
@@ -776,6 +773,8 @@ export default function RoomScreen() {
   const [gameLoadStep, setGameLoadStep] = useState<GameLoadStep>('server')
   const [gameLoadComplete, setGameLoadComplete] = useState(false)
   const [hanResData, setHanResData] = useState<HanResPlayer[] | null>(null)
+  const [forcedHanResultDismissed, setForcedHanResultDismissed] = useState(false)
+  const displayedHanResData = FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed ? FORCED_HAN_RESULT : hanResData
   const [hanResFlags, setHanResFlags] = useState({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
   const [kyoResData, setKyoResData] = useState<KyoResData | null>(null)
   const [kyoResultAction, setKyoResultAction] = useState<{
@@ -1151,6 +1150,7 @@ export default function RoomScreen() {
   useEffect(() => {
     let mounted = true
     let pendingChannelEntryHandler: SignalR.MessageHandler | null = null
+    let roomEntryFailureHandled = false
     const effectInstance = ++reconnectSetupSerialRef.current
     console.info('[GameReconnect] RoomScreen connection effect mounted', {
       effectInstance,
@@ -1227,22 +1227,21 @@ export default function RoomScreen() {
       return true
     }
 
-    const handleRoomEntryFailure = (data: Record<string, unknown>) => {
-      const fatalRoomError = isFatalRoomEntryError(data)
-      void showError(roomEnterErrorMessage(data)).then(() => {
-        if (!mounted) return
-        if (fatalRoomError) {
-          const responseRoomId = Number(data.k42e ?? data.roomId ?? 0)
-          window.sessionStorage.setItem(ABANDON_ROOM_STORAGE_KEY, JSON.stringify({
-            channelId: channelId ?? '',
-            roomId: responseRoomId > 0 ? responseRoomId : Number(roomId ?? 0),
-            fatalRoomError: true,
-          }))
-        } else if (gameReconnectActiveRef.current) {
-          return
-        }
-        navigate(`/channel/${channelId ?? ''}/lobby`, { replace: true })
-      })
+    const handleRoomEntryFailure = (data: Record<string, unknown>, fallbackMessage?: string) => {
+      if (roomEntryFailureHandled) return
+      roomEntryFailureHandled = true
+      const responseRoomId = Number(data.k42e ?? data.roomId ?? 0)
+      window.sessionStorage.setItem(ABANDON_ROOM_STORAGE_KEY, JSON.stringify({
+        channelId: channelId ?? '',
+        roomId: responseRoomId > 0 ? responseRoomId : Number(roomId ?? 0),
+        fatalRoomError: true,
+      }))
+      navigate(`/channel/${channelId ?? ''}/lobby`, { replace: true })
+      const rawMessage = data.k2e ?? data.message
+      const message = typeof rawMessage === 'string' && rawMessage.trim() && rawMessage.trim() !== 'エラー'
+        ? rawMessage.trim()
+        : fallbackMessage ?? roomEnterErrorMessage(data)
+      void showError(message)
     }
 
     /**
@@ -1790,8 +1789,7 @@ export default function RoomScreen() {
       const result = data.k1e ?? data.result
       if (result != null && !isOk(result)) {
         if (absorbAlreadyInRoom(data)) return
-        showError(String(data.k2e ?? data.message ?? '観戦に失敗しました'))
-        if (!gameReconnectActiveRef.current) navigate(`/channel/${channelId ?? ''}/lobby`)
+        handleRoomEntryFailure(data, '観戦に失敗しました')
         return
       }
       const nextRoomTitle = data.k45e ?? data.roomTitle
@@ -1830,8 +1828,7 @@ export default function RoomScreen() {
       const result = data.k1e ?? data.result
       if (result != null && !isOk(result)) {
         if (absorbAlreadyInRoom(data)) return
-        showError(String(data.k2e ?? data.message ?? 'ルームへの入室に失敗しました'))
-        if (!gameReconnectActiveRef.current) navigate(`/channel/${channelId ?? ''}/lobby`)
+        handleRoomEntryFailure(data, 'ルームへの入室に失敗しました')
         return
       }
       const nextRoomTitle = data.k45e ?? data.roomTitle
@@ -2138,7 +2135,7 @@ export default function RoomScreen() {
         if (!mounted) return
         logRejoinProbe('reconnect setup failed', { errorMessage: err instanceof Error ? err.message : String(err) })
         console.error('[RoomScreen] reconnect setup failed', err)
-        showError('ルームへの再接続に失敗しました')
+        handleRoomEntryFailure({ message: 'ルームへの再接続に失敗しました' })
       })
     }
     SignalR.onReconnected(onReconnected)
@@ -2146,8 +2143,7 @@ export default function RoomScreen() {
       if (!mounted) return
       logRejoinProbe('initial setup failed', { errorMessage: err instanceof Error ? err.message : String(err) })
       console.error('[RoomScreen] setup failed', err)
-      showError('ルームへの接続に失敗しました')
-      if (!gameReconnectActiveRef.current) navigate(`/channel/${channelId ?? ''}/lobby`)
+      handleRoomEntryFailure({ message: 'ルームへの接続に失敗しました' })
     })
 
     return () => {
@@ -2616,15 +2612,6 @@ export default function RoomScreen() {
             />
             <button type="button" onClick={() => { void sendChat() }} disabled={chatInputDisabled || !chatText.trim()}>送信</button>
           </div>
-
-          {hasPlayerSeat && (
-            <div className="majak-mobile-room-auto-actions">
-              <button type="button" className={autoControl.autoPass ? 'is-active' : undefined} onClick={onSetPass} disabled={!childAutoControlEnabled}>オートパス</button>
-              <button type="button" className={autoControl.autoHora ? 'is-active' : undefined} onClick={onSetHora} disabled={!childAutoControlEnabled}>オート和了</button>
-              <button type="button" className={autoControl.autoTap ? 'is-active' : undefined} onClick={onSetAuto} disabled={!childAutoControlEnabled}>ツモ切り</button>
-              <button type="button" className={autoControl.prox ? 'is-active' : undefined} onClick={onSetProx} disabled={!autoControlEnabled}>代打ち</button>
-            </div>
-          )}
         </aside>
 
         {showInviteList && (
@@ -2666,17 +2653,20 @@ export default function RoomScreen() {
           />
         )}
 
-        {hanResData && (
+        {displayedHanResData && (
           <HanRes
-            players={hanResData}
+            players={displayedHanResData}
             hasTor={hanResFlags.hasTor}
-            hasTip={hanResFlags.hasTip}
+            hasTip={FORCE_HAN_RESULT_FOR_TEST || hanResFlags.hasTip}
             isViewer={hanResFlags.isViewer}
             isTournament={hanResFlags.isTournament}
             displayScale={isMobileIngame ? mobileHanResScale : 1}
             displayOffsetY={isMobileIngame ? MOBILE_HAN_RES_OFFSET_Y : 0}
             backdrop
-            onClose={closeHanRes}
+            onClose={() => {
+              if (FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed) setForcedHanResultDismissed(true)
+              else closeHanRes()
+            }}
           />
         )}
 
@@ -2686,19 +2676,24 @@ export default function RoomScreen() {
   }
 
   if (inlineGame) {
+    const displayedKyoResData = FORCE_KYO_RESULT_FOR_TEST ? FORCED_KYO_RESULT : kyoResData
+    const kyoResultOverlay = displayedKyoResData && !displayedHanResData ? (
+      <KyoRes
+        data={displayedKyoResData}
+        myOdr={displayedKyoResData.players.find(player => player.pix === myPix)?.seatPos ?? 0}
+        canContinue={FORCE_KYO_RESULT_FOR_TEST || Boolean(kyoResultAction)}
+        onClose={() => { if (!FORCE_KYO_RESULT_FOR_TEST) void sendKyoResultAction() }}
+      />
+    ) : null
+
     const inlineGameStage = (
-      <div style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: '#000' }}>
+      <div style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: isMobileIngame ? 'transparent' : '#000' }}>
         <div ref={inlineGameRef} style={{ position: 'absolute', left: 0, top: -31, width: GAME_WIDTH, height: GAME_HEIGHT }} />
         <GameReconnectLoading visible={!isMobileIngame && inlineGameLoading} currentStep={gameLoadStep} complete={gameLoadComplete} />
 
-        {kyoResData && !hanResData && (
+        {!isMobileIngame && kyoResultOverlay && (
           <div style={{ position: 'absolute', left: 0, top: -31, width: GAME_WIDTH, height: GAME_HEIGHT, zIndex: 350 }}>
-            <LegacyKyoRes
-              data={kyoResData}
-              myOdr={kyoResData.players.find(player => player.pix === myPix)?.seatPos ?? 0}
-              canContinue={Boolean(kyoResultAction)}
-              onClose={() => { void sendKyoResultAction() }}
-            />
+            {kyoResultOverlay}
           </div>
         )}
 
@@ -3025,6 +3020,7 @@ export default function RoomScreen() {
           >
             {inlineGameStage}
           </div>
+          {kyoResultOverlay}
           <GameReconnectLoading visible={inlineGameLoading} currentStep={gameLoadStep} complete={gameLoadComplete} />
           {!mobileIngameChatOpen && (
             <div className={`majak-mobile-ingame-tool-drawer${mobileIngameToolOpen ? ' is-open' : ''}`} style={mobileIngameToolDrawerStyle}>
@@ -3607,17 +3603,20 @@ export default function RoomScreen() {
         />
       )}
 
-      {hanResData && (
+      {displayedHanResData && (
         <HanRes
-          players={hanResData}
+          players={displayedHanResData}
           hasTor={hanResFlags.hasTor}
-          hasTip={hanResFlags.hasTip}
+          hasTip={FORCE_HAN_RESULT_FOR_TEST || hanResFlags.hasTip}
           isViewer={hanResFlags.isViewer}
           isTournament={hanResFlags.isTournament}
           displayScale={isMobileIngame ? mobileHanResScale : 1}
           displayOffsetY={isMobileIngame ? MOBILE_HAN_RES_OFFSET_Y : 0}
           backdrop
-          onClose={closeHanRes}
+          onClose={() => {
+            if (FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed) setForcedHanResultDismissed(true)
+            else closeHanRes()
+          }}
         />
       )}
 

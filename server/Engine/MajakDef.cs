@@ -139,7 +139,7 @@ public enum ActionResult
     ErrPaiNotMatch, ErrAfterRichi, ErrSelf, ErrNotHoraForm,
     ErrFuriten, ErrNoYaku, ErrNotMenzen, ErrPointNotEnough,
     ErrNotTempai, ErrAnkanAfterRichi, ErrInvalidPaiCount,
-    ErrNotNextOrder, ErrInvalidAction, ErrKuikae,
+    ErrNotNextOrder, ErrInvalidAction,
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -155,11 +155,11 @@ public struct RuleInfo
     public bool Hanchan;     // true = hanchan, false = tonpuusen
     public bool Nagashi;
     public int  Contest;     // 0=normal, 1=grade/contest
-    public int  Ron;         // 0=double ron OK, 1=atamahane, 2=always double ron
+        public int  Ron;         // 0=head-bump, 1=double (triple abort), 2=triple
     public int  Uma;         // 0..3 index into uma table
     public bool Wareme;
     public int  AkaDora;     // number of red dora (0/1/2)
-    public bool GradeGame;   // _RATING_GRADE_MODE: 段位戦は bRevaluate=false (ダブル役満不適用)
+    public bool GradeGame;   // grade/rating mode marker
 }
 
 /// <summary>Hanchan-level state (HANCHANINFO)</summary>
@@ -220,6 +220,7 @@ public class FuroBlock
     public List<PaiCode> Tiles      = new();
     public Act           Act;
     public int           TapaiOrder;
+    internal int         CalledBipaiIndex = -1;
 
     public bool IsKan()  => Act is Act.Kan or Act.Ank or Act.Cha;
     public bool IsKou()  => Act is not (Act.Shu or Act.Chi);

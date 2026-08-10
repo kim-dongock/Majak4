@@ -17,6 +17,7 @@ import * as SignalR from '../../api/signalr'
 import { getChannelServerUrl, getBestServer, getChannels, getPlayerContinueRoom } from '../../api/channel'
 import { useAuthStore } from '../../store/authStore'
 import { useCustomSkinStore } from '../../store/customSkinStore'
+import { useGamePlayerStore } from '../../store/gamePlayerStore'
 import { showConfirm as showConfirmMessage, showError, showMessage, checkResult, isOk, tournamentErrorMessage, tournamentRegistErrorMessage } from '../../utils/msgbox'
 import { getAvatarUrl, getShortAvatarUrl, getDefaultAvatarUrl } from '../../utils/resources'
 import { configureMajakSound } from '../../utils/majakSound'
@@ -38,9 +39,10 @@ import RankingDlg, { type RankingData } from './dialogs/RankingDlg'
 import TournamentRegistDlg, { type TournamentRegistPayload } from './dialogs/TournamentRegistDlg'
 import AccuseDlg from './dialogs/AccuseDlg'
 import { MAJAK_ACCUSE_EVENT, MAJAK_EXIT_REQUEST_EVENT } from '../../components/MajakFrame'
+import MobileUserSummary from '../../components/MobileUserSummary'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 import { DEFAULT_MEMBER_FILTER, isMemberFilterActive, matchesMemberFilter, type MemberFilterValue } from './memberFilter'
-import { gpReplenishmentFailureMessage, isOwnGpReplenishmentResponse } from './gpReplenishment'
+import { gpReplenishmentFailureMessage, isOwnGpReplenishmentResponse, readGpAssetUpdate } from './gpReplenishment'
 
 const IMG = '/assets/images/game'
 const ABANDON_ROOM_STORAGE_KEY = 'majak:abandonRoomOnNextLobbyEnter'
@@ -2281,8 +2283,11 @@ export default function LobbyScreen() {
         if (!tryTournamentRestore(data, roomList)) tryContinueRestore(roomList)
         const memberList = Array.isArray(data.members) ? data.members as Array<Record<string, unknown>> : []
         _setMembers(uniqueMemberEntries(memberList.map(readMemberEntry)))
-        // DrawMemberInfo 相当: gammoney / gemcount / slevel を初期表示に反映
-        if (typeof data.gammoney === 'number') setGamMoney(data.gammoney as number)
+        // DrawMemberInfo 相当: GP / 資産称号を同じサーバー値で初期表示に反映
+        const assetUpdate = readGpAssetUpdate(data)
+        if (assetUpdate.gamMoney !== undefined) setGamMoney(assetUpdate.gamMoney)
+        if (assetUpdate.slevel !== undefined) setSlevel(assetUpdate.slevel)
+        useGamePlayerStore.getState().setData(assetUpdate)
         if (typeof data.gemcount === 'number') setGemCount(data.gemcount as number)
         if (typeof data.cashCount === 'number') setCashCount(data.cashCount as number)
         if (Array.isArray(data.majItems)) {
@@ -2295,7 +2300,6 @@ export default function LobbyScreen() {
           })
           setMajItems(nextMajItems)
         }
-        if (typeof data.slevel   === 'string') setSlevel(data.slevel as string)
         if (typeof data.channelName === 'string') setChannelName(data.channelName as string)
         if (typeof data.trickTitleName === 'string') setTrickTitleName(data.trickTitleName as string)
         if (typeof data.majakTitleName === 'string') setMajakTitleName(data.majakTitleName as string)
@@ -2407,7 +2411,14 @@ export default function LobbyScreen() {
       const onMemberList = (data: Record<string, unknown>) => {
         if (!mounted) return
         if (Number(data.result) !== 1 && data.k1e !== 'v1e') return
-        _setMembers(readMemberListPayload(data))
+        const nextMembers = readMemberListPayload(data)
+        _setMembers(nextMembers)
+        const currentPix = useAuthStore.getState().player?.pix ?? ''
+        const self = nextMembers.find(member => member.pix === currentPix)
+        if (self) {
+          setSlevel(self.slevel)
+          useGamePlayerStore.getState().setData({ slevel: self.slevel, nlevel: self.nlevel })
+        }
       }
       SignalR.on('c7e', onMemberList)
 
@@ -2446,6 +2457,10 @@ export default function LobbyScreen() {
         const sender = String(sendMember?.pix ?? data.sender ?? '')
         const recipient = String(receiveMember?.pix ?? data.target ?? '')
         const myPix = player?.pix ?? ''
+        if (rejectChat && sender && recipient === myPix && sender !== myPix) {
+          SignalR.send('hc5e', { target: sender, k38e: sender, rejectType: 2, nType: 2 }).catch(() => {})
+          return
+        }
         if (!myPix || sender !== myPix) return
         const target = recipient
         const partnerName = String(receiveMember?.name ?? displayNameForPix(target))
@@ -2463,6 +2478,10 @@ export default function LobbyScreen() {
         const recipient = String(receiveMember?.pix ?? data.target ?? '')
         const myPix = player?.pix ?? ''
         if (!myPix || (sender !== myPix && recipient !== myPix)) return
+        if (rejectChat && sender !== myPix && recipient === myPix) {
+          SignalR.send('hc5e', { target: sender, k38e: sender, rejectType: 2, nType: 2 }).catch(() => {})
+          return
+        }
         const target = sender === myPix ? recipient : sender
         const partnerName = String((sender === myPix ? receiveMember : sendMember)?.name ?? displayNameForPix(target))
         const text = String(data.k41e ?? data.string ?? '')
@@ -2484,6 +2503,20 @@ export default function LobbyScreen() {
           : current)
       }
       SignalR.on('hc8e', onOneToOneChatEnd)
+
+      const onChatReject = (data: Record<string, unknown>) => {
+        if (!mounted) return
+        const sendMember = data.sendMember as Record<string, unknown> | undefined
+        const receiveMember = data.receiveMember as Record<string, unknown> | undefined
+        const sender = String(sendMember?.pix ?? data.sender ?? '')
+        const recipient = String(receiveMember?.pix ?? data.target ?? '')
+        const myPix = player?.pix ?? ''
+        if (!sender || recipient !== myPix) return
+        const rejectorName = String(sendMember?.name ?? displayNameForPix(sender))
+        setOneToOneChat(current => current?.target === sender ? null : current)
+        showMessage(`${rejectorName}さんはチャットを拒否しています。`)
+      }
+      SignalR.on('hc5e', onChatReject)
 
       /** channel:notice — G::commandNotice: keyString を公知領域へ表示 */
       const onNotice = (data: Record<string, unknown>) => {
@@ -2606,9 +2639,18 @@ export default function LobbyScreen() {
           showMessage(gpReplenishmentFailureMessage(data))
           return
         }
-        // 原典: ProcessMoneyReplenishmentCommand → pData->m_llGamMoney を更新
-        const nextMoney = Number(data.gammoney ?? data.k34e)
-        if (Number.isFinite(nextMoney)) setGamMoney(nextMoney)
+        // 原典: ProcessMoneyReplenishmentCommand → GP と資産称号を同時更新
+        const assetUpdate = readGpAssetUpdate(data)
+        if (assetUpdate.gamMoney !== undefined) setGamMoney(assetUpdate.gamMoney)
+        if (assetUpdate.slevel !== undefined) setSlevel(assetUpdate.slevel)
+        useGamePlayerStore.getState().setData(assetUpdate)
+        _setMembers(prev => prev.map(member => member.pix === currentPix
+          ? {
+              ...member,
+              ...(assetUpdate.slevel !== undefined ? { slevel: assetUpdate.slevel } : {}),
+              ...(assetUpdate.nlevel !== undefined ? { nlevel: assetUpdate.nlevel } : {}),
+            }
+          : member))
       }
       SignalR.on('mjkc17e', onMoneyReplenishment)
 
@@ -3447,7 +3489,7 @@ export default function LobbyScreen() {
 
   if (!isLobbyDataReady && !navState?.leavingRoom) {
     return (
-      <div className="majak-boot-loading">
+      <div className="majak-boot-loading majak-screen-surface">
         <div className="majak-boot-loading__panel">
           <img className="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} />
           <div className="majak-sync-spinner" aria-hidden="true" />
@@ -3461,11 +3503,19 @@ export default function LobbyScreen() {
     const tournamentDetailLines = getTournamentDetailLines(selectedTournament, memberNameByPix)
     return (
       <div className="majak-mobile-screen majak-mobile-lobby-screen majak-mobile-tournament-screen">
-        <section className="majak-mobile-lobby-toolbar">
+        <section className="majak-mobile-lobby-toolbar majak-mobile-lobby-toolbar--with-user">
           <div>
             <div className="majak-mobile-eyebrow">TOURNAMENT</div>
             <h1>{mobileTitle}</h1>
           </div>
+          <MobileUserSummary
+            gameMoney={gamMoney}
+            assetTitle={slevel}
+            achievementTitle={majakTitleName}
+            trickTitle={trickTitleName}
+            loadProfile={false}
+            className="majak-mobile-user-summary--lobby"
+          />
           <div className="majak-mobile-lobby-actions">
             <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>
             <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>
@@ -3565,11 +3615,19 @@ export default function LobbyScreen() {
     const mobileTitle = channelName
     return (
       <div className="majak-mobile-screen majak-mobile-lobby-screen">
-        <section className="majak-mobile-lobby-toolbar">
+        <section className="majak-mobile-lobby-toolbar majak-mobile-lobby-toolbar--with-user">
           <div>
             <div className="majak-mobile-eyebrow">LOBBY</div>
             <h1>{mobileTitle}</h1>
           </div>
+          <MobileUserSummary
+            gameMoney={gamMoney}
+            assetTitle={slevel}
+            achievementTitle={majakTitleName}
+            trickTitle={trickTitleName}
+            loadProfile={false}
+            className="majak-mobile-user-summary--lobby"
+          />
           <div className="majak-mobile-lobby-actions">
             {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>}
             {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>}
@@ -3616,7 +3674,7 @@ export default function LobbyScreen() {
               </div>
               <div className="majak-mobile-lobby-command-checks">
                 <label><input type="checkbox" checked={rejectInvite} disabled={autoMatchingChannel} onChange={event => setRejectInvite(event.currentTarget.checked)} />招待拒否</label>
-                <label><input type="checkbox" checked={rejectChat} onChange={event => setRejectChat(event.currentTarget.checked)} />チャット拒</label>
+                <label><input type="checkbox" checked={rejectChat} onChange={event => setRejectChat(event.currentTarget.checked)} />チャット拒否</label>
               </div>
             </div>
             <MobileMemberListPanel

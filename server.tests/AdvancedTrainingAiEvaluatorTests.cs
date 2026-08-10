@@ -62,6 +62,32 @@ public class AdvancedTrainingAiEvaluatorTests
     }
 
     [Fact]
+    public void BuildRemainingCounts_MiddleCalledChi_ExcludesOnlyCalledDiscard()
+    {
+        MajakGameLogic game = CreateGame(Array.Empty<int>());
+        EnginePlayer caller = game.Player[1];
+        PaiCode twoMan = PaiCode.MakeSerial(1);
+        twoMan.BipaiIndex = 100;
+        PaiCode fourMan = PaiCode.MakeSerial(3);
+        fourMan.BipaiIndex = 101;
+        caller.Tehai.Add(twoMan);
+        caller.Tehai.Add(fourMan);
+        PaiCode calledThreeMan = PaiCode.MakeSerial(2);
+        calledThreeMan.BipaiIndex = 102;
+        game.Player[0].Sutehai.Add(calledThreeMan);
+        Assert.Equal(ActionResult.Ok, caller.Chi(0, calledThreeMan, new[] { 100, 101 }));
+
+        MethodInfo method = typeof(AdvancedTrainingAiEvaluator).GetMethod(
+            "BuildRemainingCounts",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        int[] remaining = (int[])method.Invoke(null, new object[] { game, game.Player[0] })!;
+
+        Assert.Equal(3, remaining[1]);
+        Assert.Equal(3, remaining[2]);
+        Assert.Equal(3, remaining[3]);
+    }
+
+    [Fact]
     public void SelectPhysicalTile_DiscardsNormalCopyBeforeRedFive()
     {
         PaiCode normalFive = PaiCode.MakeSerial(4);

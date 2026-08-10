@@ -13,11 +13,12 @@ import MajakFrame from './components/MajakFrame'
 import MessageBoxHost from './components/MessageBoxHost'
 import GameReconnectLoading from './components/GameReconnectLoading'
 import RegistrationDlg from './screens/outgame/dialogs/RegistrationDlg'
-import { googleLogin, refreshLogin, saveRegisteredPlayerCache, type MajakPlayer } from './api/auth'
+import { authApiUrl, googleLogin, refreshLogin, saveRegisteredPlayerCache, type MajakPlayer } from './api/auth'
 import { getPlayerContinueRoom } from './api/channel'
 import * as SignalR from './api/signalr'
 import { useAuthStore } from './store/authStore'
 import { useCustomSkinStore } from './store/customSkinStore'
+import { useOutgameLayoutMode } from './hooks/useOutgameLayoutMode'
 import { forceDuplicateConnectionLogout } from './utils/msgbox'
 import { signInWithNativeGoogle } from './utils/nativeGoogleAuth'
 
@@ -169,12 +170,30 @@ function AppLoadingScreen() {
     return <GameReconnectLoading visible fixed currentStep="server" complete={false} />
   }
   return (
-    <div className="majak-boot-loading">
+    <div className="majak-boot-loading majak-screen-surface">
       <div className="majak-boot-loading__panel">
         <img className="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} />
         <div className="majak-sync-spinner" aria-hidden="true" />
       </div>
     </div>
+  )
+}
+
+function PortraitOrientationNotice() {
+  return (
+    <main className="majak-mobile-portrait-notice majak-screen-surface" aria-live="polite">
+      <img
+        className="majak-mobile-portrait-notice__logo"
+        src="/assets/images/common/ico_big_majak2.jpg"
+        alt="麻雀4"
+        draggable={false}
+      />
+      <div className="majak-mobile-portrait-notice__device" aria-hidden="true">
+        <span />
+      </div>
+      <h1>端末を横向きにしてください</h1>
+      <p>麻雀4は横向きの画面に対応しています。<br />端末を横向きにすると、そのままゲームを続けられます。</p>
+    </main>
   )
 }
 
@@ -204,7 +223,8 @@ function GameAssetCacheWarmup() {
  *      b. 未登録 → RegistrationDlg (利用規約→ニックネーム→性別/アバター)
  */
 function AuthGate({ children }: { children: React.ReactNode }) {
-  const { status, player, setLoading, setPlayer, setError } = useAuthStore()
+  const { status, player, setLoading, setPlayer, setError, requireLogin } = useAuthStore()
+  const layoutMode = useOutgameLayoutMode()
   const [idToken, setIdToken] = useState<string | null>(null)
   const [refreshChecked, setRefreshChecked] = useState(false)
   const [registrationRequest, setRegistrationRequest] = useState<{ idToken: string; player: MajakPlayer } | null>(null)
@@ -295,6 +315,12 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     }
   }, [setError, setLoading, setPlayer])
 
+  const handleRegistrationAuthExpired = useCallback(() => {
+    setRegistrationRequest(null)
+    setIdToken(null)
+    requireLogin()
+  }, [requireLogin])
+
   // 3. 承認待ち中は一定間隔で再照会して、承認後に自動でゲームへ進める。
   useEffect(() => {
     if (!player || player.accountStatus !== 0 || !player.termsAgreed) return
@@ -321,6 +347,10 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   // ── レンダリング ─────────────────────────────────────────────────
 
+  if (layoutMode === 'mobilePortrait') {
+    return <PortraitOrientationNotice />
+  }
+
   // キャッシュ確認前 (idle)
   if (status === 'idle') {
     return <AppLoadingScreen />
@@ -331,6 +361,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       <RegistrationDlg
         idToken={registrationRequest.idToken}
         googleInfo={registrationRequest.player}
+        onAuthExpired={handleRegistrationAuthExpired}
         onComplete={(p) => {
           setRegistrationRequest(null)
           saveRegisteredPlayerCache(p)
@@ -353,9 +384,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   // エラー
   if (status === 'error') {
     return (
-      <div style={{
+      <div className="majak-screen-surface" style={{
         position: 'fixed', inset: 0,
-        background: '#1a1a2e',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         flexDirection: 'column', gap: 12,
         fontFamily: 'var(--majak-font-family-ui)', color: '#fff',
@@ -378,6 +408,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       <RegistrationDlg
         idToken={idToken}
         googleInfo={player}
+        onAuthExpired={handleRegistrationAuthExpired}
         onComplete={(p) => { saveRegisteredPlayerCache(p); setPlayer(p) }}
       />
     )
@@ -406,6 +437,7 @@ function GoogleSignInScreen({
 }) {
   const isNativeApp = Capacitor.isNativePlatform()
   const [nativeLoginPending, setNativeLoginPending] = useState(false)
+  const googleRedirectUrl = new URL(authApiUrl('/auth/google-login-redirect'), window.location.origin).toString()
 
   const handleNativeGoogleLogin = async () => {
     if (nativeLoginPending) return
@@ -421,9 +453,8 @@ function GoogleSignInScreen({
   }
 
   return (
-    <div style={{
+    <div className="majak-screen-surface" style={{
       position: 'fixed', inset: 0,
-      background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontFamily: 'var(--majak-font-family-ui)',
     }}>
@@ -474,6 +505,8 @@ function GoogleSignInScreen({
                   else onError()
                 }}
                 onError={onError}
+                ux_mode="redirect"
+                login_uri={googleRedirectUrl}
                 useOneTap={false}
                 width="280"
                 containerProps={{ style: { position: 'absolute', inset: 0, width: '100%' } }}
@@ -490,9 +523,8 @@ function GoogleSignInScreen({
 // ── 承認待ち画面 ─────────────────────────────────────────────────────
 function PendingApprovalScreen() {
   return (
-    <div style={{
+    <div className="majak-screen-surface" style={{
       position: 'fixed', inset: 0,
-      background: '#1a1a2e',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontFamily: 'var(--majak-font-family-ui)', color: '#fff',
     }}>
@@ -517,9 +549,8 @@ function PendingApprovalScreen() {
 // ── アカウント停止画面 ───────────────────────────────────────────────
 function SuspendedScreen() {
   return (
-    <div style={{
+    <div className="majak-screen-surface" style={{
       position: 'fixed', inset: 0,
-      background: '#1a1a2e',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       fontFamily: 'var(--majak-font-family-ui)', color: '#fff',
     }}>

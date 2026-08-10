@@ -287,6 +287,30 @@ public class ProcessEndHanchanTests
         Assert.Equal(new[] { 4, 0, -4, 0 }, logic.Player.Select(player => player.ResultRecord.TipPoint).ToArray());
         Assert.Equal(GameStatus.NotPlaying, logic.GameStatus);
     }
+
+    [Fact]
+    public void ProcessEndHanchan_TiedPointsRankFromChichaLikeLegacy()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(new RuleInfo
+        {
+            Hanchan = false,
+            Kuitan = true,
+            Contest = 0,
+            Uma = 3,
+        });
+        logic.HanchanInfo.Chicha = 2;
+        foreach (EnginePlayer player in logic.Player)
+        {
+            player.GamePoint = 25000;
+            player.Tip = MajakConst.DefaultTip;
+        }
+
+        InvokeProcessEndHanchan(logic);
+
+        Assert.Equal(new[] { 2, 3, 0, 1 },
+            logic.Player.Select(player => player.SetRank).ToArray());
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -508,6 +532,66 @@ public class ProcessEndKyokuTests
         Assert.True(logic.Player[1].IsTempai);
         Assert.False(logic.Player[2].IsTempai);
         Assert.False(logic.Player[3].IsTempai);
+    }
+
+    [Theory]
+    [InlineData(0, 0, 0)]
+    [InlineData(1, 3000, -1000)]
+    [InlineData(2, 1500, -1500)]
+    [InlineData(3, 1000, -3000)]
+    [InlineData(4, 0, 0)]
+    public void ProcessRyuukyoku_AllTempaiCountsApplyLegacyBappu(
+        int tempaiCount,
+        int tempaiBalance,
+        int notenBalance)
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        int oya = logic.KyokuInfo.OyaOrder;
+        var tempaiOrders = Enumerable.Range(0, tempaiCount)
+            .Select(offset => (oya + offset) % MajakConst.PlayerMaxCount)
+            .ToHashSet();
+
+        for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+        {
+            logic.Player[order].GamePoint = 25000;
+            if (tempaiOrders.Contains(order))
+                SetTehai(logic.Player[order], 0, 1, 2, 3, 4, 5, 6, 7, 8, 27, 27, 27, 28);
+            else
+                SetTehai(logic.Player[order], 0, 4, 8, 12, 16, 20, 24, 28, 1, 5, 9, 13, 17);
+        }
+
+        InvokeProcessRyuukyoku(logic);
+
+        for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+        {
+            bool isTempai = tempaiOrders.Contains(order);
+            int expectedBalance = isTempai ? tempaiBalance : notenBalance;
+            Assert.Equal(isTempai, logic.Player[order].IsTempai);
+            Assert.Equal(25000 + expectedBalance, logic.Player[order].GamePoint);
+            Assert.Equal(expectedBalance, logic.LastKyoResult.TenBal[order]);
+        }
+        Assert.Equal(tempaiCount != 0, logic.KyokuInfo.Renchan);
+        Assert.Equal(100000, logic.Player.Sum(player => player.GamePoint));
+    }
+
+    [Fact]
+    public void ProcessRyuukyoku_DealerNotenEndsRenchanLikeLegacy()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        int oya = logic.KyokuInfo.OyaOrder;
+        int child = (oya + 1) % MajakConst.PlayerMaxCount;
+
+        for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+            SetTehai(logic.Player[order], 0, 4, 8, 12, 16, 20, 24, 28, 1, 5, 9, 13, 17);
+        SetTehai(logic.Player[child], 0, 1, 2, 3, 4, 5, 6, 7, 8, 27, 27, 27, 28);
+
+        InvokeProcessRyuukyoku(logic);
+
+        Assert.False(logic.Player[oya].IsTempai);
+        Assert.True(logic.Player[child].IsTempai);
+        Assert.False(logic.KyokuInfo.Renchan);
     }
 
     [Fact]
@@ -933,6 +1017,51 @@ public class ProcessHoraPlayerRecordTests
         Assert.NotEqual(logic.LastKyoResult.TenBal[0], horaAdjusted);
         Assert.Equal(horaAdjusted, hora.ResultRecord.HoraPoint);
         Assert.Equal(hojuAdjusted, hoju.ResultRecord.HojuPoint);
+    }
+
+    [Fact]
+    public void ProcessHoraPlayer_PaoWaremeHonbaAndRibouFollowLegacyOrder()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(new RuleInfo
+        {
+            Hanchan = true,
+            Kuitan = true,
+            Contest = 0,
+            Wareme = true,
+        });
+        logic.KyokuInfo.OyaOrder = 3;
+        logic.KyokuInfo.Dice[0] = 0;
+        logic.KyokuInfo.Dice[1] = 0;
+        logic.HanchanInfo.RenchanCount = 2;
+        logic.KyokuInfo.RibouCount = 2;
+        foreach (EnginePlayer player in logic.Player) player.GamePoint = 25000;
+
+        EnginePlayer hora = logic.Player[0];
+        EnginePlayer hoju = logic.Player[1];
+        EnginePlayer pao = logic.Player[2];
+        hora.Tehai.Clear();
+        foreach (int serial in new[] { 31,31,31, 32,32,32, 33,33,33, 0,1,2, 27,27 })
+            hora.Tehai.Add(PaiCode.MakeSerial(serial));
+        typeof(EnginePlayer)
+            .GetProperty(nameof(EnginePlayer.PaoOrder))!
+            .SetValue(hora, pao.Order);
+        typeof(MajakGameLogic)
+            .GetField("_isFirstTurn", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, false);
+
+        InvokeProcessHoraPlayer(logic, hora, hoju, getBonus: true);
+
+        Assert.Contains(hora.Yaku.List, item => item.Name == HoraYaku.Daisangen && item.Han == 1);
+        Assert.Equal(new[] { 32000, -32000, 0, 0 }, logic.LastKyoResult.TenBal);
+        Assert.Equal(new[] { 0, 16000, -16000, 0 }, logic.LastKyoResult.PaoBal);
+        Assert.Equal(new[] { 32000, -16000, -16000, 0 }, logic.LastKyoResult.WarBal);
+        Assert.Equal(new[] { 600, -600, 0, 0 }, logic.LastKyoResult.RenBal);
+        Assert.Equal(new[] { 2000, 0, 0, 0 }, logic.LastKyoResult.RibBal);
+        Assert.Equal(new[] { 91600, -7600, -7000, 25000 },
+            logic.Player.Select(player => player.GamePoint).ToArray());
+        Assert.Equal(0, logic.KyokuInfo.RibouCount);
+        Assert.Equal(102000, logic.Player.Sum(player => player.GamePoint));
     }
 }
 

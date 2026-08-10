@@ -12,7 +12,9 @@ import { useEffect, useRef, useState } from 'react'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
 import * as SignalR from '../../api/signalr'
 import HanRes, { type HanResPlayer } from './HanRes'
-import { LegacyKyoRes, type KyoResData } from './KyoRes.tsx'
+import { FORCED_HAN_RESULT, FORCE_HAN_RESULT_FOR_TEST } from './forcedHanResult'
+import KyoRes, { type KyoResData } from './KyoRes.tsx'
+import { FORCED_KYO_RESULT, FORCE_KYO_RESULT_FOR_TEST } from './forcedKyoResult'
 import SlideAnnounce, { type SlideAnnounceData } from './SlideAnnounce'
 import ViewerListWnd, { type ViewerEntry } from './ViewerListWnd'
 import AskEndDlg from '../outgame/dialogs/AskEndDlg'
@@ -748,9 +750,12 @@ export default function GameScreen() {
 
   /** CMJHanRes 表示状態 */
   const [hanResData, setHanResData] = useState<HanResPlayer[] | null>(null)
+  const [forcedHanResultDismissed, setForcedHanResultDismissed] = useState(false)
+  const displayedHanResData = FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed ? FORCED_HAN_RESULT : hanResData
   const [hanResFlags, setHanResFlags] = useState({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
   /** CMJKyoRes 表示状態 */
   const [kyoResData, setKyoResData] = useState<KyoResData | null>(null)
+  const displayedKyoResData = FORCE_KYO_RESULT_FOR_TEST ? FORCED_KYO_RESULT : kyoResData
   /** CMJSlideAnnounce 表示状態 */
   const [announceData, setAnnounceData] = useState<SlideAnnounceData | null>(null)
   /** CMJAskEndDlg 表示状態 */
@@ -1982,14 +1987,17 @@ export default function GameScreen() {
       )}
 
       {/* ── CMJHanRes: 半荘/東風 最終結果 (room:game_report 受信時に表示) ── */}
-      {hanResData && (
+      {displayedHanResData && (
         <HanRes
-          players={hanResData}
+          players={displayedHanResData}
           hasTor={hanResFlags.hasTor}
-          hasTip={hanResFlags.hasTip}
+          hasTip={FORCE_HAN_RESULT_FOR_TEST || hanResFlags.hasTip}
           isViewer={hanResFlags.isViewer}
           isTournament={hanResFlags.isTournament}
-          onClose={onCloseHanRes}
+          onClose={() => {
+            if (FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed) setForcedHanResultDismissed(true)
+            else onCloseHanRes()
+          }}
         />
       )}
 
@@ -2002,12 +2010,12 @@ export default function GameScreen() {
       )}
 
       {/* ── CMJKyoRes: 1局終了結果 (playing/MJPID_ENDKYO 受信時に表示) ── */}
-      {kyoResData && !hanResData && (
-        <LegacyKyoRes
-          data={kyoResData}
+      {displayedKyoResData && !displayedHanResData && (
+        <KyoRes
+          data={displayedKyoResData}
           myOdr={effectiveMyOdr ?? 0}
-          canContinue={Boolean(kyoResultAction)}
-          onClose={() => void sendKyoResultAction()}
+          canContinue={FORCE_KYO_RESULT_FOR_TEST || Boolean(kyoResultAction)}
+          onClose={() => { if (!FORCE_KYO_RESULT_FOR_TEST) void sendKyoResultAction() }}
         />
       )}
 

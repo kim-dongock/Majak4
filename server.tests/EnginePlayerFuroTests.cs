@@ -87,7 +87,7 @@ public class EnginePlayerFuroTests
     }
 
     [Fact]
-    public void Chi_Kuikae_BlocksCalledAndAlternativeTilesUntilFirstDiscard()
+    public void Chi_LegacyAllowsCalledAndAlternativeTileDiscards()
     {
         var player = new EnginePlayer();
         player.InitHanchan(0, DefaultRule());
@@ -101,14 +101,13 @@ public class EnginePlayerFuroTests
         var calledTile = PaiCode.MakeSerial(2); // 3mをチーして345m
 
         Assert.Equal(ActionResult.Ok, player.Chi(3, calledTile, new[] { 10, 11 }));
-        Assert.Equal(ActionResult.ErrKuikae, player.Tapai(calledAgain));
-        Assert.Equal(ActionResult.ErrKuikae, player.Tapai(alternative));
-        Assert.Equal(ActionResult.Ok, player.Tapai(safeTile));
         Assert.Equal(ActionResult.Ok, player.Tapai(calledAgain));
+        Assert.Equal(ActionResult.Ok, player.Tapai(alternative));
+        Assert.Equal(ActionResult.Ok, player.Tapai(safeTile));
     }
 
     [Fact]
-    public void Chi_Kuikae_MiddleCalledTileDoesNotBlockUnrelatedSuji()
+    public void Chi_MiddleCalledTile_AllowsUnrelatedDiscard()
     {
         var player = new EnginePlayer();
         player.InitHanchan(0, DefaultRule());
@@ -149,7 +148,7 @@ public class EnginePlayerFuroTests
     }
 
     [Fact]
-    public void Pon_Kuikae_BlocksCalledTileAndAdvertisesOnlyLegalDiscards()
+    public void Pon_LegacyAllowsCalledTileAndAdvertisesAllDiscards()
     {
         var logic = new MajakGameLogic();
         var player = logic.Player[0];
@@ -166,9 +165,9 @@ public class EnginePlayerFuroTests
         player.Mode = PlayerMode.Turn;
 
         var actions = logic.GetValidActions(0);
-        Assert.DoesNotContain(calledAgain.BipaiIndex, actions.TapCandidates);
+    Assert.Contains(calledAgain.BipaiIndex, actions.TapCandidates);
         Assert.Contains(safeTile.BipaiIndex, actions.TapCandidates);
-        Assert.Equal(ActionResult.ErrKuikae, player.Tapai(calledAgain));
+    Assert.Equal(ActionResult.Ok, player.Tapai(calledAgain));
     }
 
     // シナリオ5: 副露した本人の流し満貫状態は HMajakPlayer::Pon では変更されない
@@ -257,6 +256,21 @@ public class EnginePlayerFuroTests
         Assert.Equal(2, p.PaoOrder);
     }
 
+    [Fact]
+    public void Pon_InvalidTiles_DoesNotSetPaoOrder()
+    {
+        var p = new EnginePlayer();
+        p.InitHanchan(0, DefaultRule());
+        p.InitKyoku();
+        p.Furo.Add(new FuroBlock { Act = Act.Pon, Tiles = { PaiCode.MakeSerial(31) } });
+        p.Furo.Add(new FuroBlock { Act = Act.Pon, Tiles = { PaiCode.MakeSerial(32) } });
+
+        var result = p.Pon(2, PaiCode.MakeSerial(33), new[] { 98, 99 });
+
+        Assert.Equal(ActionResult.ErrPaiNotFoundInHand, result);
+        Assert.Equal(MajakConst.InvalidOrder, p.PaoOrder);
+    }
+
     // ─── MinKan ─────────────────────────────────────────────────────────────
 
     // シナリオ6: 有効な明槓 → Furo追加 + KanCnt=1 + IsMenzen=false
@@ -279,6 +293,21 @@ public class EnginePlayerFuroTests
         Assert.Equal(Act.Kan, p.Furo[0].Act);
         Assert.Equal(1, p.KanCnt);
         Assert.False(p.IsMenzen);
+    }
+
+    [Fact]
+    public void MinKan_InvalidTiles_DoesNotSetPaoOrder()
+    {
+        var p = new EnginePlayer();
+        p.InitHanchan(0, DefaultRule());
+        p.InitKyoku();
+        p.Furo.Add(new FuroBlock { Act = Act.Pon, Tiles = { PaiCode.MakeSerial(31) } });
+        p.Furo.Add(new FuroBlock { Act = Act.Pon, Tiles = { PaiCode.MakeSerial(32) } });
+
+        var result = p.MinKan(2, PaiCode.MakeSerial(33), new[] { 97, 98, 99 });
+
+        Assert.Equal(ActionResult.ErrPaiNotFoundInHand, result);
+        Assert.Equal(MajakConst.InvalidOrder, p.PaoOrder);
     }
 
     // ─── AnKan ───────────────────────────────────────────────────────────────
@@ -397,6 +426,20 @@ public class EnginePlayerFuroTests
         Assert.Equal(ActionResult.Ok, result);
         Assert.Equal(Act.Cha, p.Furo[0].Act);
         Assert.Equal(1, p.KanCnt);
+    }
+
+    [Fact]
+    public void ChaKan_WithoutMatchingPon_ReturnsPaiNotMatchLikeLegacy()
+    {
+        var p = new EnginePlayer();
+        p.InitHanchan(0, DefaultRule());
+        p.InitKyoku();
+        var tile = AddToTehai(p, 31, 20);
+
+        var result = p.ChaKan(tile);
+
+        Assert.Equal(ActionResult.ErrPaiNotMatch, result);
+        Assert.Single(p.Tehai);
     }
 
     [Fact]

@@ -249,7 +249,7 @@ export default function LobbySelectScreen() {
         ]
 
     return (
-      <div className="majak-mobile-screen majak-mobile-lobby-select">
+      <div className="majak-mobile-screen majak-mobile-lobby-select majak-screen-surface">
         <section className="majak-mobile-hero">
           <div>
             <div className="majak-mobile-eyebrow">{isDani ? 'DAN-I' : 'KOURYU'}</div>
@@ -268,15 +268,15 @@ export default function LobbySelectScreen() {
 
   return (
     /* CMJSelLobbyWnd クライアント領域: 1014×704px */
-    <div style={{ position: 'relative', width: 1014, height: 704, overflow: 'hidden' }}>
-
-      {/* ── 背景 BitBlt(0,0, isDani ? m_dibBackDani : m_dibBackKouryu) ── */}
-      <img
-        src={isDani ? `${IMG}/mj_ch_bk_01.png` : `${IMG}/mj_ch_bk.png`}
-        alt=""
-        draggable={false}
-        style={{ position: 'absolute', left: 0, top: 0, width: 1014, height: 704 }}
-      />
+    <div className="majak-standard-outgame-screen majak-lobby-select-screen majak-screen-surface">
+      <h1 className="majak-lobby-select-title">{isDani ? '段位戦' : '交流戦'}</h1>
+      {isDani && (
+        <div className="majak-lobby-select-modes" aria-hidden="true">
+          <span>東風戦</span>
+          <span>半荘戦</span>
+        </div>
+      )}
+      <div className="majak-standard-member-panel" aria-hidden="true" />
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* 交流戦グループボタン (m_nGroup == IDC_CHK_STAND)              */}

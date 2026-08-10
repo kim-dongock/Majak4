@@ -66,6 +66,34 @@ public sealed class HanChatOneToOneCommandTests
     }
 
     [Fact]
+    public async Task Reject_ValidSameChannelTarget_RelaysLegacyRejectPacket()
+    {
+        var session = new PlayerSessionService();
+        var rejector = Player("rejector-id", "rejector-pix", "rejector-connection", "channel-1");
+        var requester = Player("requester-id", "requester-pix", "requester-connection", "channel-1");
+        session.Register(rejector);
+        session.Register(requester);
+        IReadOnlyList<string>? recipients = null;
+        var (context, sent) = CommandTestHelper.MakeContext(rejector, new()
+        {
+            ["target"] = requester.Pix,
+            ["rejectType"] = 2,
+        }, onClients: connectionIds => recipients = connectionIds);
+
+        await new HanChatRejectCommand(session).ExecuteAsync(context);
+
+        var packet = CommandTestHelper.ToDict(Assert.Single(sent).packet);
+        Assert.Equal(Cmd.HanChatReject, sent[0].method);
+        Assert.Equal(2, ((JsonElement)packet["rejectType"]!).GetInt32());
+        Assert.Equal(rejector.Pix, ((JsonElement)packet["sender"]!).GetString());
+        Assert.Equal(requester.Pix, ((JsonElement)packet["target"]!).GetString());
+        Assert.NotNull(recipients);
+        Assert.Equal(
+            new[] { rejector.ConnectionId, requester.ConnectionId }.OrderBy(connectionId => connectionId),
+            recipients.OrderBy(connectionId => connectionId));
+    }
+
+    [Fact]
     public async Task End_DifferentChannelTarget_DoesNotRelay()
     {
         var session = new PlayerSessionService();

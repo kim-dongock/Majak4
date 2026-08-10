@@ -35,6 +35,7 @@ import * as SignalR from '../api/signalr'
 import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
 import EndingPopupWnd from '../screens/outgame/dialogs/EndingPopupWnd'
+import MobileUserSummary from './MobileUserSummary'
 
 const MAJAK3 = '/assets/images/game'
 const HOWTOPLAY_URL = 'http://redirect.hange.jp/majak2/help/guide/?m=guide'
@@ -180,14 +181,15 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
   }
 
   if (layoutMode !== 'desktop') {
-    const showMobileHeader = accBox !== 'room'
+    const isLobbyScreen = /\/channel\/[^/]+\/lobby$/.test(location.pathname)
+    const showMobileHeader = accBox !== 'room' && !isLobbyScreen
     const showMobileExit = location.pathname === '/channel'
       || location.pathname.startsWith('/channel/select/')
-      || /\/channel\/[^/]+\/lobby$/.test(location.pathname)
+      || isLobbyScreen
 
     if (layoutMode === 'mobilePortrait') {
       return (
-        <main className="majak-mobile-portrait-notice" aria-live="polite">
+        <main className="majak-mobile-portrait-notice majak-screen-surface" aria-live="polite">
           <img
             className="majak-mobile-portrait-notice__logo"
             src="/assets/images/common/ico_big_majak2.jpg"
@@ -208,6 +210,7 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
         {showMobileHeader && (
           <header className="majak-mobile-frame__bar">
             <div className="majak-mobile-frame__brand">麻雀4</div>
+            <MobileUserSummary />
             <div className="majak-mobile-frame__tools">
               {!IS_NATIVE_APP && <button type="button" onClick={enterFullscreen} title="全画面表示">全画面</button>}
               <button type="button" onClick={() => window.open(HOWTOPLAY_URL, '_blank', 'noopener,noreferrer')}>遊び方</button>

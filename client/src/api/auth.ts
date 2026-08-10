@@ -4,7 +4,7 @@
  * Flow:
  *   1. Read the localStorage registration cache and reuse it when valid.
  *   2. If there is no valid cache, show the GoogleLogin button.
- *   3. Send the Google ID token to POST /auth/google-login.
+ *   3. Web redirects to POST /auth/google-login-redirect; native sends the Google ID token to POST /auth/google-login.
  *      - Unregistered players receive requiresRegistration=true and continue to the registration form.
  *      - Registered players receive the player payload.
  *   4. After registration form completion, send POST /auth/google-register.
@@ -251,7 +251,7 @@ export async function googleRegister(
     throw new AuthError('network', String(err))
   }
 
-  if (res.status === 401) throw new AuthError('server', 'Unauthorized')
+  if (res.status === 401) throw new AuthError('server', 'GOOGLE_REGISTRATION_AUTH_EXPIRED')
   if (res.status === 400) {
     const err = await res.json() as { error?: string }
     throw new AuthError('server', err.error ?? 'BAD_REQUEST')

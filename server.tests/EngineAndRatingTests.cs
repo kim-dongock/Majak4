@@ -136,7 +136,7 @@ public class BipaiTests
     }
 
     [Fact]
-    public void Open_ClearsSentMask_ForPublicPaiInfoResend()
+    public void Open_PreservesSentMask_ForPublicPaiInfoLikeLegacy()
     {
         var bipai = new Bipai();
         bipai.Init(0, 0);
@@ -151,7 +151,7 @@ public class BipaiTests
         var secondInfo = BipaiInfo.Create();
         bipai.GetPaiInfo(ref secondInfo, openMask: 1 << 0, skipMask: 1 << 0);
 
-        Assert.Contains(secondInfo.Pai.Take(secondInfo.PaiCnt), pai => pai.BipaiIndex == tile.BipaiIndex);
+        Assert.DoesNotContain(secondInfo.Pai.Take(secondInfo.PaiCnt), pai => pai.BipaiIndex == tile.BipaiIndex);
     }
 
     // ─── GetDoraDisplay ──────────────────────────────────────────────────────
@@ -450,6 +450,33 @@ public class EnginePlayerTests
         p.Tapai(fiveMan);
 
         Assert.Equal(new[] { oneMan.Code, nineMan.Code }, p.Tehai.Select(tile => tile.Code).ToArray());
+    }
+
+    [Fact]
+    public void Richi_DiscardsPhysicalHandTileInsteadOfCallerCopy()
+    {
+        var p = new EnginePlayer();
+        p.InitHanchan(0, DefaultRule());
+        p.InitKyoku();
+        int index = 0;
+        foreach (int serial in new[] { 0,1,2,3,4,5,6,7,8, 27,27,27, 28 })
+        {
+            var tile = PaiCode.MakeSerial(serial);
+            tile.BipaiIndex = index++;
+            p.Tehai.Add(tile);
+        }
+        var physicalDiscard = PaiCode.MakeSerial(4);
+        physicalDiscard.BipaiIndex = 99;
+        p.Tehai.Add(physicalDiscard);
+        var callerCopy = physicalDiscard;
+        callerCopy.IsRed = true;
+
+        var result = p.Richi(callerCopy);
+
+        Assert.Equal(ActionResult.Ok, result);
+        var discarded = Assert.Single(p.Sutehai);
+        Assert.Equal(99, discarded.BipaiIndex);
+        Assert.False(discarded.IsRed);
     }
 
     // ─── SetRichi ────────────────────────────────────────────────────────────

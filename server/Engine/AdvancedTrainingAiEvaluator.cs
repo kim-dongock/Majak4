@@ -94,9 +94,14 @@ public sealed class AdvancedTrainingAiEvaluator : ITrainingAiEvaluator
 
             foreach (FuroBlock furo in visiblePlayer.Furo)
             {
-                int firstVisibleTile = furo.Act == Act.Ank ? 0 : 1;
-                for (int index = firstVisibleTile; index < furo.Tiles.Count; index++)
-                    remaining[furo.Tiles[index].GetSerial()]--;
+                for (int index = 0; index < furo.Tiles.Count; index++)
+                {
+                    bool isCalledTile = furo.Act != Act.Ank
+                        && (furo.CalledBipaiIndex >= 0
+                            ? furo.Tiles[index].BipaiIndex == furo.CalledBipaiIndex
+                            : index == 0);
+                    if (!isCalledTile) remaining[furo.Tiles[index].GetSerial()]--;
+                }
             }
         }
 

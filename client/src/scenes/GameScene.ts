@@ -29,7 +29,7 @@ import Phaser from 'phaser'
 import * as SignalR from '../api/signalr'
 import type { CreateGameOptions } from '../game/GameInstance'
 import { DEFAULT_GAME_ASSIST_CONFIG, GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig, type GameAssistConfig } from '../game/assistConfig'
-import { assistTileMask, decideDiscardSource, decideTouchTileAction, waitGuideWorldY } from '../game/assistLogic'
+import { assistTileMask, decideDiscardSource, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, offsetDiscardSourceMarker, waitGuideWorldY } from '../game/assistLogic'
 import {
   GAME_AUTO_PASS_HOLD_EVENT,
   GAME_AUTO_CONTROL_EVENT,
@@ -41,8 +41,16 @@ import {
   type AutoControlState,
 } from '../game/autoControl'
 import { emitGameLoadProgress } from '../game/gameLoadProgress'
-import { DESKTOP_INGAME_LAYOUT, getIngameLayout, type IngameLayoutMode } from '../game/ingameLayout'
-import { MOBILE_PLAYFIELD_OFFSET_Y, mobileCenterHudOffset, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey } from '../game/mobileIngameViewport'
+import {
+  DESKTOP_INGAME_LAYOUT,
+  getIngameLayout,
+  MOBILE_DEAD_WALL_SHIFT_X,
+  MOBILE_DISCARD_CENTER_INFO_OFFSETS,
+  MOBILE_TOP_MELD_CENTER_INFO_OFFSET,
+  type IngameLayoutMode,
+} from '../game/ingameLayout'
+import { MOBILE_PLAYFIELD_OFFSET_Y, mobileCenterHudOffset, mobileDiscardScale, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey } from '../game/mobileIngameViewport'
+import { canCompleteGameResync, restoreVisiblePaiCodes } from '../game/resyncState'
 import {
   beginPaifuRecording,
   cancelPaifuRecording,
@@ -121,13 +129,8 @@ const MOBILE_DEAD_WALL_AVATAR_Y_OFFSET = 14
 const MOBILE_SELF_HAND_BOTTOM_INSET = 12
 const MOBILE_SELF_HAND_FIXED_COUNT = 14
 const MOBILE_OTHER_HAND_FIXED_COUNT = 14
+const MOBILE_SELF_HAND_DEPTH = 900
 const MOBILE_BOARD_BACKGROUND_SCALE = 1.6
-const MOBILE_DISCARD_CENTER_INFO_OFFSET = [
-  { x:  39, y: 149 },
-  { x: 253, y: 134 },
-  { x: 218, y: -18 },
-  { x: -14, y:   0 },
-] as const
 let DISCARD_COLS = DESKTOP_DISCARD_COLS
 
 function applyIngameLayout(mode: IngameLayoutMode) {
@@ -307,9 +310,11 @@ function discardTexture(loc: 0 | 1 | 2 | 3, flag: number): string {
 }
 
 function discardBasePos(loc: 0 | 1 | 2 | 3, mode: IngameLayoutMode): { x: number; y: number } {
-  if (mode !== 'mobileLandscape') return STH_POS[loc]
-  const offset = MOBILE_DISCARD_CENTER_INFO_OFFSET[loc]
-  return { x: CENTER_INFO.x + offset.x, y: CENTER_INFO.y + offset.y }
+  if (mode === 'mobileLandscape') {
+    const offset = MOBILE_DISCARD_CENTER_INFO_OFFSETS[loc]
+    return { x: CENTER_INFO.x + offset.x, y: CENTER_INFO.y + offset.y }
+  }
+  return STH_POS[loc]
 }
 
 function downTexture(loc: 0 | 1 | 2 | 3): string {
@@ -320,9 +325,7 @@ function discardPos(loc: 0 | 1 | 2 | 3, idx: number, flag: number, mode: IngameL
   const col = idx % DISCARD_COLS
   const row = Math.floor(idx / DISCARD_COLS)
   const base = discardBasePos(loc, mode)
-  const layoutScale = mode === 'mobileLandscape'
-    ? MOBILE_DISCARD_LAYOUT_SCALE * mobileContentScale()
-    : 1
+  const layoutScale = mode === 'mobileLandscape' ? mobileDiscardScale(MOBILE_DISCARD_LAYOUT_SCALE) : 1
   let x = base.x + (STH_COL[loc].x * col + STH_ROW[loc].x * row) * layoutScale
   let y = base.y + (STH_COL[loc].y * col + STH_ROW[loc].y * row) * layoutScale
   if (flag === 2) {
@@ -340,6 +343,14 @@ function discardPos(loc: 0 | 1 | 2 | 3, idx: number, flag: number, mode: IngameL
 }
 
 function mobileMeldBasePos(loc: 0 | 1 | 2 | 3, meldScale: number): { x: number; y: number } | null {
+  if (loc === 2) {
+    const centerOffset = mobileCenterHudOffset('mobileLandscape')
+    return {
+      x: BOARD_X + CENTER_INFO.x + centerOffset.x + MOBILE_TOP_MELD_CENTER_INFO_OFFSET.x,
+      y: BOARD_Y + CENTER_INFO.y + centerOffset.y + MOBILE_TOP_MELD_CENTER_INFO_OFFSET.y,
+    }
+  }
+
   const handScale = (loc === 0 ? MOBILE_SELF_HAND_TILE_SCALE : MOBILE_OTHER_HAND_TILE_SCALE) * mobileContentScale()
   const handEnd = mobileOuterHandPos(loc, MOBILE_OTHER_HAND_FIXED_COUNT - 1, MOBILE_OTHER_HAND_FIXED_COUNT, false, handScale)
   if (!handEnd) return null
@@ -397,7 +408,7 @@ function mobileDeadWallBasePos(): { x: number; y: number } | null {
   const groupWidth = 6 * TEH_COL[0].x + tileWidth
   const rightAvatarLeft = bounds.right - MOBILE_HUD_AVATAR_WIDTH - MOBILE_HUD_AVATAR_INSET_X
   return {
-    x: rightAvatarLeft - MOBILE_DEAD_WALL_AVATAR_GAP - groupWidth - BOARD_X,
+    x: rightAvatarLeft - MOBILE_DEAD_WALL_AVATAR_GAP - groupWidth - BOARD_X + MOBILE_DEAD_WALL_SHIFT_X,
     y: bounds.top + MOBILE_HUD_AVATAR_INSET_TOP - BOARD_Y + WAN_EXPOSE_OFFSET_Y + MOBILE_DEAD_WALL_AVATAR_Y_OFFSET + MOBILE_PLAYFIELD_OFFSET_Y,
   }
 }
@@ -639,7 +650,8 @@ interface PaiInfoMsgState {
 
 interface ResyncHandSnapshot {
   openPos: number
-  tiles: TileState[]
+  handTiles: TileState[]
+  visibleTiles: TileState[]
 }
 
 interface ActionPromptState {
@@ -858,6 +870,7 @@ export default class GameScene extends Phaser.Scene {
   private latestActionPaiInfoTiles: TileState[][] = [[], [], [], []]
   private discardSourceMarkers: Array<DiscardSourceMarkerState | undefined> = [undefined, undefined, undefined, undefined]
   private discardAfterCall = [false, false, false, false]
+  private claimedDiscardCounts = [0, 0, 0, 0]
   private waitGuideRequestSerial = 0
   private readonly waitGuidePreviewCache = new Map<string, Promise<WaitGuidePreviewResponse | null>>()
   private currentActionOffers: string[] = []
@@ -928,7 +941,7 @@ export default class GameScene extends Phaser.Scene {
 
   private discardTileScale(): number {
     return this.layoutMode === 'mobileLandscape'
-      ? MOBILE_DISCARD_TILE_SCALE * mobileContentScale()
+      ? mobileDiscardScale(MOBILE_DISCARD_TILE_SCALE)
       : this.tileScale()
   }
 
@@ -1205,7 +1218,11 @@ export default class GameScene extends Phaser.Scene {
         })
         this.paiInfoQueue = []
         this.pendingDiscardsByBipaiIndex.clear()
-        this.pendingResyncHandSnapshot = { openPos, tiles: currentHand }
+        this.pendingResyncHandSnapshot = {
+          openPos,
+          handTiles: currentHand,
+          visibleTiles: tiles,
+        }
         this.applyResyncHandSnapshot(this.pendingResyncHandSnapshot)
         this.tryCompleteGameResync('authoritative-snapshot-applied')
         return
@@ -1315,6 +1332,7 @@ export default class GameScene extends Phaser.Scene {
         const oyaOrder = ((this.chicha + kyokuCnt) % this.players.length + this.players.length) % this.players.length
         const dice = Array.isArray(data.dice) ? data.dice.map(Number) : []
         this.resetRoundState(false)
+        if (this.isReplayApplyingHistory) this.applyPendingResyncVisiblePai()
         const points = Array.isArray(data.memberPoints) ? data.memberPoints as unknown[] : []
         const yakitori = Array.isArray(data.yakitori) ? data.yakitori as unknown[] : []
         const tip = Array.isArray(data.tip) ? data.tip as unknown[] : []
@@ -1708,8 +1726,10 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private actionPacketKey(data: Record<string, unknown>, seatOrder: number, action: number): string {
+    const auditSeq = Number(data.auditSeq ?? 0)
     const actionSeq = Number(data.actionSeq ?? 0)
     const indices = Array.isArray(data.bipaiIndex) ? data.bipaiIndex.map(Number) : []
+    if (Number.isFinite(auditSeq) && auditSeq > 0) return `audit:${auditSeq}`
     if (Number.isFinite(actionSeq) && actionSeq > 0) return `${actionSeq}:${seatOrder}:${action}:${indices.join(',')}`
     return `${seatOrder}:${action}:${indices.join(',')}`
   }
@@ -1758,6 +1778,32 @@ export default class GameScene extends Phaser.Scene {
       discardCounts: this.players.map(player => player.discards.length),
       queue: this.paiInfoQueue.map(msg => ({ ini: msg.bIniKyo, openPos: msg.openPos, count: msg.tiles.length })),
       ...details,
+    })
+  }
+
+  private reportGameDiscardAudit(data: Record<string, unknown>, seatOrder: number, action: number) {
+    if (this.isReplay || this.isReplayApplyingHistory || !SignalR.isConnected()) return
+    const roomId = Number(this.roomId)
+    const auditSeq = Number(data.auditSeq ?? 0)
+    if (!Number.isInteger(roomId) || roomId <= 0 || !Number.isInteger(auditSeq) || auditSeq <= 0) return
+
+    void SignalR.invoke('ReportGameDiscardAudit', {
+      roomId,
+      auditSeq,
+      actionSeq: Number(data.actionSeq ?? 0),
+      seatOrder,
+      action,
+      handCounts: this.players.map(player => player.hand.length),
+      visibleDiscardCounts: this.players.map(player => player.discards.length),
+      claimedDiscardCounts: [...this.claimedDiscardCounts],
+      meldCounts: this.players.map(player => player.melds.length),
+      pendingDiscardCount: this.pendingDiscardsByBipaiIndex.size,
+    }).catch(error => {
+      console.warn('[GameDiscardAudit] client report failed', {
+        roomId,
+        auditSeq,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      })
     })
   }
 
@@ -1976,16 +2022,12 @@ export default class GameScene extends Phaser.Scene {
       historyReceived: this.gameResyncHistoryReceived,
       historyApplied: this.gameResyncHistoryApplied,
     }
-    if (!this.gameRestorePending || !this.gameResyncInFlight) {
-      this.logResyncProbe('resync completion gate blocked: not pending', { reason, gate })
-      return
-    }
-    if (!this.gameResyncInvokeResolved || !this.gameResyncSnapshotReceived) {
-      this.logResyncProbe('resync completion gate waiting for invoke or snapshot', { reason, gate })
-      return
-    }
-    if (this.gameResyncHistoryReceived && !this.gameResyncHistoryApplied) {
-      this.logResyncProbe('resync completion gate waiting for history application', { reason, gate })
+    if (!canCompleteGameResync(gate, this.isViewer)) {
+      this.logResyncProbe('resync completion gate waiting', {
+        reason,
+        gate,
+        requiredAuthority: this.isViewer ? 'history' : 'snapshot',
+      })
       return
     }
 
@@ -2402,7 +2444,9 @@ export default class GameScene extends Phaser.Scene {
       const { x, y } = position
       const texture = this.resolveSkinTexture(handTexture(loc))
       const concealedTexture = this.resolveSkinTexture(concealedHandTexture(loc))
-      const depth = handDepth(y, idx)
+      const depth = isMe && this.layoutMode === 'mobileLandscape'
+        ? MOBILE_SELF_HAND_DEPTH + idx * 0.0001
+        : handDepth(y, idx)
       let spr: Phaser.GameObjects.Image
 
       if (isMe) {
@@ -2459,15 +2503,18 @@ export default class GameScene extends Phaser.Scene {
     if (loc === 0) return
     const scale = this.handTileScale(odr, loc)
     const isDrawTile = !state.isTedashi
-    const position = this.layoutMode === 'mobileLandscape'
+    let position = this.layoutMode === 'mobileLandscape'
       ? mobileOuterHandPos(loc, state.displayIdx, state.handCount, isDrawTile, scale) ?? handPos(loc, state.displayIdx, isDrawTile, true)
       : handPos(loc, state.displayIdx, isDrawTile, true)
+    if (this.layoutMode === 'mobileLandscape') {
+      position = offsetDiscardSourceMarker(position, OPN_OFS[loc], scale)
+    }
     const texture = loc % 2 === 0 ? 'mj_tapai_0' : 'mj_tapai_1'
     this.discardSourceMarkerSprites[odr] = this.clipToBoard(this.add.image(position.x, position.y, texture, state.isTedashi ? 0 : 1)
       .setOrigin(0, 0)
       .setScale(scale)
       .setAlpha(32 / 256)
-      .setDepth(1000))
+      .setDepth(DISCARD_SOURCE_MARKER_DEPTH))
   }
 
   private clearDiscardSourceMarker(odr: number) {
@@ -4132,6 +4179,7 @@ export default class GameScene extends Phaser.Scene {
         this.players.forEach((_player, odr) => {
           this.redrawHand(odr)
           this.redrawDiscards(odr)
+          this.redrawMelds(odr)
         })
       }
     }
@@ -4235,6 +4283,7 @@ export default class GameScene extends Phaser.Scene {
       const claimed = this.players[claimedOdr]?.discards.pop()
       if (claimed?.isReach) this.players[claimedOdr].reachDiscardCarry = true
       if (claimed) {
+        this.claimedDiscardCounts[claimedOdr]++
         this.lastDiscardOdr = null
         this.redrawDiscards(claimedOdr)
       }
@@ -4257,6 +4306,8 @@ export default class GameScene extends Phaser.Scene {
       this.applyMeldAction(odr, action as Act, indices, this.readClaimedOdr(data, odr, action as Act), suppressLivePlayback)
       this.discardAfterCall[odr] = action === Act.Chi || action === Act.Pon
     }
+
+    this.reportGameDiscardAudit(data, odr, action)
   }
 
   private showCallAction(odr: number, action: Act) {
@@ -4451,11 +4502,17 @@ export default class GameScene extends Phaser.Scene {
 
   private applyResyncHandSnapshot(snapshot: ResyncHandSnapshot) {
     if (snapshot.openPos < 0 || snapshot.openPos >= this.players.length) return
-    snapshot.tiles.forEach(tile => {
-      if (tile.bipaiIndex !== undefined && tile.bipaiIndex >= 0) this.knownPai.set(tile.bipaiIndex, tile.code)
-    })
-    this.players[snapshot.openPos].hand = this.cloneTiles(snapshot.tiles)
+    this.applyResyncVisiblePai(snapshot)
+    this.players[snapshot.openPos].hand = this.cloneTiles(snapshot.handTiles)
     this.redrawHand(snapshot.openPos)
+  }
+
+  private applyResyncVisiblePai(snapshot: ResyncHandSnapshot) {
+    restoreVisiblePaiCodes(this.knownPai, snapshot.visibleTiles)
+  }
+
+  private applyPendingResyncVisiblePai() {
+    if (this.pendingResyncHandSnapshot) this.applyResyncVisiblePai(this.pendingResyncHandSnapshot)
   }
 
   private applyPendingResyncHandSnapshot() {
@@ -4723,6 +4780,7 @@ export default class GameScene extends Phaser.Scene {
       : this.players[claimedOdr]?.discards.pop()
 
     if (claimed) {
+      this.claimedDiscardCounts[claimedOdr]++
       if (claimed.isReach) this.players[claimedOdr].reachDiscardCarry = true
       this.lastDiscardOdr = null
       this.redrawDiscards(claimedOdr)
@@ -4931,6 +4989,7 @@ export default class GameScene extends Phaser.Scene {
     this.paifuGraphDiscards = [[], [], [], []]
     this.latestActionPaiInfoTiles = [[], [], [], []]
     this.discardAfterCall = [false, false, false, false]
+    this.claimedDiscardCounts = [0, 0, 0, 0]
     this.waitGuidePreviewCache.clear()
     this.paifuGraphRound = {
       ...this.paifuGraphRound,

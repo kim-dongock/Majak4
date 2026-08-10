@@ -137,6 +137,7 @@ builder.Services.AddScoped<GetRoomListCommand>();
 builder.Services.AddScoped<GetMemberListCommand>();
 builder.Services.AddScoped<ExitChannelCommand>();
 builder.Services.AddScoped<HanChatAllRelayCommand>();
+builder.Services.AddScoped<HanChatRejectCommand>();
 builder.Services.AddScoped<HanChatOneToOneCommand>();
 builder.Services.AddScoped<HanChatOneToOneStringCommand>();
 builder.Services.AddScoped<HanChatOneToOneEndCommand>();
@@ -267,7 +268,7 @@ static void SetPendingGoogleIdTokenCookie(HttpContext ctx, string idToken)
         HttpOnly = true,
         Secure = ctx.Request.IsHttps,
         SameSite = SameSiteMode.Lax,
-        Expires = DateTimeOffset.UtcNow.AddMinutes(5),
+        Expires = DateTimeOffset.UtcNow.AddMinutes(30),
         Path = "/",
     });
 }
@@ -1297,6 +1298,11 @@ app.MapPost("/auth/google-register", async Task<IResult> (
     }
 
     var googleSub = payload.Subject;
+    var googleEmail = string.IsNullOrWhiteSpace(payload.Email)
+        ? null
+        : payload.Email.Trim().ToLowerInvariant();
+    if (googleEmail is { Length: > 254 })
+        return Results.BadRequest(new { error = "INVALID_EMAIL" });
 
     // ニックネームバリデーション (4 文字以上 16 文字以内)
     var nickname = body.DisplayName?.Trim() ?? string.Empty;
@@ -1342,7 +1348,7 @@ app.MapPost("/auth/google-register", async Task<IResult> (
         });
     }
 
-    var memberNo = (await gamePlayers.RegisterGoogleAsync(googleSub, nickname, sexCode, (ushort)body.BirthYear.Value, body.AvatarId!))
+    var memberNo = (await gamePlayers.RegisterGoogleAsync(googleSub, googleEmail, nickname, sexCode, (ushort)body.BirthYear.Value, body.AvatarId!))
         .ToString(System.Globalization.CultureInfo.InvariantCulture);
     await playerRepo.SetDailyMissionAsync(memberNo, conditionType: 1, progressIncrement: 1);
     var pix = sessions.IssuePix(memberNo);

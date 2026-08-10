@@ -22,7 +22,7 @@
  */
 import Phaser from 'phaser'
 import { calculateTimeBankSegments, GAME_AUTO_PASS_HOLD_EVENT } from '../game/autoControl'
-import { getIngameLayout, type IngameLayoutMode } from '../game/ingameLayout'
+import { DESKTOP_REACH_POSITIONS, getIngameLayout, MOBILE_REACH_POSITIONS, type IngameLayoutMode } from '../game/ingameLayout'
 import MobileAvatarLayer from '../game/MobileAvatarLayer'
 import { mobileCenterHudOffset, mobileVisibleWorldBounds } from '../game/mobileIngameViewport'
 import { isTengokuBoardSkin } from '../utils/legacySkinPalette'
@@ -291,12 +291,6 @@ const WAR_POS = [
   { x: 353, y: 298, key: 'mj_wareme02' },
   { x: 292, y: 327, key: 'mj_wareme03' },
 ] as const
-const RICHI_POS = [
-  { x: 343, y: 418 },
-  { x: 508, y: 311 },
-  { x: 343, y: 280 },
-  { x: 270, y: 311 },
-] as const
 const MEN_FON_POS = [
   { x: 290, y: 381 },
   { x: 467, y: 381 },
@@ -340,6 +334,7 @@ const CALL_AVATAR_POS = [
 ] as const
 const Z_CALL_BALLOON = 5000
 const Z_CALL_AVATAR = Z_CALL_BALLOON + 1
+const Z_REACH_STICK = 900
 
 export default class UIScene extends Phaser.Scene {
   /* テキストオブジェクト */
@@ -491,7 +486,7 @@ export default class UIScene extends Phaser.Scene {
 
       /* リーチ棒 (CMJTblDraw::PutRicStk) */
       this.reachSprites[odr] = this.add.image(0, 0, this.resolveSkinTextureKey('mj_richbar_0'))
-        .setOrigin(0, 0).setDepth(302).setVisible(false)
+        .setOrigin(0, 0).setDepth(Z_REACH_STICK).setVisible(false)
     }
 
     /* PutTurnMark は画面上に 1 つだけ置く */
@@ -596,7 +591,7 @@ export default class UIScene extends Phaser.Scene {
 
     gs.events.on('actionPromptStart', (data: ActionPromptTimerData) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
-      this.traceUiFlow('actionPromptStart event', data)
+      this.traceUiFlow('actionPromptStart event', { ...data })
       if (Number.isFinite(data.timeLimit) && Number(data.timeLimit) > 0) this.startTimer(data)
     })
 
@@ -1070,6 +1065,7 @@ export default class UIScene extends Phaser.Scene {
     this.diceSprites[0]?.setPosition(leftDicePoint.x, leftDicePoint.y)
     this.diceSprites[1]?.setPosition(rightDicePoint.x, rightDicePoint.y)
     this.updateWindMarkers()
+    this.updateReachTexts()
   }
 
   private avatarKey(_odr: number, player: PlayerHudState) {
@@ -1170,8 +1166,8 @@ export default class UIScene extends Phaser.Scene {
     this.reachSprites.forEach(sprite => sprite.setVisible(false))
     for (const odr of this.reachedOdr) {
       const loc = this.odrToLoc(odr)
-      const pos = RICHI_POS[loc]
-      const point = boardLocalPoint(pos)
+      const pos = this.layoutMode === 'mobileLandscape' ? MOBILE_REACH_POSITIONS[loc] : DESKTOP_REACH_POSITIONS[loc]
+      const point = this.layoutMode === 'mobileLandscape' ? centerHudPoint(pos) : boardLocalPoint(pos)
       const key = this.reachBarKey(this.players[odr]?.richiEffect, loc)
       this.reachSprites[loc].setTexture(this.resolveSkinTextureKey(key)).setPosition(point.x, point.y).setVisible(true)
     }

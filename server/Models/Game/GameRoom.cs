@@ -6,6 +6,7 @@ using MajakServer.Models.Protocol;
 namespace MajakServer.Models.Game;
 
 public sealed record TrainingNpcProfile(string Name, string AvatarId, string Sex);
+public sealed record GameDiscardAuditSnapshot(int[] HandCounts, int[] DiscardCounts, int[] MeldCounts);
 
 /// <summary>
 /// ゲームルーム状態 (メモリ専用) — 原典: HMajRoomServer
@@ -139,7 +140,10 @@ public class GameRoom
 
     // Web クライアント入力要求の deadline / sequence (AP-14)
     private long _actionSeq;
+    private long _gameAuditSeq;
     private int _gameActionsStarted;
+    private readonly object _gameAuditLock = new();
+    private readonly Dictionary<long, GameDiscardAuditSnapshot> _gameAuditSnapshots = new();
     public PendingActionPrompt?[] PendingActions { get; } = new PendingActionPrompt?[4];
     public int[] KyokuTimeBankMs { get; } = new int[4];
 
@@ -147,6 +151,24 @@ public class GameRoom
     private int _gameReportProcessState;
 
     public long IssueActionSeq() => Interlocked.Increment(ref _actionSeq);
+
+    public long IssueGameAuditSeq() => Interlocked.Increment(ref _gameAuditSeq);
+
+    public void RecordGameDiscardAudit(long auditSeq, GameDiscardAuditSnapshot snapshot)
+    {
+        lock (_gameAuditLock)
+        {
+            _gameAuditSnapshots[auditSeq] = snapshot;
+            while (_gameAuditSnapshots.Count > 128)
+                _gameAuditSnapshots.Remove(_gameAuditSnapshots.Keys.Min());
+        }
+    }
+
+    public bool TryGetGameDiscardAudit(long auditSeq, out GameDiscardAuditSnapshot? snapshot)
+    {
+        lock (_gameAuditLock)
+            return _gameAuditSnapshots.TryGetValue(auditSeq, out snapshot);
+    }
 
     public bool TryStartGameActions()
         => Interlocked.CompareExchange(ref _gameActionsStarted, 1, 0) == 0;

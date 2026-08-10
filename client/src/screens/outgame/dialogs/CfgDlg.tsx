@@ -224,7 +224,7 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
     onModify?.(next)
   }
 
-  if (layoutMode === 'mobileLandscape') {
+  if (layoutMode === 'mobileLandscape' || layoutMode === 'desktop') {
     return (
       <div className="majak-mobile-dialog-overlay">
         <div className="majak-mobile-config-dialog majak-mobile-dialog-panel">

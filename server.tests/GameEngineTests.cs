@@ -146,6 +146,7 @@ public class GameEngineTests
     public void PaiCode_Invalid_IsNotValid()
     {
         Assert.False(PaiCode.Invalid.IsValid);
+        Assert.Equal(41, PaiCode.Invalid.GetSerial());
     }
 
     [Fact]

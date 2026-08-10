@@ -82,6 +82,23 @@ public sealed class HanChatOneToOneCommand : HanChatOneToOneCommandBase
     }
 }
 
+public sealed class HanChatRejectCommand : HanChatOneToOneCommandBase
+{
+    public HanChatRejectCommand(PlayerSessionService session) : base(session) { }
+
+    public override async Task ExecuteAsync(CommandContext ctx)
+    {
+        if (!TryGetParticipants(ctx, out var sender, out var recipient)) return;
+        var rejectType = ctx.GetInt("rejectType");
+        if (rejectType != 2 && rejectType != 4) rejectType = 2;
+
+        var packet = BuildPacket(sender, recipient);
+        packet["rejectType"] = rejectType;
+        packet["nType"] = rejectType;
+        await SendToParticipants(ctx, Cmd.HanChatReject, sender, recipient, packet);
+    }
+}
+
 public sealed class HanChatOneToOneStringCommand : HanChatOneToOneCommandBase
 {
     public HanChatOneToOneStringCommand(PlayerSessionService session) : base(session) { }

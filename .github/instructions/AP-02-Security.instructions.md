@@ -20,13 +20,14 @@ description: "Google認証、会員登録、ゲームJWT、Refresh Cookie、memb
 
 - `POST /auth/google-login` はGoogle ID Tokenを検証し、`google_sub` で `player_account` を検索する。
 - `POST /auth/google-login-redirect` はGoogle GIS redirect mode用である。既存会員にはRefresh Cookieを発行してクライアントへ戻し、未登録なら登録フローへ遷移させる。
-- 未登録の場合は `requiresRegistration=true` を返し、ID Tokenを5分間のHttpOnly Cookie `mj_pending_google_id_token` に一時保存できる。
+- WebのGoogleログインはポップアップを使用せず、Google GISの `ux_mode=redirect` と `login_uri=/auth/google-login-redirect` を使用する。ネイティブアプリはCapacitorのGoogleログインを使用する。
+- 未登録の場合は `requiresRegistration=true` を返し、ID Tokenを30分間のHttpOnly Cookie `mj_pending_google_id_token` に一時保存できる。登録中にCookieが失効して401になった場合、クライアントは登録フォームに留まらずGoogleログインへ戻す。
 - 既存会員では最終ログインと日次ミッションを更新し、`pix`、ゲームAccess Token、ローテーション済みRefresh Cookieを発行する。
 - Google ID Tokenの `aud` は設定されたGoogle Client IDと必ず照合する。
 
 ### 1-2. 会員登録
 
-- `POST /auth/google-register` は検証済みGoogle `sub`、ニックネーム、性別、出生年、アバターを使って登録する。
+- `POST /auth/google-register` は検証済みGoogle `sub` とメールアドレス、ニックネーム、性別、出生年、アバターを使って登録する。メールアドレスはクライアント入力を受け取らず、サーバーが検証したID Tokenのclaimだけを正規化して `player_account.email` に保存する。
 - ニックネームはtrim後4〜16文字で重複不可、性別は `M` / `F`、出生年は1900年から現在年、アバターは性別ごとの `AvatarCatalog` で検証する。
 - `GamePlayerRepository.RegisterGoogleAsync` が `player_account`、`player_wallet`、`player_profile` を同一登録フローで作成し、DBが新しい `member_no` を採番する。
 - 登録処理は同じGoogle `sub` に対して冪等に扱い、既存アカウントがあれば新しい会員を重複作成しない。

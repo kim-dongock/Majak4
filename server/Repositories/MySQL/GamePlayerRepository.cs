@@ -79,6 +79,7 @@ public class GamePlayerRepository
     /// <summary>Google 認証で初回登録する (利用規約同意も同時に記録)。</summary>
     public virtual async Task<ulong> RegisterGoogleAsync(
         string googleSub,
+        string? email,
         string displayName,
         string sexCode,
         ushort birthYear,
@@ -90,7 +91,7 @@ public class GamePlayerRepository
         {
             await using var db = await _db.CreateAsync();
             await using var tx = await db.Database.BeginTransactionAsync();
-            var memberNo = await InsertGoogleAccountAsync(db, displayName, sexCode, birthYear, avatarId, googleSub);
+            var memberNo = await InsertGoogleAccountAsync(db, displayName, sexCode, birthYear, avatarId, googleSub, email);
             AddRelatedPlayerRows(db, memberNo);
             await db.SaveChangesAsync();
             await tx.CommitAsync();
@@ -129,7 +130,8 @@ public class GamePlayerRepository
         string sexCode,
         ushort birthYear,
         string avatarId,
-        string googleSub)
+        string googleSub,
+        string? email)
     {
         var connection = db.Database.GetDbConnection();
         if (connection.State != System.Data.ConnectionState.Open)
@@ -147,7 +149,7 @@ public class GamePlayerRepository
                 (@displayName, @email, @googleSub, @sexCode, @birthYear, @avatarId,
                  @now, 0, 'google', @now, @now, @now, @now)";
         AddParameter(cmd, "@displayName", displayName ?? string.Empty);
-        AddParameter(cmd, "@email", null);
+        AddParameter(cmd, "@email", email);
         AddParameter(cmd, "@googleSub", googleSub);
         AddParameter(cmd, "@sexCode", sexCode);
         AddParameter(cmd, "@birthYear", birthYear);

@@ -82,6 +82,80 @@ public class TrainingAiEvaluatorTests
         Assert.True(decision.ShouldRiichi);
     }
 
+    [Fact]
+    public void EvaluateTrainingAiHoraPoints_PreservesLegacyRedTileState()
+    {
+        int[] hand = { 0, 1, 2, 12, 13, 14, 24, 25, 26, 31, 31, 3, 4, 33 };
+        MajakGameLogic plainGame = CreateGame(hand, lastSerial: 33);
+        MajakGameLogic redGame = CreateGame(hand, lastSerial: 33);
+        EnginePlayer redPlayer = redGame.Player[0];
+        int redIndex = redPlayer.Tehai.FindIndex(tile => tile.GetSerial() == 4);
+        PaiCode redTile = redPlayer.Tehai[redIndex];
+        redTile.IsRed = true;
+        redPlayer.Tehai[redIndex] = redTile;
+
+        var winningCounts = new int[34];
+        foreach (int serial in hand.Where(serial => serial != 33)) winningCounts[serial]++;
+        winningCounts[5]++;
+        var pointMethod = typeof(MajakGameLogic).GetMethod(
+            "EvaluateTrainingAiHoraPoints",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        var plainPoints = ((int Tsumo, int Ron, int RiichiTsumo, int RiichiRon))pointMethod.Invoke(
+            plainGame,
+            new object[] { 0, winningCounts, PaiCode.MakeSerial(5) })!;
+        var redPoints = ((int Tsumo, int Ron, int RiichiTsumo, int RiichiRon))pointMethod.Invoke(
+            redGame,
+            new object[] { 0, winningCounts, PaiCode.MakeSerial(5) })!;
+
+        Assert.True(redPoints.Tsumo > plainPoints.Tsumo);
+        Assert.True(redPoints.Ron > plainPoints.Ron);
+
+        MajakGameLogic redWinningGame = CreateGame(
+            hand.Where(serial => serial != 33).Append(5),
+            lastSerial: 5);
+        EnginePlayer redWinningPlayer = redWinningGame.Player[0];
+        int redWinningIndex = redWinningPlayer.Tehai.FindIndex(tile => tile.GetSerial() == 5);
+        PaiCode redWinningTile = redWinningPlayer.Tehai[redWinningIndex];
+        redWinningTile.IsRed = true;
+        redWinningPlayer.Tehai[redWinningIndex] = redWinningTile;
+        var redWinningPoints = ((int Tsumo, int Ron, int RiichiTsumo, int RiichiRon))pointMethod.Invoke(
+            redWinningGame,
+            new object[] { 0, winningCounts, PaiCode.MakeSerial(5) })!;
+
+        Assert.True(redWinningPoints.Tsumo > plainPoints.Tsumo);
+        Assert.Equal(plainPoints.Ron, redWinningPoints.Ron);
+    }
+
+    [Fact]
+    public void EvaluateTrainingAiHoraPoints_UsesLegacyOriginalHandForRedDora()
+    {
+        int[] sourceHand = { 4, 0, 1, 2, 12, 13, 14, 24, 25, 26, 31, 31, 3, 33 };
+        MajakGameLogic plainGame = CreateGame(sourceHand, lastSerial: 33);
+        MajakGameLogic redGame = CreateGame(sourceHand, lastSerial: 33);
+        int redIndex = redGame.Player[0].Tehai.FindIndex(tile => tile.GetSerial() == 4);
+        PaiCode redTile = redGame.Player[0].Tehai[redIndex];
+        redTile.IsRed = true;
+        redGame.Player[0].Tehai[redIndex] = redTile;
+
+        int[] candidateHand = { 9,10,11, 12,13,14, 15,16,17, 18,18,18, 27,27 };
+        var candidateCounts = new int[34];
+        foreach (int serial in candidateHand) candidateCounts[serial]++;
+        var pointMethod = typeof(MajakGameLogic).GetMethod(
+            "EvaluateTrainingAiHoraPoints",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        var plainPoints = ((int Tsumo, int Ron, int RiichiTsumo, int RiichiRon))pointMethod.Invoke(
+            plainGame,
+            new object[] { 0, candidateCounts, PaiCode.MakeSerial(17) })!;
+        var redPoints = ((int Tsumo, int Ron, int RiichiTsumo, int RiichiRon))pointMethod.Invoke(
+            redGame,
+            new object[] { 0, candidateCounts, PaiCode.MakeSerial(17) })!;
+
+        Assert.True(redPoints.Tsumo > plainPoints.Tsumo);
+        Assert.True(redPoints.Ron > plainPoints.Ron);
+    }
+
     private static MajakGameLogic CreateGame(IEnumerable<int> serials, int lastSerial)
     {
         var game = new MajakGameLogic();

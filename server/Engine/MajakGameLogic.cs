@@ -115,7 +115,13 @@ public class MajakGameLogic
             int j = 0;
             foreach (var t in player.Tehai)
             {
-                if (t.BipaiIndex == bipaiIndex[i] && !used[j]) { found = j; used[j] = true; break; }
+                if (t.BipaiIndex == bipaiIndex[i])
+                {
+                    if (used[j]) return ActionResult.ErrPaiAlreadyUsed;
+                    found = j;
+                    used[j] = true;
+                    break;
+                }
                 j++;
             }
             if (found < 0) return ActionResult.ErrPaiNotFoundInHand;
@@ -399,7 +405,11 @@ public class MajakGameLogic
             }
         }
 
-        if (best == Act.Ron) { ProcessHora(false); return ActionResult.Ok; }
+        if (best == Act.Ron)
+        {
+            ProcessHora(false);
+            return ActionResult.Ok;
+        }
 
         _isChankan = false;
 
@@ -535,6 +545,9 @@ public class MajakGameLogic
 
         if (player.Mode == PlayerMode.Turn)
         {
+            bool canDeclareKan = KyokuInfo.KanCount < 4
+                || (_rule.Contest == 0 && KyokuInfo.KanCount == 4);
+
             // ツモ和了
             if (CheckHoraYaku(player, true))
                 result.CanTsumo = true;
@@ -549,8 +562,7 @@ public class MajakGameLogic
             else
             {
                 foreach (var t in player.Tehai)
-                    if (!player.IsKuikaeForbidden(t))
-                        result.TapCandidates.Add(t.BipaiIndex);
+                    result.TapCandidates.Add(t.BipaiIndex);
             }
 
             // リーチ (リーチ前、残り牌4枚以上、点数1000以上 or コンテスト)
@@ -570,7 +582,7 @@ public class MajakGameLogic
             // 暗槓
             if (_bipai.GetBipaiCount() > 0
                 && !(_currAct is Act.Chi or Act.Pon)
-                && KyokuInfo.KanCount < 4)
+                && canDeclareKan)
             {
                 if (player.RichiType != RichiType.None)
                 {
@@ -646,10 +658,16 @@ public class MajakGameLogic
             // ロン
             if (player.IsHoraForm && !player.CheckFuriten())
             {
-                // 仮ツモしてヤク確認
-                var tmp = new EnginePlayer();
-                // 本格的な検証は ProcessFuro の Ron ブランチで行われる
-                result.CanRon = true;
+                player.Tsumo(_currTapai);
+                try
+                {
+                    result.CanRon = CheckHoraYaku(player, false);
+                    if (!result.CanRon) result.HoraErrorReason = "noYaku";
+                }
+                finally
+                {
+                    player.Tehai.RemoveAt(player.Tehai.Count - 1);
+                }
             }
             else if (player.IsHoraForm && player.CheckFuriten())
             {
@@ -673,7 +691,7 @@ public class MajakGameLogic
             // カン (ミンカン)
             if (player.RichiType == RichiType.None && !_currTapai.IsHuapai
                 && _bipai.GetBipaiCount() > 0
-                && KyokuInfo.KanCount < 4)
+                && (KyokuInfo.KanCount < 4 || (_rule.Contest == 0 && KyokuInfo.KanCount == 4)))
             {
                 var triples = player.Tehai
                     .Where(t => t == _currTapai)
@@ -720,15 +738,13 @@ public class MajakGameLogic
         bool isTsumo,
         Yaku yaku,
         bool isMenzen,
-        bool includeFirstTurn)
+        bool includeFirstTurn,
+        IReadOnlyList<PaiCode>? doraHand = null)
     {
         int chanfon      = HanchanInfo.CurKyoku / 4;
         int menfon       = (player.Order - KyokuInfo.OyaOrder + 4) % 4;
-        // 段位戦のみ bRevaluate=false (シングル役満) — 原典: bRevaluate = !m_bGradeGame
-        // 段位戦以外 (通常/カップ/トーナメント) は doubleYakuman=true で四暗刻単騎・国士13面・九蓮9面が2倍。
-        bool doubleYakuman = !_rule.GradeGame;
         new Hand(player).GetYaku(yaku, _rule.Kuitan, isTsumo, isMenzen, chanfon, menfon,
-                                 player.Tehai.Last().GetSerial(), doubleYakuman);
+                                 player.Tehai.Last().GetSerial(), doubleYakuman: !_rule.GradeGame);
 
         // First turn yakuman
         if (includeFirstTurn && _isFirstTurn && isTsumo)
@@ -752,7 +768,7 @@ public class MajakGameLogic
 
             // Dora
             int totalDora = 0;
-            foreach (var t in player.Tehai)   totalDora += CountDora(yaku, t, player.RichiType != RichiType.None);
+            foreach (var t in doraHand ?? player.Tehai) totalDora += CountDora(yaku, t, player.RichiType != RichiType.None);
             foreach (var f in player.Furo)    foreach (var t in f.Tiles) totalDora += CountDora(yaku, t, player.RichiType != RichiType.None);
             foreach (var t in player.NukiDora) { yaku.DoraCnt[3]++; totalDora += 1 + CountDora(yaku, t, player.RichiType != RichiType.None); }
             if (totalDora > 0) yaku.AddYaku(HoraYaku.Dora, totalDora);
@@ -773,6 +789,8 @@ public class MajakGameLogic
         {
             Order = source.Order,
             GamePoint = source.GamePoint,
+            RichiType = source.RichiType,
+            IsIppatsu = source.IsIppatsu,
         };
         snapshot.Furo.AddRange(source.Furo);
         snapshot.NukiDora.AddRange(source.NukiDora);
@@ -784,7 +802,7 @@ public class MajakGameLogic
             for (int copy = 0; copy < count; copy++)
                 snapshot.Tehai.Add(PaiCode.MakeSerial(serial));
         }
-        snapshot.Tehai.Add(PaiCode.MakeSerial(winningSerial));
+        snapshot.Tehai.Add(winningTile);
 
         bool canRiichi = GetBipaiCount() >= MajakConst.PlayerMaxCount
             && (source.GamePoint >= 1000 || _rule.Contest == 1)
@@ -794,7 +812,16 @@ public class MajakGameLogic
         (int points, int riichiPoints) Evaluate(bool isTsumo)
         {
             var yaku = new Yaku();
-            GetHoraYaku(snapshot, isTsumo, yaku, source.IsMenzen, includeFirstTurn: false);
+            IReadOnlyList<PaiCode> doraHand = isTsumo
+                ? source.Tehai
+                : source.Tehai.Take(source.Tehai.Count - 1).Append(winningTile).ToArray();
+            GetHoraYaku(
+                snapshot,
+                isTsumo,
+                yaku,
+                source.IsMenzen,
+                includeFirstTurn: false,
+                doraHand);
             int points = isTsumo || yaku.HanSum != 0 ? yaku.Ten : 0;
             int riichiPoints = 0;
             if (canRiichi)

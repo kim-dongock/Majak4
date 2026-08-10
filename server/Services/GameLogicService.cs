@@ -385,9 +385,9 @@ public class GameLogicService
         ConsumePromptTimeBank(room, room.PendingActions[order], DateTimeOffset.UtcNow);
         room.PendingActions[order] = null;
 
-
+        long auditSeq = LogAuthoritativeDiscardAudit(room, order, act, actionSeq, "player");
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
-        var actionInfo = BuildActionInfo(room, order, action, indices, actionSeq);
+        var actionInfo = BuildActionInfo(room, order, action, indices, actionSeq, auditSeq);
         await ctx.Clients.Group($"room_{room.RoomId}")
             .SendAsync(Cmd.GamePlay, actionInfo);
         _log?.LogDebug("GamePlayProcess broadcast action. roomId={RoomId} order={Order} action={Action} leftCount={LeftCount}", room.RoomId, order, action, room.Engine.GetBipaiCount());
@@ -602,8 +602,9 @@ public class GameLogicService
         }
 
         room.PendingActions[order] = null;
+        long auditSeq = LogAuthoritativeDiscardAudit(room, order, eAct, 0, useTrainingAi ? "training-ai" : "proxy");
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
-        var actionInfo = BuildActionInfo(room, order, (int)eAct, bipaiIdx);
+        var actionInfo = BuildActionInfo(room, order, (int)eAct, bipaiIdx, auditSeq: auditSeq);
         await ctx.Clients.Group($"room_{room.RoomId}")
             .SendAsync(Cmd.GamePlay, actionInfo);
         if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
@@ -640,7 +641,30 @@ public class GameLogicService
         return true;
     }
 
-    private static object BuildActionInfo(GameRoom room, int seatOrder, int action, int[] bipaiIndex, long actionSeq = 0)
+    private long LogAuthoritativeDiscardAudit(GameRoom room, int seatOrder, Engine.Act action, long actionSeq, string trigger)
+    {
+        long auditSeq = room.IssueGameAuditSeq();
+        int[] handCounts = room.Engine.Player.Select(player => player.Tehai.Count).ToArray();
+        int[] discardCounts = room.Engine.Player.Select(player => player.Sutehai.Count).ToArray();
+        int[] meldCounts = room.Engine.Player.Select(player => player.Furo.Count).ToArray();
+        room.RecordGameDiscardAudit(auditSeq, new GameDiscardAuditSnapshot(handCounts, discardCounts, meldCounts));
+        _log?.LogInformation(
+            "[GameDiscardAudit] source=server roomId={RoomId} auditSeq={AuditSeq} actionSeq={ActionSeq} trigger={Trigger} seatOrder={SeatOrder} action={Action} handCounts={HandCounts} discardCounts={DiscardCounts} meldCounts={MeldCounts} flowerCounts={FlowerCounts} leftCount={LeftCount}",
+            room.RoomId,
+            auditSeq,
+            actionSeq,
+            trigger,
+            seatOrder,
+            action,
+            string.Join(',', handCounts),
+            string.Join(',', discardCounts),
+            string.Join(',', meldCounts),
+            string.Join(',', room.Engine.Player.Select(player => player.NukiDora.Count)),
+            room.Engine.GetBipaiCount());
+        return auditSeq;
+    }
+
+    private static object BuildActionInfo(GameRoom room, int seatOrder, int action, int[] bipaiIndex, long actionSeq = 0, long auditSeq = 0)
     {
         return new
         {
@@ -649,6 +673,7 @@ public class GameLogicService
             action,
             bipaiIndex,
             actionSeq,
+            auditSeq,
             leftCount = room.Engine.GetBipaiCount(),
         };
     }
@@ -930,8 +955,9 @@ public class GameLogicService
         }
 
         room.PendingActions[order] = null;
+        long auditSeq = LogAuthoritativeDiscardAudit(room, order, act, actionSeq, reason);
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
-        var actionInfo = BuildActionInfo(room, order, (int)act, bipaiIdx, actionSeq);
+        var actionInfo = BuildActionInfo(room, order, (int)act, bipaiIdx, actionSeq, auditSeq);
         await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.GamePlay, actionInfo);
         if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
         room.PlayHistory.Add(actionInfo);
@@ -1262,8 +1288,9 @@ public class GameLogicService
                 ConsumePromptTimeBank(room, currentPrompt, DateTimeOffset.UtcNow);
                 room.PendingActions[order] = null;
 
+                long auditSeq = LogAuthoritativeDiscardAudit(room, order, timeoutAct, prompt.ActionSeq, "timeout");
                 var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
-                var actionInfo = BuildActionInfo(room, order, (int)timeoutAct, bipaiIdx, prompt.ActionSeq);
+                var actionInfo = BuildActionInfo(room, order, (int)timeoutAct, bipaiIdx, prompt.ActionSeq, auditSeq);
                 await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.GamePlay, actionInfo);
                 if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
                 room.PlayHistory.Add(actionInfo);

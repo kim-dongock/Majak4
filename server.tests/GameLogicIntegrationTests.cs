@@ -154,6 +154,18 @@ public class GameLogicProcessTurnTests
         Assert.Equal(ActionResult.ErrInvalidMode, result);
     }
 
+    [Fact]
+    public void ProcessAction_DuplicatePhysicalIndex_ErrPaiAlreadyUsed()
+    {
+        var logic = InitGame();
+        int parent = logic.KyokuInfo.OyaOrder;
+        int index = logic.Player[parent].Tehai[0].BipaiIndex;
+
+        var result = logic.ProcessAction(parent, Act.Ank, new[] { index, index, index, index }, 4);
+
+        Assert.Equal(ActionResult.ErrPaiAlreadyUsed, result);
+    }
+
     // シナリオ5: 点数不足でリーチ → ErrPointNotEnough
     // 原典: 1000 > pPlayer->m_nGamePoint && m_stRuleInfo.m_nContest!=1 → MLE_POINTNOTENOUGH
     [Fact]
@@ -248,6 +260,22 @@ public class GameLogicProcessTurnTests
         Assert.Empty(actions.RichiCandidates);
     }
 
+    [Fact]
+    public void GetValidActions_FifthAnkanInNormalRule_IsExposedForAbortiveDraw()
+    {
+        var logic = InitGame();
+        int parent = logic.KyokuInfo.OyaOrder;
+        var player = logic.Player[parent];
+        SetTehai(player, 0,1,2,3,4,5,6,7,8,9, 31,31,31,31);
+        logic.KyokuInfo.KanCount = 4;
+        player.KanCnt = 4;
+
+        var actions = logic.GetValidActions(parent);
+
+        Assert.Contains(actions.AnkanCandidates, candidate =>
+            candidate.OrderBy(index => index).SequenceEqual(new[] { 90, 91, 92, 93 }));
+    }
+
     [Theory]
     [InlineData(Act.Tsu, 0)]
     [InlineData(Act.Ank, 4)]
@@ -336,6 +364,47 @@ public class GameLogicProcessTurnTests
         Assert.Equal(Act.Cha, player.Furo[0].Act);
         Assert.True(GetPrivateBool(logic, "_isChankan"));
         Assert.All(logic.Player, p => Assert.Equal(PlayerMode.Chan, p.Mode));
+    }
+
+    [Fact]
+    public void ProcessFuro_ChankanRon_PreservesCompletedChakanLikeLegacy()
+    {
+        var logic = InitGame();
+        int declarerOrder = logic.KyokuInfo.OyaOrder;
+        int winnerOrder = (declarerOrder + 1) % 4;
+        var declarer = logic.Player[declarerOrder];
+        var addedTile = declarer.Tehai.Last();
+        declarer.Furo.Add(new FuroBlock
+        {
+            Act = Act.Pon,
+            TapaiOrder = (declarerOrder + 2) % 4,
+            Tiles = { addedTile, addedTile, addedTile },
+        });
+
+        var winner = logic.Player[winnerOrder];
+        winner.Tehai.Clear();
+        int[] tripletSerials = { 0, 9, 18, 27, 28, 29, 30, 31, 32, 33 };
+        foreach (int serial in tripletSerials.Where(serial => serial != addedTile.GetSerial()).Take(4))
+            for (int copy = 0; copy < 3; copy++)
+                winner.Tehai.Add(PaiCode.MakeSerial(serial));
+        winner.Tehai.Add(PaiCode.MakeSerial(addedTile.GetSerial()));
+        winner.RichiType = RichiType.Richi;
+
+        Assert.Equal(ActionResult.Ok,
+            logic.ProcessAction(declarerOrder, Act.Cha, new[] { addedTile.BipaiIndex }, 1));
+        Assert.Equal(ActionResult.Ok,
+            logic.ProcessAction(winnerOrder, Act.Ron, Array.Empty<int>(), 0));
+        for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+        {
+            if (logic.Player[order].Mode == PlayerMode.Chan)
+                Assert.Equal(ActionResult.Ok,
+                    logic.ProcessAction(order, Act.Pas, Array.Empty<int>(), 0));
+        }
+
+        Assert.Equal(Act.Cha, declarer.Furo[0].Act);
+        Assert.Equal(4, declarer.Furo[0].Tiles.Count);
+        Assert.Equal(1, declarer.KanCnt);
+        Assert.Equal(0, logic.KyokuInfo.KanCount);
     }
 
     [Fact]
@@ -436,6 +505,95 @@ public class GameLogicProcessFuroTests
     {
         Hanchan = true, Kuitan = true, Contest = 0, AkaDora = 1, Uma = 0,
     };
+
+    private static MajakGameLogic CreateMultiRonGame(int ronMode)
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule() with { Ron = ronMode });
+        const int discarder = 0;
+
+        typeof(MajakGameLogic)
+            .GetField("_currOrder", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, discarder);
+        typeof(MajakGameLogic)
+            .GetField("_currTapai", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, PaiCode.MakeSerial(33));
+
+        logic.Player[discarder].Mode = PlayerMode.None;
+        for (int order = 1; order < MajakConst.PlayerMaxCount; order++)
+        {
+            EnginePlayer player = logic.Player[order];
+            player.Tehai.Clear();
+            foreach (int serial in new[] { 0,0,0, 9,9,9, 18,18,18, 27,27,27, 33 })
+                player.Tehai.Add(PaiCode.MakeSerial(serial));
+            player.Mode = PlayerMode.Furo;
+            player.IsHoraForm = true;
+            player.RichiType = RichiType.Richi;
+        }
+        return logic;
+    }
+
+    private static void SubmitRon(MajakGameLogic logic, params int[] winnerOrders)
+    {
+        foreach (int order in winnerOrders)
+            Assert.Equal(ActionResult.Ok,
+                logic.ProcessAction(order, Act.Ron, Array.Empty<int>(), 0));
+
+        for (int order = 1; order < MajakConst.PlayerMaxCount; order++)
+            if (logic.Player[order].Mode == PlayerMode.Furo)
+                Assert.Equal(ActionResult.Ok,
+                    logic.ProcessAction(order, Act.Pas, Array.Empty<int>(), 0));
+    }
+
+    [Fact]
+    public void ProcessFuro_HeadBump_AcceptsNearestRonOnlyLikeLegacy()
+    {
+        MajakGameLogic logic = CreateMultiRonGame(ronMode: 0);
+
+        SubmitRon(logic, 1, 2);
+
+        Assert.True(logic.LastKyoResult.Hora[1]);
+        Assert.False(logic.LastKyoResult.Hora[2]);
+        Assert.False(logic.LastKyoResult.Hora[3]);
+        Assert.Equal(Act.Pas, logic.Player[2].CurAct);
+        Assert.Equal(Act.Pas, logic.Player[3].CurAct);
+    }
+
+    [Fact]
+    public void ProcessFuro_DoubleRon_AcceptsTwoWinnersLikeLegacy()
+    {
+        MajakGameLogic logic = CreateMultiRonGame(ronMode: 1);
+
+        SubmitRon(logic, 1, 2);
+
+        Assert.True(logic.LastKyoResult.Hora[1]);
+        Assert.True(logic.LastKyoResult.Hora[2]);
+        Assert.False(logic.LastKyoResult.Hora[3]);
+    }
+
+    [Fact]
+    public void ProcessFuro_DoubleRon_ThirdRonCausesSanchahoLikeLegacy()
+    {
+        MajakGameLogic logic = CreateMultiRonGame(ronMode: 1);
+
+        SubmitRon(logic, 1, 2, 3);
+
+        Assert.Equal(KyokuEnd.Sanchaho, logic.KyokuEnd);
+        Assert.Equal(KyoResultPin.Sanchaho, logic.LastKyoResult.Pin);
+        Assert.DoesNotContain(logic.LastKyoResult.Hora, won => won);
+    }
+
+    [Fact]
+    public void ProcessFuro_TripleRon_AcceptsAllThreeWinnersLikeLegacy()
+    {
+        MajakGameLogic logic = CreateMultiRonGame(ronMode: 2);
+
+        SubmitRon(logic, 1, 2, 3);
+
+        Assert.True(logic.LastKyoResult.Hora[1]);
+        Assert.True(logic.LastKyoResult.Hora[2]);
+        Assert.True(logic.LastKyoResult.Hora[3]);
+    }
 
     // シナリオ1: 自分の打牌に対して Ron → ErrSelf
     // 原典: if(action != PAS && pPlayer->m_nOrder == m_nCurrOrder) → MLE_SELF
@@ -594,8 +752,19 @@ public class GameLogicProcessFuroTests
         logic.InitHanchan(DefaultRule());
         int parent = logic.KyokuInfo.OyaOrder;
         int child = (parent + 1) % 4;
-        logic.Player[child].Mode = PlayerMode.Chan;
-        logic.Player[child].IsHoraForm = true;
+        var player = logic.Player[child];
+        player.Tehai.Clear();
+        foreach (int serial in new[] { 0,0,0, 9,9,9, 18,18,18, 27,27,27, 33 })
+            player.Tehai.Add(PaiCode.MakeSerial(serial));
+        player.Mode = PlayerMode.Chan;
+        player.IsHoraForm = true;
+        player.RichiType = RichiType.Richi;
+        typeof(MajakGameLogic)
+            .GetField("_currOrder", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, parent);
+        typeof(MajakGameLogic)
+            .GetField("_currTapai", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, PaiCode.MakeSerial(33));
 
         var actions = logic.GetValidActions(child);
 
@@ -606,6 +775,40 @@ public class GameLogicProcessFuroTests
         Assert.Empty(actions.KanCandidates);
         Assert.Empty(actions.ChakanCandidates);
         Assert.Empty(actions.AnkanCandidates);
+    }
+
+    [Fact]
+    public void GetValidActions_OpenNoYakuRon_IsNotExposed()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        int discarder = logic.KyokuInfo.OyaOrder;
+        int child = (discarder + 1) % 4;
+        var player = logic.Player[child];
+        player.Tehai.Clear();
+        foreach (int serial in new[] { 3,4,5, 15,16,17, 18,19,20, 21 })
+            player.Tehai.Add(PaiCode.MakeSerial(serial));
+        player.Furo.Add(new FuroBlock
+        {
+            Act = Act.Chi,
+            Tiles = { PaiCode.MakeSerial(0), PaiCode.MakeSerial(1), PaiCode.MakeSerial(2) },
+        });
+        player.Mode = PlayerMode.Furo;
+        player.IsHoraForm = true;
+
+        typeof(MajakGameLogic)
+            .GetField("_currOrder", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, discarder);
+        typeof(MajakGameLogic)
+            .GetField("_currTapai", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, PaiCode.MakeSerial(21));
+
+        var actions = logic.GetValidActions(child);
+
+        Assert.False(actions.CanRon);
+        Assert.True(actions.CanPass);
+        Assert.Equal("noYaku", actions.HoraErrorReason);
+        Assert.Equal(10, player.Tehai.Count);
     }
 
     [Fact]
@@ -647,6 +850,15 @@ public class GameLogicModeKyoTests
     {
         Hanchan = true, Kuitan = true, Contest = 0, AkaDora = 1, Uma = 0,
     };
+
+    private static void CompleteKyoPasses(MajakGameLogic logic)
+    {
+        for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+            logic.Player[order].Mode = PlayerMode.Kyo;
+        for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+            Assert.Equal(ActionResult.Ok,
+                logic.ProcessAction(order, Act.Pas, Array.Empty<int>(), 0));
+    }
 
     // シナリオ1: KYO モードで全員 PAS → CurKyoku 進む
     // 原典: 全員 MODE_NONE → m_stHanchanInfo.m_nCurKyoku++
@@ -728,6 +940,54 @@ public class GameLogicModeKyoTests
         Assert.Equal(1, logic.HanchanInfo.CurKyoku);
         Assert.Equal(GameStatus.NotPlaying, logic.GameStatus);
         Assert.Equal(GameEnd.Set, logic.GameEnd);
+    }
+
+    [Fact]
+    public void ProcessModeKyo_AllLastDealerTopEndsAutomaticallyLikeLegacy()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        int oya = logic.KyokuInfo.OyaOrder;
+        logic.HanchanInfo.CurKyoku = 7;
+        logic.HanchanInfo.RenchanCount = 0;
+        logic.KyokuInfo.Renchan = true;
+        logic.KyokuInfo.EndKyokuWithHora = true;
+        for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+            logic.Player[order].GamePoint = order == oya ? 40000 : 20000;
+
+        CompleteKyoPasses(logic);
+
+        Assert.Equal(GameEnd.Hora, logic.GameEnd);
+        Assert.Equal(GameStatus.NotPlaying, logic.GameStatus);
+    }
+
+    [Theory]
+    [InlineData(Act.Ron, GameEnd.None, GameStatus.NewKyoku)]
+    [InlineData(Act.Pas, GameEnd.Stop, GameStatus.NotPlaying)]
+    public void ProcessModeKyo_AllLastDealerNotTopCanContinueOrStopLikeLegacy(
+        Act choice,
+        GameEnd expectedEnd,
+        GameStatus expectedStatus)
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        int oya = logic.KyokuInfo.OyaOrder;
+        int top = (oya + 1) % MajakConst.PlayerMaxCount;
+        logic.HanchanInfo.CurKyoku = 7;
+        logic.HanchanInfo.RenchanCount = 0;
+        logic.KyokuInfo.Renchan = true;
+        logic.KyokuInfo.EndKyokuWithHora = true;
+        for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+            logic.Player[order].GamePoint = order == top ? 40000 : 20000;
+
+        CompleteKyoPasses(logic);
+        Assert.Equal(PlayerMode.Aga, logic.Player[oya].Mode);
+
+        Assert.Equal(ActionResult.Ok,
+            logic.ProcessAction(oya, choice, Array.Empty<int>(), 0));
+
+        Assert.Equal(expectedEnd, logic.GameEnd);
+        Assert.Equal(expectedStatus, logic.GameStatus);
     }
 }
 
@@ -997,6 +1257,23 @@ public class GameLogicProcessKanTests
             .Invoke(logic, new object[] { player });
     }
 
+    private static PaiCode[] FindFourMatchingTiles(MajakGameLogic logic)
+        => Enumerable.Range(0, 136)
+            .Select(logic.GetBipaiPai)
+            .GroupBy(tile => tile.GetSerial())
+            .First(group => group.Count() == 4)
+            .ToArray();
+
+    private static void SetCurrentDiscard(MajakGameLogic logic, int order, PaiCode tile)
+    {
+        typeof(MajakGameLogic)
+            .GetField("_currOrder", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, order);
+        typeof(MajakGameLogic)
+            .GetField("_currTapai", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(logic, tile);
+    }
+
     [Fact]
     public void ProcessKan_FourthKanByDifferentPlayer_SetsSukaikanWithoutRinshanDraw()
     {
@@ -1029,5 +1306,107 @@ public class GameLogicProcessKanTests
         Assert.True(logic.KyokuInfo.Dora[1].IsValid);
         Assert.True(logic.KyokuInfo.UraDora[1].IsValid);
         Assert.Equal(before + 1, player.Tehai.Count);
+    }
+
+    [Fact]
+    public void ProcessKan_FourthKanBySamePlayerIsAllowedLikeLegacy()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        EnginePlayer player = logic.Player[0];
+        logic.KyokuInfo.KanCount = 3;
+        player.KanCnt = 4;
+        int before = player.Tehai.Count;
+
+        InvokeProcessKan(logic, player);
+
+        Assert.Equal(KyokuEnd.None, logic.KyokuEnd);
+        Assert.Equal(4, logic.KyokuInfo.KanCount);
+        Assert.Equal(before + 1, player.Tehai.Count);
+    }
+
+    [Fact]
+    public void ProcessTurn_FifthAnkanCausesSukaikanLikeLegacy()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        int order = logic.KyokuInfo.OyaOrder;
+        EnginePlayer player = logic.Player[order];
+        PaiCode[] tiles = FindFourMatchingTiles(logic);
+        player.Tehai.Clear();
+        player.Tehai.AddRange(tiles);
+        player.Mode = PlayerMode.Turn;
+        logic.KyokuInfo.KanCount = 4;
+        player.KanCnt = 4;
+
+        ActionResult result = logic.ProcessAction(
+            order,
+            Act.Ank,
+            tiles.Select(tile => tile.BipaiIndex).ToArray(),
+            4);
+
+        Assert.Equal(ActionResult.Ok, result);
+        Assert.Equal(KyokuEnd.Sukaikan, logic.KyokuEnd);
+        Assert.Equal(4, logic.KyokuInfo.KanCount);
+        Assert.Equal(5, player.KanCnt);
+        Assert.Empty(player.Tehai);
+    }
+
+    [Fact]
+    public void ProcessFuro_FifthMinkanCausesSukaikanLikeLegacy()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        const int discarder = 0;
+        const int caller = 1;
+        PaiCode[] tiles = FindFourMatchingTiles(logic);
+        EnginePlayer player = logic.Player[caller];
+        player.Tehai.Clear();
+        player.Tehai.AddRange(tiles.Skip(1));
+        player.Mode = PlayerMode.Furo;
+        logic.Player[discarder].Mode = PlayerMode.None;
+        logic.KyokuInfo.KanCount = 4;
+        player.KanCnt = 4;
+        SetCurrentDiscard(logic, discarder, tiles[0]);
+
+        ActionResult result = logic.ProcessAction(
+            caller,
+            Act.Kan,
+            tiles.Skip(1).Select(tile => tile.BipaiIndex).ToArray(),
+            3);
+
+        Assert.Equal(ActionResult.Ok, result);
+        Assert.Equal(KyokuEnd.Sukaikan, logic.KyokuEnd);
+        Assert.Equal(4, logic.KyokuInfo.KanCount);
+        Assert.Equal(5, player.KanCnt);
+        Assert.Empty(player.Tehai);
+    }
+
+    [Fact]
+    public void ProcessTurn_FifthChakanIsRejectedBeforeMutationLikeLegacy()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(DefaultRule());
+        int order = logic.KyokuInfo.OyaOrder;
+        EnginePlayer player = logic.Player[order];
+        PaiCode tile = player.Tehai[0];
+        player.Furo.Add(new FuroBlock
+        {
+            Act = Act.Pon,
+            Tiles = { tile, tile, tile },
+        });
+        logic.KyokuInfo.KanCount = 4;
+        player.KanCnt = 4;
+
+        ActionResult result = logic.ProcessAction(
+            order,
+            Act.Cha,
+            new[] { tile.BipaiIndex },
+            1);
+
+        Assert.Equal(ActionResult.ErrKanAfter4Kan, result);
+        Assert.Equal(Act.Pon, player.Furo[0].Act);
+        Assert.Equal(4, player.KanCnt);
+        Assert.Contains(player.Tehai, handTile => handTile.BipaiIndex == tile.BipaiIndex);
     }
 }

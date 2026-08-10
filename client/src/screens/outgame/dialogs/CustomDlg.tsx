@@ -246,9 +246,9 @@ function ResponsiveCustomInventory({
       .custom-inventory__header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; color: #fff; background: #174b43; }
       .custom-inventory__header p { margin: 0; color: #d9bc62; font: 700 calc(10px * var(--majak-type-scale))/1 var(--majak-font-family-ui); letter-spacing: 1px; }
       .custom-inventory__header h2 { margin: 2px 0 0; font-size: calc(25px * var(--majak-type-scale)); font-weight: 700; letter-spacing: 0; }
-      .custom-inventory__header button { width: 34px; height: 34px; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: calc(22px * var(--majak-type-scale)); cursor: pointer; }
+      .custom-inventory__header button { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; box-sizing: border-box; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: var(--majak-popup-close-font-size); line-height: 1; cursor: pointer; }
       .custom-inventory__tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #a5afa5; background: #dbe0d7; }
-      .custom-inventory__tabs button { min-height: 48px; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 calc(14px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+      .custom-inventory__tabs button { height: var(--majak-popup-tab-height); box-sizing: border-box; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 var(--majak-popup-tab-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
       .custom-inventory__tabs button.is-active { color: #fff; background: #b84228; }
       .custom-inventory__content { min-height: 0; flex: 1; padding: 18px; overflow: auto; }
       .custom-inventory__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
@@ -256,13 +256,13 @@ function ResponsiveCustomInventory({
       .custom-inventory__image { height: 124px; display: grid; place-items: center; background: #f1eee4; }
       .custom-inventory__image img { max-width: 100%; max-height: 100%; object-fit: contain; }
       .custom-inventory__item h3 { margin: 10px 0; overflow: hidden; color: #1f302b; font-size: calc(16px * var(--majak-type-scale)); line-height: 1.35; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-      .custom-inventory__item button { margin-top: auto; border: 0; border-radius: 3px; padding: 9px; color: #fff; background: #1c5a4d; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+      .custom-inventory__item button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); box-sizing: border-box; margin-top: auto; border: 0; border-radius: 3px; padding: 0 9px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
       .custom-inventory__item button:disabled { color: #718078; background: #d7ddd5; cursor: default; }
       .custom-inventory__empty { padding: 48px; color: #647069; text-align: center; font: calc(14px * var(--majak-type-scale)) var(--majak-font-family-ui); }
-      .custom-inventory__footer { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; padding: 12px 18px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
-      .custom-inventory__footer button { border: 0; border-radius: 3px; padding: 10px 14px; color: #fff; background: #1c5a4d; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
+      .custom-inventory__footer { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px 18px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
+      .custom-inventory__footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); max-width: 100%; box-sizing: border-box; border: 0; border-radius: 3px; padding: 0 14px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
       .custom-inventory__pager { display: flex; gap: 8px; align-items: center; justify-content: center; color: #385047; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); }
-      .custom-inventory__pager button { width: 34px; padding-inline: 0; }
+      .custom-inventory__pager button { width: var(--majak-popup-command-height); padding-inline: 0; }
       .custom-inventory__pager button:disabled { color: #87918c; background: #d7ddd5; cursor: default; }
       .custom-inventory__close { justify-self: end; color: #32453e !important; border: 1px solid #839087 !important; background: transparent !important; }
       .custom-inventory--mobileLandscape, .custom-inventory--mobilePortrait { width: 100%; height: 100%; }
@@ -270,16 +270,16 @@ function ResponsiveCustomInventory({
       .custom-inventory--mobileLandscape .custom-inventory__header, .custom-inventory--mobilePortrait .custom-inventory__header { padding: 8px 10px; }
       .custom-inventory--mobileLandscape .custom-inventory__header p, .custom-inventory--mobilePortrait .custom-inventory__header p { display: none; }
       .custom-inventory--mobileLandscape .custom-inventory__header h2, .custom-inventory--mobilePortrait .custom-inventory__header h2 { margin: 0; font-size: calc(17px * var(--majak-type-scale)); }
-      .custom-inventory--mobileLandscape .custom-inventory__header button, .custom-inventory--mobilePortrait .custom-inventory__header button { width: 28px; height: 28px; font-size: calc(18px * var(--majak-type-scale)); }
-      .custom-inventory--mobileLandscape .custom-inventory__tabs button, .custom-inventory--mobilePortrait .custom-inventory__tabs button { min-height: 38px; font-size: calc(11px * var(--majak-type-scale)); }
+      .custom-inventory--mobileLandscape .custom-inventory__header button, .custom-inventory--mobilePortrait .custom-inventory__header button { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); font-size: var(--majak-popup-close-font-size); }
+      .custom-inventory--mobileLandscape .custom-inventory__tabs button, .custom-inventory--mobilePortrait .custom-inventory__tabs button { height: var(--majak-popup-tab-height); font-size: var(--majak-popup-tab-font-size); }
       .custom-inventory--mobileLandscape .custom-inventory__content, .custom-inventory--mobilePortrait .custom-inventory__content { padding: 8px; }
       .custom-inventory--mobileLandscape .custom-inventory__grid, .custom-inventory--mobilePortrait .custom-inventory__grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
       .custom-inventory--mobileLandscape .custom-inventory__item, .custom-inventory--mobilePortrait .custom-inventory__item { min-height: 150px; padding: 8px; }
       .custom-inventory--mobileLandscape .custom-inventory__image, .custom-inventory--mobilePortrait .custom-inventory__image { height: 76px; }
       .custom-inventory--mobileLandscape .custom-inventory__item h3, .custom-inventory--mobilePortrait .custom-inventory__item h3 { margin: 5px 0; font-size: calc(13px * var(--majak-type-scale)); }
-      .custom-inventory--mobileLandscape .custom-inventory__item button, .custom-inventory--mobilePortrait .custom-inventory__item button { padding: 7px 5px; font-size: calc(11px * var(--majak-type-scale)); }
+      .custom-inventory--mobileLandscape .custom-inventory__item button, .custom-inventory--mobilePortrait .custom-inventory__item button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); padding: 0 5px; font-size: var(--majak-popup-command-font-size); }
       .custom-inventory--mobileLandscape .custom-inventory__footer, .custom-inventory--mobilePortrait .custom-inventory__footer { gap: 7px; padding: 8px; }
-      .custom-inventory--mobileLandscape .custom-inventory__footer button, .custom-inventory--mobilePortrait .custom-inventory__footer button { padding: 8px; font-size: calc(11px * var(--majak-type-scale)); }
+      .custom-inventory--mobileLandscape .custom-inventory__footer button, .custom-inventory--mobilePortrait .custom-inventory__footer button { height: var(--majak-popup-command-height); padding: 0 8px; font-size: var(--majak-popup-command-font-size); }
       .custom-inventory--mobilePortrait .custom-inventory__item { min-height: 178px; }
       .custom-inventory--mobilePortrait .custom-inventory__image { height: 100px; }
     `}</style>

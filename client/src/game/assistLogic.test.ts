@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { assistTileMask, decideDiscardSource, decideTouchTileAction, waitGuideWorldY } from './assistLogic'
+import { assistTileMask, decideDiscardSource, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, offsetDiscardSourceMarker, waitGuideWorldY } from './assistLogic'
+
+describe('DISCARD_SOURCE_MARKER_DEPTH', () => {
+  it('keeps the marker behind hand tiles like legacy z=-1', () => {
+    expect(DISCARD_SOURCE_MARKER_DEPTH).toBe(-1)
+    expect(DISCARD_SOURCE_MARKER_DEPTH).toBeLessThan(10)
+  })
+})
+
+describe('offsetDiscardSourceMarker', () => {
+  it('applies the legacy right-hand open offset at the rendered scale', () => {
+    expect(offsetDiscardSourceMarker({ x: 800, y: 200 }, { x: -15, y: 18 }, 0.75))
+      .toEqual({ x: 788.75, y: 213.5 })
+  })
+})
 
 describe('waitGuideWorldY', () => {
   it('places the full guide above the hand and action buttons', () => {

@@ -88,7 +88,7 @@ export default function ResponsiveShopTransactionDlg({
         .shop-transaction header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; color: #fff; background: #174b43; }
         .shop-transaction header p { margin: 0; color: #d9bc62; font: 700 calc(10px * var(--majak-type-scale))/1 var(--majak-font-family-ui); letter-spacing: 1px; }
         .shop-transaction header h2 { margin: 2px 0 0; font-size: calc(25px * var(--majak-type-scale)); font-weight: 700; line-height: 1; letter-spacing: 0; }
-        .shop-transaction header button { width: 36px; height: 36px; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: calc(22px * var(--majak-type-scale)); cursor: pointer; }
+        .shop-transaction header button { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; box-sizing: border-box; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: var(--majak-popup-close-font-size); line-height: 1; cursor: pointer; }
         .shop-transaction__body { padding: 18px; overflow: hidden; }
         .shop-transaction__item { display: grid; grid-template-columns: 104px minmax(0,1fr); gap: 14px; align-items: center; }
         .shop-transaction__image { height: 104px; display: grid; place-items: center; background: #e8ede4; }
@@ -103,7 +103,7 @@ export default function ResponsiveShopTransactionDlg({
         .shop-transaction dt { color: #5a6e66; font: calc(11px * var(--majak-type-scale))/1.2 var(--majak-font-family-ui); } .shop-transaction dd { margin: 0; color: #173f36; font: 700 calc(15px * var(--majak-type-scale))/1.1 var(--majak-font-family-ui); text-align: right; }
         .shop-transaction select { min-width: 70px; padding: 3px; border: 1px solid #8e9c90; background: #fff; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); }
         .shop-transaction footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid #c8d0c2; background: #e7ede4; }
-        .shop-transaction footer button { border: 0; border-radius: 3px; padding: 10px 15px; font: 700 calc(12px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
+        .shop-transaction footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 15px; box-sizing: border-box; border: 0; border-radius: 3px; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
         .shop-transaction__cancel { color: #3e5249; background: transparent; border: 1px solid #87958a !important; }
         .shop-transaction__primary { color: #fff; background: #1b5b4d; } .shop-transaction__primary:disabled { color: #84908a; background: #d6ddd5; cursor: not-allowed; }
         @media (max-width: 700px), (max-height: 560px) {

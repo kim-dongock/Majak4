@@ -10,6 +10,19 @@ export interface DiscardSourceDecision {
   displayIdx: number
 }
 
+export const DISCARD_SOURCE_MARKER_DEPTH = -1
+
+export function offsetDiscardSourceMarker(
+  position: { x: number; y: number },
+  openOffset: { x: number; y: number },
+  scale: number,
+): { x: number; y: number } {
+  return {
+    x: position.x + openOffset.x * scale,
+    y: position.y + openOffset.y * scale,
+  }
+}
+
 export function waitGuideWorldY(
   handTop: number,
   visibleTop: number,

@@ -260,18 +260,21 @@ public class Hand
         {
             if (_cnt[i] < 2) continue;
             _cnt[i] -= 2;
-            if (ResMenShu(men, _furoCnt, 0, _handCnt - 2))
+            bool resolved = ResMenShu(men, _furoCnt, 0, _handCnt - 2);
+            _cnt[i] += 2;
+            if (resolved)
             {
                 var y1 = new Yaku();
                 ChkYakuGeneral(y1, kuitan, i, men, ref ym);
-                if (y1.HanSum > 0) { _cnt[i] += 2; return true; }
+                if (y1.HanSum > 0) return true;
 
+                _cnt[i] -= 2;
                 ResMenKou(men, _furoCnt, 0, _handCnt - 2);
+                _cnt[i] += 2;
                 var y2 = new Yaku();
                 ChkYakuGeneral(y2, kuitan, i, men, ref ym);
-                if (y2.HanSum > 0) { _cnt[i] += 2; return true; }
+                if (y2.HanSum > 0) return true;
             }
-            _cnt[i] += 2;
         }
         return false;
     }
@@ -287,15 +290,22 @@ public class Hand
             _cnt[i] -= 2;
             if (ResMenShu(men, _furoCnt, 0, _handCnt - 2))
             {
+                _cnt[i] += 2;
                 var y1 = new Yaku();
                 ChkYakuGeneral(y1, kuitan, i, men, ref ym);
                 yaku.CheckAndUpdate(y1);
+
+                _cnt[i] -= 2;
                 ResMenKou(men, _furoCnt, 0, _handCnt - 2);
+                _cnt[i] += 2;
                 var y2 = new Yaku();
                 ChkYakuGeneral(y2, kuitan, i, men, ref ym);
                 yaku.CheckAndUpdate(y2);
             }
-            _cnt[i] += 2;
+            else
+            {
+                _cnt[i] += 2;
+            }
         }
     }
 
@@ -570,7 +580,7 @@ public class Hand
         {
             bool koutsu = true;
             for (int i = 0; i < MentsuCount; i++)
-                if (men[i].IsShu() && men[i].Pai <= _paiHora && _paiHora <= men[i].Pai + 2)
+                if (men[i].Act == Act.Shu && men[i].Pai <= _paiHora && _paiHora <= men[i].Pai + 2)
                 { koutsu = false; break; }
             int n = 0;
             for (int i = 0; i < MentsuCount; i++)
@@ -672,7 +682,7 @@ public class Hand
             fu += 2 * ChkYakuhai(jan);
             for (int i = 0; i < MentsuCount; i++)
             {
-                if (men[i].IsShu())
+                if (men[i].Act == Act.Shu)
                 {
                     if (men[i].Pai <= _paiHora && _paiHora <= men[i].Pai + 2)
                     {

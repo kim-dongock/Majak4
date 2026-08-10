@@ -1,0 +1,354 @@
+.registration-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  font-family: var(--majak-font-family-ui);
+}
+
+.registration-panel {
+  position: relative;
+  color: #f5f1df;
+  border: 1px solid #bda45e;
+  border-radius: 8px;
+  background-color: var(--majak-screen-surface-color);
+  background-image: var(--majak-screen-surface-image);
+  background-position: var(--majak-screen-surface-position);
+  background-size: var(--majak-screen-surface-size);
+  background-repeat: var(--majak-screen-surface-repeat);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .62), inset 0 0 0 4px #09291f, inset 0 0 0 5px rgba(255, 228, 150, .28);
+  font-family: var(--majak-font-family-ui);
+}
+
+.registration-steps {
+  display: flex;
+  flex-shrink: 0;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.registration-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #9db4aa;
+  font-size: var(--majak-font-12);
+  font-weight: 700;
+}
+
+.registration-step.is-active { color: #fff1bd; }
+.registration-step.is-done { color: #a9d49f; }
+
+.registration-heading {
+  flex-shrink: 0;
+  margin-bottom: 14px;
+  color: #fff;
+  font-size: var(--majak-font-20);
+  font-weight: 800;
+}
+
+.registration-panel--flow {
+  --registration-terms-gutter: clamp(18px, 3.2vw, 36px);
+}
+
+.registration-panel--terms {
+  min-height: 0;
+}
+
+.registration-panel--flow .registration-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-self: center;
+  width: min(720px, calc(100% - (var(--registration-terms-gutter) * 2)));
+  box-sizing: border-box;
+  gap: 4px;
+  margin-right: auto;
+  margin-left: auto;
+  padding: 6px 6px 0;
+  border-bottom: 2px solid #d8b75e;
+  background: rgba(3, 31, 23, .48);
+}
+
+.registration-panel--flow .registration-step {
+  justify-content: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 46px;
+  box-sizing: border-box;
+  padding: 5px 12px 7px;
+  border: 1px solid rgba(157, 180, 170, .24);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: rgba(8, 51, 40, .78);
+  font-size: var(--majak-font-16);
+}
+
+.registration-panel--flow .registration-step > span:last-child { white-space: nowrap; }
+
+.registration-panel--flow .registration-step.is-active {
+  position: relative;
+  z-index: 1;
+  color: #2f2918;
+  border-color: #d8b75e;
+  background: #f5f1df;
+  box-shadow: 0 -3px 0 #d8b75e;
+}
+
+.registration-panel--flow .registration-step.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -2px;
+  left: 0;
+  height: 3px;
+  background: #f5f1df;
+  content: '';
+}
+
+.registration-panel--flow .registration-step.is-done {
+  color: #e8f4df;
+  border-color: rgba(117, 164, 109, .58);
+  background: rgba(38, 91, 58, .86);
+}
+
+.registration-panel--flow .registration-heading {
+  margin-right: var(--registration-terms-gutter);
+  margin-left: var(--registration-terms-gutter);
+}
+
+.registration-terms {
+  flex: 1;
+  min-height: 0;
+  margin-right: var(--registration-terms-gutter);
+  margin-left: var(--registration-terms-gutter);
+  overflow-y: auto;
+  padding: 18px 22px 24px;
+  color: #292820;
+  border: 1px solid #c7ba8e;
+  border-radius: 4px;
+  background: #f5f1df;
+  box-shadow: inset 0 2px 7px rgba(72, 58, 24, .18);
+  font-size: var(--majak-font-15);
+  line-height: 1.8;
+  scrollbar-color: #9c8955 #e6dfc5;
+}
+
+.registration-terms h2 {
+  margin: 0 0 20px;
+  padding-bottom: 10px;
+  color: #173f33;
+  border-bottom: 2px solid #c9b46f;
+  font-size: var(--majak-font-20);
+  line-height: 1.4;
+}
+
+.registration-terms section + section { margin-top: 20px; }
+.registration-terms h3 { margin: 0 0 6px; color: #493d1e; font-size: var(--majak-font-16); line-height: 1.5; }
+.registration-terms p { margin: 0; }
+.registration-terms ol { margin: 8px 0 0; padding-left: 1.7em; }
+.registration-terms li { padding-left: 3px; }
+
+.registration-terms-footer {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px var(--registration-terms-gutter) 0;
+}
+
+.registration-consent {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.registration-consent input { flex-shrink: 0; width: 20px; height: 20px; margin: 0; accent-color: #d8b75e; cursor: pointer; }
+
+.registration-nickname-input {
+  color: #17211d;
+  border-radius: 4px;
+  outline: none;
+  background: #fffef5;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, .14);
+}
+
+.registration-nickname-input:focus { box-shadow: 0 0 0 3px rgba(224, 189, 93, .24); }
+
+.registration-nickname-field {
+  flex-shrink: 0;
+  margin-right: var(--registration-terms-gutter);
+  margin-left: var(--registration-terms-gutter);
+}
+
+.registration-actions {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.registration-actions--end { justify-content: flex-end; }
+
+.registration-command { font-weight: 800 !important; border-radius: 4px !important; }
+.registration-command--primary:not(:disabled) {
+  color: #2d2107 !important;
+  border: 1px solid #f1dc8e !important;
+  border-bottom: 4px solid #8b6821 !important;
+  background: linear-gradient(#f1d879, #c99f3e) !important;
+  text-shadow: 0 1px rgba(255, 255, 255, .45);
+}
+.registration-command--secondary {
+  color: #e8eee9;
+  border: 1px solid #738e83;
+  border-bottom: 4px solid #263f36;
+  background: #365b4d;
+}
+
+.registration-profile-title { color: #fff; }
+.registration-profile-field { border-color: #54766a; background: rgba(3, 28, 21, .52); }
+.registration-profile-field legend { color: #ecd98f; }
+.registration-birth-control label { color: #e6eee9; }
+
+.registration-avatar-grid {
+  flex: 1 1 0;
+  min-height: 0;
+  margin-right: var(--registration-terms-gutter);
+  margin-left: var(--registration-terms-gutter);
+  overflow: hidden;
+  border-color: #54766a !important;
+  border-radius: 5px;
+  background: rgba(3, 25, 19, .54);
+}
+.registration-avatar-grid button.is-selected { border-color: #f0d77b !important; background: #fffbed !important; box-shadow: 0 0 0 2px #a9822e; }
+
+.registration-profile-title {
+  flex-shrink: 0;
+  margin-bottom: 10px;
+  font-size: var(--majak-font-20);
+  font-weight: 800;
+}
+
+.registration-profile-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, .8fr) minmax(310px, 1.2fr);
+  gap: 12px;
+  flex-shrink: 0;
+  margin: 0 var(--registration-terms-gutter) 14px;
+}
+
+.registration-profile-field {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 12px 8px;
+  border: 1px solid #80968b;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, .28);
+}
+
+.registration-profile-field legend {
+  padding: 0 7px;
+  color: #274e41;
+  font-size: var(--majak-font-14);
+  font-weight: 800;
+}
+
+.registration-sex-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.registration-sex-control button {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  align-items: center;
+  min-height: 44px;
+  padding: 3px 12px 3px 5px;
+  color: #263c34;
+  border: 1px solid #879b92;
+  border-bottom: 3px solid #61756c;
+  border-radius: 4px;
+  background: #e8ece8;
+  font: 700 var(--majak-font-16)/1 var(--majak-font-family-ui);
+  cursor: pointer;
+}
+
+.registration-sex-control button img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 3px;
+  background: #fff;
+}
+
+.registration-sex-control button.is-selected {
+  color: #382604;
+  border-color: #d1ad4d;
+  border-bottom-color: #876619;
+  background: #e4c566;
+  box-shadow: 0 0 0 2px rgba(196, 151, 44, .18);
+}
+
+.registration-birth-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.registration-birth-control label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 7px;
+  font-size: var(--majak-font-14);
+}
+
+.registration-birth-control select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 26px 0 9px;
+  color: #1e2924;
+  border: 1px solid #8b9c94;
+  border-radius: 4px;
+  background: #fffef6;
+  font: 700 var(--majak-font-15)/1 var(--majak-font-family-ui);
+}
+
+.registration-birth-control select:disabled {
+  color: #777;
+  background: #d4d8d5;
+}
+
+@media (max-width: 700px), (max-height: 560px) {
+  .registration-panel { border-radius: 0; }
+  .registration-panel--profile { padding-top: 4px !important; }
+  .registration-steps { gap: 7px; margin-bottom: 6px; }
+  .registration-step { gap: 4px; font-size: var(--majak-font-9); }
+  .registration-heading { margin-bottom: 5px; font-size: var(--majak-font-14); }
+  .registration-panel--terms { padding: 12px 16px; }
+  .registration-panel--flow .registration-steps { gap: 3px; margin-bottom: 6px; padding: 3px 5px 0; }
+  .registration-panel--flow .registration-step { gap: 6px; min-height: 42px; padding: 4px 8px 6px; font-size: var(--majak-font-14); }
+  .registration-panel--flow .registration-heading { margin-bottom: 8px; font-size: var(--majak-font-17); }
+  .registration-terms { padding: 14px 16px 18px; font-size: var(--majak-font-14); line-height: 1.72; }
+  .registration-terms h2 { margin-bottom: 14px; padding-bottom: 8px; font-size: var(--majak-font-18); }
+  .registration-terms section + section { margin-top: 16px; }
+  .registration-terms h3 { margin-bottom: 4px; font-size: var(--majak-font-15); }
+  .registration-terms-footer { gap: 12px; padding-top: 10px; }
+  .registration-consent { font-size: var(--majak-font-13); }
+  .registration-profile-title { margin-bottom: 2px; font-size: var(--majak-font-14); }
+  .registration-profile-controls { grid-template-columns: minmax(190px, .8fr) minmax(270px, 1.2fr); gap: 7px; margin-bottom: 3px; }
+  .registration-profile-field { padding: 4px 6px 3px; }
+  .registration-profile-field legend { font-size: var(--majak-font-13); }
+  .registration-sex-control { gap: 5px; }
+  .registration-sex-control button { grid-template-columns: 29px 1fr; min-height: 36px; padding: 1px 6px 1px 2px; font-size: var(--majak-font-14); }
+  .registration-sex-control button img { width: 28px; height: 28px; }
+  .registration-birth-control { gap: 5px; }
+  .registration-birth-control label { gap: 4px; font-size: var(--majak-font-13); }
+  .registration-birth-control select { min-height: 34px; padding-left: 7px; font-size: var(--majak-font-14); }
+}

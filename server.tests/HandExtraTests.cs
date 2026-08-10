@@ -293,11 +293,268 @@ public class CalcFuTests
     }
 }
 
+public class RareLegacyYakuTests
+{
+    private static FuroBlock Kan(int serial, Act act = Act.Kan)
+    {
+        var block = new FuroBlock { Act = act };
+        for (int copy = 0; copy < 4; copy++) block.Tiles.Add(PaiCode.MakeSerial(serial));
+        return block;
+    }
+
+    [Fact]
+    public void GetYaku_Iipeikou_HasOneHanLikeLegacy()
+    {
+        var player = H.P(0,1,2, 0,1,2, 12,13,14, 24,25,26, 27,27);
+
+        Yaku yaku = H.GetYaku(player, paiHora: 14, tsumo: true, menzen: true);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Iipeikou && item.Han == 1);
+        Assert.DoesNotContain(yaku.List, item => item.Name == HoraYaku.Ryanpeikou);
+    }
+
+    [Fact]
+    public void GetYaku_Ryanpeikou_HasThreeHanLikeLegacy()
+    {
+        var player = H.P(0,1,2, 0,1,2, 12,13,14, 12,13,14, 27,27);
+
+        Yaku yaku = H.GetYaku(player, paiHora: 14, tsumo: true, menzen: true);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Ryanpeikou && item.Han == 3);
+        Assert.DoesNotContain(yaku.List, item => item.Name == HoraYaku.Iipeikou);
+    }
+
+    [Fact]
+    public void GetYaku_Chanta_HasTwoHanLikeLegacy()
+    {
+        var player = H.P(0,1,2, 15,16,17, 18,18,18, 27,27,27, 31,31);
+
+        Yaku yaku = H.GetYaku(player, paiHora: 17, tsumo: false, menzen: true);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Chanta && item.Han == 2);
+        Assert.DoesNotContain(yaku.List, item => item.Name == HoraYaku.Junchan);
+    }
+
+    [Fact]
+    public void GetYaku_Junchan_HasThreeHanLikeLegacy()
+    {
+        var player = H.P(0,1,2, 6,7,8, 9,9,9, 26,26,26, 18,18);
+
+        Yaku yaku = H.GetYaku(player, paiHora: 8, tsumo: false, menzen: true);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Junchan && item.Han == 3);
+        Assert.DoesNotContain(yaku.List, item => item.Name == HoraYaku.Chanta);
+    }
+
+    [Fact]
+    public void GetYaku_HonroutouStandardForm_HasTwoHanLikeLegacy()
+    {
+        var player = H.P(0,0,0, 8,8,8, 9,9,9, 27,27,27, 31,31);
+
+        Yaku yaku = H.GetYaku(player, paiHora: 31, tsumo: false, menzen: false);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Honroutou && item.Han == 2);
+    }
+
+    [Fact]
+    public void GetYaku_Sankantsu_HasTwoHanLikeLegacy()
+    {
+        var player = H.P(21,22,23, 27,27);
+        player.Furo.Add(Kan(0, Act.Kan));
+        player.Furo.Add(Kan(8, Act.Ank));
+        player.Furo.Add(Kan(31, Act.Cha));
+
+        Yaku yaku = H.GetYaku(player, paiHora: 23, tsumo: false, menzen: false);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Sankantsu && item.Han == 2);
+        Assert.DoesNotContain(yaku.List, item => item.Name == HoraYaku.Suukantsu);
+    }
+
+    [Fact]
+    public void GetYaku_Suukantsu_IsYakumanLikeLegacy()
+    {
+        var player = H.P(27,27);
+        player.Furo.Add(Kan(0));
+        player.Furo.Add(Kan(8));
+        player.Furo.Add(Kan(9));
+        player.Furo.Add(Kan(31));
+
+        Yaku yaku = H.GetYaku(player, paiHora: 27, tsumo: false, menzen: false);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Suukantsu && item.Han == 1);
+        Assert.True(yaku.IsYakuman);
+        Assert.Equal(8000, yaku.Ten);
+    }
+
+    [Fact]
+    public void GetYaku_Shosangen_HasTwoHanLikeLegacy()
+    {
+        var player = H.P(31,31,31, 32,32,32, 33,33, 0,1,2, 12,13,14);
+
+        Yaku yaku = H.GetYaku(player, paiHora: 14, tsumo: false, menzen: true);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Shosangen && item.Han == 2);
+        Assert.DoesNotContain(yaku.List, item => item.Name == HoraYaku.Daisangen);
+    }
+
+    [Fact]
+    public void GetYaku_Daisangen_IsYakumanLikeLegacy()
+    {
+        var player = H.P(31,31,31, 32,32,32, 33,33,33, 0,1,2, 27,27);
+
+        Yaku yaku = H.GetYaku(player, paiHora: 2, tsumo: false, menzen: true);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Daisangen && item.Han == 1);
+        Assert.True(yaku.IsYakuman);
+        Assert.Equal(8000, yaku.Ten);
+    }
+}
+
+public class LegacyFuClassTests
+{
+    private static FuroBlock Meld(int serial, Act act, int count)
+    {
+        var block = new FuroBlock { Act = act };
+        for (int copy = 0; copy < count; copy++) block.Tiles.Add(PaiCode.MakeSerial(serial));
+        return block;
+    }
+
+    [Fact]
+    public void Fu_OpenTripletAndKanClasses_TotalSixtyLikeLegacy()
+    {
+        var player = H.P(22,22);
+        player.Furo.Add(Meld(4, Act.Pon, 3));
+        player.Furo.Add(Meld(0, Act.Pon, 3));
+        player.Furo.Add(Meld(13, Act.Kan, 4));
+        player.Furo.Add(Meld(31, Act.Cha, 4));
+
+        Yaku yaku = H.GetYaku(player, paiHora: 22, tsumo: false, menzen: false);
+
+        Assert.Equal(60, yaku.Fu);
+    }
+
+    [Fact]
+    public void Fu_ClosedSimpleAndTerminalTriplets_TotalFortyLikeLegacy()
+    {
+        var player = H.P(4,4,4, 9,9,9, 18,19,20, 22,22);
+        player.Furo.Add(Meld(12, Act.Chi, 3));
+
+        Yaku yaku = H.GetYaku(player, paiHora: 19, tsumo: false, menzen: false);
+
+        Assert.Equal(40, yaku.Fu);
+    }
+
+    [Theory]
+    [InlineData(4, 40)]
+    [InlineData(0, 60)]
+    public void Fu_ClosedKanSimpleAndTerminalClassesMatchLegacy(int kanSerial, int expectedFu)
+    {
+        var player = H.P(18,19,20, 21,22,23, 30,30);
+        player.Furo.Add(Meld(9, Act.Chi, 3));
+        player.Furo.Add(Meld(kanSerial, Act.Ank, 4));
+
+        Yaku yaku = H.GetYaku(player, paiHora: 19, tsumo: false, menzen: false);
+
+        Assert.Equal(expectedFu, yaku.Fu);
+    }
+
+    [Theory]
+    [InlineData(4)]
+    [InlineData(2)]
+    [InlineData(22)]
+    public void Fu_KanchanPenchanAndTankiWaits_TotalFortyLikeLegacy(int winningSerial)
+    {
+        var player = H.P(0,1,2, 3,4,5, 6,7,8, 9,9,9, 22,22);
+
+        Yaku yaku = H.GetYaku(player, paiHora: winningSerial, tsumo: false, menzen: true);
+
+        Assert.Equal(40, yaku.Fu);
+    }
+
+    [Fact]
+    public void Fu_NonPinfuTsumoAddsTwoAndTotalsThirtyLikeLegacy()
+    {
+        var player = H.P(0,1,2, 3,4,5, 6,7,8, 9,9,9, 22,22);
+
+        Yaku yaku = H.GetYaku(player, paiHora: 3, tsumo: true, menzen: true);
+
+        Assert.Equal(30, yaku.Fu);
+    }
+
+    [Fact]
+    public void Fu_DoubleWindPairAddsFourAndTotalsFiftyLikeLegacy()
+    {
+        var player = H.P(0,1,2, 3,4,5, 6,7,8, 9,9,9, 27,27);
+
+        Yaku yaku = H.GetYaku(
+            player,
+            paiHora: 3,
+            tsumo: false,
+            menzen: true,
+            chanfon: 0,
+            menfon: 0);
+
+        Assert.Equal(50, yaku.Fu);
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // CHand レガシー差分回帰テスト
 // ═══════════════════════════════════════════════════════════════════════════
 public class HandLegacyEdgeTests
 {
+    [Fact]
+    public void GetYaku_JunseiChuren_HasDoubleYakuman()
+    {
+        var p = H.P(0,0,0,0, 1,2,3,4,5,6,7, 8,8,8);
+        var y = H.GetYaku(p, paiHora: 0, tsumo: false, menzen: true);
+        var churen = y.List.Single(x => x.Name == HoraYaku.Churenpaotou2);
+
+        Assert.Equal(2, churen.Han);
+        Assert.Equal(16000, y.Ten);
+    }
+
+    [Fact]
+    public void GetYaku_Churen_HasSingleYakuman()
+    {
+        var p = H.P(0,0,0, 1,2,3,4,4,5,6,7, 8,8,8);
+        var y = H.GetYaku(p, paiHora: 1, tsumo: false, menzen: true);
+
+        Assert.Contains(y.List, x => x.Name == HoraYaku.Churenpaotou && x.Han == 1);
+        Assert.Equal(8000, y.Ten);
+    }
+
+    [Fact]
+    public void GetYaku_OpenChiContainingRonTile_DoesNotCreateSanankou()
+    {
+        var p = H.P(1,1,1, 22,22,22, 23,23,23, 24,24);
+        p.Furo.Add(new FuroBlock
+        {
+            Act = Act.Chi,
+            Tiles = new List<PaiCode> { PaiCode.MakeSerial(0), PaiCode.MakeSerial(1), PaiCode.MakeSerial(2) },
+        });
+
+        var y = H.GetYaku(p, paiHora: 1, tsumo: false, menzen: false, kuitan: true);
+
+        Assert.DoesNotContain(y.List, x => x.Name == HoraYaku.Sanankou);
+    }
+
+    [Fact]
+    public void GetYaku_OpenChiContainingRonTile_DoesNotInflateFu()
+    {
+        var p = H.P(1,1,1, 31,31,31, 21,22,23, 27,27);
+        p.Furo.Add(new FuroBlock
+        {
+            Act = Act.Chi,
+            Tiles = new List<PaiCode> { PaiCode.MakeSerial(0), PaiCode.MakeSerial(1), PaiCode.MakeSerial(2) },
+        });
+
+        var y = H.GetYaku(
+            p, paiHora: 1, tsumo: false, menzen: false, kuitan: true, chanfon: 1, menfon: 2);
+
+        Assert.Equal(30, y.Fu);
+    }
+
     // 原典: MENTSU::IsGreen — 順子は 234s (pai%9==1) のみ緑一色対象
     [Fact]
     public void GetYaku_Ryuisou_Rejects345SouSequence()
@@ -318,6 +575,23 @@ public class HandLegacyEdgeTests
         var daisuushi = y.List.FirstOrDefault(x => x.Name == HoraYaku.Daisuushi);
 
         Assert.Equal(2, daisuushi.Han);
+    }
+
+    [Fact]
+    public void GetHoraYaku_GradeGameKokushi13Sided_IsSingleYakumanLikeLegacy()
+    {
+        var logic = new MajakGameLogic();
+        logic.InitHanchan(new RuleInfo { GradeGame = true, Kuitan = true });
+        var player = logic.Player[0];
+        player.Tehai.Clear();
+        foreach (int serial in new[] { 0,8,9,17,18,26,27,28,29,30,31,32,33,27 })
+            player.Tehai.Add(PaiCode.MakeSerial(serial));
+        var yaku = new Yaku();
+
+        logic.GetHoraYaku(player, isTsumo: false, yaku);
+
+        Assert.Contains(yaku.List, item => item.Name == HoraYaku.Kokushi2 && item.Han == 1);
+        Assert.Equal(8000, yaku.Ten);
     }
 
     // 原典: chkYakuChitoi — 字牌に到達したら numeric suit 判定をそこで止め、混一色を付ける

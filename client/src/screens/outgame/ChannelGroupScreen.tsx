@@ -18,8 +18,6 @@ import DrawMemberInfo from '../../components/DrawMemberInfo'
 import * as SignalR from '../../api/signalr'
 import { MAJAK_EXIT_REQUEST_EVENT } from '../../components/MajakFrame'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
-import { useAuthStore } from '../../store/authStore'
-import { useGamePlayerStore } from '../../store/gamePlayerStore'
 
 const IMG = '/assets/images/game'
 const MOBILE_MAIN_VISUAL_SRC = 'https://images.hange.jp/hangame/easy/majak4/client/bnr/top_majak_20220329.png'
@@ -124,11 +122,6 @@ const descriptions: [number, number, string][] = [
 export default function ChannelGroupScreen() {
   const navigate = useNavigate()
   const layoutMode = useOutgameLayoutMode()
-  const player = useAuthStore(state => state.player)
-  const { data: gpData, fetchProfile } = useGamePlayerStore()
-  const gameMoneyText = typeof gpData?.gamMoney === 'number' && Number.isFinite(gpData.gamMoney)
-    ? gpData.gamMoney.toLocaleString('ja-JP')
-    : ''
 
   /** OnPaint(): m_bShowStartPopup=TRUE → ShowStartPopupDialog() 相当 */
   const [showStartPopup, setShowStartPopup] = useState(false)
@@ -137,28 +130,6 @@ export default function ChannelGroupScreen() {
     SignalR.disconnect().catch(() => {})
     if (needsToDisplayToday()) setShowStartPopup(true)
   }, [])
-
-  useEffect(() => {
-    if (player?.pix) {
-      fetchProfile(player.pix)
-    }
-  }, [player?.pix, fetchProfile])
-
-  useEffect(() => {
-    if (!player?.pix) return
-
-    const refreshProfile = () => fetchProfile(player.pix)
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === 'visible') refreshProfile()
-    }
-
-    window.addEventListener('focus', refreshProfile)
-    document.addEventListener('visibilitychange', refreshWhenVisible)
-    return () => {
-      window.removeEventListener('focus', refreshProfile)
-      document.removeEventListener('visibilitychange', refreshWhenVisible)
-    }
-  }, [player?.pix, fetchProfile])
 
   /** OnCommand() → GetParent()->SendMessage(WM_COMMAND) に相当するナビゲーション */
   const onKouryu  = () => navigate('/channel/select/kouryu')   // IDC_BTN_CATEGORY_KOURYU → EnterCustom(IDC_CHK_STAND)
@@ -176,18 +147,11 @@ export default function ChannelGroupScreen() {
     ]
 
     return (
-      <div className="majak-mobile-screen majak-mobile-channel-group">
+      <div className="majak-mobile-screen majak-mobile-channel-group majak-screen-surface">
         <section className="majak-mobile-hero">
           <div className="majak-mobile-hero__visual">
             <img className="majak-mobile-logo" src={MOBILE_MAIN_VISUAL_SRC} alt="麻雀4" draggable={false} />
           </div>
-          {player && (
-            <div className="majak-mobile-member-info">
-              <span className="majak-mobile-member-info__id">{player.name}</span>
-              <span>GP : {gameMoneyText} GP</span>
-              <span>資産 : {gpData ? gpData.slevel : ''}</span>
-            </div>
-          )}
         </section>
         <div className="majak-mobile-card-list majak-mobile-sprite-list">
           {items.map(item => (
@@ -206,15 +170,9 @@ export default function ChannelGroupScreen() {
 
   return (
     /* CMJSelGroupWnd クライアント領域: 1014×704px */
-    <div style={{ position: 'relative', width: 1014, height: 704, overflow: 'hidden' }}>
-
-      {/* ── 背景 BitBlt(0,0, m_dibBack) ── */}
-      <img
-        src={`${IMG}/mj_gs_bk.png`}
-        alt=""
-        draggable={false}
-        style={{ position: 'absolute', left: 0, top: 0, width: 1014, height: 704 }}
-      />
+    <div className="majak-standard-outgame-screen majak-title-select-screen majak-screen-surface">
+      <h1 className="majak-title-select-brand">麻雀<span>4</span></h1>
+      <div className="majak-standard-member-panel" aria-hidden="true" />
 
       {/* ── ロビー説明テキスト TextOut(x,y, ...) / FW_BOLD 18px MS UI Gothic 白 ── */}
       {descriptions.map(([tx, ty, text]) => (

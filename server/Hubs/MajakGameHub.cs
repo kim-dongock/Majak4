@@ -453,6 +453,94 @@ public class MajakGameHub : Hub
         }
     }
 
+    public Task ReportGameDiscardAudit(GameDiscardAuditReport report)
+    {
+        var log = _sp.GetService<ILogger<MajakGameHub>>();
+        var player = _session.GetByConn(Context.ConnectionId);
+        var room = player?.RoomId == report.RoomId ? _session.GetRoom(report.RoomId) : null;
+        if (player == null || room == null || !_session.IsCurrentConnection(player.MemberNo, Context.ConnectionId))
+        {
+            log?.LogWarning(
+                "[GameDiscardAudit] rejected client report. connectionId={ConnectionId} requestedRoomId={RequestedRoomId} memberNo={MemberNo} playerRoomId={PlayerRoomId} auditSeq={AuditSeq}",
+                Context.ConnectionId,
+                report.RoomId,
+                player?.MemberNo ?? "",
+                player?.RoomId,
+                report.AuditSeq);
+            return Task.CompletedTask;
+        }
+
+        if (!IsValidGameCountArray(report.HandCounts)
+            || !IsValidGameCountArray(report.VisibleDiscardCounts)
+            || !IsValidGameCountArray(report.ClaimedDiscardCounts)
+            || !IsValidGameCountArray(report.MeldCounts)
+            || report.AuditSeq <= 0
+            || report.PendingDiscardCount < 0
+            || report.PendingDiscardCount > GameConst.PlayerMaxCount)
+        {
+            log?.LogWarning(
+                "[GameDiscardAudit] rejected malformed client report. connectionId={ConnectionId} memberNo={MemberNo} roomId={RoomId} auditSeq={AuditSeq}",
+                Context.ConnectionId,
+                player.MemberNo,
+                report.RoomId,
+                report.AuditSeq);
+            return Task.CompletedTask;
+        }
+
+        int[] reconstructedDiscardCounts = report.VisibleDiscardCounts
+            .Zip(report.ClaimedDiscardCounts, (visible, claimed) => visible + claimed)
+            .ToArray();
+        bool hasSnapshot = room.TryGetGameDiscardAudit(report.AuditSeq, out var snapshot);
+        bool matches = hasSnapshot
+            && snapshot != null
+            && snapshot.DiscardCounts.SequenceEqual(reconstructedDiscardCounts)
+            && snapshot.MeldCounts.SequenceEqual(report.MeldCounts)
+            && report.PendingDiscardCount == 0;
+
+        if (matches)
+        {
+            log?.LogDebug(
+                "[GameDiscardAudit] source=client status=match roomId={RoomId} auditSeq={AuditSeq} actionSeq={ActionSeq} reporterOrder={ReporterOrder} seatOrder={SeatOrder} action={Action} handCounts={HandCounts} visibleDiscardCounts={VisibleDiscardCounts} claimedDiscardCounts={ClaimedDiscardCounts} reconstructedDiscardCounts={ReconstructedDiscardCounts} meldCounts={MeldCounts}",
+                report.RoomId,
+                report.AuditSeq,
+                report.ActionSeq,
+                player.EngineOrder,
+                report.SeatOrder,
+                report.Action,
+                string.Join(',', report.HandCounts),
+                string.Join(',', report.VisibleDiscardCounts),
+                string.Join(',', report.ClaimedDiscardCounts),
+                string.Join(',', reconstructedDiscardCounts),
+                string.Join(',', report.MeldCounts));
+        }
+        else
+        {
+            log?.LogWarning(
+                "[GameDiscardAudit] source=client status=mismatch roomId={RoomId} auditSeq={AuditSeq} actionSeq={ActionSeq} reporterOrder={ReporterOrder} seatOrder={SeatOrder} action={Action} hasSnapshot={HasSnapshot} serverHandCounts={ServerHandCounts} clientHandCounts={ClientHandCounts} serverDiscardCounts={ServerDiscardCounts} visibleDiscardCounts={VisibleDiscardCounts} claimedDiscardCounts={ClaimedDiscardCounts} reconstructedDiscardCounts={ReconstructedDiscardCounts} serverMeldCounts={ServerMeldCounts} clientMeldCounts={ClientMeldCounts} pendingDiscardCount={PendingDiscardCount}",
+                report.RoomId,
+                report.AuditSeq,
+                report.ActionSeq,
+                player.EngineOrder,
+                report.SeatOrder,
+                report.Action,
+                hasSnapshot,
+                snapshot == null ? "" : string.Join(',', snapshot.HandCounts),
+                string.Join(',', report.HandCounts),
+                snapshot == null ? "" : string.Join(',', snapshot.DiscardCounts),
+                string.Join(',', report.VisibleDiscardCounts),
+                string.Join(',', report.ClaimedDiscardCounts),
+                string.Join(',', reconstructedDiscardCounts),
+                snapshot == null ? "" : string.Join(',', snapshot.MeldCounts),
+                string.Join(',', report.MeldCounts),
+                report.PendingDiscardCount);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private static bool IsValidGameCountArray(int[] counts)
+        => counts.Length == GameConst.PlayerMaxCount && counts.All(count => count is >= 0 and <= 136);
+
     public async Task RequestGameResync(int roomId)
     {
         var log = _sp.GetService<ILogger<MajakGameHub>>();
@@ -692,6 +780,7 @@ public class MajakGameHub : Hub
         Cmd.GetRoomMembers       => _sp.GetRequiredService<Commands.Room.RoomGetMembersCommand>(),
         Cmd.ExitChannel          => _sp.GetRequiredService<Commands.Channel.ExitChannelCommand>(),
         Cmd.HanChatRelay         => _sp.GetRequiredService<Commands.Channel.HanChatAllRelayCommand>(),
+        Cmd.HanChatReject        => _sp.GetRequiredService<Commands.Channel.HanChatRejectCommand>(),
         Cmd.HanChatOneToOne      => _sp.GetRequiredService<Commands.Channel.HanChatOneToOneCommand>(),
         Cmd.HanChatOneToOneString => _sp.GetRequiredService<Commands.Channel.HanChatOneToOneStringCommand>(),
         Cmd.HanChatOneToOneEnd   => _sp.GetRequiredService<Commands.Channel.HanChatOneToOneEndCommand>(),

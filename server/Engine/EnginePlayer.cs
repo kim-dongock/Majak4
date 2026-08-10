@@ -14,7 +14,6 @@ public class EnginePlayer
     public List<PaiCode> Sutehai = new();
     public List<FuroBlock> Furo  = new();
     public List<PaiCode> NukiDora = new();  // for flower/nuki modes
-    private readonly HashSet<int> _kuikaeForbiddenSerials = new();
 
     // ─── Mode / Action ───────────────────────────────────────────────────────
     public PlayerMode Mode    { get; set; } = PlayerMode.None;
@@ -90,7 +89,6 @@ public class EnginePlayer
         KyokuPoint     = 0;
         KanCnt         = 0;
         PaoOrder       = MajakConst.InvalidOrder;
-        _kuikaeForbiddenSerials.Clear();
         Yaku.Clear();
     }
 
@@ -101,9 +99,7 @@ public class EnginePlayer
     /// <summary>Discard a tile from hand (TAP / RIC discard step).</summary>
     public ActionResult Tapai(PaiCode tapai)
     {
-        if (IsKuikaeForbidden(tapai)) return ActionResult.ErrKuikae;
         if (!TryRemoveTehai(new[] { tapai.BipaiIndex }, 1, Sutehai)) return ActionResult.ErrPaiNotFoundInHand;
-        _kuikaeForbiddenSerials.Clear();
         ClearIppatsu();
         if (RichiType == RichiType.None) IsFuriten = false;
         if (!tapai.IsYaochupai) IsNagashiMangan = false;
@@ -127,11 +123,8 @@ public class EnginePlayer
 
         if (!tenpai) return ActionResult.ErrNotTempai;
 
-    Tehai.RemoveAt(idx);
-    Sutehai.Add(tapai);
-    SortTehaiByCode();
-        IsFuriten = false;
-        if (!tapai.IsYaochupai) IsNagashiMangan = false;
+        var result = Tapai(saved);
+        if (result != ActionResult.Ok) return result;
         IsIppatsu = true;   // marks riichi pending; also ippatsu after SetRichi
         return ActionResult.Ok;
     }
@@ -174,62 +167,50 @@ public class EnginePlayer
 
     public ActionResult Chi(int tapaiOrder, PaiCode curTapai, int[] bipaiIndex)
     {
-        var furo = new FuroBlock { Act = Act.Chi, TapaiOrder = tapaiOrder };
+        var furo = new FuroBlock
+        {
+            Act = Act.Chi,
+            TapaiOrder = tapaiOrder,
+            CalledBipaiIndex = curTapai.BipaiIndex,
+        };
         furo.Tiles.Add(curTapai);
         if (!TryRemoveTehai(bipaiIndex, 2, furo.Tiles)) return ActionResult.ErrPaiNotFoundInHand;
         furo.Tiles.Sort((a, b) => a.GetSerial().CompareTo(b.GetSerial()));
         Furo.Add(furo);
         IsMenzen = false;
-        SetChiKuikae(curTapai, furo);
         return ActionResult.Ok;
     }
 
     public ActionResult Pon(int tapaiOrder, PaiCode curTapai, int[] bipaiIndex)
     {
-        ProcessPao(curTapai, tapaiOrder);
-        var furo = new FuroBlock { Act = Act.Pon, TapaiOrder = tapaiOrder };
+        var furo = new FuroBlock
+        {
+            Act = Act.Pon,
+            TapaiOrder = tapaiOrder,
+            CalledBipaiIndex = curTapai.BipaiIndex,
+        };
         furo.Tiles.Add(curTapai);
         if (!TryRemoveTehai(bipaiIndex, 2, furo.Tiles)) return ActionResult.ErrPaiNotFoundInHand;
         Furo.Add(furo);
+        ProcessPao(curTapai, tapaiOrder);
         IsMenzen = false;
-        SetPonKuikae(curTapai);
         return ActionResult.Ok;
-    }
-
-    public bool IsKuikaeForbidden(PaiCode tile)
-        => _kuikaeForbiddenSerials.Contains(tile.GetSerial());
-
-    private void SetChiKuikae(PaiCode calledTile, FuroBlock furo)
-    {
-        _kuikaeForbiddenSerials.Clear();
-        int calledSerial = calledTile.GetSerial();
-        int firstSerial = furo.Tiles[0].GetSerial();
-        _kuikaeForbiddenSerials.Add(calledSerial);
-
-        int alternativeSerial = calledSerial == firstSerial
-            ? firstSerial + 3
-            : calledSerial == firstSerial + 2
-                ? firstSerial - 1
-                : -1;
-        if (alternativeSerial >= 0 && alternativeSerial / 9 == firstSerial / 9)
-            _kuikaeForbiddenSerials.Add(alternativeSerial);
-    }
-
-    private void SetPonKuikae(PaiCode calledTile)
-    {
-        _kuikaeForbiddenSerials.Clear();
-        _kuikaeForbiddenSerials.Add(calledTile.GetSerial());
     }
 
     public ActionResult MinKan(int tapaiOrder, PaiCode curTapai, int[] bipaiIndex)
     {
-        ProcessPao(curTapai, tapaiOrder);
-        var furo = new FuroBlock { Act = Act.Kan, TapaiOrder = tapaiOrder };
+        var furo = new FuroBlock
+        {
+            Act = Act.Kan,
+            TapaiOrder = tapaiOrder,
+            CalledBipaiIndex = curTapai.BipaiIndex,
+        };
         furo.Tiles.Add(curTapai);
         if (!TryRemoveTehai(bipaiIndex, 3, furo.Tiles)) return ActionResult.ErrPaiNotFoundInHand;
         Furo.Add(furo);
         IsMenzen = false;
         KanCnt++;
+        ProcessPao(curTapai, tapaiOrder);
         return ActionResult.Ok;
     }
 
@@ -251,16 +232,12 @@ public class EnginePlayer
 
     public ActionResult ChaKan(PaiCode tehaiTile)
     {
-        // Find the existing pon block with matching tile
-        int idx = FindInTehai(tehaiTile.BipaiIndex);
-        if (idx < 0) return ActionResult.ErrPaiNotFoundInHand;
-
         int serial = tehaiTile.GetSerial();
         var pon = Furo.FirstOrDefault(f => f.Act == Act.Pon && f.Tiles[0].GetSerial() == serial);
-        if (pon == null) return ActionResult.ErrInvalidMode;
+        if (pon == null) return ActionResult.ErrPaiNotMatch;
 
-        pon.Act = Act.Cha;
         if (!TryRemoveTehai(new[] { tehaiTile.BipaiIndex }, 1, pon.Tiles)) return ActionResult.ErrPaiNotFoundInHand;
+        pon.Act = Act.Cha;
         KanCnt++;
         return ActionResult.Ok;
     }
@@ -269,7 +246,7 @@ public class EnginePlayer
     {
         if (!tehaiTile.IsHuapai) return ActionResult.ErrHuapai;
 
-    if (!TryRemoveTehai(new[] { tehaiTile.BipaiIndex }, 1, NukiDora)) return ActionResult.ErrPaiNotFoundInHand;
+        if (!TryRemoveTehai(new[] { tehaiTile.BipaiIndex }, 1, NukiDora)) return ActionResult.ErrPaiNotFoundInHand;
         return ActionResult.Ok;
     }
 
@@ -334,12 +311,12 @@ public class EnginePlayer
         if (tapai.IsSangenpai)
         {
             int cnt = Furo.Count(f => f.Tiles[0].IsSangenpai);
-            if (cnt == 2) PaoOrder = tapaiOrder;
+            if (cnt == 3) PaoOrder = tapaiOrder;
         }
         else if (tapai.IsFonpai)
         {
             int cnt = Furo.Count(f => f.Tiles[0].IsFonpai);
-            if (cnt == 3) PaoOrder = tapaiOrder;
+            if (cnt == 4) PaoOrder = tapaiOrder;
         }
     }
 }

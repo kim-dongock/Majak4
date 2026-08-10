@@ -11,6 +11,16 @@ export interface MobileVisibleWorldBounds {
   bottom: number
 }
 
+const STANDARD_MOBILE_LANDSCAPE_ASPECT = 667 / 375
+
+export function mobileDiscardScale(baseScale: number, bounds = mobileVisibleWorldBounds()): number {
+  if (!bounds) return baseScale
+  const width = bounds.right - bounds.left
+  const height = bounds.bottom - bounds.top
+  if (width <= 0 || height <= 0) return baseScale
+  return width / height > STANDARD_MOBILE_LANDSCAPE_ASPECT ? baseScale * 0.9 : baseScale
+}
+
 function mobileCenterInfoReference(): HudPoint {
   const layout = getIngameLayout('mobileLandscape')
   return {

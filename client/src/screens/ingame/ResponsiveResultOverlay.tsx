@@ -65,9 +65,16 @@ function playerAvatar(player: { avatarId?: string; sex?: string }) {
 function resultLabel(data: KyoResData): string {
   if (data.pinType === 0) return 'RON'
   if (data.pinType === 1) return 'TSUMO'
-  if (data.pinType === 9) return 'NAGASHI MANGAN'
-  if (data.pinType === 5) return 'DRAW - TENPAI'
-  return 'DRAW'
+  if (data.pinType === 9) return '流し満貫'
+  return '流局'
+}
+
+function playerResultLabel(data: KyoResData, player: KyoPlayer): string {
+  if (player.isHora) return '和了'
+  if (player.isHoju) return '放銃'
+  if (data.pinType === 5) return player.isTempai ? '聴牌' : 'ノーテン'
+  if (data.pinType === 9) return player.isNagashiMangan ? '流し満貫' : '流局'
+  return '流局'
 }
 
 function playerChange(player: KyoPlayer): number {
@@ -93,20 +100,15 @@ function tileName(code: number): string {
   return kind < 3 ? `${number}${suit[kind]}` : ['東', '南', '西', '北', '白', '發', '中'][number - 1] ?? String(code)
 }
 
-function HandSettlement({ player, isWareme, delay }: { player: KyoPlayer; isWareme: boolean; delay: number }) {
+function HandSettlementCells({ player, delay }: { player: KyoPlayer; delay: number }) {
   const pointChange = (player.tenBaseBal ?? player.tenBal) + (player.paoBal ?? 0)
-  const values = [
-    ['点数', pointChange],
-    ['割れ目', player.warBal ?? 0],
-    ['供託', player.ribBal ?? 0],
-    ['本場', player.renBal ?? 0],
-    ['チップ', player.tipBal ?? 0],
-  ]
+  const values = [pointChange, player.warBal ?? 0, player.ribBal ?? 0, player.renBal ?? 0, player.tipBal ?? 0]
   return (
-    <dl className="majak-result-player__settlement">
-      {values.map(([label, value], index) => <div key={label}><dt>{label}</dt><dd className={Number(value) >= 0 ? 'is-plus' : ''}><AnimatedNumber value={Number(value)} signed delay={delay + index * 45} /></dd></div>)}
-      <div className="majak-result-player__tags"><span>{player.isOya ? '親' : '子'}</span>{isWareme && <span>割れ目</span>}</div>
-    </dl>
+    <>{values.map((value, index) => (
+      <span key={index} className={`majak-result-player__value${value >= 0 ? ' is-plus' : ''}`}>
+        <AnimatedNumber value={value} signed delay={delay + index * 45} />
+      </span>
+    ))}</>
   )
 }
 
@@ -135,7 +137,7 @@ export function ResponsiveKyoResult({ data, canContinue, onClose }: KyoProps) {
 
   return (
     <div className="majak-result-overlay" role="dialog" aria-modal="true" aria-label="局結果">
-      <section className="majak-result-panel majak-kyo-result-panel">
+      <section className={`majak-result-panel majak-kyo-result-panel${isHora ? ' is-hora' : ' is-draw'}`}>
         <header className="majak-result-header">
           <div>
             <span className="majak-result-kicker">HAND RESULT</span>
@@ -145,35 +147,42 @@ export function ResponsiveKyoResult({ data, canContinue, onClose }: KyoProps) {
         </header>
 
         <div className="majak-kyo-result-body">
-          <section className="majak-result-players" aria-label="点数移動">
+          <section className="majak-result-players" role="table" aria-label="点数移動">
+            <div className="majak-result-players__head" role="row">
+              <span>プレイヤー</span>
+              <span>結果</span>
+              <span>収支</span>
+              <span>点数</span>
+              <span>割れ目</span>
+              <span>供託</span>
+              <span>本場</span>
+              <span>チップ</span>
+              <span>詳細</span>
+            </div>
             {data.players.map((player, index) => {
               const selectedWinner = index === selectedIndex && player.isHora
               return (
                 <div
                   key={`${player.pix}-${player.seatPos}`}
                   className={`majak-result-player${player.isHora ? ' is-winner' : ''}${player.isHoju ? ' is-dealer-in' : ''}${selectedWinner ? ' is-selected' : ''}`}
+                  role="row"
                 >
-                  <img src={playerAvatar(player)} alt="" onError={event => { event.currentTarget.src = getDefaultAvatarUrl('male') }} />
                   <span className="majak-result-player__identity">
-                    <strong>{player.name || player.pix}</strong>
-                    <small>{player.isHora ? '和了' : player.isHoju ? '放銃' : player.isTempai ? '聴牌' : '流局'}</small>
+                    <img src={playerAvatar(player)} alt="" onError={event => { event.currentTarget.src = getDefaultAvatarUrl('male') }} />
+                    <span><strong>{player.name || player.pix}</strong><small>{player.isOya ? '親' : '子'}{data.waremeOdr === player.seatPos ? ' / 割れ目' : ''}</small></span>
                   </span>
+                  <span className="majak-result-player__status">{playerResultLabel(data, player)}</span>
                   <span className={`majak-result-player__change${playerChange(player) >= 0 ? ' is-plus' : ''}`}><AnimatedNumber value={playerChange(player)} signed delay={index * 100} /></span>
-                  {player.isHora && <button type="button" className="majak-result-player__select" onClick={() => setSelectedIndex(index)}>詳細</button>}
-                  <HandSettlement player={player} isWareme={data.waremeOdr === player.seatPos} delay={index * 100 + 120} />
+                  <HandSettlementCells player={player} delay={index * 100 + 120} />
+                  <span className="majak-result-player__detail-cell">{player.isHora && <button type="button" className="majak-result-player__select" onClick={() => setSelectedIndex(index)}>表示</button>}</span>
                 </div>
               )
             })}
           </section>
 
-          <section className="majak-result-detail" aria-label="和了詳細">
-            {selected && isHora ? (
+          {selected && isHora && (
+            <section className="majak-result-detail" aria-label="和了詳細">
               <>
-                <div className="majak-result-winner">
-                  <img src={playerAvatar(selected)} alt="" onError={event => { event.currentTarget.src = getDefaultAvatarUrl('male') }} />
-                  <div><span>WINNER</span><strong>{selected.name || selected.pix}</strong></div>
-                  <b><AnimatedNumber value={totalFor(data, selected, selectedIndex) ?? 0} suffix="点" /></b>
-                </div>
                 <div className="majak-result-yaku">
                   {yaku.length > 0 ? yaku.map((item, index) => (
                     <div key={`${item.name}-${index}`}><span>{item.name}</span><b>{item.isYakuman ? `${item.fan}倍役満` : `${item.fan}翻`}{item.tip ? ` / チップ ${item.tip}` : ''}</b></div>
@@ -185,10 +194,8 @@ export function ResponsiveKyoResult({ data, canContinue, onClose }: KyoProps) {
                 </div>
                 {(data.dora?.length || data.uraDora?.length) ? <div className="majak-result-dora">ドラ {data.dora?.map(tileName).join(' / ') || '-'} {selected.isRichi && data.contest !== 1 && data.uraDora?.length ? ` 裏ドラ ${data.uraDora.map(tileName).join(' / ')}` : ''}</div> : null}
               </>
-            ) : (
-              <div className="majak-result-draw"><strong>{resultLabel(data)}</strong><span>各プレイヤーの点数移動を確認してください。</span></div>
-            )}
-          </section>
+            </section>
+          )}
         </div>
 
         <footer className="majak-result-actions">

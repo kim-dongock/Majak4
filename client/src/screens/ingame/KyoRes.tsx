@@ -30,6 +30,7 @@ export interface KyoPlayer {
   pix: string
   name: string
   avatarId?: string
+  sex?: string
   seatPos: 0 | 1 | 2 | 3
   isOya: boolean
   tenBal: number

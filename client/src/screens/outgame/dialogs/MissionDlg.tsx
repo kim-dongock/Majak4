@@ -190,8 +190,8 @@ function ResponsiveMissionDialog({
       .mission-dialog__header p { margin: 0; color: #d7b95d; font: 700 calc(10px * var(--majak-type-scale))/1 var(--majak-font-family-ui); letter-spacing: 1px; }
       .mission-dialog__header h2 { margin: 2px 0 0; font-size: calc(25px * var(--majak-type-scale)); font-weight: 700; letter-spacing: 0; }
       .mission-dialog__header-actions { display: flex; gap: 8px; }
-      .mission-dialog__header button { min-width: 36px; height: 36px; border: 1px solid rgba(255,255,255,.7); border-radius: 0; padding: 0 10px; color: #fff; background: transparent; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
-      .mission-dialog__header-actions button:last-child { font-size: calc(22px * var(--majak-type-scale)); }
+      .mission-dialog__header button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); box-sizing: border-box; border: 1px solid rgba(255,255,255,.7); border-radius: 0; padding: 0 10px; color: #fff; background: transparent; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
+      .mission-dialog__header-actions button:last-child { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; font-size: var(--majak-popup-close-font-size); }
       .mission-dialog__summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #c1cbc0; border-bottom: 1px solid #c1cbc0; }
       .mission-dialog__summary > div { min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; padding: 11px 18px; background: #f7faf4; }
       .mission-dialog__summary span { color: #607069; font: 700 calc(11px * var(--majak-type-scale))/1 var(--majak-font-family-ui); }
@@ -214,8 +214,7 @@ function ResponsiveMissionDialog({
       .mission-dialog__reward-grid article.is-available { border-top: 4px solid #d19f35; background: #ecf0e4; }
       .mission-dialog__reward-grid span { color: #a06425; font: 700 var(--majak-font-10)/1 var(--majak-font-family-ui); }
       .mission-dialog__reward-grid strong { color: #1f302b; font-size: var(--majak-font-15); font-weight: 400; }
-      .mission-dialog__reward-grid button, .mission-dialog footer button { margin-top: auto; border: 0; border-radius: 3px; padding: 9px 13px; color: #fff; background: #1c5a4d; font: 700 calc(13px * var(--majak-type-scale))/1 var(--majak-font-family-ui); cursor: pointer; }
-      .mission-dialog__reward-grid button { font-size: var(--majak-font-12); }
+      .mission-dialog__reward-grid button, .mission-dialog footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); max-width: 100%; box-sizing: border-box; margin-top: auto; border: 0; border-radius: 3px; padding: 0 13px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
       .mission-dialog__reward-grid button:disabled { color: #87918c; background: #d7ddd5; cursor: not-allowed; }
       .mission-dialog footer { display: flex; justify-content: flex-end; padding: 12px 24px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
       .mission-dialog footer button { margin: 0; color: #32453e; border: 1px solid #839087; background: transparent; }
@@ -224,8 +223,8 @@ function ResponsiveMissionDialog({
       .mission-dialog--mobileLandscape .mission-dialog__header, .mission-dialog--mobilePortrait .mission-dialog__header { padding: 8px 10px; }
       .mission-dialog--mobileLandscape .mission-dialog__header p, .mission-dialog--mobilePortrait .mission-dialog__header p { display: none; }
       .mission-dialog--mobileLandscape .mission-dialog__header h2, .mission-dialog--mobilePortrait .mission-dialog__header h2 { margin: 0; font-size: calc(17px * var(--majak-type-scale)); }
-      .mission-dialog--mobileLandscape .mission-dialog__header button, .mission-dialog--mobilePortrait .mission-dialog__header button { min-width: 28px; height: 28px; padding: 0 7px; font-size: calc(11px * var(--majak-type-scale)); }
-      .mission-dialog--mobileLandscape .mission-dialog__header-actions button:last-child, .mission-dialog--mobilePortrait .mission-dialog__header-actions button:last-child { font-size: calc(18px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__header button, .mission-dialog--mobilePortrait .mission-dialog__header button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 7px; font-size: var(--majak-popup-command-font-size); }
+      .mission-dialog--mobileLandscape .mission-dialog__header-actions button:last-child, .mission-dialog--mobilePortrait .mission-dialog__header-actions button:last-child { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); font-size: var(--majak-popup-close-font-size); }
       .mission-dialog--mobileLandscape .mission-dialog__summary, .mission-dialog--mobilePortrait .mission-dialog__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .mission-dialog--mobileLandscape .mission-dialog__summary > div, .mission-dialog--mobilePortrait .mission-dialog__summary > div { gap: 4px; padding: 7px 8px; }
       .mission-dialog--mobileLandscape .mission-dialog__summary span, .mission-dialog--mobilePortrait .mission-dialog__summary span { font-size: calc(10px * var(--majak-type-scale)); }
@@ -242,8 +241,7 @@ function ResponsiveMissionDialog({
       .mission-dialog--mobileLandscape .mission-dialog__reward-grid article, .mission-dialog--mobilePortrait .mission-dialog__reward-grid article { min-height: 75px; gap: 4px; padding: 6px; }
       .mission-dialog--mobileLandscape .mission-dialog__reward-grid strong, .mission-dialog--mobilePortrait .mission-dialog__reward-grid strong { font-size: var(--majak-font-10); }
       .mission-dialog--mobileLandscape .mission-dialog__reward-grid span, .mission-dialog--mobilePortrait .mission-dialog__reward-grid span { font-size: var(--majak-font-9); }
-      .mission-dialog--mobileLandscape .mission-dialog__reward-grid button, .mission-dialog--mobilePortrait .mission-dialog__reward-grid button, .mission-dialog--mobileLandscape .mission-dialog footer button, .mission-dialog--mobilePortrait .mission-dialog footer button { padding: 7px; font-size: calc(11px * var(--majak-type-scale)); }
-      .mission-dialog--mobileLandscape .mission-dialog__reward-grid button, .mission-dialog--mobilePortrait .mission-dialog__reward-grid button { font-size: var(--majak-font-10); }
+      .mission-dialog--mobileLandscape .mission-dialog__reward-grid button, .mission-dialog--mobilePortrait .mission-dialog__reward-grid button, .mission-dialog--mobileLandscape .mission-dialog footer button, .mission-dialog--mobilePortrait .mission-dialog footer button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); padding: 0 7px; font-size: var(--majak-popup-command-font-size); }
       .mission-dialog--mobileLandscape .mission-dialog footer, .mission-dialog--mobilePortrait .mission-dialog footer { padding: 9px; }
       .mission-dialog--mobilePortrait .mission-dialog__content { grid-template-columns: 1fr; overflow: auto; }
     `}</style>

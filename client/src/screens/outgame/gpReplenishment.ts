@@ -3,6 +3,24 @@ export function isOwnGpReplenishmentResponse(data: Record<string, unknown>, curr
   return responsePix === '' || responsePix === currentPix
 }
 
+export interface GpAssetUpdate {
+  gamMoney?: number
+  slevel?: string
+  nlevel?: number
+}
+
+export function readGpAssetUpdate(data: Record<string, unknown>): GpAssetUpdate {
+  const gamMoney = Number(data.gammoney ?? data.gamMoney ?? data.k34e)
+  const nlevel = Number(data.nlevel ?? data.nLevel ?? data.k33e)
+  const rawSlevel = data.slevel ?? data.k32e
+
+  return {
+    ...(Number.isFinite(gamMoney) ? { gamMoney } : {}),
+    ...(typeof rawSlevel === 'string' ? { slevel: rawSlevel } : {}),
+    ...(Number.isFinite(nlevel) ? { nlevel } : {}),
+  }
+}
+
 export function gpReplenishmentFailureMessage(data: Record<string, unknown>): string {
   const replenishmentType = Number(data.mjkk42e ?? data.replenishmentType ?? 0)
   if (replenishmentType === 3) {

@@ -152,6 +152,33 @@ type WidenLayout<T> = T extends number
 
 export type IngameLayout = WidenLayout<typeof DESKTOP_INGAME_LAYOUT>
 
+export const DESKTOP_REACH_POSITIONS = [
+  { x: 343, y: 418 },
+  { x: 508, y: 311 },
+  { x: 343, y: 280 },
+  { x: 270, y: 311 },
+] as const
+
+// Preserve the legacy edge insets on the repositioned mobile center panel.
+export const MOBILE_REACH_POSITIONS = [
+  { x: 343, y: 389 },
+  { x: 508, y: 282 },
+  { x: 343, y: 251 },
+  { x: 270, y: 282 },
+] as const
+
+// Fixed offsets from the mobile center-info panel. These must not depend on viewport scale.
+export const MOBILE_DISCARD_CENTER_INFO_OFFSETS = [
+  { x: 24.5, y: 149 },
+  { x:  280, y: 146.5 },
+  { x: 219, y: -27 },
+  { x: -46, y: -15.5 },
+] as const
+
+export const MOBILE_TOP_MELD_CENTER_INFO_OFFSET = { x: 251, y: -48 } as const
+
+export const MOBILE_DEAD_WALL_SHIFT_X = 24
+
 export const MOBILE_INGAME_LAYOUT: IngameLayout = {
   ...DESKTOP_INGAME_LAYOUT,
   centerInfo: {
@@ -213,10 +240,10 @@ export const MOBILE_INGAME_LAYOUT: IngameLayout = {
     { x:  0, y:  15 },
   ],
   discardRowStep: [
-    { x:   0, y:  22 },
-    { x:  26, y:   0 },
-    { x:   0, y: -22 },
-    { x: -26, y:   0 },
+    { x:   0, y:  27 },
+    { x:  27, y:   0 },
+    { x:   0, y: -27 },
+    { x: -27, y:   0 },
   ],
   rotatedDiscardOffset: [
     { x:   0, y:   7 },

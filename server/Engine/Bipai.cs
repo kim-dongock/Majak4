@@ -193,7 +193,7 @@ public class Bipai
     public void Open(int bipaiIndex)
     {
         int openMask = (1 << (MajakConst.PlayerMaxCount + 1)) - 1;
-        _openFlags[bipaiIndex] = (_openFlags[bipaiIndex] & openMask) | openMask;
+        _openFlags[bipaiIndex] |= openMask;
     }
 
     public void OpenAll() { for (int i = 0; i < 136; i++) Open(i); }
