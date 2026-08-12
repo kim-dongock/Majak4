@@ -64,6 +64,10 @@ OPAQUE_HIM_STEMS = {
     "_ShopReceiptOkBtn",
 }
 
+# CMJImgBmpEx / CHgGrpDib32 effects store per-pixel alpha in the fourth byte of
+# a BI_RGB bitmap. Pillow treats that format as RGB and otherwise makes it opaque.
+SOURCE_ALPHA_HIM_PREFIXES = ("mj_ef_", "eff_")
+
 # .him files that are NOT images — skip conversion
 # mj_images*.him : MD5 checksum database for skin integrity verification (MJGraph.cpp)
 # Collection*.him : PKM archive of GIF images — unpack separately
@@ -71,6 +75,32 @@ SKIP_HIM_STEMS = {
     "mj_images", "mj_images_100001",
     "Collection", "Collection_r",
 }
+
+
+def read_bmp_source_alpha(src: Path) -> tuple[int, int, bytes] | None:
+    data = src.read_bytes()
+    if len(data) < 54 or data[:2] != b"BM":
+        return None
+    pixel_offset = struct.unpack_from("<I", data, 10)[0]
+    width = struct.unpack_from("<i", data, 18)[0]
+    height = struct.unpack_from("<i", data, 22)[0]
+    bit_count = struct.unpack_from("<H", data, 28)[0]
+    compression = struct.unpack_from("<I", data, 30)[0]
+    if width <= 0 or height == 0 or bit_count != 32 or compression != 0:
+        return None
+
+    absolute_height = abs(height)
+    stride = ((width * bit_count + 31) // 32) * 4
+    if pixel_offset + stride * absolute_height > len(data):
+        return None
+
+    alpha = bytearray(width * absolute_height)
+    for y in range(absolute_height):
+        source_y = y if height < 0 else absolute_height - 1 - y
+        row_offset = pixel_offset + source_y * stride
+        for x in range(width):
+            alpha[y * width + x] = data[row_offset + x * 4 + 3]
+    return width, absolute_height, bytes(alpha)
 
 
 def ensure_dirs() -> None:
@@ -81,7 +111,7 @@ def ensure_dirs() -> None:
 # ─── .him → .png ──────────────────────────────────────────────────────────────
 def convert_him_to_png(src: Path, dst: Path) -> bool:
     """
-    .him files are standard BMP images.
+    .him files contain BMP or animated GIF images.
     Pure blue (0, 0, 255) is used as the transparency color key.
     """
     try:
@@ -92,16 +122,28 @@ def convert_him_to_png(src: Path, dst: Path) -> bool:
 
     try:
         dst.parent.mkdir(parents=True, exist_ok=True)
-        img = Image.open(src).convert("RGBA")
-        if src.stem not in OPAQUE_HIM_STEMS:
-            pixels = img.load()
-            w, h = img.size
-            for y in range(h):
-                for x in range(w):
-                    r, g, b, a = pixels[x, y]
-                    if r == TRANS_COLOR[0] and g == TRANS_COLOR[1] and b == TRANS_COLOR[2]:
-                        pixels[x, y] = (0, 0, 0, 0)
-        img.save(dst, "PNG")
+        source_alpha = read_bmp_source_alpha(src) if src.stem.startswith(SOURCE_ALPHA_HIM_PREFIXES) else None
+        with Image.open(src) as source:
+            frame_count = getattr(source, "n_frames", 1)
+            for frame_index in range(frame_count):
+                source.seek(frame_index)
+                img = source.convert("RGBA")
+                if source_alpha is not None and source_alpha[:2] == img.size:
+                    alpha = Image.frombytes("L", img.size, source_alpha[2])
+                    img.putalpha(alpha)
+                elif src.stem not in OPAQUE_HIM_STEMS:
+                    pixels = img.load()
+                    w, h = img.size
+                    for y in range(h):
+                        for x in range(w):
+                            r, g, b, a = pixels[x, y]
+                            if r == TRANS_COLOR[0] and g == TRANS_COLOR[1] and b == TRANS_COLOR[2]:
+                                pixels[x, y] = (0, 0, 0, 0)
+                if frame_index == 0:
+                    img.save(dst, "PNG")
+                if frame_count > 1:
+                    frame_dst = dst.with_name(f"{dst.stem}_{frame_index:02d}{dst.suffix}")
+                    img.save(frame_dst, "PNG")
         return True
     except Exception as e:
         print(f"  ERROR converting {src.name}: {e}")

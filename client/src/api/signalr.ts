@@ -22,6 +22,10 @@ import { useAuthStore } from '../store/authStore'
 export type MessageHandler = (data: Record<string, unknown>) => void
 export type ConnectionLostHandler = (error?: Error) => void
 export type ReconnectedHandler = (connectionId?: string) => void
+export interface SignalRTestAdapter {
+  send?: (cmd: string, params: Record<string, unknown>) => Promise<void> | void
+  invoke?: (method: string, args: unknown[]) => Promise<unknown> | unknown
+}
 type StockedMessage = {
   cmd: string
   data: Record<string, unknown>
@@ -29,6 +33,7 @@ type StockedMessage = {
 }
 
 let connection: HubConnection | null = null
+let testAdapter: SignalRTestAdapter | null = null
 let currentHubUrl: string | null = null
 let connecting: Promise<void> | null = null
 let intentionalStopDepth = 0
@@ -211,6 +216,16 @@ export function getConnection(): HubConnection | null {
   return connection
 }
 
+export function installSignalRTestAdapter(adapter: SignalRTestAdapter | null): void {
+  if (!import.meta.env.DEV) throw new Error('SignalR test adapter is available only in development mode.')
+  testAdapter = adapter
+}
+
+export function emitSignalRTestMessage(cmd: string, data: Record<string, unknown>): void {
+  if (!import.meta.env.DEV || !testAdapter) throw new Error('SignalR test adapter is not installed.')
+  dispatchToHandlers(cmd, data, [...(handlers.get(cmd) ?? [])])
+}
+
 export async function connect(hubUrl = '/hubs/majak'): Promise<void> {
   // 同一 URL に既に接続済みならスキップ
   if (connection && connection.state === HubConnectionState.Connected
@@ -361,6 +376,10 @@ export function offReconnected(handler: ReconnectedHandler): void {
  * Hub.SendCommand(code, payload) に対応
  */
 export async function send(cmd: string, params: Record<string, unknown> = {}): Promise<void> {
+  if (testAdapter) {
+    await testAdapter.send?.(cmd, params)
+    return
+  }
   const traceRoomEntry = cmd === 'c14e' || cmd === 'mjkc6e' || cmd === 'c16e'
   if (!connection || connection.state !== HubConnectionState.Connected) {
     if (traceRoomEntry) {
@@ -407,13 +426,14 @@ export async function send(cmd: string, params: Record<string, unknown> = {}): P
 }
 
 export function isConnected(): boolean {
-  return connection?.state === HubConnectionState.Connected
+  return Boolean(testAdapter) || connection?.state === HubConnectionState.Connected
 }
 
 /**
  * Hub の直接メソッドを呼び出す
  */
 export async function invoke<T = void>(method: string, ...args: unknown[]): Promise<T> {
+  if (testAdapter) return await testAdapter.invoke?.(method, args) as T
   const traceReconnect = method === 'RequestGameResync' || method === 'NotifyGameClientReady'
   if (!connection || connection.state !== HubConnectionState.Connected) {
     if (traceReconnect) {

@@ -25,7 +25,7 @@
  *   三元牌(kind=3): 0x35-0x37 → frame 31-33
  */
 import Phaser from 'phaser'
-import { GAME_OPTIONS_REGISTRY_KEY, getGameOptions, type CreateGameOptions } from '../game/GameInstance'
+import { GAME_OPTIONS_REGISTRY_KEY, getGameOptions } from '../game/GameInstance'
 import { emitGameLoadProgress } from '../game/gameLoadProgress'
 import { getLegacyFullUiSkinId } from '../utils/legacySkinPalette'
 
@@ -43,27 +43,21 @@ function customSkinBase(id: number): string {
 }
 
 export default class PreloadScene extends Phaser.Scene {
-  private readonly initialOptions?: CreateGameOptions
-  private readonly preloadOnly: boolean
-  private readonly onPreloadComplete?: () => void
   private preloadStartedAt = 0
 
-  constructor(config: { options?: CreateGameOptions; preloadOnly?: boolean; onComplete?: () => void } = {}) {
+  constructor() {
     super({ key: 'PreloadScene' })
-    this.initialOptions = config.options
-    this.preloadOnly = Boolean(config.preloadOnly)
-    this.onPreloadComplete = config.onComplete
   }
 
   preload() {
-    const options = this.initialOptions ?? getGameOptions()
+    const options = getGameOptions()
     const customBgId = Number(options.customBgId ?? 0)
     const customBoardType = Number(options.customBoardType ?? 0)
     const customHaiId = Number(options.customHaiId ?? 0)
     this.preloadStartedAt = performance.now()
-    if (!this.preloadOnly) emitGameLoadProgress('resources')
+    emitGameLoadProgress('resources')
     console.info('[GameAssets] load start', {
-      phase: this.preloadOnly ? 'app-startup-cache-warmup' : 'game-start',
+      phase: 'game-start',
       customBgId,
       customBoardType,
       customHaiId,
@@ -179,6 +173,8 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.spritesheet('mj_tonari_1', `${IMG}/mj_tonari_1.png`, { frameWidth: 45, frameHeight: 43 })
     this.load.spritesheet('mj_tapai_0', `${IMG}/mj_tapai_0.png`, { frameWidth: 31, frameHeight: 55 })
     this.load.spritesheet('mj_tapai_1', `${IMG}/mj_tapai_1.png`, { frameWidth: 45, frameHeight: 43 })
+    this.load.spritesheet('mj_throw_0', `${IMG}/mj_throw_0.png`, { frameWidth: 38, frameHeight: 45 })
+    this.load.spritesheet('mj_throw_1', `${IMG}/mj_throw_1.png`, { frameWidth: 52, frameHeight: 33 })
     this.load.spritesheet('mj_machihai_num', `${IMG}/mj_machihai_num.png`, { frameWidth: 9, frameHeight: 12 })
     this.load.image('mj_machihai_furiten', `${IMG}/mj_machihai_furiten.png`)
     this.load.image('mj_machihai_han', `${IMG}/mj_machihai_han.png`)
@@ -192,6 +188,7 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.image('mj_machihai_frame03', `${IMG}/mj_machihai_frame03.png`)
     this.load.image('mj_rkey',      `${IMG}/mj_rkey.png`)
     this.load.image('cursor_mouse', `${IMG}/mj_crsMouse_2(6).png`)
+    this.load.image('cursor_keyboard', `${IMG}/mj_crsKybrd.png`)
     loadBgSkinImage('mj_uiBoard')
     loadBgSkinImage('mj_resBtBoard')
     loadBgSkinImage('mj_watchBoard')
@@ -235,6 +232,18 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.image('mj_ryu_richbar_length_b', `${IMG}/mj_ryu_richbar_length_b.png`)
     this.load.image('mj_ryu_richbar_side_y', `${IMG}/mj_ryu_richbar_side_y.png`)
     this.load.image('mj_ryu_richbar_length_y', `${IMG}/mj_ryu_richbar_length_y.png`)
+    const loadNumberedImages = (prefix: string, count: number, start = 0) => {
+      for (let frame = start; frame < start + count; frame++) {
+        const suffix = String(frame).padStart(2, '0')
+        this.load.image(`${prefix}_${suffix}`, `${IMG}/${prefix}_${suffix}.png`)
+      }
+    }
+    for (let loc = 0; loc < 4; loc++) loadNumberedImages(`mj_ryu_richbar0${loc}`, 9)
+    loadNumberedImages('mj_ryu_richbar_side', 13)
+    loadNumberedImages('mj_ryu_richbar_length', 13)
+    for (const key of ['mj_GrichBar_0', 'mj_GrichBar_1', 'mj_GrichBar_Spin1', 'mj_GrichBar_Spin2', 'mj_Grich_Effect_0', 'mj_Grich_Effect_1', 'mj_GreachBar_0', 'mj_GreachBar_1']) {
+      this.load.image(key, `${IMG}/${key}.png`)
+    }
     for (const key of ['mj_wareme00', 'mj_wareme01', 'mj_wareme02', 'mj_wareme03']) {
       loadBgSkinImage(key)
     }
@@ -315,6 +324,29 @@ export default class PreloadScene extends Phaser.Scene {
         this.load.image(name, `${IMG}/${name}.png`)
       }
     }
+    loadNumberedImages('eff_roneff', 11, 1)
+    loadNumberedImages('eff_roneff_b', 20, 1)
+    loadNumberedImages('eff_roneff_c', 27, 1)
+    loadNumberedImages('eff_tumoeff', 12, 1)
+    loadNumberedImages('eff_tumoeff_b', 13, 1)
+    loadNumberedImages('eff_tumoeff_c', 15, 1)
+    loadNumberedImages('eff_rontumoeff_d', 30, 1)
+    this.load.image('eff_rontumo_black', `${IMG}/eff_rontumo_black.png`)
+    for (let frame = 0; frame < 13; frame++) {
+      const key = `mj_ef_yakuman${String(frame).padStart(2, '0')}`
+      this.load.image(key, `${IMG}/${key}.png`)
+    }
+    for (let dir = 0; dir < 3; dir++) loadNumberedImages(`mj_ef_horafire0${dir}`, 3)
+    const skillFrames = {
+      L1fire: 13, L1water: 11, L1earth: 12, L1wind: 12,
+      L2fire: 12, L2water: 9, L2earth: 10, L2wind: 12,
+    }
+    for (const [family, count] of Object.entries(skillFrames)) loadNumberedImages(`mj_ef_${family}`, count, 1)
+    loadNumberedImages('mj_ryu_normal', 10, 1)
+    loadNumberedImages('mj_ryu_big', 10, 1)
+    for (const key of ['mj_ef_status_hora', 'mj_ef_status_hoju']) this.load.image(key, `${IMG}/${key}.png`)
+    loadNumberedImages('mj_ef_status_hora', 2)
+    loadNumberedImages('mj_ef_status_hoju', 4)
     for (const dir of ['00', '01']) {
       for (let frame = 0; frame <= 4; frame++) {
         const name = `mj_ef_reachhai${dir}_${String(frame).padStart(2, '0')}`
@@ -330,14 +362,10 @@ export default class PreloadScene extends Phaser.Scene {
   create() {
     const durationMs = Math.round(performance.now() - this.preloadStartedAt)
     console.info('[GameAssets] load complete', {
-      phase: this.preloadOnly ? 'app-startup-cache-warmup' : 'game-start',
+      phase: 'game-start',
       durationMs,
       completedAt: new Date().toISOString(),
     })
-    if (this.preloadOnly) {
-      this.onPreloadComplete?.()
-      return
-    }
     emitGameLoadProgress('scene', { resourceDurationMs: durationMs })
     const options = this.game.registry.get(GAME_OPTIONS_REGISTRY_KEY) ?? getGameOptions()
     this.scene.start('GameScene', options)

@@ -1,6 +1,6 @@
 import type { HanResPlayer } from './HanRes'
 
-export const FORCE_HAN_RESULT_FOR_TEST = true
+export const FORCE_HAN_RESULT_FOR_TEST = false
 
 export const FORCED_HAN_RESULT: HanResPlayer[] = [
   { pix: 'final-p0', name: 'テスト一位', sex: 'male', seatPos: 0, rank: 0, point: 42_000, setBal: 120, setTen: 72, setUma: 40, setTip: 8, coinGain: 1_200, coinNeed: 800, isMe: true },

@@ -58,6 +58,32 @@ export function decideTouchTileAction(selectedIdx: number, tappedIdx: number): T
   }
 }
 
+export function decideTimedDiscardIndex(
+  handBipaiIndices: readonly (number | undefined)[],
+  selectedIdx: number,
+  selectedBipaiIndex?: number,
+): number {
+  if (selectedBipaiIndex !== undefined) {
+    const currentIdx = handBipaiIndices.indexOf(selectedBipaiIndex)
+    if (currentIdx >= 0) return currentIdx
+  }
+  if (selectedIdx >= 0 && selectedIdx < handBipaiIndices.length) return selectedIdx
+  return handBipaiIndices.length - 1
+}
+
+export function decideAutoDiscardDelayMs(
+  localDeadlineAt: number | undefined,
+  localNow: number,
+  timeLimitSeconds: number,
+  sendLeadMs = 250,
+): number {
+  const fallbackMs = Math.max(1000, Math.trunc((Number.isFinite(timeLimitSeconds) && timeLimitSeconds > 0 ? timeLimitSeconds : 5) * 1000))
+  const remainingMs = localDeadlineAt !== undefined && Number.isFinite(localDeadlineAt)
+    ? Math.max(0, localDeadlineAt - localNow)
+    : fallbackMs
+  return Math.max(0, remainingMs - Math.max(0, sendLeadMs))
+}
+
 export function decideDiscardSource(
   handCount: number,
   handIdx: number,

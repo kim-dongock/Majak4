@@ -19,6 +19,10 @@ export function canCompleteGameResync(gate: GameResyncGate, isViewer: boolean): 
   return !gate.historyReceived || gate.historyApplied
 }
 
+export function shouldRequestInitialGameResync(reconnectActive: boolean, receivedFreshAutoStart: boolean): boolean {
+  return reconnectActive && !receivedFreshAutoStart
+}
+
 export function restoreVisiblePaiCodes(target: Map<number, number>, tiles: readonly VisiblePaiCode[]): void {
   tiles.forEach(tile => {
     if (tile.bipaiIndex !== undefined && tile.bipaiIndex >= 0) target.set(tile.bipaiIndex, tile.code)

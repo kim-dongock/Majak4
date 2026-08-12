@@ -38,6 +38,8 @@ public class GameLogicService
     private const int CasualPointSubTypeTop = 1;
     private const int CasualPointTonpuRate = 1;
     private const int CasualPointHanchanRate = 2;
+    private const int DefaultGameClientReadyTimeoutMs = 30_000;
+    private const int DefaultGamePresentationReadyTimeoutMs = 30_000;
 
     private static readonly (int Kind, int Point, string IconCode)[] GameIconMaster =
     [
@@ -62,6 +64,8 @@ public class GameLogicService
     private readonly TrainingAiLevel      _trainingAiLevel;
     private readonly bool                 _testEnvironment;
     private readonly bool                 _debugEndAfterEast1;
+    private readonly int                  _gameClientReadyTimeoutMs;
+    private readonly int                  _gamePresentationReadyTimeoutMs;
 
     public GameLogicService(
         PlayerSessionService session,
@@ -97,6 +101,8 @@ public class GameLogicService
         };
         _testEnvironment = config.GetValue<bool>("GameSettings:TestEnvironment", false);
         _debugEndAfterEast1 = config.GetValue<bool>("RuntimeFlag:DebugEndAfterEast1", false);
+        _gameClientReadyTimeoutMs = Math.Max(0, config.GetValue("GameSettings:GameClientReadyTimeoutMs", DefaultGameClientReadyTimeoutMs));
+        _gamePresentationReadyTimeoutMs = Math.Max(0, config.GetValue("GameSettings:GamePresentationReadyTimeoutMs", DefaultGamePresentationReadyTimeoutMs));
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -145,6 +151,7 @@ public class GameLogicService
         await ctx.Clients.Group($"room_{room.RoomId}")
             .SendAsync(Cmd.AutoStart, BuildAutoStartPayload(room, gemGame));
 
+        await WaitForGameClientsReadyAsync(room, TimeSpan.FromMilliseconds(_gameClientReadyTimeoutMs));
 
         await ctx.Clients.Group($"chanel_{room.ChannelId}")
             .SendAsync(Cmd.RoomState, RoomStatePayload.Build(room, "game_started"));
@@ -204,21 +211,54 @@ public class GameLogicService
         return Task.FromResult(isAllReady);
     }
 
+    public Task<bool> MarkGamePresentationReadyAsync(int roomId, string connectionId, long presentationId)
+    {
+        var room = _session.GetRoom(roomId);
+        if (room == null || string.IsNullOrEmpty(connectionId)) return Task.FromResult(false);
+
+        bool isAllReady;
+        int readyCount;
+        int expectedCount;
+        lock (room.GamePresentationReadyLock)
+        {
+            if (presentationId != room.GamePresentationId) return Task.FromResult(false);
+            PruneGamePresentationReadyLocked(room);
+            room.GamePresentationReadyConnectionIds.Add(connectionId);
+            var expected = GetExpectedGameClientConnectionIds(room);
+            room.GamePresentationReadyConnectionIds.RemoveWhere(id => !expected.Contains(id));
+            readyCount = room.GamePresentationReadyConnectionIds.Count;
+            expectedCount = expected.Count;
+            isAllReady = expectedCount > 0 && expected.All(room.GamePresentationReadyConnectionIds.Contains);
+            if (isAllReady) room.GamePresentationReadyTcs?.TrySetResult(true);
+        }
+
+        _log?.LogInformation("Game presentation ready. roomId={RoomId} presentationId={PresentationId} connectionId={ConnectionId} ready={ReadyCount}/{ExpectedCount} allReady={AllReady}",
+            roomId, presentationId, connectionId, readyCount, expectedCount, isAllReady);
+        return Task.FromResult(isAllReady);
+    }
+
     public async Task StartGameActionsAsync(GameRoom room, CommandContext ctx)
     {
-        await StartGameActionsCoreAsync(room, ctx);
+        await StartGameActionsIfClientsReadyAsync(room, ctx);
     }
 
     public async Task<bool> StartGameActionsIfClientsReadyAsync(GameRoom room, CommandContext ctx)
     {
-        bool isAllReady;
+        bool areGameClientsReady;
         lock (room.GameClientReadyLock)
         {
             PruneGameClientReadyLocked(room);
-            isAllReady = IsGameClientReadyLocked(room);
+            areGameClientsReady = IsGameClientReadyLocked(room);
         }
 
-        if (!isAllReady) return false;
+        bool isPresentationReady;
+        lock (room.GamePresentationReadyLock)
+        {
+            PruneGamePresentationReadyLocked(room);
+            isPresentationReady = room.GamePresentationReadyTcs?.Task.IsCompleted == true;
+        }
+
+        if (!areGameClientsReady || !isPresentationReady) return false;
         return await StartGameActionsCoreAsync(room, ctx);
     }
 
@@ -296,6 +336,63 @@ public class GameLogicService
             .Select(player => player!.ConnectionId)
             .Distinct()
             .ToList();
+    }
+
+    private static long PrepareGamePresentationReadyGate(GameRoom room)
+    {
+        lock (room.GamePresentationReadyLock)
+        {
+            room.GamePresentationId++;
+            room.GamePresentationReadyConnectionIds.Clear();
+            room.GamePresentationReadyTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            return room.GamePresentationId;
+        }
+    }
+
+    private async Task WaitForGamePresentationReadyAsync(GameRoom room, long presentationId, TimeSpan timeout)
+    {
+        Task readyTask;
+        int expectedCount;
+        lock (room.GamePresentationReadyLock)
+        {
+            if (presentationId != room.GamePresentationId) return;
+            expectedCount = GetExpectedGameClientConnectionIds(room).Count;
+            if (expectedCount == 0) return;
+            readyTask = room.GamePresentationReadyTcs?.Task ?? Task.CompletedTask;
+        }
+
+        _log?.LogInformation("Waiting for game presentation ready. roomId={RoomId} presentationId={PresentationId} expectedCount={ExpectedCount} timeoutMs={TimeoutMs}",
+            room.RoomId, presentationId, expectedCount, (int)timeout.TotalMilliseconds);
+
+        if (timeout <= TimeSpan.Zero)
+        {
+            lock (room.GamePresentationReadyLock)
+                room.GamePresentationReadyTcs?.TrySetResult(false);
+            return;
+        }
+        var completed = await Task.WhenAny(readyTask, Task.Delay(timeout));
+        if (completed == readyTask)
+        {
+            _log?.LogInformation("All game presentations ready. roomId={RoomId} presentationId={PresentationId}", room.RoomId, presentationId);
+            return;
+        }
+
+        int readyCount;
+        lock (room.GamePresentationReadyLock)
+        {
+            PruneGamePresentationReadyLocked(room);
+            readyCount = room.GamePresentationReadyConnectionIds.Count;
+            expectedCount = GetExpectedGameClientConnectionIds(room).Count;
+            room.GamePresentationReadyTcs?.TrySetResult(false);
+        }
+        _log?.LogWarning("Game presentation ready wait timed out; continuing round. roomId={RoomId} presentationId={PresentationId} ready={ReadyCount}/{ExpectedCount}",
+            room.RoomId, presentationId, readyCount, expectedCount);
+    }
+
+    private static void PruneGamePresentationReadyLocked(GameRoom room)
+    {
+        var expected = GetExpectedGameClientConnectionIds(room).ToHashSet();
+        room.GamePresentationReadyConnectionIds.RemoveWhere(connectionId => !expected.Contains(connectionId));
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1499,6 +1596,7 @@ public class GameLogicService
         if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
 
 
+        long presentationId = PrepareGamePresentationReadyGate(room);
         var ki = room.Engine.KyokuInfo;
         int oyaOrder = ki.OyaOrder;
         int waremeOdr = room.Engine.Rule.Wareme && ki.Dice.Length >= 2
@@ -1507,6 +1605,7 @@ public class GameLogicService
         var kyokuInfo = new
         {
             playType    = "MJPID_INIKYO",
+            presentationId,
             kyokuCnt    = room.Engine.HanchanInfo.CurKyoku,
             oyaOrder,
             waremeOdr,
@@ -1532,6 +1631,7 @@ public class GameLogicService
             waremeOdr,
             string.Join(',', ki.Dice),
             string.Join(',', room.Engine.Player.Select(p => p.GamePoint)));
+            await WaitForGamePresentationReadyAsync(room, presentationId, TimeSpan.FromMilliseconds(_gamePresentationReadyTimeoutMs));
     }
 
     // ─────────────────────────────────────────────────────────────

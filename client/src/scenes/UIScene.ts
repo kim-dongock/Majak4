@@ -23,9 +23,17 @@
 import Phaser from 'phaser'
 import { calculateTimeBankSegments, GAME_AUTO_PASS_HOLD_EVENT } from '../game/autoControl'
 import { DESKTOP_REACH_POSITIONS, getIngameLayout, MOBILE_REACH_POSITIONS, type IngameLayoutMode } from '../game/ingameLayout'
+import {
+  LEGACY_COSTUME_FRAME_COUNTS,
+  LEGACY_REACH_FRAME_DELAYS,
+  numberedLegacyKeys,
+  type LegacyCostumeAction,
+  type LegacyCostumeId,
+} from '../game/legacyAnimations'
 import MobileAvatarLayer from '../game/MobileAvatarLayer'
-import { mobileCenterHudOffset, mobileVisibleWorldBounds } from '../game/mobileIngameViewport'
+import { mobileCenterHudOffset, mobileEffectPointFromAnchor, mobileVisibleWorldBounds } from '../game/mobileIngameViewport'
 import { isTengokuBoardSkin } from '../utils/legacySkinPalette'
+import { playMajakSfx, playMajakSid, SID_RICSTK } from '../utils/majakSound'
 import { getUiFontFamily, getUiFontSize, getUiFontSizePx } from '../utils/typography'
 
 interface HudPoint { x: number; y: number }
@@ -75,6 +83,13 @@ interface LegacyNumber {
 interface CallAvatarHandle {
   sprite?: Phaser.GameObjects.Image
   destroy: () => void
+}
+
+interface CostumeAnimationState {
+  action: LegacyCostumeAction
+  returnAction: 'default' | 'reach'
+  frame: number
+  oneShot: boolean
 }
 
 const TURN_MARK_EVENT = 'majak:turn-mark'
@@ -353,6 +368,7 @@ export default class UIScene extends Phaser.Scene {
   private menFonSprites: Phaser.GameObjects.Image[] = []
   private chichaSprite?: Phaser.GameObjects.Image
   private reachSprites: Phaser.GameObjects.Image[] = []
+  private reachAnimationSprites: Phaser.GameObjects.Image[] = []
   private chaFonSprite!: Phaser.GameObjects.Image
   private kyokuNumSprite!: Phaser.GameObjects.Image
   private leftNumber!: LegacyNumber
@@ -368,6 +384,7 @@ export default class UIScene extends Phaser.Scene {
   private diceRollTimer?: Phaser.Time.TimerEvent
   private callSprites: Phaser.GameObjects.Image[] = []
   private mobileAvatarLayer?: MobileAvatarLayer
+  private costumeAnimationStates: Array<CostumeAnimationState | undefined> = [undefined, undefined, undefined, undefined]
 
   /* タイマー */
   private timerMaxMs = 0
@@ -551,7 +568,7 @@ export default class UIScene extends Phaser.Scene {
     /* ステート更新 */
     gs.events.on('stateUpdate', (data: {
       players: PlayerHudState[]
-      kyoku?: string; kyokuCnt?: number; chicha?: number; oyaOrder?: number; left?: number; ribo?: number; renchan?: number; dice?: number[]; waremeOdr?: number; viewOdr?: number; roundStart?: boolean; activeTurnOdr?: number; preserveTurnMark?: boolean
+      kyoku?: string; kyokuCnt?: number; chicha?: number; oyaOrder?: number; left?: number; ribo?: number; renchan?: number; dice?: number[]; waremeOdr?: number; viewOdr?: number; roundStart?: boolean; roundPresentationDelayMs?: number; activeTurnOdr?: number; preserveTurnMark?: boolean
     }) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       if (data.chicha !== undefined) this.chicha = data.chicha
@@ -567,7 +584,7 @@ export default class UIScene extends Phaser.Scene {
       if (data.ribo !== undefined) this.setLegacyNumber(this.riboNumber, data.ribo)
       if (data.renchan !== undefined) this.setLegacyNumber(this.renchanNumber, data.renchan)
       if (data.roundStart && data.dice && data.dice.length >= 2) {
-        this.startRoundDiceRoll(data.dice, data.waremeOdr)
+        this.startRoundDiceRoll(data.dice, data.waremeOdr, data.roundPresentationDelayMs)
       } else {
         if (data.dice && data.dice.length >= 2) this.updateDice(data.dice)
         if (data.waremeOdr !== undefined) this.updateWareme(data.waremeOdr)
@@ -605,12 +622,14 @@ export default class UIScene extends Phaser.Scene {
     gs.events.on('reach', (data: { odr: number; viewOdr?: number }) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.reachedOdr.add(data.odr)
-      this.updateReachTexts()
+      if (!this.playLegacyReachDeclaration(data.odr)) this.updateReachTexts()
     })
 
-    gs.events.on('callAction', (data: { odr: number; frame: number; avatarUrl: string; fallbackAvatarUrl: string }) => {
+    gs.events.on('callAction', (data: { odr: number; frame: number; avatarUrl: string; fallbackAvatarUrl: string; costumeAction?: LegacyCostumeAction }) => {
       this.showCallAction(data)
     })
+
+    this.time.addEvent({ delay: 100, loop: true, callback: () => this.advanceCostumeAnimations() })
 
     /* 局結果 → CMJKyoRes ダイアログへ (将来実装) */
     gs.events.on('kyoResult', (_data: Record<string, string>) => {
@@ -639,8 +658,9 @@ export default class UIScene extends Phaser.Scene {
     return this.textures.exists(candidate) ? candidate : key
   }
 
-  private showCallAction(data: { odr: number; frame: number; avatarUrl: string; fallbackAvatarUrl: string }) {
+  private showCallAction(data: { odr: number; frame: number; avatarUrl: string; fallbackAvatarUrl: string; costumeAction?: LegacyCostumeAction }) {
     if (data.odr < 0 || data.odr >= 4) return
+    if (data.costumeAction) this.startCostumeAction(data.odr, data.costumeAction)
     const loc = this.odrToLoc(data.odr)
     const point = this.callActionPoint(loc)
     const balloon = this.add.image(point.x, point.y, this.resolveSkinTextureKey(`mj_baloon_${loc}`), data.frame)
@@ -942,7 +962,8 @@ export default class UIScene extends Phaser.Scene {
       this.rankTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight : infoRowHeight * 2)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatRankText(players, odr)).setVisible(mobileInfoVisible)
       this.diffTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight * 2 : infoRowHeight * 3)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatDiffText(players, odr)).setVisible(mobileInfoVisible)
       this.updateMobileHudPanel(loc, avt, avatarSize, nameLayout.x, nameY, nameLayout.width, textBounds.left, textY, textBounds.width, compactInfo ? 3 : 4, infoRowHeight)
-      const avatarUrl = this.costumeAvatarUrl(p) || p.avatarUrl || p.fallbackAvatarUrl || ''
+      const costumeFrame = this.costumeFrameResource(odr, p)
+      const avatarUrl = costumeFrame?.url || this.costumeAvatarUrl(p) || p.avatarUrl || p.fallbackAvatarUrl || ''
       if (this.mobileAvatarLayer) {
         this.avatarSprites[loc].setVisible(false)
         this.mobileAvatarLayer.update(loc, {
@@ -956,7 +977,7 @@ export default class UIScene extends Phaser.Scene {
           alt: displayName,
         })
       } else {
-        this.setDynamicImage(this.avatarSprites[loc], this.avatarKey(odr, p), avatarUrl, avt.x, avt.y, 10, 'mj_aiAvtrL', true, avatarSize, this.layoutMode === 'desktop')
+        this.setDynamicImage(this.avatarSprites[loc], costumeFrame?.key ?? this.avatarKey(odr, p), avatarUrl, avt.x, avt.y, 10, 'mj_aiAvtrL', true, avatarSize, this.layoutMode === 'desktop')
       }
       const majakTitleDepth = this.layoutMode === 'mobileLandscape' ? 9 : 2
       const trickTitleDepth = this.layoutMode === 'mobileLandscape' ? 8 : 1
@@ -1086,6 +1107,59 @@ export default class UIScene extends Phaser.Scene {
     return `${IMG}/skin/${costumeId}/mj_costume_default_${imageId}.png`
   }
 
+  private costumeFrameResource(odr: number, player: PlayerHudState) {
+    const costumeId = Number(player.customCostume ?? 0)
+    if (costumeId !== 9 && costumeId !== 10 && costumeId !== 11) return undefined
+    const costumeType = Number(player.customCostumeType ?? 0)
+    if (costumeType > 0 && (costumeType < 30 || costumeType >= 40)) return undefined
+    const state = this.costumeAnimationStates[odr]
+    const action = state?.action ?? (this.reachedOdr.has(odr) ? 'reach' : 'default')
+    const frameCount = LEGACY_COSTUME_FRAME_COUNTS[costumeId][action]
+    const frame = Math.min(state?.frame ?? 0, frameCount - 1)
+    const suffix = String(costumeId).padStart(2, '0')
+    const key = `mj_costume_${action}_${suffix}_${String(frame).padStart(2, '0')}`
+    return { key, url: `${IMG}/skin/${costumeId}/${key}.png` }
+  }
+
+  private startCostumeAction(odr: number, action: LegacyCostumeAction) {
+    const costumeId = Number(this.players[odr]?.customCostume ?? 0)
+    if (costumeId !== 9 && costumeId !== 10 && costumeId !== 11) return
+    const returnAction = action === 'ron' || action === 'tsumo'
+      ? 'default'
+      : this.reachedOdr.has(odr) || action === 'reach' ? 'reach' : 'default'
+    this.costumeAnimationStates[odr] = {
+      action,
+      returnAction,
+      frame: 0,
+      oneShot: action !== 'default' && action !== 'reach',
+    }
+    this.updatePlayerTexts(this.players)
+  }
+
+  private advanceCostumeAnimations() {
+    let changed = false
+    this.players.forEach((player, odr) => {
+      const costumeId = Number(player.customCostume ?? 0)
+      if (costumeId !== 9 && costumeId !== 10 && costumeId !== 11) return
+      const typedCostumeId = costumeId as LegacyCostumeId
+      const state = this.costumeAnimationStates[odr] ?? {
+        action: this.reachedOdr.has(odr) ? 'reach' : 'default',
+        returnAction: this.reachedOdr.has(odr) ? 'reach' : 'default',
+        frame: 0,
+        oneShot: false,
+      }
+      state.frame++
+      if (state.frame >= LEGACY_COSTUME_FRAME_COUNTS[typedCostumeId][state.action]) {
+        state.action = state.oneShot ? state.returnAction : state.action
+        state.frame = 0
+        state.oneShot = false
+      }
+      this.costumeAnimationStates[odr] = state
+      changed = true
+    })
+    if (changed) this.updatePlayerTexts(this.players)
+  }
+
   private majakTitleKey(code?: number) {
     if (!code) return ''
     return `hud_majak_title_${code}`
@@ -1173,6 +1247,99 @@ export default class UIScene extends Phaser.Scene {
     }
   }
 
+  private playLegacyReachDeclaration(odr: number) {
+    if (document.visibilityState !== 'visible' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false
+    const effect = Number(this.players[odr]?.richiEffect ?? 0)
+    if (effect < 1 || effect > 3) return false
+    const loc = this.odrToLoc(odr)
+    this.reachSprites[loc].setVisible(false)
+
+    if (effect === 1 || effect === 2) {
+      const delays = LEGACY_REACH_FRAME_DELAYS[effect]
+      const keys = effect === 1
+        ? numberedLegacyKeys(`mj_ryu_richbar0${loc}`, delays.length)
+        : numberedLegacyKeys(loc % 2 === 0 ? 'mj_ryu_richbar_side' : 'mj_ryu_richbar_length', delays.length)
+      const positions = effect === 1
+        ? [{ x: 328, y: 351 }, { x: 445, y: 110 }, { x: 152, y: 213 }, { x: 207, y: 288 }]
+        : [{ x: 193, y: 235 }, { x: 330, y: 123 }, { x: 193, y: 97 }, { x: 92, y: 123 }]
+      playMajakSfx(effect === 1 ? 'mjkreach01' : 'mjkreach02')
+      this.playReachFrameSequence(keys, delays, this.mobileReachAnimationPoint(loc, positions[loc]))
+      return true
+    }
+
+    const bigPositions = [{ x: 333, y: 413 }, { x: 507, y: 297 }, { x: 333, y: 275 }, { x: 269, y: 297 }]
+    const spinPositions = [{ x: 333, y: 364 }, { x: 453, y: 294 }, { x: 333, y: 226 }, { x: 215, y: 294 }]
+    const effectPositions = [{ x: 373, y: 397 }, { x: 488, y: 332 }, { x: 373, y: 259 }, { x: 250, y: 332 }]
+    const bigKey = loc % 2 === 0 ? 'mj_GrichBar_0' : 'mj_GrichBar_1'
+    const spinPoint = this.mobileReachAnimationPoint(loc, spinPositions[loc])
+    const bigPoint = this.mobileReachAnimationPoint(loc, bigPositions[loc])
+    const spin = this.add.image(spinPoint.x, spinPoint.y, 'mj_GrichBar_Spin1').setOrigin(0, 0).setDepth(Z_REACH_STICK + 1).setVisible(false)
+    const big = this.add.image(bigPoint.x, bigPoint.y, bigKey).setOrigin(0, 0).setDepth(Z_REACH_STICK + 1)
+    this.reachAnimationSprites.push(big, spin)
+    this.time.delayedCall(300, () => {
+      big.setVisible(false)
+      spin.setVisible(true)
+      let frame = 0
+      const spinTimer = this.time.addEvent({
+        delay: 6,
+        repeat: 19,
+        callback: () => {
+          if (spin.active) spin.setTexture(frame++ % 2 === 0 ? 'mj_GrichBar_Spin1' : 'mj_GrichBar_Spin2')
+        },
+      })
+      this.time.delayedCall(120, () => {
+        spinTimer.destroy()
+        spin.setVisible(false)
+        big.setVisible(true)
+        this.time.delayedCall(20, () => {
+          big.destroy()
+          spin.destroy()
+          const reachKey = loc % 2 === 0 ? 'mj_richbar_0_Festa' : 'mj_richbar_1_Festa'
+          const flashKey = loc % 2 === 0 ? 'mj_Grich_Effect_0' : 'mj_Grich_Effect_1'
+          const reachPoint = this.mobileReachAnimationPoint(loc, DESKTOP_REACH_POSITIONS[loc])
+          const flashPoint = this.mobileReachAnimationPoint(loc, effectPositions[loc])
+          const reach = this.add.image(reachPoint.x, reachPoint.y, reachKey).setOrigin(0, 0).setDepth(Z_REACH_STICK + 1)
+          const flash = this.add.image(flashPoint.x, flashPoint.y, flashKey).setOrigin(0, 0).setDepth(Z_REACH_STICK + 2)
+          this.reachAnimationSprites.push(reach, flash)
+          playMajakSid(SID_RICSTK)
+          this.time.delayedCall(20, () => flash.destroy())
+          this.time.delayedCall(320, () => {
+            reach.destroy()
+            this.finishReachDeclaration()
+          })
+        })
+      })
+    })
+    return true
+  }
+
+  private mobileReachAnimationPoint(loc: number, point: HudPoint): HudPoint {
+    if (this.layoutMode !== 'mobileLandscape') return point
+    return mobileEffectPointFromAnchor(point, DESKTOP_REACH_POSITIONS[loc], centerHudPoint(MOBILE_REACH_POSITIONS[loc]))
+  }
+
+  private playReachFrameSequence(keys: string[], delays: readonly number[], point: HudPoint) {
+    const sprite = this.add.image(point.x, point.y, keys[0]).setOrigin(0, 0).setDepth(Z_REACH_STICK + 1)
+    this.reachAnimationSprites.push(sprite)
+    let elapsed = 0
+    for (let frame = 1; frame < keys.length; frame++) {
+      elapsed += delays[frame - 1]
+      this.time.delayedCall(elapsed, () => {
+        if (sprite.active) sprite.setTexture(keys[frame])
+      })
+    }
+    const duration = delays.reduce((sum, delay) => sum + delay, 0)
+    this.time.delayedCall(duration, () => {
+      sprite.destroy()
+      this.finishReachDeclaration()
+    })
+  }
+
+  private finishReachDeclaration() {
+    this.reachAnimationSprites = this.reachAnimationSprites.filter(sprite => sprite.active)
+    this.updateReachTexts()
+  }
+
   private reachBarKey(richiEffect: number | undefined, loc: number) {
     const side = loc === 0 || loc === 2
     switch (richiEffect) {
@@ -1221,8 +1388,17 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private clearRoundMarkers(preserveTurnMark = false) {
+    this.reachAnimationSprites.forEach(sprite => sprite.destroy())
+    this.reachAnimationSprites = []
     if (!preserveTurnMark) this.activeTurnOdr = null
     this.reachedOdr.clear()
+    this.costumeAnimationStates.forEach(state => {
+      if (!state) return
+      state.action = 'default'
+      state.returnAction = 'default'
+      state.frame = 0
+      state.oneShot = false
+    })
     if (!preserveTurnMark) {
       if (this.turnMark) this.tweens.killTweensOf(this.turnMark)
       this.turnMark?.setVisible(false)
@@ -1243,11 +1419,11 @@ export default class UIScene extends Phaser.Scene {
     this.diceRollTimer = undefined
   }
 
-  private startRoundDiceRoll(finalDice: number[], finalWaremeOdr?: number) {
+  private startRoundDiceRoll(finalDice: number[], finalWaremeOdr?: number, presentationDelayMs = 0) {
     this.clearDiceRollTimers()
     this.diceSprites.forEach(sprite => sprite.setVisible(false))
     this.waremeSprite?.setVisible(false)
-    this.diceRollDelay = this.time.delayedCall(DICE_ROLL_START_DELAY_MS, () => {
+    this.diceRollDelay = this.time.delayedCall(presentationDelayMs + DICE_ROLL_START_DELAY_MS, () => {
       let frame = 1
       this.updateDice([
         Phaser.Math.Between(0, 5),

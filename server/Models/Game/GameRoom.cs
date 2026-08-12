@@ -195,6 +195,12 @@ public class GameRoom
     public HashSet<string> GameClientReadyConnectionIds { get; } = new();
     public TaskCompletionSource<bool>? GameClientReadyTcs { get; set; }
 
+    // 局開始演出完了待ち (MJPID_INIKYO → 最初の MJPID_ACTIONS の間)
+    public object GamePresentationReadyLock { get; } = new();
+    public HashSet<string> GamePresentationReadyConnectionIds { get; } = new();
+    public TaskCompletionSource<bool>? GamePresentationReadyTcs { get; set; }
+    public long GamePresentationId { get; set; }
+
     // プレイ履歴 (原典: m_vecPlayHist — 牌譜データ)
     public List<object> PlayHistory { get; } = new();
 

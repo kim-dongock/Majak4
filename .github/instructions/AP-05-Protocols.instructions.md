@@ -205,7 +205,7 @@ description: "麻雀4のSignalR・RESTプロトコル、レガシー互換キー
 | 対局開始通知 | 全員 OK / AutoJoin 成立後、`mjkc4e` を `INIHAN` より前に送る。payload には対局メンバー、ホスト、BAN 状態、`onStartNewGame()` 情報を含める。 | `mjkc4e` で `MODE_PLAYING` に入り、卓・メンバー・表示を準備する。まだ局データは確定扱いしない。 |
 | 半荘初期化 | `majak.InitHanchan(rule)` 後に `playing / MJPID_INIHAN` を全員へ送る。 | 半荘情報を受け取り、親・エンジン order・対局者対応を初期化する。 |
 | 初期牌情報 | engine order と player pos を確定後、各プレイヤーごとに `smmc4e(bInit=true)` を送る。観戦者/全公開は open mask が異なる。 | `smmc4e` は即時盤面適用しない。PaiInfo キューに積み、対応する `playing` 受信時に消費する。 |
-| 局開始 | `playing / MJPID_INIKYO` を送る。Web 版の `MJPID_ACTIONS` はこの後にだけ送る。 | `MJPID_INIKYO` 処理時に `bInit=true` の PaiInfo を取り出して盤面へ適用し、局状態を開始する。 |
+| 局開始 | `presentationId` 付き `playing / MJPID_INIKYO` を送り、全接続プレイヤーの `NotifyGamePresentationReady(roomId, presentationId)` を待ってから最初の `MJPID_ACTIONS`、deadline、NPC 進行を開始する。 | `MJPID_INIKYO` 処理時に `bInit=true` の PaiInfo を取り出し、レガシーの局開始演出と13枚ずつの配牌が完了した時だけ同じ `presentationId` を ACK する。 |
 | プレイ中アクション | C->S `playing / MJPID_ACTION` を engine で検証・適用した後、S->C `smmc4e` → `playing / MJPID_ACTION` → 必要なら `INIKYO`/`ENDKYO`/終局 → `MJPID_ACTIONS` の順で送る。 | `smmc4e` は次の `playing` と同期して適用する。`MJPID_ACTION` は実行履歴、`MJPID_ACTIONS` は Web UI の有効操作通知として分離する。 |
 
 親・手番・進行の契約:
@@ -246,6 +246,7 @@ description: "麻雀4のSignalR・RESTプロトコル、レガシー互換キー
 - Web 版で一時的に PaiInfo から手牌表示を補完する場合でも、`smmc4e.pai` を全件そのまま「捨てられる手牌」とみなしてはならない。打牌可能な `bipaiIndex` はサーバー engine が提示する `MJPID_ACTIONS` / Tap 候補、またはレガシーと同等の手牌構成ロジックで確定する。
 - `smmc4e(bInit=true)` は `MJPID_INIKYO` に対応する初期配牌である。`MJPID_INIHAN` 受信時に消費してはならない。
 - Web 版のゲーム画面準備 ACK は `mjkc4e` と `MJPID_INIHAN` の間でサーバー送信開始を遅らせる補助であり、レガシーの packet order を変更する権限を持たない。
+- Web 版の局開始演出 ACK は、レガシーの同期処理 `IniSet()` → 技/龍珠演出 → `IniKyo()` → `PutWareme()` → `PutHaipai()` が完了するまで入力受付を開始しないための補助である。サーバーは ACK 待機中に `MJPID_ACTIONS`、action deadline、空席 NPC の `ProxyPlay` を開始してはならない。切断・非アクティブで ACK が返らない場合だけ設定済み timeout 後に進行する。
 - サーバーが状態の唯一の権威である。クライアントは UI 準備・入力送信・受信データ適用を担当し、牌山・点棒・局遷移をクライアント側推測で進めてはならない。
 
 通常ゲーム開始時の順序:
@@ -257,8 +258,9 @@ S->C: smmc2e (押下者への OK 応答)
 S->C: mjkc4e (AutoStart: メンバー情報・ゲーム開始準備)
 S->C: playing / MJPID_INIHAN (半荘情報)
 S->C: smmc4e (PaiInfoList, bInit=true: 初期配牌情報)
-S->C: playing / MJPID_INIKYO (局情報)
-S->C: playing / MJPID_ACTIONS (Web 移植の有効操作通知。必ず INIKYO 後)
+S->C: playing / MJPID_INIKYO (presentationId 付き局情報)
+C->S: NotifyGamePresentationReady(roomId, presentationId) (局開始演出・13枚配牌完了)
+S->C: playing / MJPID_ACTIONS (Web 移植の有効操作通知。必ず演出 ACK 後)
 ```
 
 通常アクション後の順序:

@@ -77,6 +77,32 @@ function playerResultLabel(data: KyoResData, player: KyoPlayer): string {
   return '流局'
 }
 
+function AnimatedLegacyStatus({ status }: { status: 'tsumo' | 'ron' | 'hoju' }) {
+  const type = status === 'hoju' ? 'hoju' : 'hora'
+  const frameCount = type === 'hora' ? 2 : 4
+  const [frame, setFrame] = useState(0)
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const timer = window.setInterval(() => setFrame(current => (current + 1) % frameCount), 200)
+    return () => window.clearInterval(timer)
+  }, [frameCount])
+
+  return (
+    <span className={`majak-result-player__animated-status is-${status}`} role="img" aria-label={status === 'tsumo' ? '自摸和了' : status === 'ron' ? '栄和了' : '放銃'}>
+      <span className="majak-result-player__status-label" aria-hidden="true" />
+      <img
+        className="majak-result-player__status-image"
+        src={`/assets/images/game/mj_ef_status_${type}_${String(frame).padStart(2, '0')}.png`}
+        width={122}
+        height={48}
+        alt=""
+        aria-hidden="true"
+      />
+    </span>
+  )
+}
+
 function playerChange(player: KyoPlayer): number {
   return (player.tenBaseBal ?? player.tenBal)
     + (player.paoBal ?? 0)
@@ -171,7 +197,13 @@ export function ResponsiveKyoResult({ data, canContinue, onClose }: KyoProps) {
                     <img src={playerAvatar(player)} alt="" onError={event => { event.currentTarget.src = getDefaultAvatarUrl('male') }} />
                     <span><strong>{player.name || player.pix}</strong><small>{player.isOya ? '親' : '子'}{data.waremeOdr === player.seatPos ? ' / 割れ目' : ''}</small></span>
                   </span>
-                  <span className="majak-result-player__status">{playerResultLabel(data, player)}</span>
+                  <span className="majak-result-player__status">
+                    {player.isHora
+                      ? <AnimatedLegacyStatus status={data.pinType === 1 ? 'tsumo' : 'ron'} />
+                      : player.isHoju
+                        ? <AnimatedLegacyStatus status="hoju" />
+                        : playerResultLabel(data, player)}
+                  </span>
                   <span className={`majak-result-player__change${playerChange(player) >= 0 ? ' is-plus' : ''}`}><AnimatedNumber value={playerChange(player)} signed delay={index * 100} /></span>
                   <HandSettlementCells player={player} delay={index * 100 + 120} />
                   <span className="majak-result-player__detail-cell">{player.isHora && <button type="button" className="majak-result-player__select" onClick={() => setSelectedIndex(index)}>表示</button>}</span>

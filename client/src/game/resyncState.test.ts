@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canCompleteGameResync, restoreVisiblePaiCodes, type GameResyncGate } from './resyncState'
+import { canCompleteGameResync, restoreVisiblePaiCodes, shouldRequestInitialGameResync, type GameResyncGate } from './resyncState'
 
 const COMPLETE_GATE: GameResyncGate = {
   restorePending: true,
@@ -44,5 +44,15 @@ describe('canCompleteGameResync', () => {
       historyReceived: false,
       historyApplied: false,
     }, true)).toBe(false)
+  })
+})
+
+describe('shouldRequestInitialGameResync', () => {
+  it('does not resync a fresh mjkc4e game even when the room page was reloaded', () => {
+    expect(shouldRequestInitialGameResync(true, true)).toBe(false)
+  })
+
+  it('keeps resync enabled for an existing game restored without fresh auto-start', () => {
+    expect(shouldRequestInitialGameResync(true, false)).toBe(true)
   })
 })

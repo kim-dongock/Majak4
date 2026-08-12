@@ -170,6 +170,7 @@ builder.Services.AddScoped<ReserveChanceCommand>();
 builder.Services.AddSignalR(opt =>
 {
     opt.MaximumReceiveMessageSize = 1024 * 1024; // 1MB
+    opt.MaximumParallelInvocationsPerClient = 2;
     opt.KeepAliveInterval = TimeSpan.FromSeconds(15);
     opt.ClientTimeoutInterval = TimeSpan.FromSeconds(120);
 });

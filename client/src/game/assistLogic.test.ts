@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assistTileMask, decideDiscardSource, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, offsetDiscardSourceMarker, waitGuideWorldY } from './assistLogic'
+import { assistTileMask, decideAutoDiscardDelayMs, decideDiscardSource, decideTimedDiscardIndex, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, offsetDiscardSourceMarker, waitGuideWorldY } from './assistLogic'
 
 describe('DISCARD_SOURCE_MARKER_DEPTH', () => {
   it('keeps the marker behind hand tiles like legacy z=-1', () => {
@@ -55,6 +55,39 @@ describe('decideTouchTileAction', () => {
   it('confirms discard only when the selected tile is touched again', () => {
     expect(decideTouchTileAction(4, 4)).toEqual({ selectedIdx: 4, confirmDiscard: true })
     expect(decideTouchTileAction(4, 7)).toEqual({ selectedIdx: 7, confirmDiscard: false })
+  })
+})
+
+describe('decideTimedDiscardIndex', () => {
+  it('prioritizes the tile selected by the first mobile touch', () => {
+    expect(decideTimedDiscardIndex(Array.from({ length: 14 }, (_, index) => index), 5)).toBe(5)
+  })
+
+  it('keeps an off-turn selection after the hand order changes', () => {
+    expect(decideTimedDiscardIndex([101, 103, 102, 104], 1, 102)).toBe(2)
+  })
+
+  it('falls back to the final tile when there is no valid selection', () => {
+    const hand = Array.from({ length: 14 }, (_, index) => index)
+    expect(decideTimedDiscardIndex(hand, -1)).toBe(13)
+    expect(decideTimedDiscardIndex(hand, 14)).toBe(13)
+  })
+})
+
+describe('mobile preselected timeout discard', () => {
+  it('sends the preselected tile before the server deadline after the hand is reordered', () => {
+    const selectedBipaiIndex = 102
+    const reorderedHand = [101, 103, 104, 105, selectedBipaiIndex]
+    const localNow = 5_000
+    const localDeadlineAt = 9_400
+
+    expect(decideAutoDiscardDelayMs(localDeadlineAt, localNow, 5)).toBe(4_150)
+    expect(localNow + decideAutoDiscardDelayMs(localDeadlineAt, localNow, 5)).toBeLessThan(localDeadlineAt)
+    expect(decideTimedDiscardIndex(reorderedHand, 1, selectedBipaiIndex)).toBe(4)
+  })
+
+  it('runs immediately when less than the send lead remains', () => {
+    expect(decideAutoDiscardDelayMs(5_100, 5_000, 1)).toBe(0)
   })
 })
 

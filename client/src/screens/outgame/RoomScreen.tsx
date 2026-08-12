@@ -39,6 +39,7 @@ import MiniChannelWnd from './MiniChannelWnd'
 import { getDefaultAvatarUrl, getGameAvatarUrl } from '../../utils/resources'
 import { configureMajakSound, playMajakChat, playMajakSid, SID_EXIT, SID_JOIN } from '../../utils/majakSound'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
+import { shouldRequestInitialGameResync } from '../../game/resyncState'
 import {
   GAME_AUTO_CONTROL_EVENT,
   GAME_KYOKU_STARTED_EVENT,
@@ -50,6 +51,7 @@ import {
 } from '../../game/autoControl'
 import { GAME_LOAD_PROGRESS_EVENT, GAME_LOAD_STEPS, type GameLoadStep } from '../../game/gameLoadProgress'
 import { finalizePaifuRecording } from '../../game/paifuRecording'
+import { getLegacyKyoResultDelayMs } from '../../game/legacyAnimations'
 import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyFullUiSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 
@@ -827,6 +829,8 @@ export default function RoomScreen() {
   const proxyGuideShownRef = useRef(false)
   const roomEntryGuideShownRef = useRef(false)
   const gemGameGuideShownRef = useRef(false)
+  const gemGameRef = useRef(0)
+  const kyoResultTimerRef = useRef<number | null>(null)
   const emoticonSeqRef = useRef(0)
   const beginGameLoad = (source: string, trigger = '') => {
     const current = gameLoadTimingRef.current
@@ -1049,6 +1053,7 @@ export default function RoomScreen() {
       roomOption: currentRoomOption,
       layoutMode: ingameLayoutMode,
       skipInitialRoomEnter: true,
+      requestInitialGameResync: gameReconnectActiveRef.current,
     })
     createGame(inlineGameRef.current, {
       mode: 'game',
@@ -1070,7 +1075,9 @@ export default function RoomScreen() {
       customBgId: customBoardId,
       customBoardType,
       customHaiId,
+      gemGame: gemGameRef.current,
       skipInitialRoomEnter: true,
+      requestInitialGameResync: gameReconnectActiveRef.current,
     })
     return () => destroyGame()
   }, [inlineGame, roomId, customBoardId, customHaiId, ingameLayoutMode, locState.mode])
@@ -1616,12 +1623,34 @@ export default function RoomScreen() {
     const onGamePlay = (data: Record<string, unknown>) => {
       if (!mounted) return
       if (data.playType === 'MJPID_INIHAN' || data.playType === 'MJPID_INIKYO') {
+        if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
+        kyoResultTimerRef.current = null
         setKyoResData(null)
         setKyoResultAction(null)
         return
       }
       if (data.playType !== 'MJPID_ENDKYO' || !Array.isArray(data.players)) return
-      setKyoResData(data as unknown as KyoResData)
+      if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
+      const showKyoResult = () => {
+        if (!mounted) return
+        kyoResultTimerRef.current = null
+        setKyoResData(data as unknown as KyoResData)
+      }
+      const delayData = {
+        ...data,
+        players: data.players.map((value, index) => {
+          if (value == null || typeof value !== 'object') return value
+          const playerResult = value as Record<string, unknown>
+          const seatPos = asNumber(playerResult.seatPos ?? playerResult.odr, index)
+          const player = playersRef.current.find(item => item.pos === seatPos) ?? playersRef.current[index]
+          return { ...playerResult, trickTitle: player?.trickTitle }
+        }),
+      }
+      const delay = document.visibilityState === 'visible' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? getLegacyKyoResultDelayMs(delayData)
+        : 0
+      if (delay > 0) kyoResultTimerRef.current = window.setTimeout(showKyoResult, delay)
+      else showKyoResult()
     }
     SignalR.on(CMD_GAME_PLAY, onGamePlay)
 
@@ -1772,7 +1801,9 @@ export default function RoomScreen() {
         showError('ゲーム開始に失敗しました')
         return
       }
-      putGemGameStatus(data[KEY_GEM_GAME] ?? data.gemGame)
+      gemGameRef.current = asNumber(data[KEY_GEM_GAME] ?? data.gemGame, 0)
+      putGemGameStatus(gemGameRef.current)
+      gameReconnectActiveRef.current = shouldRequestInitialGameResync(gameReconnectActiveRef.current, true)
       navigateToGame()
     }
     SignalR.on('mjkc4e', onGameStart)
@@ -2148,6 +2179,8 @@ export default function RoomScreen() {
 
     return () => {
       mounted = false
+      if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
+      kyoResultTimerRef.current = null
       console.info('[GameReconnect] RoomScreen connection effect cleanup', {
         effectInstance,
         channelId,

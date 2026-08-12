@@ -29,7 +29,7 @@ import Phaser from 'phaser'
 import * as SignalR from '../api/signalr'
 import type { CreateGameOptions } from '../game/GameInstance'
 import { DEFAULT_GAME_ASSIST_CONFIG, GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig, type GameAssistConfig } from '../game/assistConfig'
-import { assistTileMask, decideDiscardSource, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, offsetDiscardSourceMarker, waitGuideWorldY } from '../game/assistLogic'
+import { assistTileMask, decideAutoDiscardDelayMs, decideDiscardSource, decideTimedDiscardIndex, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, offsetDiscardSourceMarker, waitGuideWorldY } from '../game/assistLogic'
 import {
   GAME_AUTO_PASS_HOLD_EVENT,
   GAME_AUTO_CONTROL_EVENT,
@@ -42,6 +42,14 @@ import {
 } from '../game/autoControl'
 import { emitGameLoadProgress } from '../game/gameLoadProgress'
 import {
+  getLegacyHoraPresentations,
+  LEGACY_EFFECT_FRAME_MS,
+  LEGACY_HORA_FIRE_DURATION_MS,
+  LEGACY_YAKUMAN_FINISH_DURATION_MS,
+  numberedLegacyKeys,
+  type LegacyHoraPresentation,
+} from '../game/legacyAnimations'
+import {
   DESKTOP_INGAME_LAYOUT,
   getIngameLayout,
   MOBILE_DEAD_WALL_SHIFT_X,
@@ -49,7 +57,15 @@ import {
   MOBILE_TOP_MELD_CENTER_INFO_OFFSET,
   type IngameLayoutMode,
 } from '../game/ingameLayout'
-import { MOBILE_PLAYFIELD_OFFSET_Y, mobileCenterHudOffset, mobileDiscardScale, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey } from '../game/mobileIngameViewport'
+import {
+  centerMobileEffectPoint,
+  MOBILE_PLAYFIELD_OFFSET_Y,
+  mobileCenterHudOffset,
+  mobileDiscardScale,
+  mobileEffectPointFromAnchor,
+  mobileVisibleWorldBounds,
+  mobileVisibleWorldLayoutKey,
+} from '../game/mobileIngameViewport'
 import { canCompleteGameResync, restoreVisiblePaiCodes } from '../game/resyncState'
 import {
   beginPaifuRecording,
@@ -131,6 +147,22 @@ const MOBILE_SELF_HAND_FIXED_COUNT = 14
 const MOBILE_OTHER_HAND_FIXED_COUNT = 14
 const MOBILE_SELF_HAND_DEPTH = 900
 const MOBILE_BOARD_BACKGROUND_SCALE = 1.6
+const LEGACY_GEM_EFFECT_SIZE = { width: 345, height: 353 }
+const LEGACY_YAKUMAN_FINISH_SIZE = { width: 563, height: 435 }
+const MATCH_START_SEAT_REVEAL_DURATION_MS = 3100
+const LEGACY_WAREME_PRESENTATION_DURATION_MS = 3700
+const MATCH_START_SEAT_POSITIONS = [
+  { x: 379, y: 506 },
+  { x: 627, y: 325 },
+  { x: 379, y: 131 },
+  { x: 117, y: 325 },
+] as const
+const MATCH_START_OPEN_OFFSETS = [
+  { x: 0, y: 0 },
+  { x: -15, y: 18 },
+  { x: 0, y: 17 },
+  { x: 0, y: 18 },
+] as const
 let DISCARD_COLS = DESKTOP_DISCARD_COLS
 
 function applyIngameLayout(mode: IngameLayoutMode) {
@@ -288,7 +320,7 @@ function mobileContentScale(): number {
 }
 
 function handTexture(loc: 0 | 1 | 2 | 3): { key: string; frame?: number } {
-  if (loc === 0) return { key: 'hai_omote' }
+  if (loc === 0) return { key: 'hai_tachi_0' }
   return { key: `hai_tachi_${loc}` }
 }
 
@@ -808,12 +840,15 @@ export default class GameScene extends Phaser.Scene {
   private mobileActionButtonsVisible = false
   private horaErrorSprite?: Phaser.GameObjects.Sprite
   private boardEffectSprites: Phaser.GameObjects.Image[] = []
+  private legacyEffectSprites: Phaser.GameObjects.Image[] = []
   private reachTileEffectSprites: Phaser.GameObjects.Image[] = []
-  private hoverCursor?: Phaser.GameObjects.Image
-  private selectedCursor?: Phaser.GameObjects.Image
+  private hoverCursor?: Phaser.GameObjects.Image | Phaser.GameObjects.Graphics
+  private selectedCursor?: Phaser.GameObjects.Image | Phaser.GameObjects.Graphics
+  private drawnTileCursor?: Phaser.GameObjects.Image
   private tenpaiMarkerSprites: Phaser.GameObjects.Image[] = []
   private assistHighlightSprites: Phaser.GameObjects.Image[] = []
   private discardSourceMarkerSprites: Array<Phaser.GameObjects.Image | undefined> = [undefined, undefined, undefined, undefined]
+  private latestDiscardFrame?: Phaser.GameObjects.Image
   private waitTileGuideContainer?: Phaser.GameObjects.Container
   private actionBtns: Phaser.GameObjects.Sprite[] = []
   private paifuGraphLayer?: Phaser.GameObjects.Container
@@ -835,6 +870,7 @@ export default class GameScene extends Phaser.Scene {
   private pendingActionChoice: { def: { act: string; code: Act }; acts: string[]; choices: Array<{ code: Act; bipaiIndex: number[] }> } | null = null
   private currentHoraErrorReason = ''
   private selectedIdx = -1
+  private selectedDiscardBipaiIndex?: number
   private touchConfirmDiscardIdx = -1
   private activeAssistTileCode = 0
   private activeAssistHandIdx = -1
@@ -848,11 +884,13 @@ export default class GameScene extends Phaser.Scene {
   private flowTraceSerial = 0
   private actionSendInFlight = false
   private gameResyncInFlight = false
+  private pendingMatchStartSeatReveal = false
   private gameRestorePending = false
   private gameResyncInvokeResolved = false
   private gameResyncSnapshotReceived = false
   private gameResyncHistoryReceived = false
   private gameResyncHistoryApplied = false
+  private deferInitialDeadWallRedraw = false
   private pendingAction: { seatOrder: number; action: number; actionSeq?: number } | null = null
   private currentActionPrompt: ActionPromptState | null = null
   private timeBankExtensionInFlight = false
@@ -864,6 +902,7 @@ export default class GameScene extends Phaser.Scene {
   private readonly pendingDiscardsByBipaiIndex = new Map<number, PendingDiscardState>()
   private activeDiscardFlights: Array<ActiveDiscardFlight | undefined> = [undefined, undefined, undefined, undefined]
   private lastDiscardOdr: number | null = null
+  private lastRonSource?: { x: number; y: number; width: number; height: number; isReach: boolean }
   private readonly appliedActionKeys = new Set<string>()
   private paiInfoQueue: PaiInfoMsgState[] = []
   private pendingResyncHandSnapshot?: ResyncHandSnapshot
@@ -893,6 +932,7 @@ export default class GameScene extends Phaser.Scene {
   private replayPaifuApplied = false
   private isReplayApplyingHistory = false
   private skipInitialRoomEnter = false
+  private requestInitialGameResync = false
   private replayHandOpen = true
   private signalRHandlers: Array<{ cmd: string; handler: SignalR.MessageHandler }> = []
   private acceptingSignalR = false
@@ -912,6 +952,7 @@ export default class GameScene extends Phaser.Scene {
   private assistConfig: GameAssistConfig = { ...DEFAULT_GAME_ASSIST_CONFIG }
   private customBgId = 0
   private customBoardType = 0
+  private gemGame = 0
   private currentBgmSkinId: number | undefined
   private currentRoundUsesTengokuBgm = false
   private currentRoundIsCarnival = false
@@ -970,13 +1011,15 @@ export default class GameScene extends Phaser.Scene {
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
     this.customHaiId = Number(data.customHaiId ?? 0)
+    this.gemGame = Number(data.gemGame ?? 0)
     this.replayPaifuData = data.paifu
     this.replayPaifuApplied = false
     this.isReplayApplyingHistory = false
     this.pendingResyncHandSnapshot = undefined
     this.skipInitialRoomEnter = Boolean(data.skipInitialRoomEnter)
+    this.requestInitialGameResync = Boolean(data.requestInitialGameResync)
     this.gameResyncInFlight = false
-    this.gameRestorePending = this.skipInitialRoomEnter && !this.isReplay
+    this.gameRestorePending = this.requestInitialGameResync && !this.isReplay
     this.gameResyncInvokeResolved = false
     this.gameResyncSnapshotReceived = false
     this.gameResyncHistoryReceived = false
@@ -991,6 +1034,7 @@ export default class GameScene extends Phaser.Scene {
       mode: data.mode,
       layoutMode: this.layoutMode,
       skipInitialRoomEnter: this.skipInitialRoomEnter,
+      requestInitialGameResync: this.requestInitialGameResync,
       nSelPasKey: this.inputConfig.nSelPasKey,
     })
     if (Array.isArray(data.players)) {
@@ -1238,6 +1282,11 @@ export default class GameScene extends Phaser.Scene {
     }
     this.onSignalR('smmc4e', handlePaiInfo)
 
+    this.onSignalR('mjkc4e', data => {
+      if (!this.canHandleSignalR()) return
+      this.gemGame = Number(data.mjkk56e ?? data.gemGame ?? 0)
+    })
+
     const handleMemberList: SignalR.MessageHandler = data => {
       if (!this.canHandleSignalR()) return
       const count = Number(data.k25e ?? data.count ?? 0)
@@ -1321,10 +1370,12 @@ export default class GameScene extends Phaser.Scene {
           this.mergePlayerInfoAtOdr(odr, member)
         })
         this.resolveMyOdrFromPlayers()
+        this.pendingMatchStartSeatReveal = this.shouldPlayLegacyVisuals()
         this.emitToUiScene('stateUpdate', { players: this.players, viewOdr: this.myOdr })
         return
       }
       if (isInitKyokuPacket) {
+        const isLiveRoundStart = !this.isReplayApplyingHistory
         if (!this.isReplay) window.dispatchEvent(new Event(GAME_KYOKU_STARTED_EVENT))
         this.clearLiveActionState('init kyoku')
         this.kyokuTimeFullMs = Math.max(0, Number(data.timeFullMs ?? 0))
@@ -1354,12 +1405,16 @@ export default class GameScene extends Phaser.Scene {
           dora: [],
           uraDora: [],
         }
+        const shouldAnimateRoundStart = this.shouldPlayLegacyVisuals()
+        this.deferInitialDeadWallRedraw = shouldAnimateRoundStart
         this.popPaiInfo(true, oyaOrder, dice)
-        this.redrawDeadWall()
-        if (!this.shouldSuppressLivePlayback()) {
-          this.playRoundStartSounds(data)
-          this.playRoundBgm(data, kyokuCnt)
-        }
+        this.deferInitialDeadWallRedraw = false
+        if (!shouldAnimateRoundStart) this.redrawDeadWall()
+        this.ensureConcealedOpponentHands()
+        const seatRevealDelay = this.animateMatchStartSeatReveal()
+        const skillDelay = this.playLegacyLevel1Skills(seatRevealDelay)
+        const gemDelay = this.playLegacyGemGame(skillDelay)
+        const waremeStartDelay = skillDelay + gemDelay
         this.emitToUiScene('stateUpdate', {
           players: this.players,
           kyoku: this.formatKyoku(kyokuCnt),
@@ -1373,13 +1428,21 @@ export default class GameScene extends Phaser.Scene {
           waremeOdr: Number(data.waremeOdr ?? -1),
           viewOdr: this.myOdr,
           roundStart: true,
-          activeTurnOdr: this.isReplayApplyingHistory ? undefined : (Number.isFinite(oyaOrder) ? oyaOrder : 0),
+          roundPresentationDelayMs: waremeStartDelay,
           preserveTurnMark: this.isReplayApplyingHistory,
         })
-        this.ensureConcealedOpponentHands()
-        this.emitToUiScene('turnChange', {
-          odr: Number.isFinite(oyaOrder) ? oyaOrder : 0,
-          viewOdr: this.myOdr,
+        if (shouldAnimateRoundStart) {
+          this.playRoundStartSounds(data, waremeStartDelay)
+          this.time.delayedCall(waremeStartDelay + 2000, () => this.redrawDeadWall(false))
+          this.time.delayedCall(waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS, () => this.redrawDeadWall())
+        }
+        this.animateInitialDeal(oyaOrder, waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS, () => {
+          if (!this.shouldSuppressLivePlayback()) this.playRoundBgm(data, kyokuCnt)
+          this.emitToUiScene('turnChange', {
+            odr: Number.isFinite(oyaOrder) ? oyaOrder : 0,
+            viewOdr: this.myOdr,
+          })
+          if (isLiveRoundStart) this.notifyGamePresentationReady(Number(data.presentationId ?? 0))
         })
         if (!this.viewerHistorySyncPending) this.emitGameSync(false, 'initial-kyoku-ready')
         return
@@ -1485,7 +1548,6 @@ export default class GameScene extends Phaser.Scene {
         this.clearTimeWarningTimers()
         this.currentActionSeatOrder = isForLocalPlayer ? seatOrder : null
         this.canDiscardOnTileClick = isForLocalPlayer && isTurnMode && actionOffers.includes('Tap')
-        if (!this.canDiscardOnTileClick) this.selectedIdx = -1
         if (this.canDiscardOnTileClick) this.reconcileTapCandidates(seatOrder)
         if (isForLocalPlayer) this.redrawHand(this.myOdr)
         this.clearActionResponseTimer()
@@ -1956,7 +2018,7 @@ export default class GameScene extends Phaser.Scene {
       })
       return
     }
-    if (this.skipInitialRoomEnter) {
+    if (this.requestInitialGameResync) {
       this.logResyncProbe('request initial room state through c16e + RequestGameResync', { skipInitialRoomEnter: true })
       console.info('[GameReconnect] c16e send start', { roomId: numericRoomId })
       void SignalR.send('c16e', {})
@@ -1976,6 +2038,7 @@ export default class GameScene extends Phaser.Scene {
         })
       return
     }
+    if (this.skipInitialRoomEnter) return
     this.logResyncProbe('send c14e from GameScene initial room state', { numericRoomId })
     void SignalR.send('c14e', { roomId: numericRoomId, k42e: numericRoomId })
       .then(() => SignalR.send('c16e', {}))
@@ -2054,6 +2117,19 @@ export default class GameScene extends Phaser.Scene {
       .catch(error => {
         console.warn('[GameReconnect] NotifyGameClientReady invoke failed', {
           roomId,
+          errorMessage: error instanceof Error ? error.message : String(error),
+        })
+      })
+  }
+
+  private notifyGamePresentationReady(presentationId: number) {
+    const roomId = Number(this.roomId)
+    if (!Number.isInteger(roomId) || roomId <= 0 || !Number.isSafeInteger(presentationId) || presentationId <= 0) return
+    void SignalR.invoke('NotifyGamePresentationReady', roomId, presentationId)
+      .catch(error => {
+        console.warn('[GameScene] NotifyGamePresentationReady invoke failed', {
+          roomId,
+          presentationId,
           errorMessage: error instanceof Error ? error.message : String(error),
         })
       })
@@ -2374,20 +2450,53 @@ export default class GameScene extends Phaser.Scene {
 
   private playKyoResultHoraEffect(data: Record<string, unknown>) {
     if (this.shouldSuppressLivePlayback()) return
-    const pinType = Number(data.pinType ?? -1)
-    if (pinType !== 0 && pinType !== 1) return
-    const totalsByPlayer = isRecord(data.totalsByPlayer) ? data.totalsByPlayer : {}
-    const yakuByPlayer = isRecord(data.yakuByPlayer) ? data.yakuByPlayer : {}
     const resultPlayers = Array.isArray(data.players) ? data.players : []
+    const presentations = getLegacyHoraPresentations({
+      ...data,
+      players: resultPlayers.map((value, odr) => isRecord(value)
+        ? { ...value, trickTitle: this.players[odr]?.trickTitle }
+        : value),
+    })
+    if (presentations.length === 0) return
+    presentations.forEach(presentation => this.playHoraEffectSound(presentation.pinType, presentation.totalTen, presentation.isYakuman))
+    if (!this.shouldPlayLegacyVisuals()) return
 
-    for (let odr = 0; odr < this.players.length; odr++) {
-      const playerResult = isRecord(resultPlayers[odr]) ? resultPlayers[odr] : {}
-      const yakuList = Array.isArray(yakuByPlayer[String(odr)]) ? yakuByPlayer[String(odr)] as unknown[] : []
-      if (!asBoolean(playerResult.isHora) && yakuList.length === 0) continue
-      const totals = isRecord(totalsByPlayer[String(odr)]) ? totalsByPlayer[String(odr)] as Record<string, unknown> : {}
-      const basicTen = asFiniteNumber(totals.totalTen)
-      const isYakuman = yakuList.filter(isRecord).some(yaku => asBoolean(yaku.isYakuman))
-      this.playHoraEffectSound(pinType, basicTen, isYakuman)
+    const scoreDuration = Math.max(...presentations.map(presentation => this.playLegacyScoreEffect(presentation)))
+    const hasHighHora = presentations.some(presentation => presentation.isYakuman || presentation.totalTen >= 3000)
+    const hasYakuman = presentations.some(presentation => presentation.isYakuman)
+    const skillDuration = Math.max(...presentations.map(presentation => presentation.level2SkillDurationMs))
+    if (skillDuration > 0) {
+      this.time.delayedCall(scoreDuration, () => {
+        presentations.forEach(presentation => {
+          if (presentation.level2SkillDurationMs > 0) this.playLegacyLevel2Skill(presentation)
+        })
+      })
+    }
+    const middleDuration = skillDuration || (hasHighHora ? LEGACY_HORA_FIRE_DURATION_MS : 0)
+    const backdropDuration = scoreDuration
+      + middleDuration
+      + (hasYakuman ? LEGACY_YAKUMAN_FINISH_DURATION_MS : 0)
+    this.playLegacyFrameSequence(['eff_rontumo_black'], BOARD_X, BOARD_Y, [backdropDuration], { depth: 9990 })
+
+    if (hasHighHora && skillDuration === 0) {
+      const presentation = presentations.find(item => item.isYakuman || item.totalTen >= 3000) ?? presentations[0]
+      this.time.delayedCall(scoreDuration, () => this.playLegacyHoraFire(presentation))
+    }
+    if (hasYakuman) {
+      const finishDelay = scoreDuration + middleDuration
+      this.time.delayedCall(finishDelay, () => {
+        playMajakSfx('mjkFan01', this.soundSkinOptions())
+        const fallbackPoint = boardLocalPoint({ x: 115, y: 139 })
+        const bounds = this.layoutMode === 'mobileLandscape' ? mobileVisibleWorldBounds() : null
+        const point = bounds ? centerMobileEffectPoint(LEGACY_YAKUMAN_FINISH_SIZE, bounds) : fallbackPoint
+        this.playLegacyFrameSequence(
+          numberedLegacyKeys('mj_ef_yakuman', 13, 0, ''),
+          point.x,
+          point.y,
+          [...Array(12).fill(50), 1350],
+          { depth: 10020 },
+        )
+      })
     }
   }
 
@@ -2398,7 +2507,231 @@ export default class GameScene extends Phaser.Scene {
       ? level === 3 ? SID_EFFECT_R_LV3 : level === 2 ? SID_EFFECT_R_LV2 : SID_EFFECT_R_LV1
       : level === 3 ? SID_EFFECT_T_LV3 : level === 2 ? SID_EFFECT_T_LV2 : SID_EFFECT_T_LV1
     playMajakSid(sid, this.soundSkinOptions())
-    if (isYakuman || ten >= 8000) playMajakSid(SID_EFFECT_YAKUMAN, this.soundSkinOptions())
+  }
+
+  private shouldPlayLegacyVisuals() {
+    return !this.isReplay
+      && !this.shouldSuppressLivePlayback()
+      && !this.gameResyncInFlight
+      && document.visibilityState === 'visible'
+      && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  }
+
+  private playLegacyFrameSequence(
+    keys: string[],
+    x: number,
+    y: number,
+    frameDelays: readonly number[],
+    options: { delay?: number; depth?: number; additive?: boolean; angle?: number } = {},
+  ) {
+    const delay = options.delay ?? 0
+    const duration = frameDelays.reduce((sum, value) => sum + value, 0)
+    if (keys.length === 0 || !this.textures.exists(keys[0])) return delay + duration
+    const start = () => {
+      if (!this.shouldPlayLegacyVisuals()) return
+      const sprite = this.clipToBoard(this.add.image(x, y, keys[0]).setOrigin(0, 0).setDepth(options.depth ?? 10000))
+      if (options.additive) sprite.setBlendMode(Phaser.BlendModes.ADD)
+      const angle = options.angle ?? 0
+      if (angle !== 0) {
+        const width = sprite.width
+        const height = sprite.height
+        if (angle === -90) sprite.setPosition(x, y + width)
+        else if (angle === 90) sprite.setPosition(x + height, y)
+        else if (Math.abs(angle) === 180) sprite.setPosition(x + width, y + height)
+        sprite.setAngle(angle)
+      }
+      this.legacyEffectSprites.push(sprite)
+      let elapsed = 0
+      for (let frame = 1; frame < keys.length; frame++) {
+        elapsed += frameDelays[frame - 1] ?? 0
+        this.time.delayedCall(elapsed, () => {
+          if (sprite.active && this.textures.exists(keys[frame])) sprite.setTexture(keys[frame])
+        })
+      }
+      this.time.delayedCall(duration, () => {
+        sprite.destroy()
+        this.legacyEffectSprites = this.legacyEffectSprites.filter(item => item !== sprite)
+      })
+    }
+    if (delay > 0) this.time.delayedCall(delay, start)
+    else start()
+    return delay + duration
+  }
+
+  private playLegacyScoreEffect(presentation: LegacyHoraPresentation) {
+    const { pinType, level, isYakuman, totalTen, odr } = presentation
+    if (pinType === 1) {
+      const loc = odrToLoc(odr, this.myOdr)
+      if (isYakuman) {
+        playMajakSid(SID_EFFECT_YAKUMAN, this.soundSkinOptions())
+        return this.playLegacyFrameSequence(numberedLegacyKeys('eff_rontumoeff_d', 30, 1), BOARD_X, BOARD_Y, Array(30).fill(LEGACY_EFFECT_FRAME_MS), { additive: true })
+      }
+      const prefix = level === 3 ? 'eff_tumoeff_c' : level === 2 ? 'eff_tumoeff_b' : 'eff_tumoeff'
+      const count = level === 3 ? 15 : level === 2 ? 13 : 12
+      let position = [{ x: 1, y: 501 }, { x: 650, y: 0 }, { x: 1, y: -14 }, { x: -24, y: 0 }][loc]
+      if (this.layoutMode === 'mobileLandscape') {
+        const desktopHand = DESKTOP_INGAME_LAYOUT.handPosition[loc]
+        const mobileHand = this.mobileHandAnchor(odr, loc)
+        position = loc % 2 === 0
+          ? { ...position, y: position.y + mobileHand.y - BOARD_Y - desktopHand.y }
+          : { ...position, x: position.x + mobileHand.x - BOARD_X - desktopHand.x }
+      }
+      const angle = [0, -90, 180, 90][loc]
+      const point = boardLocalPoint(position)
+      return this.playLegacyFrameSequence(numberedLegacyKeys(prefix, count, 1), point.x, point.y, Array(count).fill(LEGACY_EFFECT_FRAME_MS), { additive: true, angle })
+    }
+
+    const source = this.lastRonSource ?? { x: BOARD_X + 399, y: BOARD_Y + 383, width: 0, height: 0, isReach: false }
+    const centerX = source.x + source.width / 2
+    const centerY = source.y + source.height / 2
+    const prefix = level === 3 ? 'eff_roneff_c' : level === 2 ? 'eff_roneff_b' : 'eff_roneff'
+    const count = level === 3 ? 27 : level === 2 ? 20 : 11
+    const offsets = level === 3 && (isYakuman || totalTen >= 6000)
+      ? [{ x: -145, y: -490 }, { x: -185, y: -530 }, { x: -180, y: -500 }, { x: -155, y: -520 }, { x: -145, y: -490 }]
+      : [{ x: level === 3 ? -165 : -100, y: level === 3 ? -510 : -530 }]
+    let duration = 0
+    offsets.forEach((offset, index) => {
+      duration = Math.max(duration, this.playLegacyFrameSequence(
+        numberedLegacyKeys(prefix, count, 1),
+        centerX + offset.x,
+        centerY + offset.y,
+        Array(count).fill(LEGACY_EFFECT_FRAME_MS),
+        { delay: index * 3 * LEGACY_EFFECT_FRAME_MS, additive: true, depth: 10000 + index },
+      ))
+    })
+    if (isYakuman) {
+      const yakumanDelay = count * LEGACY_EFFECT_FRAME_MS + 12 * LEGACY_EFFECT_FRAME_MS
+      this.time.delayedCall(yakumanDelay, () => playMajakSid(SID_EFFECT_YAKUMAN, this.soundSkinOptions()))
+      duration = Math.max(duration, this.playLegacyFrameSequence(
+        numberedLegacyKeys('eff_rontumoeff_d', 30, 1),
+        BOARD_X,
+        BOARD_Y,
+        Array(30).fill(LEGACY_EFFECT_FRAME_MS),
+        { delay: yakumanDelay, additive: true, depth: 10010 },
+      ))
+    }
+    return duration
+  }
+
+  private legacySkillDefinition(trickTitle: number | undefined, level: 1 | 2) {
+    const title = Number(trickTitle ?? 0)
+    const attribute = Math.trunc((title - 1) / 3) - 1
+    if (attribute < 0 || attribute >= 4 || (level === 2 && title % 3 < 2)) return undefined
+    const element = ['fire', 'water', 'earth', 'wind'][attribute]
+    const delays = level === 1
+      ? [
+          Array(13).fill(100),
+          [130, 130, 130, 130, 130, 130, 130, 130, 120, 120, 120],
+          [80, 80, 80, 80, 420, 80, 80, 80, 80, 80, 80, 80],
+          [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 150, 150],
+        ][attribute]
+      : [
+          [100, 100, 100, 100, 60, 60, 60, 60, 60, 100, 100, 100],
+          [100, 100, 100, 100, 200, 100, 100, 100, 100],
+          Array(10).fill(100),
+          [100, 100, 100, 100, 100, 100, 100, 60, 60, 60, 60, 60],
+        ][attribute]
+    return { element, delays, sound: `mjk${element}skill${level}` }
+  }
+
+  private playLegacyLevel1Skills(startDelay = 0) {
+    if (!this.shouldPlayLegacyVisuals()) return 0
+    const positions = [{ x: 0, y: 580 }, { x: 687, y: 580 }, { x: 687, y: 0 }, { x: 0, y: 0 }]
+    let duration = startDelay
+    this.players.forEach((player, odr) => {
+      const definition = this.legacySkillDefinition(player.trickTitle, 1)
+      if (!definition) return
+      const loc = odrToLoc(odr, this.myOdr)
+      const desktopPoint = boardLocalPoint(positions[loc])
+      const point = this.layoutMode === 'mobileLandscape'
+        ? this.mobileHandAnchoredEffectPoint(desktopPoint, odr, loc)
+        : desktopPoint
+      if (this.isLocalPlayerOdr(odr)) {
+        if (startDelay > 0) this.time.delayedCall(startDelay, () => playMajakSfx(definition.sound, this.soundSkinOptions()))
+        else playMajakSfx(definition.sound, this.soundSkinOptions())
+      }
+      duration = Math.max(duration, this.playLegacyFrameSequence(
+        numberedLegacyKeys(`mj_ef_L1${definition.element}`, definition.delays.length, 1),
+        point.x,
+        point.y,
+        definition.delays,
+        { delay: startDelay, additive: true },
+      ) + 500)
+    })
+    return duration
+  }
+
+  private playLegacyLevel2Skill(presentation: LegacyHoraPresentation) {
+    const definition = this.legacySkillDefinition(this.players[presentation.odr]?.trickTitle, 2)
+    if (!definition) return 0
+    const loc = odrToLoc(presentation.odr, this.myOdr)
+    const source = presentation.pinType === 0
+      ? this.lastRonSource
+      : this.handSprites[presentation.odr][this.handSprites[presentation.odr].length - 1]
+    if (!source) return 0
+    const offsets = presentation.pinType === 0
+      ? [{ x: -58, y: -87 }, { x: -51, y: -92 }, { x: -58, y: -87 }, { x: -51, y: -92 }]
+      : [{ x: -58, y: -87 }, { x: -51, y: -92 }, { x: -55, y: -70 }, { x: -51, y: -92 }]
+    const point = { x: source.x + offsets[loc].x, y: source.y + offsets[loc].y }
+    playMajakSfx(definition.sound, this.soundSkinOptions())
+    return this.playLegacyFrameSequence(
+      numberedLegacyKeys(`mj_ef_L2${definition.element}`, definition.delays.length, 1),
+      point.x,
+      point.y,
+      definition.delays,
+      { additive: true, depth: 10012 },
+    )
+  }
+
+  private playLegacyGemGame(delay: number) {
+    if (!this.shouldPlayLegacyVisuals() || (this.gemGame !== 1 && this.gemGame !== 2)) return 0
+    const prefix = this.gemGame === 1 ? 'mj_ryu_normal' : 'mj_ryu_big'
+    const sound = this.gemGame === 1 ? 'mjkryutama01' : 'mjkryutama02'
+    this.time.delayedCall(delay, () => {
+      playMajakSfx(sound, this.soundSkinOptions())
+      const fallbackPoint = boardLocalPoint({ x: 227, y: 212 })
+      const bounds = this.layoutMode === 'mobileLandscape' ? mobileVisibleWorldBounds() : null
+      const point = bounds ? centerMobileEffectPoint(LEGACY_GEM_EFFECT_SIZE, bounds) : fallbackPoint
+      this.playLegacyFrameSequence(
+        numberedLegacyKeys(prefix, 10, 1),
+        point.x,
+        point.y,
+        [50, 50, 100, 100, 100, 100, 100, 100, 100, 1000],
+        { depth: 10011 },
+      )
+    })
+    return 1800
+  }
+
+  private mobileHandAnchor(odr: number, loc: number) {
+    const firstHandSprite = this.handSprites[odr][0]
+    return firstHandSprite
+      ? { x: firstHandSprite.x, y: firstHandSprite.y }
+      : boardLocalPoint(TEH_POS[loc])
+  }
+
+  private mobileHandAnchoredEffectPoint(point: { x: number; y: number }, odr: number, loc: number) {
+    const desktopAnchor = boardLocalPoint(DESKTOP_INGAME_LAYOUT.handPosition[loc])
+    const mobileAnchor = this.mobileHandAnchor(odr, loc)
+    return mobileEffectPointFromAnchor(point, desktopAnchor, mobileAnchor)
+  }
+
+  private playLegacyHoraFire(presentation: LegacyHoraPresentation) {
+    const loc = odrToLoc(presentation.odr, this.myOdr)
+    const handSprite = this.handSprites[presentation.odr][this.handSprites[presentation.odr].length - 1]
+    const source = presentation.pinType === 0 ? this.lastRonSource : handSprite
+    if (!source) return
+    const direction = presentation.pinType === 0 ? (this.lastRonSource?.isReach ? 4 : 3) : loc
+    const bitmap = presentation.pinType === 0 ? 0 : [0, 2, 1, 0][loc]
+    const offset = [{ x: 2, y: -35 }, { x: -35, y: -35 }, { x: -35, y: 20 }, { x: 10, y: -35 }, { x: -4, y: -35 }][direction]
+    playMajakSfx('mjkFire_pai', this.soundSkinOptions())
+    this.playLegacyFrameSequence(
+      numberedLegacyKeys(`mj_ef_horafire0${bitmap}`, 3),
+      source.x + offset.x,
+      source.y + offset.y,
+      [50, 50, 550],
+      { depth: 10015 },
+    )
   }
 
   private applyHostPix(hostPix: string) {
@@ -2431,6 +2764,8 @@ export default class GameScene extends Phaser.Scene {
     if (!this.isViewer && odr === this.myOdr) {
       this.selectedCursor?.destroy()
       this.selectedCursor = undefined
+      this.drawnTileCursor?.destroy()
+      this.drawnTileCursor = undefined
       this.clearTenpaiMarkers()
     }
 
@@ -2462,11 +2797,13 @@ export default class GameScene extends Phaser.Scene {
           .on('pointerover', (pointer: Phaser.Input.Pointer) => this.onTilePointerOver(idx, pointer))
           .on('pointerout', (pointer: Phaser.Input.Pointer) => this.onTilePointerOut(idx, pointer))
         this.clipToBoard(spr)
+        if (isDrawTile) {
+          this.drawnTileCursor = this.createLegacyReceivedTileCursor(spr)
+        }
         if (tile.isSelected) {
-          this.selectedCursor = this.clipToBoard(this.add.image(x, y - 5, 'cursor_mouse')
-            .setOrigin(0, 0)
-            .setScale(handScale)
-            .setDepth(1001))
+          this.selectedCursor = this.layoutMode === 'mobileLandscape'
+            ? this.createLegacyHoverCursor(spr)
+            : this.createTileSelectionFrame(spr)
         }
       } else if ((this.isReplay && this.replayHandOpen) || (this.isViewer && this.replayHandOpen && tile.code > 0)) {
         const frame = paiToFrame(tile.code)
@@ -2528,6 +2865,7 @@ export default class GameScene extends Phaser.Scene {
     const visible = !this.mobileActionButtonsVisible
     this.handSprites[this.myOdr].forEach(sprite => sprite.setVisible(visible))
     this.selectedCursor?.setVisible(visible)
+    this.drawnTileCursor?.setVisible(visible)
     this.tenpaiMarkerSprites.forEach(sprite => sprite.setVisible(visible))
   }
 
@@ -2609,7 +2947,24 @@ export default class GameScene extends Phaser.Scene {
       this.bindAssistTileInput(spr, discard.code)
       this.suteSprites[odr].push(spr)
     })
+    this.redrawLatestDiscardFrame()
     this.redrawPaifuGraphContent()
+  }
+
+  private redrawLatestDiscardFrame() {
+    this.latestDiscardFrame?.destroy()
+    this.latestDiscardFrame = undefined
+    if (this.lastDiscardOdr === null || this.isReplay) return
+    const loc = odrToLoc(this.lastDiscardOdr, this.myOdr)
+    const discards = this.suteSprites[this.lastDiscardOdr]
+    const target = discards[discards.length - 1]
+    if (!target?.active) return
+    const scale = target.scaleX
+    const texture = loc % 2 === 0 ? 'mj_throw_0' : 'mj_throw_1'
+    this.latestDiscardFrame = this.clipToBoard(this.add.image(target.x - 4 * scale, target.y - 4 * scale, texture, 0)
+      .setOrigin(0, 0)
+      .setScale(scale)
+      .setDepth(1002))
   }
 
   private shouldAnimateLiveDiscard(): boolean {
@@ -2646,6 +3001,7 @@ export default class GameScene extends Phaser.Scene {
       .setDepth(Math.max(origin.depth, target.depth) + 1))
     const flight: ActiveDiscardFlight = { sprite, target }
     this.activeDiscardFlights[odr] = flight
+    this.latestDiscardFrame?.setVisible(false)
 
     const progress = { value: 0 }
     const centerX = BOARD_X + BOARD_W / 2
@@ -2678,6 +3034,7 @@ export default class GameScene extends Phaser.Scene {
         if (target.active) target.setVisible(true)
         if (sprite.active) sprite.destroy()
         this.activeDiscardFlights[odr] = undefined
+        this.redrawLatestDiscardFrame()
       },
     })
   }
@@ -2733,18 +3090,71 @@ export default class GameScene extends Phaser.Scene {
     this.deadWallSprites = []
   }
 
-  private redrawDeadWall() {
+  private animateMatchStartSeatReveal() {
+    const shouldReveal = this.pendingMatchStartSeatReveal && this.shouldPlayLegacyVisuals()
+    this.pendingMatchStartSeatReveal = false
+    if (!shouldReveal) return 0
+
+    const scale = this.tileScale()
+    const sprites = this.players.map((_player, odr) => {
+      const loc = odrToLoc(odr, this.myOdr)
+      const base = MATCH_START_SEAT_POSITIONS[loc]
+      const offset = MATCH_START_OPEN_OFFSETS[loc]
+      const point = boardLocalPoint({ x: base.x + offset.x, y: base.y + offset.y })
+      const sprite = this.clipToBoard(this.add.image(point.x, point.y, this.resolveSkinTextureKey(downTexture(loc)))
+        .setOrigin(0, 0)
+        .setScale(scale)
+        .setDepth(1000 + loc))
+      this.legacyEffectSprites.push(sprite)
+      return { sprite, loc, odr }
+    })
+
+    this.time.delayedCall(1000, () => {
+      sprites.forEach(({ sprite, loc, odr }) => {
+        if (!sprite.active) return
+        const point = boardLocalPoint(MATCH_START_SEAT_POSITIONS[loc])
+        const frame = paiToFrame(0x31 + odr)
+        if (loc === 0) sprite.setTexture(this.resolveSkinTextureKey('hai_dora'), frame)
+        else sprite.setTexture(this.resolveSkinTextureKey(`hai_tachi_${loc}`))
+        sprite.setPosition(point.x, point.y)
+      })
+      playMajakSid(SID_EXPOSE, this.soundSkinOptions())
+    })
+
+    this.time.delayedCall(1100, () => {
+      sprites.forEach(({ sprite, loc, odr }) => {
+        if (!sprite.active) return
+        const base = MATCH_START_SEAT_POSITIONS[loc]
+        const offset = MATCH_START_OPEN_OFFSETS[loc]
+        const point = boardLocalPoint({ x: base.x + offset.x, y: base.y + offset.y })
+        const texture = loc === 0 ? 'hai_sute' : `hai_open_${loc}`
+        sprite.setTexture(this.resolveSkinTextureKey(texture), paiToFrame(0x31 + odr))
+        sprite.setPosition(point.x, point.y)
+      })
+      playMajakSid(SID_EXPOSE, this.soundSkinOptions())
+    })
+
+    this.time.delayedCall(MATCH_START_SEAT_REVEAL_DURATION_MS, () => {
+      sprites.forEach(({ sprite }) => sprite.destroy())
+      this.legacyEffectSprites = this.legacyEffectSprites.filter(sprite => sprite.active)
+    })
+    return MATCH_START_SEAT_REVEAL_DURATION_MS
+  }
+
+  private redrawDeadWall(showDora = true) {
     if (this.isReplayApplyingHistory) return
     this.clearDeadWall()
     const haipaiPos = this.currentHaipaiPos()
     if (haipaiPos === undefined) return
 
     const exposed = new Map<number, number>()
-    this.paifuGraphRound.dora.forEach((code, idx) => {
-      if (!code || code <= 0) return
-      const wallIdx = this.deadWallIndexForBipai(this.getDoraIndex(idx), haipaiPos)
-      if (wallIdx !== undefined) exposed.set(wallIdx, code)
-    })
+    if (showDora) {
+      this.paifuGraphRound.dora.forEach((code, idx) => {
+        if (!code || code <= 0) return
+        const wallIdx = this.deadWallIndexForBipai(this.getDoraIndex(idx), haipaiPos)
+        if (wallIdx !== undefined) exposed.set(wallIdx, code)
+      })
+    }
 
     for (let idx = 0; idx < DEAD_WALL_COUNT; idx++) {
       const { x, y } = deadWallPos(idx, this.layoutMode)
@@ -2759,6 +3169,60 @@ export default class GameScene extends Phaser.Scene {
       if (code) this.bindAssistTileInput(sprite, code)
       this.deadWallSprites.push(sprite)
     }
+  }
+
+  private animateInitialDeal(oyaOrder: number, startDelay = 0, onComplete?: () => void) {
+    if (!this.shouldPlayLegacyVisuals()) {
+      onComplete?.()
+      return 0
+    }
+    this.handSprites.forEach(sprites => sprites.forEach(sprite => sprite.setVisible(false)))
+    let step = 0
+    let odr = oyaOrder
+    for (let round = 0; round < 3; round++) {
+      for (let player = 0; player < this.players.length; player++) {
+        const revealOdr = odr
+        const start = round * 4
+        this.time.delayedCall(startDelay + step++ * 100, () => {
+          this.handSprites[revealOdr].slice(start, start + 4).forEach(sprite => {
+            if (sprite.active) sprite.setVisible(true)
+          })
+        })
+        odr = (odr + 1) % this.players.length
+      }
+    }
+    for (let player = 0; player < this.players.length; player++) {
+      const revealOdr = odr
+      this.time.delayedCall(startDelay + step++ * 100, () => {
+        const sprites = this.handSprites[revealOdr]
+        if (sprites[12]?.active) sprites[12].setVisible(true)
+      })
+      odr = (odr + 1) % this.players.length
+    }
+    this.time.delayedCall(startDelay + step * 100, () => {
+      onComplete?.()
+    })
+    return startDelay + step * 100
+  }
+
+  private animateDoraReveal(doraIndexes: number[]) {
+    if (!this.shouldPlayLegacyVisuals()) return
+    const haipaiPos = this.currentHaipaiPos()
+    if (haipaiPos === undefined) return
+    doraIndexes.forEach(doraIndex => {
+      const wallIndex = this.deadWallIndexForBipai(this.getDoraIndex(doraIndex), haipaiPos)
+      const sprite = wallIndex === undefined ? undefined : this.deadWallSprites[wallIndex]
+      const code = this.paifuGraphRound.dora[doraIndex]
+      if (!sprite?.active || !code || code <= 0) return
+      const originalY = sprite.y
+      sprite.setTexture(this.resolveSkinTextureKey('hai_ura_2')).setY(originalY - 5 * this.tileScale())
+      playMajakSid(SID_EXPOSE, this.soundSkinOptions())
+      this.time.delayedCall(100, () => {
+        if (!sprite.active) return
+        sprite.setTexture(this.resolveSkinTextureKey('hai_sute'), paiToFrame(code)).setY(originalY)
+        playMajakSid(SID_EXPOSE, this.soundSkinOptions())
+      })
+    })
   }
 
   private currentHaipaiPos(): number | undefined {
@@ -2966,20 +3430,44 @@ export default class GameScene extends Phaser.Scene {
     this.activeAssistTileCode = hand[idx].code
     this.activeAssistHandIdx = idx
     this.showAssistHighlights(hand[idx].code)
-    if (!this.canDiscardOnTileClick && !this.pendingActionChoice) return
-    const loc = odrToLoc(this.myOdr, this.myOdr)
-    const isDrawTile = idx === hand.length - 1 && hand.length % 3 === 2
-    const handScale = this.handTileScale(this.myOdr, loc)
-    const position = this.layoutMode === 'mobileLandscape'
-      ? mobileOuterHandPos(loc, idx, hand.length, isDrawTile, handScale) ?? handPos(loc, idx, isDrawTile)
-      : handPos(loc, idx, isDrawTile)
-    const { x, y } = position
+    const tileSprite = this.handSprites[this.myOdr][idx]
     this.hoverCursor?.destroy()
-    this.hoverCursor = this.clipToBoard(this.add.image(x, y - 5, 'cursor_mouse')
-      .setOrigin(0, 0)
-      .setScale(handScale)
-      .setDepth(1001))
+    if (tileSprite) this.hoverCursor = this.createLegacyHoverCursor(tileSprite)
     if (this.canDiscardOnTileClick) this.showWaitTileGuide(idx)
+  }
+
+  private createLegacyHoverCursor(tile: Phaser.GameObjects.Image) {
+    return this.clipToBoard(this.add.image(tile.x, tile.y - 5 * tile.scaleY, 'cursor_mouse')
+      .setOrigin(0, 0)
+      .setScale(tile.scaleX, tile.scaleY)
+      .setDepth(1001))
+  }
+
+  private createLegacyReceivedTileCursor(tile: Phaser.GameObjects.Image) {
+    return this.clipToBoard(this.add.image(tile.x, tile.y - 6 * tile.scaleY, 'cursor_keyboard')
+      .setOrigin(0, 0)
+      .setScale(tile.scaleX, tile.scaleY)
+      .setDepth(1000))
+  }
+
+  private createTileSelectionFrame(tile: Phaser.GameObjects.Image) {
+    return this.createTileOutline(tile, 0xe52b2b)
+  }
+
+  private createTileOutline(tile: Phaser.GameObjects.Image, color: number) {
+    const lineWidth = Math.max(1, 1.5 * tile.scaleX)
+    const marginX = 3 * tile.scaleX
+    const marginY = 3 * tile.scaleY
+    const frame = this.add.graphics()
+      .lineStyle(lineWidth, color, 1)
+      .strokeRect(
+        tile.x - marginX,
+        tile.y - marginY,
+        tile.displayWidth + marginX * 2,
+        tile.displayHeight + marginY * 2,
+      )
+      .setDepth(tile.depth + 0.002)
+    return this.clipToBoard(frame)
   }
 
   private onTilePointerOut(_idx: number, pointer?: Phaser.Input.Pointer) {
@@ -3025,6 +3513,7 @@ export default class GameScene extends Phaser.Scene {
       this.assistHighlightSprites.push(this.clipToBoard(this.add.image(sprite.x, sprite.y, texture, mask - 1)
         .setOrigin(0, 0)
         .setScale(sprite.scaleX, sprite.scaleY)
+        .setBlendMode(Phaser.BlendModes.MULTIPLY)
         .setDepth(sprite.depth + 0.001)))
     }
 
@@ -3380,6 +3869,7 @@ export default class GameScene extends Phaser.Scene {
     this.selectedIdx = this.selectedIdx >= 0
       ? (this.selectedIdx + delta + hand.length) % hand.length
       : delta > 0 ? 0 : hand.length - 1
+    this.selectedDiscardBipaiIndex = hand[this.selectedIdx].bipaiIndex
     hand[this.selectedIdx].isSelected = true
     this.redrawHand(this.myOdr)
     return true
@@ -3412,17 +3902,37 @@ export default class GameScene extends Phaser.Scene {
       void this.selectActionChoiceTile(idx)
       return
     }
-    if (!this.canDiscardOnTileClick) return
     if (idx < 0 || idx >= hand.length) {
       if (DEBUG_GAME) console.warn('[GameScene] tile click ignored: invalid index', { idx, handLength: hand.length })
       return
     }
+
+    if (!this.canDiscardOnTileClick) {
+      if (!isTouchPointer(pointer)) return
+      this.touchConfirmDiscardIdx = -1
+      if (this.selectedIdx >= 0 && this.selectedIdx < hand.length) hand[this.selectedIdx].isSelected = false
+      this.selectedIdx = idx
+      this.selectedDiscardBipaiIndex = hand[idx].bipaiIndex
+      hand[idx].isSelected = true
+      this.activeAssistTileCode = hand[idx].code
+      this.activeAssistHandIdx = idx
+      this.hoverCursor?.destroy()
+      this.redrawHand(this.myOdr)
+      this.hoverCursor = this.createLegacyHoverCursor(this.handSprites[this.myOdr][idx])
+      this.clearWaitTileGuide()
+      this.showAssistHighlights(hand[idx].code)
+      return
+    }
+
+    this.hoverCursor?.destroy()
+    this.hoverCursor = undefined
 
     if (isTouchPointer(pointer)) {
       const decision = decideTouchTileAction(this.selectedIdx, idx)
       this.touchConfirmDiscardIdx = decision.confirmDiscard ? idx : -1
       if (this.selectedIdx >= 0) hand[this.selectedIdx].isSelected = false
       this.selectedIdx = decision.selectedIdx
+      this.selectedDiscardBipaiIndex = hand[idx].bipaiIndex
       hand[idx].isSelected = true
       this.activeAssistTileCode = hand[idx].code
       this.activeAssistHandIdx = idx
@@ -3434,6 +3944,7 @@ export default class GameScene extends Phaser.Scene {
 
     if (this.selectedIdx >= 0) hand[this.selectedIdx].isSelected = false
     this.selectedIdx = idx
+    this.selectedDiscardBipaiIndex = hand[idx].bipaiIndex
     hand[idx].isSelected = true
     this.redrawHand(this.myOdr)
   }
@@ -3474,11 +3985,14 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private onScenePointerDown(pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) {
-    if (!isTouchPointer(pointer) || currentlyOver.length > 0 || this.selectedIdx < 0) return
+    if (!isTouchPointer(pointer) || currentlyOver.length > 0 || (this.selectedIdx < 0 && this.activeAssistHandIdx < 0)) return
     const hand = this.players[this.myOdr].hand
     if (this.selectedIdx < hand.length) hand[this.selectedIdx].isSelected = false
     this.selectedIdx = -1
+    this.selectedDiscardBipaiIndex = undefined
     this.touchConfirmDiscardIdx = -1
+    this.hoverCursor?.destroy()
+    this.hoverCursor = undefined
     this.activeAssistTileCode = 0
     this.activeAssistHandIdx = -1
     this.clearAssistHighlights()
@@ -3507,6 +4021,17 @@ export default class GameScene extends Phaser.Scene {
       console.warn('[GameScene] discard ignored: missing bipaiIndex', { idx, tile, myOdr: this.myOdr, actionSeatOrder })
       return
     }
+    this.players[this.myOdr].hand.forEach(handTile => { handTile.isSelected = false })
+    this.selectedIdx = -1
+    this.selectedDiscardBipaiIndex = undefined
+    this.touchConfirmDiscardIdx = -1
+    this.selectedCursor?.destroy()
+    this.selectedCursor = undefined
+    this.drawnTileCursor?.destroy()
+    this.drawnTileCursor = undefined
+    this.activeAssistTileCode = 0
+    this.activeAssistHandIdx = -1
+    this.clearAssistHighlights()
     this.actionPromptSerial++
     this.clearAutoDiscardTimer()
     this.clearActionResponseTimer()
@@ -3520,7 +4045,6 @@ export default class GameScene extends Phaser.Scene {
     this.currentActionSeatOrder = null
     this.actionSendInFlight = true
     this.canDiscardOnTileClick = false
-    this.selectedIdx = -1
     this.emitToUiScene('actionPromptEnd', { viewOdr: this.myOdr })
     const payload = {
       playType: 'MJPID_ACTION',
@@ -3584,6 +4108,7 @@ export default class GameScene extends Phaser.Scene {
     this.pendingActionChoice = { def, acts, choices }
     this.canDiscardOnTileClick = false
     this.selectedIdx = -1
+    this.selectedDiscardBipaiIndex = undefined
     this.clearActionButtons()
     this.redrawHand(this.myOdr)
   }
@@ -3749,7 +4274,11 @@ export default class GameScene extends Phaser.Scene {
   private scheduleAutoDiscard(timeLimitSeconds: number, promptSerial = this.actionPromptSerial) {
     this.clearAutoDiscardTimer()
     if (this.isReplay || !this.canDiscardOnTileClick) return
-    const delay = Math.max(1000, Math.trunc((Number.isFinite(timeLimitSeconds) && timeLimitSeconds > 0 ? timeLimitSeconds : 5) * 1000))
+    const delay = decideAutoDiscardDelayMs(
+      this.currentActionPrompt?.localDeadlineAt,
+      performance.now(),
+      timeLimitSeconds,
+    )
     this.autoDiscardTimer = this.time.delayedCall(delay, () => {
       if (promptSerial !== this.actionPromptSerial) return
       if (!this.canSendCurrentPrompt('auto discard timeout')) return
@@ -3757,7 +4286,11 @@ export default class GameScene extends Phaser.Scene {
       if (!this.canDiscardOnTileClick) return
       const actionSeatOrder = this.getActionSeatOrder()
       const hand = this.players[actionSeatOrder].hand
-      const idx = hand.length - 1
+      const idx = decideTimedDiscardIndex(
+        hand.map(tile => tile.bipaiIndex),
+        this.selectedIdx,
+        this.selectedDiscardBipaiIndex,
+      )
       if (idx < 0) {
         console.error('[GameScene] auto discard failed: hand is empty', { myOdr: this.myOdr, actionSeatOrder })
         return
@@ -3809,7 +4342,6 @@ export default class GameScene extends Phaser.Scene {
       }))
     }
   }
-
   private getActionSeatOrder() {
     return this.currentActionSeatOrder ?? this.myOdr
   }
@@ -3839,6 +4371,8 @@ export default class GameScene extends Phaser.Scene {
     this.timeBankExtensionInFlight = false
     this.canDiscardOnTileClick = false
     this.selectedIdx = -1
+    this.selectedDiscardBipaiIndex = undefined
+    this.selectedDiscardBipaiIndex = undefined
     this.clearTenpaiMarkers()
     this.clearWaitTileGuide()
     this.emitToUiScene('actionPromptEnd', { viewOdr: this.myOdr })
@@ -3899,6 +4433,7 @@ export default class GameScene extends Phaser.Scene {
     this.currentActionSeatOrder = null
     this.canDiscardOnTileClick = false
     this.selectedIdx = -1
+    this.selectedDiscardBipaiIndex = undefined
     this.keyboardActionIndex = -1
     this.actionOfferByName.clear()
     this.actionChoicesByName.clear()
@@ -4280,6 +4815,17 @@ export default class GameScene extends Phaser.Scene {
 
     if (action === Act.Ron && odr >= 0 && odr < this.players.length) {
       const claimedOdr = this.readClaimedOdr(data, odr, action)
+      const claimedSprite = this.suteSprites[claimedOdr]?.[this.suteSprites[claimedOdr].length - 1]
+      const claimedDiscard = this.players[claimedOdr]?.discards[this.players[claimedOdr].discards.length - 1]
+      if (claimedSprite?.active) {
+        this.lastRonSource = {
+          x: claimedSprite.x,
+          y: claimedSprite.y,
+          width: claimedSprite.displayWidth,
+          height: claimedSprite.displayHeight,
+          isReach: Boolean(claimedDiscard?.isReach),
+        }
+      }
       const claimed = this.players[claimedOdr]?.discards.pop()
       if (claimed?.isReach) this.players[claimedOdr].reachDiscardCarry = true
       if (claimed) {
@@ -4295,7 +4841,7 @@ export default class GameScene extends Phaser.Scene {
       if (!this.isReplay && this.isLocalPlayerOdr(odr)) window.dispatchEvent(new Event(GAME_LOCAL_REACH_EVENT))
       if (!suppressLivePlayback && materializedDiscard) {
         this.playReachBgm()
-        playMajakSid(SID_RICSTK, this.soundSkinOptions())
+        this.playDefaultReachStickSound(odr)
       }
     }
 
@@ -4320,6 +4866,7 @@ export default class GameScene extends Phaser.Scene {
     this.emitToUiScene('callAction', {
       odr,
       frame,
+      costumeAction: this.costumeActionName(action),
       avatarUrl: this.callAvatarUrl(player),
       fallbackAvatarUrl: player.avatarUrl || player.fallbackAvatarUrl || this.callAvatarUrl(player),
     })
@@ -4345,6 +4892,16 @@ export default class GameScene extends Phaser.Scene {
     if (action === Act.Kan || action === Act.Ank || action === Act.Cha) return 3
     if (action === Act.Chi) return 4
     if (action === Act.Ron) return 5
+    return undefined
+  }
+
+  private costumeActionName(action: Act) {
+    if (action === Act.Ric) return 'reach'
+    if (action === Act.Tsu) return 'tsumo'
+    if (action === Act.Pon) return 'pon'
+    if (action === Act.Kan || action === Act.Ank || action === Act.Cha) return 'kan'
+    if (action === Act.Chi) return 'chi'
+    if (action === Act.Ron) return 'ron'
     return undefined
   }
 
@@ -4375,7 +4932,7 @@ export default class GameScene extends Phaser.Scene {
       if (pending.animateDiscard && pending.flightOrigin) flightOrigins.set(pending.odr, pending.flightOrigin)
       if (pending.isReach && pending.playReachFeedback) {
         this.playReachBgm()
-        playMajakSid(SID_RICSTK, this.soundSkinOptions())
+        this.playDefaultReachStickSound(pending.odr)
         this.playReachDiscardSound(pending.odr)
         this.showReachTileEffect(pending.odr)
       }
@@ -4410,6 +4967,11 @@ export default class GameScene extends Phaser.Scene {
       sprite.destroy()
       this.boardEffectSprites = this.boardEffectSprites.filter(item => item !== sprite)
     })
+  }
+
+  private playDefaultReachStickSound(odr: number) {
+    const effect = Number(this.players[odr]?.richiEffect ?? 0)
+    if (effect < 1 || effect > 3) playMajakSid(SID_RICSTK, this.soundSkinOptions())
   }
 
   private boardEffectPrefix(action: Act): string | undefined {
@@ -4639,7 +5201,7 @@ export default class GameScene extends Phaser.Scene {
     const doraTile = tiles.find(tile => tile.bipaiIndex === doraIndex)
     if (!doraTile || doraTile.code <= 0) return
     this.paifuGraphRound.dora = [doraTile.code]
-    this.redrawDeadWall()
+    if (!this.deferInitialDeadWallRedraw) this.redrawDeadWall()
     this.redrawPaifuGraphContent()
   }
 
@@ -4647,6 +5209,7 @@ export default class GameScene extends Phaser.Scene {
     const count = Math.max(0, Math.min(5, Math.trunc(minCount)))
     if (count === 0) return
     const indicators = [...this.paifuGraphRound.dora]
+    const revealedIndexes: number[] = []
     let changed = false
     for (let idx = 0; idx < count; idx++) {
       const doraIndex = this.getDoraIndex(idx)
@@ -4654,12 +5217,14 @@ export default class GameScene extends Phaser.Scene {
       if (!code || code <= 0) continue
       if (indicators[idx] !== code) {
         indicators[idx] = code
+        revealedIndexes.push(idx)
         changed = true
       }
     }
     if (!changed) return
     this.paifuGraphRound.dora = indicators
     this.redrawDeadWall()
+    this.animateDoraReveal(revealedIndexes)
     this.redrawPaifuGraphContent()
   }
 
@@ -4877,11 +5442,18 @@ export default class GameScene extends Phaser.Scene {
     return taken
   }
 
-  private playRoundStartSounds(data: Record<string, unknown>) {
+  private playRoundStartSounds(data: Record<string, unknown>, startDelay = 0) {
     const soundSkinId = this.resolveBgmSkinId(data) ?? this.currentBgmSkinId
-    playMajakSid(SID_SIPAI, this.soundSkinOptions(soundSkinId))
     const dice = Array.isArray(data.dice) ? data.dice : []
-    if (dice.length > 0) this.time.delayedCall(2000, () => playMajakSid(SID_DICE, this.soundSkinOptions(soundSkinId)))
+    const start = () => {
+      if (!this.shouldPlayLegacyVisuals()) return
+      playMajakSid(SID_SIPAI, this.soundSkinOptions(soundSkinId))
+      if (dice.length > 0) this.time.delayedCall(2000, () => {
+        if (this.shouldPlayLegacyVisuals()) playMajakSid(SID_DICE, this.soundSkinOptions(soundSkinId))
+      })
+    }
+    if (startDelay > 0) this.time.delayedCall(startDelay, start)
+    else start()
   }
 
   private playRoundBgm(data: Record<string, unknown>, kyokuCnt: number) {
@@ -4981,8 +5553,11 @@ export default class GameScene extends Phaser.Scene {
 
   private resetRoundState(preserveHands = false) {
     this.clearAllDiscardFlights()
+    this.legacyEffectSprites.forEach(sprite => sprite.destroy())
+    this.legacyEffectSprites = []
     this.selectedIdx = -1
     this.lastDiscardOdr = null
+    this.lastRonSource = undefined
     this.appliedActionKeys.clear()
     this.pendingDiscardsByBipaiIndex.clear()
     this.paifuGraphDraws = [[], [], [], []]

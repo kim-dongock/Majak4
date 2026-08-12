@@ -2,6 +2,8 @@ import { getIngameLayout, type IngameLayoutMode } from './ingameLayout'
 
 export interface HudPoint { x: number; y: number }
 
+export interface EffectSize { width: number; height: number }
+
 export const MOBILE_PLAYFIELD_OFFSET_Y = -8
 
 export interface MobileVisibleWorldBounds {
@@ -67,4 +69,18 @@ export function mobileVisibleWorldLayoutKey(mode: IngameLayoutMode): string {
   return [bounds.left, bounds.top, bounds.right, bounds.bottom]
     .map(value => Math.round(value))
     .join(':')
+}
+
+export function mobileEffectPointFromAnchor(point: HudPoint, desktopAnchor: HudPoint, mobileAnchor: HudPoint): HudPoint {
+  return {
+    x: point.x + mobileAnchor.x - desktopAnchor.x,
+    y: point.y + mobileAnchor.y - desktopAnchor.y,
+  }
+}
+
+export function centerMobileEffectPoint(size: EffectSize, bounds: MobileVisibleWorldBounds): HudPoint {
+  return {
+    x: bounds.left + (bounds.right - bounds.left - size.width) / 2,
+    y: bounds.top + (bounds.bottom - bounds.top - size.height) / 2,
+  }
 }

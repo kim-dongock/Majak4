@@ -26,6 +26,7 @@ import { getAvatarUrl, getDefaultAvatarUrl } from '../../utils/resources'
 import { getChannelServerUrl } from '../../api/channel'
 import { getTabSessionId } from '../../utils/tabSession'
 import { GAME_AUTO_CONTROL_EVENT, GAME_KYOKU_STARTED_EVENT } from '../../game/autoControl'
+import { getLegacyKyoResultDelayMs } from '../../game/legacyAnimations'
 import { playMajakChat, playMajakSfx, playMajakSid, SID_DRAW, SID_EXIT, SID_JOIN, stopMajakBgm } from '../../utils/majakSound'
 import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 import { useDesktopScreenScale } from '../../hooks/useDesktopScreenScale'
@@ -195,6 +196,7 @@ interface GameLocationState {
   customBgId?: number
   customBoardType?: number
   customHaiId?: number
+  gemGame?: number
   skipInitialRoomEnter?: boolean
   viewers?: ViewerEntry[]
   players?: GamePlayerEntry[]
@@ -818,6 +820,7 @@ export default function GameScreen() {
   const messageSeqRef = useRef(0)
   const proxyGuideShownRef = useRef(false)
   const gemGameGuideShownRef = useRef(false)
+  const kyoResultTimerRef = useRef<number | null>(null)
   const pendingInviteTargetRef = useRef<string | null>(null)
   const emoticonCooldownRef = useRef(false)
   const emoticonCooldownTimerRef = useRef<number | null>(null)
@@ -1084,7 +1087,9 @@ export default function GameScreen() {
       customBgId,
       customBoardType,
       customHaiId,
+      gemGame: asNumber(gameState?.gemGame ?? navState?.gemGame, 0),
       skipInitialRoomEnter: Boolean(gameState?.skipInitialRoomEnter || gameState?.players?.length),
+      requestInitialGameResync: Boolean(gameState?.skipInitialRoomEnter || gameState?.players?.length),
     })
     return () => destroyGame()
   }, [customBgId, customHaiId, initialMyOdr, roomId, signalReady])
@@ -1362,6 +1367,8 @@ export default function GameScreen() {
     const onGamePlay = (data: Record<string, unknown>) => {
       if (!mounted) return
       if (data.playType === 'MJPID_INIHAN') {
+        if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
+        kyoResultTimerRef.current = null
         const memberInfo = Array.isArray(data.memberInfo) ? data.memberInfo : []
         const startedPlayers = memberInfo.map((member, order) => {
           if (!isRecord(member)) return null
@@ -1385,6 +1392,8 @@ export default function GameScreen() {
         return
       }
       if (data.playType === 'MJPID_INIKYO') {
+        if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
+        kyoResultTimerRef.current = null
         const oyaOdr = asNumber(data.oyaOrder ?? data.oyaOdr ?? data.dealerOdr, -1)
         const oya = playersRef.current.find(player => player.pos === oyaOdr)
         putStatus(oya ? `親：${oya.name || oya.playerId}` : `親：${oyaOdr}`)
@@ -1401,10 +1410,29 @@ export default function GameScreen() {
       if (!Array.isArray(data.players)) return
       const kyoResultData = data as unknown as KyoResData
       kyoEndStatusLines(kyoResultData).forEach(line => putStatus(line))
-      const pinType = Number(kyoResultData.pinType)
-      if (pinType > PIN_NON && pinType !== PIN_RON && pinType !== PIN_TSU) playMajakSid(SID_DRAW, boardSoundOptions)
-      playMajakSfx('mjkhiend1', boardSoundOptions)
-      setKyoResData(kyoResultData)
+      if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
+      const showKyoResult = () => {
+        if (!mounted) return
+        kyoResultTimerRef.current = null
+        const pinType = Number(kyoResultData.pinType)
+        if (pinType > PIN_NON && pinType !== PIN_RON && pinType !== PIN_TSU) playMajakSid(SID_DRAW, boardSoundOptions)
+        playMajakSfx('mjkhiend1', boardSoundOptions)
+        setKyoResData(kyoResultData)
+      }
+      const delayData = {
+        ...data,
+        players: data.players.map((value, index) => {
+          if (!isRecord(value)) return value
+          const seatPos = asNumber(value.seatPos ?? value.odr, index)
+          const player = playersRef.current.find(item => item.pos === seatPos) ?? playersRef.current[index]
+          return { ...value, trickTitle: player?.trickTitle }
+        }),
+      }
+      const delay = document.visibilityState === 'visible' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? getLegacyKyoResultDelayMs(delayData)
+        : 0
+      if (delay > 0) kyoResultTimerRef.current = window.setTimeout(showKyoResult, delay)
+      else showKyoResult()
     }
     SignalR.on(CMD_GAME_PLAY, onGamePlay)
 
@@ -1525,6 +1553,8 @@ export default function GameScreen() {
 
     return () => {
       mounted = false
+      if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
+      kyoResultTimerRef.current = null
       SignalR.off('c16e',                onMemberList)
       SignalR.off('c7e',                 onChannelMemberList)
       SignalR.off('c14e',                onRoomEnter)

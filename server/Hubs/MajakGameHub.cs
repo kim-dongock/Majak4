@@ -322,6 +322,9 @@ public class MajakGameHub : Hub
                 player?.RoomId);
             return;
         }
+        var roomBeforeReady = _session.GetRoom(roomId);
+        bool isInitialStartupReady = roomBeforeReady?.State == GameRoomState.Playing
+            && roomBeforeReady.PlayHistory.Count == 0;
         var gameLogic = _sp.GetRequiredService<GameLogicService>();
         bool allReady = await gameLogic.MarkGameClientReadyAsync(roomId, Context.ConnectionId);
         log?.LogInformation("[GameReconnect] NotifyGameClientReady marked. connectionId={ConnectionId} roomId={RoomId} allReady={AllReady}",
@@ -330,7 +333,7 @@ public class MajakGameHub : Hub
             allReady);
 
         var room = _session.GetRoom(roomId);
-        if (room?.State != GameRoomState.Playing || room.PlayHistory.Count == 0)
+        if (isInitialStartupReady || room?.State != GameRoomState.Playing || room.PlayHistory.Count == 0)
         {
             log?.LogInformation("[GameReconnect] NotifyGameClientReady completed without snapshot. connectionId={ConnectionId} roomId={RoomId} roomFound={RoomFound} roomState={RoomState} playHistoryCount={PlayHistoryCount}",
                 Context.ConnectionId,
@@ -391,6 +394,21 @@ public class MajakGameHub : Hub
                 Context.ConnectionId,
                 roomId);
         }
+    }
+
+    public async Task NotifyGamePresentationReady(int roomId, long presentationId)
+    {
+        var player = _session.GetByConn(Context.ConnectionId);
+        if (player == null
+            || !_session.IsCurrentConnection(player.MemberNo, Context.ConnectionId)
+            || player.RoomId != roomId
+            || player.IsViewer)
+        {
+            return;
+        }
+
+        var gameLogic = _sp.GetRequiredService<GameLogicService>();
+        await gameLogic.MarkGamePresentationReadyAsync(roomId, Context.ConnectionId, presentationId);
     }
 
     public async Task<object?> GetWaitGuidePreview(int roomId, int discardBipaiIndex)

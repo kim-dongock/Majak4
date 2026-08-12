@@ -1176,7 +1176,7 @@ public class MajakPlayerModelTests
 // ═══════════════════════════════════════════════════════════════════════════
 public class GameLogicHelperTests
 {
-    private static GameLogicService BuildService(PlayerSessionService? session = null, PlayerRepository? playerRepo = null, HistoryRepository? historyRepo = null, LogRepository? logRepo = null, RoomRegistryService? roomRegistry = null, bool testEnvironment = false, string? trainingAiLevel = null)
+    private static GameLogicService BuildService(PlayerSessionService? session = null, PlayerRepository? playerRepo = null, HistoryRepository? historyRepo = null, LogRepository? logRepo = null, RoomRegistryService? roomRegistry = null, bool testEnvironment = false, string? trainingAiLevel = null, int gamePresentationReadyTimeoutMs = 0)
     {
         session ??= new PlayerSessionService();
         var histMock = new Mock<HistoryRepository>(MockBehavior.Loose);
@@ -1192,6 +1192,8 @@ public class GameLogicHelperTests
                 {
                     ["GameSettings:TestEnvironment"] = testEnvironment.ToString(),
                     ["GameSettings:TrainingAiLevel"] = trainingAiLevel,
+                    ["GameSettings:GameClientReadyTimeoutMs"] = "0",
+                    ["GameSettings:GamePresentationReadyTimeoutMs"] = gamePresentationReadyTimeoutMs.ToString(),
                 })
                 .Build(), roomRegistry: roomRegistry);
     }
@@ -1266,15 +1268,34 @@ public class GameLogicHelperTests
 
         var sent = new List<(string method, object packet)>();
         GameLogicService service = null!;
+        bool presentationReadyObserved = false;
         var proxy = new Mock<IClientProxy>();
         proxy.Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default))
-            .Callback<string, object?[], CancellationToken>((method, args, _) =>
+            .Returns(async (string method, object?[] args, CancellationToken _) =>
             {
                 sent.Add((method, args[0]!));
                 if (method == Cmd.AutoStart)
-                    service.MarkGameClientReadyAsync(room.RoomId, host.ConnectionId).GetAwaiter().GetResult();
-            })
-            .Returns(Task.CompletedTask);
+                {
+                    Assert.DoesNotContain(sent, packet => packet.method == Cmd.GamePlay
+                        && CommandTestHelper.ToDict(packet.packet).TryGetValue("playType", out var playType)
+                        && ((JsonElement)playType!).GetString() == "MJPID_INIHAN");
+                    await service.MarkGameClientReadyAsync(room.RoomId, host.ConnectionId);
+                }
+                else if (method == Cmd.GamePlay)
+                {
+                    var packet = CommandTestHelper.ToDict(args[0]!);
+                    if (packet.TryGetValue("playType", out var playType)
+                        && ((JsonElement)playType!).GetString() == "MJPID_INIKYO")
+                    {
+                        Assert.DoesNotContain(room.PendingActions, prompt => prompt != null);
+                        Assert.DoesNotContain(sent, sentPacket => sentPacket.method == Cmd.GamePlay
+                            && CommandTestHelper.ToDict(sentPacket.packet).TryGetValue("playType", out var sentPlayType)
+                            && ((JsonElement)sentPlayType!).GetString() == "MJPID_ACTIONS");
+                        long presentationId = ((JsonElement)packet["presentationId"]!).GetInt64();
+                        presentationReadyObserved = await service.MarkGamePresentationReadyAsync(room.RoomId, host.ConnectionId, presentationId);
+                    }
+                }
+            });
         var singleProxy = new Mock<ISingleClientProxy>();
         singleProxy.Setup(c => c.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default))
             .Callback<string, object?[], CancellationToken>((method, args, _) => sent.Add((method, args[0]!)))
@@ -1286,7 +1307,7 @@ public class GameLogicHelperTests
         clients.Setup(c => c.GroupExcept(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>())).Returns(proxy.Object);
 
         var ctx = new CommandContext { Player = host, Clients = clients.Object };
-        service = BuildService(session, testEnvironment: true);
+        service = BuildService(session, testEnvironment: true, gamePresentationReadyTimeoutMs: 5000);
 
         await service.StartGameLogicAsync(room, ctx);
         await WaitUntilAsync(() => room.PendingActions.Any(prompt => prompt != null)
@@ -1298,6 +1319,11 @@ public class GameLogicHelperTests
             || sent.Any(packet => packet.method == Cmd.GamePlay
                 && CommandTestHelper.ToDict(packet.packet).TryGetValue("playType", out var playType)
                 && ((JsonElement)playType!).GetString() == "MJPID_ACTION"));
+        Assert.True(presentationReadyObserved);
+        Assert.True(sent.FindIndex(packet => packet.method == Cmd.AutoStart)
+            < sent.FindIndex(packet => packet.method == Cmd.GamePlay
+                && CommandTestHelper.ToDict(packet.packet).TryGetValue("playType", out var playType)
+                && ((JsonElement)playType!).GetString() == "MJPID_INIHAN"));
     }
 
     [Fact]
