@@ -17,13 +17,6 @@
  */
 import { useEffect, useState } from 'react'
 
-const DLG_BG = '#d4d0c8'
-const BORDER = '#808080'
-const LIGHT = '#fff'
-
-const SX = (value: number) => Math.round(value * 1.5)
-const SY = (value: number) => Math.round(value * 1.625)
-
 export interface DebugLoginServerOption {
   label: string
   serverId: string
@@ -103,17 +96,6 @@ function buildLoginUri(result: Omit<DebugLoginResult, 'loginUri'>): string {
     + passwordParam
 }
 
-function FieldLabel({ x, y, children }: { x: number; y: number; children: string }) {
-  return (
-    <span style={{
-      position: 'absolute', left: SX(x), top: SY(y), width: SX(20), height: SY(8),
-      fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: `${SY(8)}px`, color: '#000',
-    }}>
-      {children}
-    </span>
-  )
-}
-
 export default function DebugLoginDlg({ servers, groups, users, onOK, onCancel }: Props) {
   const [serverIndex, setServerIndex] = useState(0)
   const [groupIndex, setGroupIndex] = useState(0)
@@ -148,33 +130,13 @@ export default function DebugLoginDlg({ servers, groups, users, onOK, onCancel }
     })
   }
 
-  const comboStyle: React.CSSProperties = {
-    position: 'absolute', width: SX(100), height: SY(20),
-    fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))',
-  }
-
   return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'transparent', zIndex: 500,
-    }}>
-      <div style={{
-        position: 'relative', width: SX(139), height: SY(149) + 22,
-        background: DLG_BG, borderTop: `1px solid ${LIGHT}`, borderLeft: `1px solid ${LIGHT}`,
-        borderRight: `1px solid ${BORDER}`, borderBottom: `1px solid ${BORDER}`,
-        boxShadow: '2px 2px 0 rgba(0,0,0,0.35)',
-        fontFamily: 'var(--majak-font-family-ui)', color: '#000',
-      }}>
-        <div style={{
-          position: 'absolute', left: 3, top: 3, right: 3, height: 18,
-          background: 'linear-gradient(90deg, #000080, #1084d0)', color: '#fff',
-          fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '18px', paddingLeft: 5,
-        }}>
-          LOGIN
-        </div>
-        <div style={{ position: 'absolute', left: 0, top: 22, width: SX(139), height: SY(149) }}>
-          <FieldLabel x={5} y={15}>Server</FieldLabel>
+    <div className="majak-popup-overlay">
+      <section className="majak-popup-panel majak-debug-login-dialog" role="dialog" aria-modal="true" aria-labelledby="debug-login-dialog-title">
+        <header id="debug-login-dialog-title" className="majak-popup-titlebar"><span>ログイン</span><button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button></header>
+        <div className="majak-popup-body majak-debug-login-dialog__body">
+          <label>
+            <span>Server</span>
           <input
             list="debug-login-server-options"
             value={serverText}
@@ -184,13 +146,14 @@ export default function DebugLoginDlg({ servers, groups, users, onOK, onCancel }
               setServerText(value)
               setServerIndex(nextIndex)
             }}
-            style={{ ...comboStyle, left: SX(30), top: SY(15) }}
           />
+          </label>
           <datalist id="debug-login-server-options">
             {servers.map((server, index) => <option key={`${server.serverId}-${index}`} value={server.label} />)}
           </datalist>
 
-          <FieldLabel x={5} y={35}>Group</FieldLabel>
+          <label>
+            <span>Group</span>
           <input
             list="debug-login-group-options"
             value={groupText}
@@ -200,13 +163,14 @@ export default function DebugLoginDlg({ servers, groups, users, onOK, onCancel }
               setGroupText(value)
               setGroupIndex(nextIndex)
             }}
-            style={{ ...comboStyle, left: SX(30), top: SY(35) }}
           />
+          </label>
           <datalist id="debug-login-group-options">
             {groups.map((group, index) => <option key={`${group.groupId}-${index}`} value={group.label} />)}
           </datalist>
 
-          <FieldLabel x={5} y={65}>ID</FieldLabel>
+          <label>
+            <span>ID</span>
           <input
             list="debug-login-user-options"
             value={userId}
@@ -217,36 +181,31 @@ export default function DebugLoginDlg({ servers, groups, users, onOK, onCancel }
               setUserId(value)
               if (nextIndex >= 0) setPassword(users[nextIndex]?.password ?? '')
             }}
-            style={{ ...comboStyle, left: SX(30), top: SY(60) }}
           />
+          </label>
           <datalist id="debug-login-user-options">
             {users.map((user, index) => <option key={`${user.id}-${index}`} value={user.id} />)}
           </datalist>
 
-          <FieldLabel x={5} y={85}>PW</FieldLabel>
+          <label>
+            <span>PW</span>
           <input
             type="password"
             value={password}
             onChange={event => setPassword(event.target.value)}
-            style={{ ...comboStyle, left: SX(30), top: SY(80), height: SY(14) }}
           />
-
-          <label style={{
-            position: 'absolute', left: SX(30), top: SY(103), width: SX(80), height: SY(10),
-            display: 'flex', alignItems: 'center', gap: 4, fontSize: 'calc(12px * var(--majak-type-scale))',
-          }}>
-            <input type="checkbox" checked={secure} onChange={event => setSecure(event.target.checked)} style={{ margin: 0 }} />
-            クロ保護
           </label>
 
-          <button onClick={handleOK} style={{ position: 'absolute', left: SX(17), top: SY(125), width: SX(50), height: SY(14), fontSize: 'calc(12px * var(--majak-type-scale))', padding: 0 }}>
-            OK
-          </button>
-          <button onClick={onCancel} style={{ position: 'absolute', left: SX(71), top: SY(125), width: SX(50), height: SY(14), fontSize: 'calc(12px * var(--majak-type-scale))', padding: 0 }}>
-            Cancel
-          </button>
+          <label className="majak-debug-login-dialog__secure">
+            <input type="checkbox" checked={secure} onChange={event => setSecure(event.target.checked)} />
+            クロ保護
+          </label>
         </div>
-      </div>
+        <footer className="majak-popup-actions">
+          <button type="button" onClick={onCancel}>キャンセル</button>
+          <button type="button" className="is-primary" onClick={handleOK}>OK</button>
+        </footer>
+      </section>
     </div>
   )
 }

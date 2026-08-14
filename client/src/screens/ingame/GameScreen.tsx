@@ -18,6 +18,7 @@ import { FORCED_KYO_RESULT, FORCE_KYO_RESULT_FOR_TEST } from './forcedKyoResult'
 import SlideAnnounce, { type SlideAnnounceData } from './SlideAnnounce'
 import ViewerListWnd, { type ViewerEntry } from './ViewerListWnd'
 import AskEndDlg from '../outgame/dialogs/AskEndDlg'
+import LevelupDlg from '../outgame/dialogs/LevelupDlg'
 import GameInviteDialog from './GameInviteDialog'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
@@ -29,7 +30,6 @@ import { GAME_AUTO_CONTROL_EVENT, GAME_KYOKU_STARTED_EVENT } from '../../game/au
 import { getLegacyKyoResultDelayMs } from '../../game/legacyAnimations'
 import { playMajakChat, playMajakSfx, playMajakSid, SID_DRAW, SID_EXIT, SID_JOIN, stopMajakBgm } from '../../utils/majakSound'
 import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
-import { useDesktopScreenScale } from '../../hooks/useDesktopScreenScale'
 
 const CMD_GAME_PLAY = 'playing'
 const CMD_AUTO_START = 'mjkc4e'
@@ -734,13 +734,14 @@ function GameSpriteButton({ src, frameW, frameH, x, y, checked = false, disabled
         cursor: disabled ? 'default' : 'pointer',
         imageRendering: 'pixelated',
         pointerEvents: 'auto',
+        filter: disabled ? 'grayscale(1) brightness(.62)' : undefined,
+        opacity: disabled ? 0.68 : 1,
       }}
     />
   )
 }
 
 export default function GameScreen() {
-  const desktopScale = useDesktopScreenScale()
   const containerRef = useRef<HTMLDivElement>(null)
   const navigate     = useNavigate()
   const location     = useLocation()
@@ -755,6 +756,7 @@ export default function GameScreen() {
   const [forcedHanResultDismissed, setForcedHanResultDismissed] = useState(false)
   const displayedHanResData = FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed ? FORCED_HAN_RESULT : hanResData
   const [hanResFlags, setHanResFlags] = useState({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
+  const [levelUp, setLevelUp] = useState<{ level: number; lentMoney: number } | null>(null)
   /** CMJKyoRes 表示状態 */
   const [kyoResData, setKyoResData] = useState<KyoResData | null>(null)
   const displayedKyoResData = FORCE_KYO_RESULT_FOR_TEST ? FORCED_KYO_RESULT : kyoResData
@@ -1327,6 +1329,7 @@ export default function GameScreen() {
         gemCount: u.gemCount !== undefined ? Number(u.gemCount) : undefined,
         experience: u.experience !== undefined ? Number(u.experience) : undefined,
         expGain: u.expGain !== undefined ? Number(u.expGain) : undefined,
+        lentMoney: u.lentMoney !== undefined ? Number(u.lentMoney) : undefined,
         horaCnt: u.horaCnt !== undefined ? Number(u.horaCnt) : undefined,
         horaPoint: u.horaPoint !== undefined ? Number(u.horaPoint) : undefined,
         hojuCnt: u.hojuCnt !== undefined ? Number(u.hojuCnt) : undefined,
@@ -1791,12 +1794,8 @@ export default function GameScreen() {
   }
 
   /** HanRes を閉じてロビーへ戻る */
-  const onCloseHanRes = () => {
+  const returnFromHanRes = () => {
     const isViewer = hanResFlags.isViewer || Boolean(gameState?.isViewer)
-    setHanResData(null)
-    setHanResFlags({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
-    setTournamentTotalResult(null)
-    setShowTournamentTotalResult(false)
     const returnChannelId = gameState?.channelId
     const returnRoomId = gameState?.roomId ?? roomId
     if (isViewer) {
@@ -1832,9 +1831,30 @@ export default function GameScreen() {
     }
   }
 
+  const onCloseHanRes = () => {
+    const me = hanResData?.find(player => player.isMe)
+    const shouldShowLevelUp = !hanResFlags.isViewer
+      && !hanResFlags.isTournament
+      && me?.nlevel !== undefined
+      && me.prevNlevel !== undefined
+      && me.nlevel > me.prevNlevel
+
+    setHanResData(null)
+    setHanResFlags({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
+    setTournamentTotalResult(null)
+    setShowTournamentTotalResult(false)
+
+    if (shouldShowLevelUp && me) {
+      setLevelUp({ level: me.nlevel, lentMoney: me.lentMoney ?? 0 })
+      return
+    }
+
+    returnFromHanRes()
+  }
+
   return (
     <div className="majak-ingame-viewport">
-    <div className="majak-game-screen" style={{ position: 'relative', width: GAME_WIDTH, height: GAME_HEIGHT, flex: '0 0 auto', overflow: 'hidden', background: '#000', transform: desktopScale === 1 ? undefined : `scale(${desktopScale})`, transformOrigin: 'center center' }}>
+    <div className="majak-game-screen" style={{ position: 'relative', width: GAME_WIDTH, height: GAME_HEIGHT, flex: '0 0 auto', overflow: 'hidden', background: '#000' }}>
       {/* Phaser マウントコンテナ */}
       <div
         ref={containerRef}
@@ -2031,6 +2051,17 @@ export default function GameScreen() {
         />
       )}
 
+      {levelUp && (
+        <LevelupDlg
+          level={levelUp.level}
+          lentMoney={levelUp.lentMoney}
+          onClose={() => {
+            setLevelUp(null)
+            returnFromHanRes()
+          }}
+        />
+      )}
+
       {hanResData && tournamentTotalResult && !showTournamentTotalResult && (
         <NextTournamentResultButton onClick={() => setShowTournamentTotalResult(true)} />
       )}
@@ -2061,6 +2092,7 @@ export default function GameScreen() {
         <AskEndDlg
           onYes={() => void sendAskEndSetAction(ACT_RON)}
           onNo={() => void sendAskEndSetAction(ACT_PAS)}
+          deadlineAt={askEndSet.localDeadlineAt}
         />
       )}
     </div>

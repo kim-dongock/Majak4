@@ -51,17 +51,17 @@ export default function CollectionDlg({ onClose, onEquipChange }: Props) {
   }
 
   return (
-    <div className="majak-collection-overlay" role="presentation">
-      <section className="majak-collection-dialog" role="dialog" aria-modal="true" aria-labelledby="majak-collection-title">
-        <header className="majak-collection-header">
-          <div><span>MAJAK4 COLLECTION</span><h2 id="majak-collection-title">コレクション</h2></div>
-          <button type="button" onClick={onClose} aria-label="閉じる">×</button>
+    <div className="majak-popup-overlay majak-collection-overlay" role="presentation">
+      <section className="majak-popup-panel majak-collection-dialog" role="dialog" aria-modal="true" aria-labelledby="majak-collection-title">
+        <header className="majak-popup-titlebar majak-collection-header">
+          <div><h2 id="majak-collection-title">コレクション</h2></div>
+          <button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
         </header>
         <div className="majak-collection-tabs" role="tablist" aria-label="コレクション種別">
           <button type="button" role="tab" aria-selected={category === 'majak'} className={category === 'majak' ? 'is-active' : ''} onClick={() => setCategory('majak')}>麻雀称号</button>
           <button type="button" role="tab" aria-selected={category === 'trick'} className={category === 'trick' ? 'is-active' : ''} onClick={() => setCategory('trick')}>技</button>
         </div>
-        <div className="majak-collection-content">
+        <div className="majak-popup-body majak-collection-content">
           {!collection && !error && <div className="majak-collection-status">読み込み中...</div>}
           {error && <div className="majak-collection-status is-error">{error}</div>}
           {collection && items.length === 0 && <div className="majak-collection-status">獲得済みの{category === 'majak' ? '麻雀称号' : '技'}はありません。</div>}
@@ -75,7 +75,7 @@ export default function CollectionDlg({ onClose, onEquipChange }: Props) {
             ))}
           </div>
         </div>
-        <footer className="majak-collection-footer">
+        <footer className="majak-popup-actions majak-collection-footer">
           <button type="button" disabled={!equippedTitleId || pendingTitleId !== null} onClick={() => void equip(null)}>装着を外す</button>
           <button type="button" onClick={onClose}>閉じる</button>
         </footer>

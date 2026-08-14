@@ -42,13 +42,10 @@
  *   ID_REASON_EVENTENTRY  "対局できません"
  *   ID_REASON_EVENTENTRY2 "参加できません"
  */
-import { useRef, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import BuyHanCoinItemDlg from './BuyHanCoinItemDlg'
 import { SHOP_ITEM_DATA_BUY } from './shopItemData'
 import { playMajakSfx } from '../../../utils/majakSound'
-
-const IMG = '/assets/images/game'
-const FONT = 'var(--majak-font-family-ui)'
 
 /** itemPopupReason 相当 */
 export const POPUP_REASON = {
@@ -88,38 +85,6 @@ interface Props {
   hanCoinCoupon?: number
   onClose: () => void
   onBuyItem?: (item: PopupItemData) => void
-}
-
-/** ====================================================================
- * CMJBmpButton 相当 — AP-06 §2 4フレームスプライトボタン
- * ==================================================================== */
-function SpriteButton({
-  src, frameW, frameH, x, y, onClick, title,
-}: {
-  src: string; frameW: number; frameH: number
-  x: number; y: number; onClick: () => void; title?: string
-}) {
-  const [fi, setFi] = useState(0)
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      onMouseEnter={() => setFi(2)}
-      onMouseLeave={() => setFi(0)}
-      onMouseDown={() => setFi(3)}
-      onMouseUp={() => setFi(2)}
-      style={{
-        position: 'absolute', left: x, top: y,
-        width: frameW, height: frameH,
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-fi * frameW}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none', padding: 0,
-        cursor: 'pointer', outline: 'none',
-        imageRendering: 'pixelated',
-      }}
-    />
-  )
 }
 
 const DEFAULT_POPUP_ITEMS: [PopupItemData, PopupItemData, PopupItemData] = [
@@ -171,24 +136,8 @@ function getMessage(reason: PopupReason, gamMoney = 0, callerMessage = ''): stri
   }
 }
 
-/** メッセージ矩形 (m_rcMessage 相当) */
-function getMsgRect(reason: PopupReason): { left: number; top: number; width: number; height: number } {
-  /** 2行ケース: CRect(12,58,497,81) */
-  const twoLine = [
-    POPUP_REASON.FREE,
-    POPUP_REASON.USEDUP,
-    POPUP_REASON.NOTHING,
-    POPUP_REASON.EVENTENTRY2,
-  ] as PopupReason[]
-  if (twoLine.includes(reason)) {
-    return { left: 12, top: 58, width: 485, height: 23 }   /* 497-12=485, 81-58=23 */
-  }
-  /** 1行ケース: CRect(12,64,497,75) */
-  return { left: 12, top: 64, width: 485, height: 11 }     /* 75-64=11 */
-}
-
 function makeMoneyString(value: number): string {
-  return `${Math.trunc(value).toLocaleString('ja-JP')} GP`
+  return `${Math.trunc(value).toLocaleString('ja-JP')} MP`
 }
 
 function getBuyDialogDescription(item: PopupItemData): string[] {
@@ -226,31 +175,6 @@ export default function ItemPopupDlg({
   onBuyItem,
 }: Props) {
   const [buyTarget, setBuyTarget] = useState<PopupItemData | null>(null)
-  /* ドラッグ移動 (OnNcHitTest: pt.y < 31 → HTCAPTION) */
-  const [pos, setPos]   = useState({ x: 0, y: 0 })
-  const dragging        = useRef(false)
-  const dragOffset      = useRef({ dx: 0, dy: 0 })
-
-  const onDragStart = (e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    if (e.clientY - rect.top >= 31) return
-    dragging.current   = true
-    dragOffset.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
-    e.preventDefault()
-  }
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!dragging.current) return
-      setPos({ x: e.clientX - dragOffset.current.dx, y: e.clientY - dragOffset.current.dy })
-    }
-    const onUp = () => { dragging.current = false }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
-    }
-  }, [])
 
   useEffect(() => {
     if (reason === POPUP_REASON.FREE) playMajakSfx('mjkhojyu')
@@ -261,214 +185,32 @@ export default function ItemPopupDlg({
 
   const title   = getTitle(reason)
   const message = getMessage(reason, gamMoney, callerMessage)
-  const msgRect = getMsgRect(reason)
 
   /* おすすめアイコン: ID_REASON_EVENTENTRY / EVENTENTRY2 では非表示 */
   const showEncourage = reason !== POPUP_REASON.EVENTENTRY && reason !== POPUP_REASON.EVENTENTRY2
 
   return (
-    /* モーダルオーバーレイ */
-    <div
-      style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.45)',
-        zIndex: 300,
-      }}
-    >
-      {/* CItemPopupDlg クライアント領域: 510×410px */}
-      <div
-        style={{
-          position: 'relative',
-          width: 510, height: 410,
-          left: pos.x, top: pos.y,
-        }}
-        onMouseDown={onDragStart}
-      >
-        {/* ================================================================
-            背景: mj_shp_window_minishop_01.png (510×410) at (0,0)
-            Create(..., 1, ...) = 1フレーム単一画像
-            DrawTransparent(&dc, 0, 0, 0)
-            ================================================================ */}
-        <img
-          src={`${IMG}/mj_shp_window_minishop_01.png`}
-          alt=""
-          draggable={false}
-          style={{
-            position: 'absolute', left: 0, top: 0,
-            width: 510, height: 410,
-            userSelect: 'none',
-          }}
-        />
-
-        {/* ================================================================
-            タイトル (OnPaint)
-            DrawText(m_strTitle, CRect(148,7,364,22), DT_CENTER)
-            15px bold 白
-            ================================================================ */}
-        <div
-          style={{
-            position: 'absolute',
-            left: 148, top: 7, width: 216, height: 15,  /* 364-148=216, 22-7=15 */
-            fontFamily: FONT,
-            fontSize: 'calc(15px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
-            textAlign: 'center', pointerEvents: 'none',
-          }}
-        >
-          {title}
-        </div>
-
-        {/* ================================================================
-            メッセージ (OnPaint)
-            DrawText(m_strMessage, m_rcMessage, DT_CENTER)
-            12px bold 黒
-            2行ケース: CRect(12,58,497,81)
-            1行ケース: CRect(12,64,497,75)
-            ================================================================ */}
-        <div
-          style={{
-            position: 'absolute',
-            left: msgRect.left,
-            top: msgRect.top,
-            width: msgRect.width,
-            height: msgRect.height,
-            fontFamily: FONT,
-            fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
-            textAlign: 'center',
-            whiteSpace: 'pre-line',
-            pointerEvents: 'none',
-          }}
-        >
-          {message}
-        </div>
-
-        {/* ================================================================
-            おすすめ！アイコン: mj_shp_icon.png (83×32, 1フレーム)
-            DrawTransparent(&dc, 64+150*m_nEncourageMarkPos, 141, 0)
-            ID_REASON_EVENTENTRY / EVENTENTRY2 では非表示 (SAFE_DELETE)
-            ================================================================ */}
-        {showEncourage && (
-          <img
-            src={`${IMG}/mj_shp_icon.png`}
-            alt="おすすめ"
-            draggable={false}
-            style={{
-              position: 'absolute',
-              left: 64 + 150 * encouragePos,
-              top: 141,
-              width: 83,
-              height: 32,
-              pointerEvents: 'none',
-            }}
-          />
-        )}
-
-        {/* ================================================================
-            アイテム × 3 (i=0,1,2):
-              アイテム画像 m_pItemImage[i]->Draw(&dc, 73+150*i, 226, 0)
-              アイテム名   CRect(40+150*i,187, 170+150*i,198) DT_CENTER 黒
-              おすすめ文   CRect(40+150*i,199, 170+150*i,210) DT_CENTER RGB(40,160,100)
-              価格         CRect(46+150*i,312, 108+150*i,323) DT_RIGHT  黒
-            購入ボタン  mj_shp_btn_buy.png (204×28 → 4フレーム 51×28)
-              at (119+150*i, 303)  IDC_BTN_ITEM1BUY+i
-            ================================================================ */}
-        {items.map((item, i) => (
-          <div key={item.itemCode} style={{ position: 'absolute', left: 0, top: 0 }}>
-
-            {/* アイテム画像 (65×65, 1フレーム) at (73+150*i, 226) */}
-            {item.imageUrl && (
-              <img
-                src={item.imageUrl}
-                alt={item.itemName}
-                draggable={false}
-                style={{
-                  position: 'absolute',
-                  left: 73 + 150 * i,
-                  top: 226,
-                  width: 65,
-                  height: 65,
-                  pointerEvents: 'none',
-                }}
-                onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-              />
-            )}
-
-            {/* アイテム名 CRect(40+150*i,187, 170+150*i,198) DT_CENTER 黒 */}
-            <div
-              style={{
-                position: 'absolute',
-                left: 40 + 150 * i,
-                top: 187,
-                width: 130,  /* 170-40=130 */
-                height: 11,  /* 198-187=11 */
-                fontFamily: FONT,
-                fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
-                textAlign: 'center',
-                overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                pointerEvents: 'none',
-              }}
-            >
-              {item.itemName}
-            </div>
-
-            {/* おすすめ文 CRect(40+150*i,199, 170+150*i,210) DT_CENTER RGB(40,160,100) */}
-            <div
-              style={{
-                position: 'absolute',
-                left: 40 + 150 * i,
-                top: 199,
-                width: 130,
-                height: 11,  /* 210-199=11 */
-                fontFamily: FONT,
-                fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: 'rgb(40,160,100)',
-                textAlign: 'center',
-                overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                pointerEvents: 'none',
-              }}
-            >
-              おすすめ{item.itemNameSub}
-            </div>
-
-            {/* 価格 CRect(46+150*i,312, 108+150*i,323) DT_RIGHT 黒 */}
-            <div
-              style={{
-                position: 'absolute',
-                left: 46 + 150 * i,
-                top: 312,
-                width: 62,   /* 108-46=62 */
-                height: 11,  /* 323-312=11 */
-                fontFamily: FONT,
-                fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
-                textAlign: 'right',
-                pointerEvents: 'none',
-              }}
-            >
-              {makeMoneyString(item.price)}
-            </div>
-
-            {/* 購入ボタン: mj_shp_btn_buy.png (204×28, 4フレーム 51×28) at (119+150*i, 303) */}
-            <SpriteButton
-              src={`${IMG}/mj_shp_btn_buy.png`}
-              frameW={51} frameH={28}
-              x={119 + 150 * i} y={303}
-              onClick={() => openBuyDialog(item)}
-              title="購入"
-            />
+    <div className="majak-popup-overlay">
+      <section className="majak-popup-panel majak-item-popup-dialog" role="dialog" aria-modal="true" aria-labelledby="item-popup-dialog-title">
+        <header id="item-popup-dialog-title" className="majak-popup-titlebar"><span>{title}</span><button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button></header>
+        <div className="majak-popup-body majak-item-popup-dialog__body">
+          {message && <p className="majak-item-popup-dialog__message">{message}</p>}
+          <div className="majak-item-popup-dialog__items">
+            {items.map((item, index) => (
+              <article key={item.itemCode} className={`majak-item-popup-dialog__item${showEncourage && index === encouragePos ? ' is-recommended' : ''}`}>
+                {showEncourage && index === encouragePos && <span className="majak-item-popup-dialog__recommendation">おすすめ</span>}
+                {item.imageUrl && <img src={item.imageUrl} alt={item.itemName} onError={event => { event.currentTarget.hidden = true }} />}
+                <strong>{item.itemName}</strong>
+                <em>{makeMoneyString(item.price)}</em>
+                <button type="button" onClick={() => openBuyDialog(item)}>購入</button>
+              </article>
+            ))}
           </div>
-        ))}
-
-        {/* ================================================================
-            OKボタン: mj_shp_btn_ok.png (352×32, 4フレーム 88×32) at (211,358)
-            m_btnClose.Create(0, ..., 211, 358, ..., IDOK)
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG}/mj_shp_btn_ok.png`}
-          frameW={88} frameH={32}
-          x={211} y={358}
-          onClick={onClose}
-          title="OK"
-        />
-      </div>
+        </div>
+        <footer className="majak-popup-actions">
+          <button type="button" className="is-primary" onClick={onClose}>OK</button>
+        </footer>
+      </section>
 
       {buyTarget && (
         <BuyHanCoinItemDlg

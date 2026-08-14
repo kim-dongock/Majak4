@@ -865,12 +865,17 @@ public class HanChatAllRelayCommand : ICommand
             [GKey.PlayerType] = GKey.ValuePlayer,
             [GKey.Target] = packetTarget,
             [GKey.Color] = 0,
+            [GKey.Name] = player.NickName,
+            [Key.NickName] = player.NickName,
             [GKey.String] = message,
             ["memberNo"] = player.Pix,
             ["pix"] = player.Pix,
             ["playerType"] = GKey.ValuePlayer,
             ["target"] = packetTarget,
             ["color"] = 0,
+            ["name"] = player.NickName,
+            ["nickname"] = player.NickName,
+            ["nickName"] = player.NickName,
             ["string"] = message,
         };
     }

@@ -245,7 +245,7 @@ public class EnterChannelCommand : ICommand
 
         if (!await _playerRepo.ExistsCommonRatAsync(memberNo))
         {
-            await _moneyService.CreateCommonRatWithDefaultMoneyHistAsync(memberNo, GameConst.DefaultMoney, ctx.RemoteIpAddress);
+            await _moneyService.CreateCommonRatWithConfiguredMoneyHistAsync(memberNo, ctx.RemoteIpAddress);
         }
 
         if (!await _playerRepo.LoadCommonRatAsync(player))

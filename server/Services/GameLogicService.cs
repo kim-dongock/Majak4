@@ -60,6 +60,7 @@ public class GameLogicService
     private readonly GradeRankService     _gradeRank;
     private readonly ILogger<GameLogicService>? _log;
     private readonly RoomRegistryService? _roomRegistry;
+    private readonly PaifuFileService? _paifuFiles;
     private readonly ITrainingAiEvaluator _trainingAiEvaluator;
     private readonly TrainingAiLevel      _trainingAiLevel;
     private readonly bool                 _testEnvironment;
@@ -79,7 +80,8 @@ public class GameLogicService
         GradeRankService     gradeRank,
         IConfiguration       config,
         ILogger<GameLogicService>? log = null,
-        RoomRegistryService? roomRegistry = null)
+        RoomRegistryService? roomRegistry = null,
+        PaifuFileService? paifuFiles = null)
     {
         _session       = session;
         _historyRepo   = historyRepo;
@@ -92,6 +94,7 @@ public class GameLogicService
         _gradeRank     = gradeRank;
         _log           = log;
         _roomRegistry  = roomRegistry;
+        _paifuFiles    = paifuFiles;
         if (!Enum.TryParse(config["GameSettings:TrainingAiLevel"], ignoreCase: true, out _trainingAiLevel))
             _trainingAiLevel = TrainingAiLevel.Legacy;
         _trainingAiEvaluator = _trainingAiLevel switch
@@ -123,6 +126,7 @@ public class GameLogicService
         room.ResetGameActions();
         room.ResetGameReportProcess();
         room.LastGameReportPayload = null;
+        room.PaifuHistory.Clear();
         PrepareTrainingNpcProfiles(room);
         if (_roomRegistry != null)
         {
@@ -178,8 +182,10 @@ public class GameLogicService
             string.Join(',', room.SeatToEngineOrder));
 
 
+        var hanchanInfo = BuildHanchanInfo(room);
+        room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, hanchanInfo));
         await ctx.Clients.Group($"room_{room.RoomId}")
-            .SendAsync(Cmd.GamePlay, BuildHanchanInfo(room));
+            .SendAsync(Cmd.GamePlay, hanchanInfo);
 
 
         await OnInitKyokuAsync(room, ctx);
@@ -490,8 +496,14 @@ public class GameLogicService
         _log?.LogDebug("GamePlayProcess broadcast action. roomId={RoomId} order={Order} action={Action} leftCount={LeftCount}", room.RoomId, order, action, room.Engine.GetBipaiCount());
 
 
-        if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
+        if (historyPaiInfo != null)
+        {
+            var historyPacket = WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo);
+            room.PlayHistory.Add(historyPacket);
+            room.PaifuHistory.Add(historyPacket);
+        }
         room.PlayHistory.Add(actionInfo);
+        room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, actionInfo));
 
 
         _log?.LogDebug("GamePlayProcess post-action state. roomId={RoomId} gameStatus={GameStatus} roomState={RoomState}", room.RoomId, room.Engine.GameStatus, room.State);
@@ -704,8 +716,14 @@ public class GameLogicService
         var actionInfo = BuildActionInfo(room, order, (int)eAct, bipaiIdx, auditSeq: auditSeq);
         await ctx.Clients.Group($"room_{room.RoomId}")
             .SendAsync(Cmd.GamePlay, actionInfo);
-        if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
+        if (historyPaiInfo != null)
+        {
+            var historyPacket = WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo);
+            room.PlayHistory.Add(historyPacket);
+            room.PaifuHistory.Add(historyPacket);
+        }
         room.PlayHistory.Add(actionInfo);
+        room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, actionInfo));
 
         switch (room.Engine.GameStatus)
         {
@@ -1056,8 +1074,14 @@ public class GameLogicService
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
         var actionInfo = BuildActionInfo(room, order, (int)act, bipaiIdx, actionSeq, auditSeq);
         await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.GamePlay, actionInfo);
-        if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
+        if (historyPaiInfo != null)
+        {
+            var historyPacket = WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo);
+            room.PlayHistory.Add(historyPacket);
+            room.PaifuHistory.Add(historyPacket);
+        }
         room.PlayHistory.Add(actionInfo);
+        room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, actionInfo));
 
         switch (room.Engine.GameStatus)
         {
@@ -1389,8 +1413,14 @@ public class GameLogicService
                 var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
                 var actionInfo = BuildActionInfo(room, order, (int)timeoutAct, bipaiIdx, prompt.ActionSeq, auditSeq);
                 await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.GamePlay, actionInfo);
-                if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
+                if (historyPaiInfo != null)
+                {
+                    var historyPacket = WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo);
+                    room.PlayHistory.Add(historyPacket);
+                    room.PaifuHistory.Add(historyPacket);
+                }
                 room.PlayHistory.Add(actionInfo);
+                room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, actionInfo));
 
                 switch (room.Engine.GameStatus)
                 {
@@ -1593,7 +1623,12 @@ public class GameLogicService
 
 
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: true);
-        if (historyPaiInfo != null) room.PlayHistory.Add(WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo));
+        if (historyPaiInfo != null)
+        {
+            var historyPacket = WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo);
+            room.PlayHistory.Add(historyPacket);
+            room.PaifuHistory.Add(historyPacket);
+        }
 
 
         long presentationId = PrepareGamePresentationReadyGate(room);
@@ -1623,6 +1658,7 @@ public class GameLogicService
             timeKeepMs   = speed.Keep,
         };
         room.PlayHistory.Add(kyokuInfo);
+        room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, kyokuInfo));
         await ctx.Clients.Group($"room_{room.RoomId}")
             .SendAsync(Cmd.GamePlay, kyokuInfo);
         _log?.LogInformation("OnInitKyoku sent MJPID_INIKYO. roomId={RoomId} oyaOrder={OyaOrder} waremeOdr={WaremeOdr} dice={Dice} memberPoints={MemberPoints}",
@@ -2325,6 +2361,17 @@ public class GameLogicService
         await ctx.Clients.Group($"chanel_{room.ChannelId}")
             .SendAsync(Cmd.GameReport, resultPayload);
         room.LastGameReportPayload = resultPayload;
+        if (_paifuFiles != null)
+        {
+            try
+            {
+                await _paifuFiles.StoreCompletedGameAsync(room, room.PaifuHistory, room.Seats.Where(seat => seat != null).Select(seat => seat!).ToArray(), resultPayload);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "Paifu archive write failed but game report continues. roomId={RoomId}", room.RoomId);
+            }
+        }
         _log?.LogInformation("GameReportProcess sent game report. roomId={RoomId} users={UserCount}", room.RoomId, report.Users.Count(u => u != null));
 
         ClearReservedChanceItems(report);
@@ -2346,6 +2393,7 @@ public class GameLogicService
         room.CurrentKyoku = 0;
         room.LimitCnt = GameConst.PlayerMaxCount;
         room.PlayHistory.Clear();
+        room.PaifuHistory.Clear();
         room.ClearOk();
         for (int i = 0; i < GameConst.PlayerMaxCount; i++)
             room.OkButtonStates[i] = false;
@@ -3881,6 +3929,20 @@ public class GameLogicService
         }
 
 
+        var archiveBuf = Engine.BipaiInfo.Create();
+        room.Engine.GetBipai(ref archiveBuf, (1 << (MajakConst.PlayerMaxCount + 1)) - 1, 1 << MajakConst.PlayerMaxCount);
+        var archivePayload = archiveBuf.PaiCnt > 0
+            ? new
+            {
+                bInit = effectiveIsInit,
+                openPos = MajakConst.PlayerMaxCount,
+                paiCount = archiveBuf.PaiCnt,
+                pai = archiveBuf.Pai.Take(archiveBuf.PaiCnt)
+                    .Select(pc => new { code = pc.Code, idx = pc.BipaiIndex, red = pc.IsRed })
+                    .ToArray(),
+            }
+            : null;
+
         int vOpenMask = 1 << MajakConst.PlayerMaxCount;
         if (room.RoomOption.Length > 6 && room.RoomOption[6] == '1')
             vOpenMask = (1 << (MajakConst.PlayerMaxCount + 1)) - 1;
@@ -3904,7 +3966,7 @@ public class GameLogicService
                     .SendAsync(Cmd.PaiInfoList, viewerPayload);
             }
         }
-        return viewerPayload;
+        return archivePayload;
     }
 
     public async Task SendPaiInfoAsync(GameRoom room, CommandContext ctx, MajakPlayer player, bool isInit, bool includeAll)
@@ -4142,6 +4204,7 @@ public class GameLogicService
                     slevel       = sLevel,
                     gammoney     = currentMoney,
                     moneyChange  = u.MoneyChange,
+                    lentMoney    = u.CurrLent,
                     coinGain     = Math.Max(0, (long)setBal * room.MoneyRate),
                     coinNeed     = GetNextLevelMoneyNeed(p?.NLevel ?? 0, currentMoney),
                     dealerFee    = u.DealerFee,
@@ -4464,17 +4527,14 @@ public class GameLogicService
 
 
     /// </summary>
-    private long GetRoomChargeCommon(GameRoom room)
+    public static long GetRoomCharge(GameRoom room)
     {
-
-
-        //   citor = m_baDaiMap.find(m_pChnlInfo->m_szSubId);
-        //   if (citor == m_baDaiMap.end()) return 0;
-        //   return citor->second;
         if (s_baDaiMap.TryGetValue(room.SubId, out int badai))
             return badai;
         return 0L;
     }
+
+    private long GetRoomChargeCommon(GameRoom room) => GetRoomCharge(room);
 
     // ─────────────────────────────────────────────────────────────
 

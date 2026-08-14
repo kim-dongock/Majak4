@@ -131,6 +131,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
     coinAfter: number
   } | null>(null)
   const [showLotSlot, setShowLotSlot] = useState(false)
+  const [lotteryTotal, setLotteryTotal] = useState(0)
   const [coinBalance] = useState(hanCoin)
   const layoutMode = useOutgameLayoutMode()
   const isMobile = layoutMode !== 'desktop'
@@ -224,6 +225,14 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
         } else {
           const coinAfter = Number(data.cashCount ?? (coinBalance >= 0 ? Math.max(0, coinBalance - totalPrice) : coinBalance))
           if (item.isLottery && typeof item.lotteryCount === 'number' && item.lotteryCount > 0) {
+            const moneyChange = Number(data.moneyChange ?? 0)
+            if (!Number.isSafeInteger(moneyChange) || moneyChange <= 0) {
+              showError('くじの獲得GPを確認できませんでした')
+              onClose()
+              resolve()
+              return
+            }
+            setLotteryTotal(moneyChange)
             setShowLotSlot(true)
           } else {
             setReceipt({ count, coinBefore: coinBalance, coinAfter })
@@ -297,7 +306,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
       {showLotSlot && item.isLottery && typeof item.lotteryCount === 'number' && item.lotteryCount > 0 && <LotSlotDlg
         itemName={item.itemName}
         lotteryCount={item.lotteryCount}
-        totalAmount={item.gameMoney}
+        totalAmount={lotteryTotal}
         imageUrl={item.imageUrl}
         onResult={() => { onBuyOK?.(coinBalance); onClose() }}
         onClose={() => { setShowLotSlot(false); setYesEnabled(true) }}
@@ -525,7 +534,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
           <LotSlotDlg
             itemName={item.itemName}
             lotteryCount={item.lotteryCount}
-            totalAmount={item.gameMoney}
+            totalAmount={lotteryTotal}
             imageUrl={item.imageUrl}
             onResult={() => {
               onBuyOK?.(coinBalance)

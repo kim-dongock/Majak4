@@ -693,7 +693,8 @@ export default function RoomScreen() {
   const location  = useLocation()
   const layoutMode = useOutgameLayoutMode()
   const isMobileIngame = layoutMode === 'mobileLandscape'
-  const ingameLayoutMode = isMobileIngame ? 'mobileLandscape' : 'desktop'
+  const ingameLayoutMode = isMobileIngame ? 'mobileLandscape' : 'responsiveDesktop'
+  const usesLegacyIngameSidebar = ingameLayoutMode === 'desktop'
 
   /** AP-04 §8: ナビゲーション state からサーバー URL とモードを取得
    *   mode='create' : ルーム作成モード → send('c8e', ...)
@@ -772,6 +773,7 @@ export default function RoomScreen() {
   const [announceData, setAnnounceData] = useState<SlideAnnounceData | null>(null)
   const [inlineGame, setInlineGame] = useState(false)
   const [inlineGameLoading, setInlineGameLoading] = useState(false)
+  const useResponsiveWaitingLayout = !inlineGame && layoutMode !== 'mobilePortrait'
   const [gameLoadStep, setGameLoadStep] = useState<GameLoadStep>('server')
   const [gameLoadComplete, setGameLoadComplete] = useState(false)
   const [hanResData, setHanResData] = useState<HanResPlayer[] | null>(null)
@@ -1686,10 +1688,11 @@ export default function RoomScreen() {
       else if (isSelf)     color = legacyPalette.chatSelf
       else if (isPlayer)   color = legacyPalette.chatOther
       else                 color = legacyPalette.chatViewer
+      const senderName = String(data.mjkk34e ?? data.k8e ?? data.nickName ?? data.nickname ?? data.name ?? '')
       setChatLog(prev => appendRoomLog(prev,
         {
           id:   nextMessageId(),
-          name: displayNameForPix(pix),
+          name: senderName || displayNameForPix(pix),
           pix,
           text: String(data.k41e ?? data.string ?? ''),
           color,
@@ -1908,7 +1911,7 @@ export default function RoomScreen() {
       if (!mounted) return
       const lackMoney = Number(data.smmk3e ?? data.lackMoney ?? 0)
       if (lackMoney > 0) {
-        showError(`GPが不足しています。不足金額: ${lackMoney.toLocaleString()} GP`)
+        showError(String(data.message ?? 'GPが不足しています。'))
         void exitRoomToLobby(me?.pos)
       }
     }
@@ -2331,6 +2334,7 @@ export default function RoomScreen() {
     const pix = useAuthStore.getState().player?.pix ?? ''
     await SignalR.send('c22e', {
       k3e: pix,
+      targetMemberNo: targetPix,
       targetPix,
       k42e: roomId ?? '',
       k65e: '一緒に対戦しませんか？',
@@ -2495,6 +2499,17 @@ export default function RoomScreen() {
         : !effectiveAllReady
           ? promptSrc.waitReady
           : promptSrc.waitStart
+  const responsivePromptText = autoMatchingChannel || !me
+    ? null
+    : trainingChannel && me.isHost
+      ? trainingReadyToStart ? '対局を開始できます。開始を押してください。' : '参加者の準備が完了するまでお待ちください。'
+    : !effectiveRoomFull
+      ? '参加者を待っています。'
+      : !me.ready
+        ? '準備完了を押してください。'
+        : !effectiveAllReady
+          ? 'ほかの参加者の準備を待っています。'
+          : '全員の準備が完了しました。開始を待っています。'
   const readyButtonImage = trainingChannel && me?.isHost
     ? bgSkinSrc('mj_btStart')
     : bgSkinSrc('mj_btOK', 'mj_btOk')
@@ -2545,7 +2560,7 @@ export default function RoomScreen() {
     return pendingStage
   }
 
-  if (isMobileIngame && !inlineGame) {
+  if (useResponsiveWaitingLayout) {
     const mobileSeats = ([0, 1, 2, 3] as const).map(loc => ({
       loc,
       player: players.find(player => seatToLegacyLoc(player.pos, me?.pos) === loc),
@@ -2558,11 +2573,11 @@ export default function RoomScreen() {
     const readyButtonAttention = readyLabel === '準備完了' && !readyButtonDisabled
 
     return (
-      <div className={`majak-mobile-room-waiting-screen${tengokuBoardSkin ? ' is-tengoku-skin' : ''}`}>
+      <div className={`majak-mobile-room-waiting-screen${layoutMode === 'desktop' ? ' majak-responsive-desktop-room-waiting' : ''}${tengokuBoardSkin ? ' is-tengoku-skin' : ''}`}>
         <section className="majak-mobile-room-table">
           <div className="majak-mobile-room-table__header">
             <div>
-              <div className="majak-mobile-eyebrow">ROOM</div>
+              <div className="majak-mobile-eyebrow">対局待機</div>
               <h1>{roomTitle || `${roomId ?? ''}番部屋`}</h1>
             </div>
             <div className="majak-mobile-room-table__meta">
@@ -2603,6 +2618,8 @@ export default function RoomScreen() {
               )
             })}
           </div>
+
+          {responsivePromptText && <p className="majak-mobile-room-prompt-message" role="status">{responsivePromptText}</p>}
 
           <div className="majak-mobile-room-primary-actions">
             <button type="button" onClick={() => { void exitRoomToLobby(me?.pos) }}>退室</button>
@@ -2653,7 +2670,6 @@ export default function RoomScreen() {
             members={channelMembers}
             fullScreen
             compact
-            placement="bottom"
             onClose={() => setShowInviteList(false)}
             onReqGame={pix => void onGameInvi(pix)}
             onViewProfile={openChannelMemberInfo}
@@ -2720,21 +2736,14 @@ export default function RoomScreen() {
     ) : null
 
     const inlineGameStage = (
-      <div style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: isMobileIngame ? 'transparent' : '#000' }}>
+      <div className="majak-inline-game-stage" style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: isMobileIngame || ingameLayoutMode === 'responsiveDesktop' ? 'transparent' : '#000' }}>
         <div ref={inlineGameRef} style={{ position: 'absolute', left: 0, top: -31, width: GAME_WIDTH, height: GAME_HEIGHT }} />
-        <GameReconnectLoading visible={!isMobileIngame && inlineGameLoading} currentStep={gameLoadStep} complete={gameLoadComplete} />
-
-        {!isMobileIngame && kyoResultOverlay && (
-          <div style={{ position: 'absolute', left: 0, top: -31, width: GAME_WIDTH, height: GAME_HEIGHT, zIndex: 350 }}>
-            {kyoResultOverlay}
-          </div>
-        )}
 
         <div style={{ position: 'absolute', left: 0, top: 0, width: ROOM_W, height: ROOM_H, zIndex: 24, pointerEvents: 'none' }}>
           {activeEmoticons.map(item => <EmoticonAnimation key={item.id} item={item} now={emoticonNow} />)}
         </div>
 
-        {!isMobileIngame && Array.from({ length: EMOTICON_COUNT }, (_, index) => (
+        {usesLegacyIngameSidebar && Array.from({ length: EMOTICON_COUNT }, (_, index) => (
           <EmoticonSpriteButton
             key={index}
             index={index}
@@ -2746,7 +2755,7 @@ export default function RoomScreen() {
         ))}
 
         {/* Inline gameplay still uses CMJRoomWnd right panel on desktop; mobile exposes chat/actions as overlay controls. */}
-        {!isMobileIngame && (
+        {usesLegacyIngameSidebar && (
           <>
             <div
               style={{
@@ -2775,7 +2784,7 @@ export default function RoomScreen() {
         )}
 
         <div
-          ref={isMobileIngame ? undefined : statusLogRef}
+          ref={usesLegacyIngameSidebar ? statusLogRef : undefined}
           className="majak-room-scroll"
           style={{
             position: 'absolute',
@@ -2793,7 +2802,7 @@ export default function RoomScreen() {
             color: legacyPalette.roomTitle,
             zIndex: 21,
             pointerEvents: 'auto',
-            display: isMobileIngame || announceData ? 'none' : undefined,
+            display: !usesLegacyIngameSidebar || announceData ? 'none' : undefined,
           }}
         >
           {statusLog.map(m => (
@@ -2801,7 +2810,7 @@ export default function RoomScreen() {
           ))}
         </div>
 
-        {!isMobileIngame && (
+        {usesLegacyIngameSidebar && (
           <div style={{ position: 'absolute', left: 0, top: 0, zIndex: 22 }}>
             <ViewerListWnd viewers={viewers} y={204} />
           </div>
@@ -2828,7 +2837,7 @@ export default function RoomScreen() {
             whiteSpace: 'nowrap',
             pointerEvents: 'none',
             zIndex: 21,
-            display: isMobileIngame || announceData ? 'none' : undefined,
+            display: !usesLegacyIngameSidebar || announceData ? 'none' : undefined,
             textShadow: '1px 1px 0 rgba(0,0,0,0.65)',
           }}
         >
@@ -2836,7 +2845,7 @@ export default function RoomScreen() {
         </div>
 
         <div
-          ref={isMobileIngame ? undefined : chatLogRef}
+          ref={usesLegacyIngameSidebar ? chatLogRef : undefined}
           className="majak-room-scroll"
           style={{
             position: 'absolute',
@@ -2855,7 +2864,7 @@ export default function RoomScreen() {
             background: 'transparent',
             zIndex: 21,
             pointerEvents: 'auto',
-            display: isMobileIngame ? 'none' : undefined,
+            display: usesLegacyIngameSidebar ? undefined : 'none',
           }}
         >
           {chatLog.map(m => (
@@ -2866,7 +2875,7 @@ export default function RoomScreen() {
         </div>
 
         <input
-          ref={isMobileIngame ? undefined : chatInputRef}
+          ref={usesLegacyIngameSidebar ? chatInputRef : undefined}
           value={chatText}
           onChange={e => setChatText(e.target.value)}
           onKeyDown={onChatKeyDown}
@@ -2887,7 +2896,7 @@ export default function RoomScreen() {
             padding: '0 2px',
             opacity: chatInputDisabled ? 0.65 : 1,
             zIndex: 30,
-            display: isMobileIngame ? 'none' : undefined,
+            display: usesLegacyIngameSidebar ? undefined : 'none',
           }}
         />
         <div style={{ position: 'absolute', left: 0, top: 0, width: ROOM_W, height: ROOM_H, zIndex: 30, pointerEvents: 'none' }}>
@@ -2897,7 +2906,7 @@ export default function RoomScreen() {
             x={118} y={647}
             onClick={() => onViewerRotate(3)}
             title="回転3"
-            hidden={isMobileIngame || !isViewerUser}
+            hidden={!usesLegacyIngameSidebar || !isViewerUser}
           />
           <SpriteButton
             src={bgSkinSrc('mj_btPaifuRot1')}
@@ -2905,7 +2914,7 @@ export default function RoomScreen() {
             x={164} y={647}
             onClick={() => onViewerRotate(1)}
             title="回転1"
-            hidden={isMobileIngame || !isViewerUser}
+            hidden={!usesLegacyIngameSidebar || !isViewerUser}
           />
           <SpriteButton
             src={bgSkinSrc('mj_btLookSutehai')}
@@ -2913,7 +2922,7 @@ export default function RoomScreen() {
             x={435} y={647}
             onClick={() => {}}
             title="捨て牌表示"
-            hidden={isMobileIngame || !isViewerUser}
+            hidden={!usesLegacyIngameSidebar || !isViewerUser}
             disabled
           />
           <SpriteButton
@@ -2922,7 +2931,7 @@ export default function RoomScreen() {
             x={isViewerUser ? 558 : 435} y={647}
             onClick={() => { void exitRoomToLobby(me?.pos) }}
             title="退室"
-            hidden={isMobileIngame || !isViewerUser}
+            hidden={!usesLegacyIngameSidebar || !isViewerUser}
           />
           <SpriteButton
             src={bgSkinSrc('mj_btPaifuHide')}
@@ -2930,7 +2939,7 @@ export default function RoomScreen() {
             x={118} y={676}
             onClick={onViewerHandToggle}
             title="手牌表示切替"
-            hidden={isMobileIngame || !isViewerUser}
+            hidden={!usesLegacyIngameSidebar || !isViewerUser}
             disabled={!viewerHandOpenEnabled}
             checked={viewerHandHidden}
           />
@@ -2940,7 +2949,7 @@ export default function RoomScreen() {
             x={802} y={646}
             onClick={onSetPass}
             title="オートパス"
-            hidden={isMobileIngame || !hasPlayerSeat}
+            hidden={!usesLegacyIngameSidebar || !hasPlayerSeat}
             disabled={!childAutoControlEnabled}
             checked={autoControl.autoPass}
           />
@@ -2950,7 +2959,7 @@ export default function RoomScreen() {
             x={874} y={646}
             onClick={onSetHora}
             title="オート和了"
-            hidden={isMobileIngame || !hasPlayerSeat}
+            hidden={!usesLegacyIngameSidebar || !hasPlayerSeat}
             disabled={!childAutoControlEnabled}
             checked={autoControl.autoHora}
           />
@@ -2960,7 +2969,7 @@ export default function RoomScreen() {
             x={946} y={646}
             onClick={onSetProx}
             title="代打ち"
-            hidden={isMobileIngame || !hasPlayerSeat}
+            hidden={!usesLegacyIngameSidebar || !hasPlayerSeat}
             disabled={!autoControlEnabled}
             checked={autoControl.prox}
           />
@@ -2970,7 +2979,7 @@ export default function RoomScreen() {
             x={802} y={674}
             onClick={onSetAuto}
             title="ツモ切り"
-            hidden={isMobileIngame || !hasPlayerSeat}
+            hidden={!usesLegacyIngameSidebar || !hasPlayerSeat}
             disabled={!childAutoControlEnabled}
             checked={autoControl.autoTap}
           />
@@ -2980,7 +2989,7 @@ export default function RoomScreen() {
             x={803} y={618}
             onClick={openInviteList}
             title="招待"
-            hidden={isMobileIngame || !hasPlayerSeat}
+            hidden={!usesLegacyIngameSidebar || !hasPlayerSeat}
             disabled={autoMatchingChannel}
           />
           <SpriteButton
@@ -2989,12 +2998,12 @@ export default function RoomScreen() {
             x={628} y={569}
             onClick={() => { void onReserveChance() }}
             title="チャンス"
-            hidden={isMobileIngame || !chanceButtonVisible || !hasPlayerSeat}
+            hidden={!usesLegacyIngameSidebar || !chanceButtonVisible || !hasPlayerSeat}
             checked={chanceReserved}
           />
         </div>
 
-        {showInviteList && !isMobileIngame && (
+        {showInviteList && usesLegacyIngameSidebar && (
           <MiniChannelWnd
             channelId={channelId}
             members={channelMembers}
@@ -3160,7 +3169,64 @@ export default function RoomScreen() {
       )
     }
 
-    return inlineGameStage
+    return (
+      <div className={`majak-responsive-ingame-shell${inlineGameLoading ? ' is-loading' : ''}`}>
+        <div className="majak-responsive-ingame-playfield">
+          <img
+            className="majak-responsive-ingame-background"
+            src={customBoardSrc}
+            alt=""
+            onError={event => { event.currentTarget.src = `${IMG}/mj_board.png` }}
+          />
+          <div className="majak-responsive-ingame-world">
+            {inlineGameStage}
+          </div>
+          <div className="majak-responsive-ingame-loading">
+            <GameReconnectLoading visible={inlineGameLoading} currentStep={gameLoadStep} complete={gameLoadComplete} />
+          </div>
+        </div>
+        {!inlineGameLoading && (
+          <aside className={`majak-responsive-ingame-sidebar${tengokuBoardSkin ? ' is-tengoku-skin' : ''}`}>
+            <div className="majak-responsive-ingame-sidebar__status" ref={statusLogRef}>
+              {statusLog.map(message => <div key={message.id} style={{ color: message.color ?? undefined, fontWeight: message.bold ? 'bold' : undefined }}>{message.text}</div>)}
+            </div>
+            <div className="majak-responsive-ingame-sidebar__chat" ref={chatLogRef}>
+              {chatLog.map(message => (
+                <div key={message.id} style={{ color: message.color ?? undefined, fontWeight: message.bold ? 'bold' : undefined }}>
+                  {message.name ? `${message.name} : ${message.text}` : message.text}
+                </div>
+              ))}
+            </div>
+            <div className="majak-responsive-ingame-sidebar__input">
+              <input ref={chatInputRef} value={chatText} onChange={event => setChatText(event.target.value)} onKeyDown={onChatKeyDown} maxLength={80} disabled={chatInputDisabled} />
+              <button type="button" onClick={() => { void sendChat() }} disabled={chatInputDisabled || !chatText.trim()}>送信</button>
+            </div>
+            <div className="majak-responsive-ingame-sidebar__actions">
+              {hasInlineGamePlayerControls && (
+                <>
+                  <button type="button" onClick={openInviteList} disabled={autoMatchingChannel}>招待</button>
+                  <button type="button" className={autoControl.autoPass ? 'is-active' : undefined} onClick={onSetPass} disabled={!childAutoControlEnabled}>オートパス</button>
+                  <button type="button" className={autoControl.autoHora ? 'is-active' : undefined} onClick={onSetHora} disabled={!childAutoControlEnabled}>オート和了</button>
+                  <button type="button" className={autoControl.autoTap ? 'is-active' : undefined} onClick={onSetAuto} disabled={!childAutoControlEnabled}>ツモ切り</button>
+                  <button type="button" className={autoControl.prox ? 'is-active' : undefined} onClick={onSetProx} disabled={!autoControlEnabled}>代打ち</button>
+                </>
+              )}
+            </div>
+          </aside>
+        )}
+        {kyoResultOverlay}
+        {showInviteList && (
+          <MiniChannelWnd
+            channelId={channelId}
+            members={channelMembers}
+            fullScreen
+            onClose={() => setShowInviteList(false)}
+            onReqGame={pix => void onGameInvi(pix)}
+            onViewProfile={openChannelMemberInfo}
+          />
+        )}
+      </div>
+    )
   }
 
   const waitingRoomStage = (
@@ -3600,7 +3666,7 @@ export default function RoomScreen() {
         checked={chanceReserved}
       />
 
-      {showInviteList && (
+      {showInviteList && !isMobileIngame && (
         <MiniChannelWnd
           channelId={channelId}
           members={channelMembers}
@@ -3676,6 +3742,16 @@ export default function RoomScreen() {
         >
           {waitingRoomStage}
         </div>
+        {showInviteList && (
+          <MiniChannelWnd
+            channelId={channelId}
+            members={channelMembers}
+            fullScreen
+            onClose={() => setShowInviteList(false)}
+            onReqGame={pix => void onGameInvi(pix)}
+            onViewProfile={openChannelMemberInfo}
+          />
+        )}
       </div>
     )
   }

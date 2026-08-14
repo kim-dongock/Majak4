@@ -75,6 +75,7 @@ public class BuyMajItemCommand : ICommand
             [Key.GemCount]       = result.GemCount,    // mjkk55e
             [GKey.GamMoney]      = result.GamMoney,    // k34e
             ["cashCount"]       = result.CashCount,
+            ["moneyChange"]     = result.MoneyChange,
             ["result"]           = 0,
             [GKey.Result]        = "v1e",             // G::valueSuccess
         };

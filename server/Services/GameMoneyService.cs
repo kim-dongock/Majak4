@@ -12,15 +12,18 @@ public class GameMoneyService
     private readonly PlayerRepository          _playerRepo;
     private readonly RatingService             _ratingService;
     private readonly HistoryRepository?        _historyRepo;
+    private readonly IGameEconomyPolicyService? _economyPolicy;
 
     public GameMoneyService(
         PlayerRepository          playerRepo,
         RatingService             ratingService,
-        HistoryRepository?        historyRepo = null)
+        HistoryRepository?        historyRepo = null,
+        IGameEconomyPolicyService? economyPolicy = null)
     {
         _playerRepo  = playerRepo;
         _ratingService = ratingService;
         _historyRepo = historyRepo;
+        _economyPolicy = economyPolicy;
     }
 
     /// <summary>
@@ -44,6 +47,12 @@ public class GameMoneyService
         catch
         {
         }
+    }
+
+    public async Task CreateCommonRatWithConfiguredMoneyHistAsync(string memberNo, string remoteAddr)
+    {
+        var policy = await GetEconomyPolicyAsync();
+        await CreateCommonRatWithDefaultMoneyHistAsync(memberNo, policy.InitialGp, remoteAddr);
     }
 
     /// <summary>
@@ -88,8 +97,9 @@ public class GameMoneyService
         DateTime currentTime = DateTime.Now;
         RefreshReplenishmentDay(player, currentTime);
 
-        long allinTarget = GameConst.AllinMoney;
-        int maxCount = GameConst.AllinCountMax;
+        var policy = await GetEconomyPolicyAsync();
+        long allinTarget = policy.FreeReplenishTargetGp;
+        int maxCount = policy.FreeReplenishDailyLimit;
 
         int restAllIn = Math.Max(0, maxCount - player.AllinCnt);
 
@@ -144,6 +154,14 @@ public class GameMoneyService
         restAllIn = Math.Max(0, maxCount - player.AllinCnt);
         return (true, player.GamMoney, 0L, restAllIn, 2);
     }
+
+    private Task<GameEconomyPolicy> GetEconomyPolicyAsync() =>
+        _economyPolicy?.GetCurrentAsync()
+        ?? Task.FromResult(new GameEconomyPolicy(
+            GameConst.DefaultMoney,
+            GameConst.AllinMoney,
+            GameConst.AllinCountMax,
+            DateTime.MinValue));
 
     public static void RefreshReplenishmentDay(MajakPlayer player, DateTime currentTime)
     {

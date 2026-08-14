@@ -1,11 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DESKTOP_INGAME_LAYOUT,
+  getIngameLayout,
+  isCenteredIngameLayout,
+  isMobileIngameLayout,
   MOBILE_DEAD_WALL_SHIFT_X,
   MOBILE_DISCARD_CENTER_INFO_OFFSETS,
   MOBILE_INGAME_LAYOUT,
   MOBILE_REACH_POSITIONS,
   MOBILE_TOP_MELD_CENTER_INFO_OFFSET,
 } from './ingameLayout'
+
+describe('responsive desktop layout mode', () => {
+  it('centers the original desktop geometry without using mobile coordinates', () => {
+    expect(isCenteredIngameLayout('responsiveDesktop')).toBe(true)
+    expect(isCenteredIngameLayout('mobileLandscape')).toBe(true)
+    expect(isCenteredIngameLayout('desktop')).toBe(false)
+    expect(isMobileIngameLayout('responsiveDesktop')).toBe(false)
+    expect(isMobileIngameLayout('mobileLandscape')).toBe(true)
+    expect(getIngameLayout('responsiveDesktop')).toBe(DESKTOP_INGAME_LAYOUT)
+  })
+})
 
 describe('mobile reach-stick ring', () => {
   it('centers all discard rivers around the panel without overlapping rows', () => {

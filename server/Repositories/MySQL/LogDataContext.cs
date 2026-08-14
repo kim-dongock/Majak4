@@ -19,6 +19,8 @@ public sealed class LogDataContext : DbContext
     public DbSet<WinningYakuLogEntity> WinningYakuLogs => Set<WinningYakuLogEntity>();
     public DbSet<ItemPurchaseLogEntity> ItemPurchases => Set<ItemPurchaseLogEntity>();
     public DbSet<PlayerLoginLogEntity> PlayerLoginLogs => Set<PlayerLoginLogEntity>();
+    public DbSet<PaifuArchiveLogEntity> PaifuArchives => Set<PaifuArchiveLogEntity>();
+    public DbSet<PaifuArchiveMemberLogEntity> PaifuArchiveMembers => Set<PaifuArchiveMemberLogEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -166,6 +168,32 @@ public sealed class LogDataContext : DbContext
             entity.Property(x => x.EventType).HasColumnName("event_type");
             entity.Property(x => x.IpAddress).HasColumnName("ip_address").HasMaxLength(45);
             entity.Property(x => x.UserAgent).HasColumnName("user_agent").HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<PaifuArchiveLogEntity>(entity =>
+        {
+            entity.ToTable("paifu_archive_log");
+            entity.HasKey(x => x.PaifuArchiveId);
+            entity.Property(x => x.PaifuArchiveId).HasColumnName("paifu_archive_id").ValueGeneratedOnAdd();
+            entity.Property(x => x.PlayedAt).HasColumnName("played_at");
+            entity.Property(x => x.ChannelId).HasColumnName("channel_id").HasMaxLength(30);
+            entity.Property(x => x.RoomId).HasColumnName("room_id");
+            entity.Property(x => x.RoomName).HasColumnName("room_name").HasMaxLength(100);
+            entity.Property(x => x.RoomOption).HasColumnName("room_option").HasMaxLength(200);
+            entity.Property(x => x.ResultText).HasColumnName("result_text").HasMaxLength(100);
+            entity.Property(x => x.MembersJson).HasColumnName("members_json").HasColumnType("json");
+            entity.Property(x => x.PacketCount).HasColumnName("packet_count");
+            entity.Property(x => x.S3ObjectKey).HasColumnName("s3_object_key").HasMaxLength(512);
+            entity.Property(x => x.ExpiresAt).HasColumnName("expires_at");
+            entity.Property(x => x.CreatedAt).HasColumnName("created_at");
+        });
+
+        modelBuilder.Entity<PaifuArchiveMemberLogEntity>(entity =>
+        {
+            entity.ToTable("paifu_archive_member_log");
+            entity.HasKey(x => new { x.PaifuArchiveId, x.MemberNo });
+            entity.Property(x => x.PaifuArchiveId).HasColumnName("paifu_archive_id").HasColumnType("bigint unsigned");
+            entity.Property(x => x.MemberNo).HasColumnName("member_no").HasColumnType("bigint unsigned");
         });
     }
 }

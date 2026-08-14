@@ -33,17 +33,15 @@ export default function RankingDlg({ data, onClose, memberNameByPix = new Map<st
     : rankDate || '-'
 
   return (
-    <div className="majak-ranking-dialog-overlay" role="dialog" aria-modal="true" aria-labelledby="majak-ranking-dialog-title" onContextMenu={event => event.preventDefault()}>
-      <section className="majak-ranking-dialog">
-        <header className="majak-ranking-dialog__header">
-          <div>
-            <h2 id="majak-ranking-dialog-title">ランキング</h2>
-            <p>対象年月 <strong>{rankDateLabel}</strong><span aria-hidden="true"> / </span>種別 <strong>{data.rankId ?? '-'}</strong></p>
-          </div>
-          <button type="button" className="majak-ranking-dialog__close" onClick={onClose} aria-label="閉じる">×</button>
+    <div className="majak-popup-overlay majak-ranking-dialog-overlay" onContextMenu={event => event.preventDefault()}>
+      <section className="majak-popup-panel majak-ranking-dialog" role="dialog" aria-modal="true" aria-labelledby="majak-ranking-dialog-title">
+        <header className="majak-popup-titlebar majak-ranking-dialog__header">
+          <h2 id="majak-ranking-dialog-title">ランキング</h2>
+          <button type="button" className="majak-popup-titlebar__close majak-ranking-dialog__close" onClick={onClose} aria-label="閉じる">×</button>
         </header>
 
-        <div className="majak-ranking-dialog__body">
+        <div className="majak-popup-body majak-ranking-dialog__body">
+          <p className="majak-ranking-dialog__meta">対象年月 {rankDateLabel}<span aria-hidden="true"> / </span>種別 {data.rankId ?? '-'}</p>
           {data.gradeRankSelf && (
             <section className="majak-ranking-dialog__self" aria-label="自分の順位">
               <span>自分の順位</span>
@@ -74,7 +72,7 @@ export default function RankingDlg({ data, onClose, memberNameByPix = new Map<st
             </div>
           </section>
         </div>
-        <footer className="majak-ranking-dialog__footer"><button type="button" onClick={onClose}>閉じる</button></footer>
+        <footer className="majak-popup-actions majak-ranking-dialog__footer"><button type="button" onClick={onClose}>閉じる</button></footer>
       </section>
     </div>
   )

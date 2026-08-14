@@ -5,6 +5,12 @@
 -- CHANELWT.csv は運用時ランタイムスナップショットのため投入しない
 
 -- 初期データ: cash_product_master
+INSERT INTO game_economy_policy
+    (policy_id, initial_gp, free_replenish_target_gp, free_replenish_daily_limit)
+VALUES
+    (1, 1000, 1000, 1);
+
+-- 初期データ: cash_product_master
 INSERT INTO cash_product_master
     (product_id,         display_name,                  cash_amount, price_jpy, platform,  store_product_id, is_active, sort_order)
 VALUES

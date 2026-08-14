@@ -48,29 +48,13 @@ const IMG_LOT = `${IMG}/lot`
 const REEL_CORNER_POS_X  = 137
 const REEL_CORNER_POS_Y  = 61
 const REEL_HEIGHT         = 78
+const REEL_SCALE          = 1.25
+const REEL_WIDTH          = 25
+const DISPLAY_REEL_WIDTH  = REEL_WIDTH * REEL_SCALE
+const DISPLAY_REEL_HEIGHT = REEL_HEIGHT * REEL_SCALE
+const REEL_FRAME_WIDTH    = DISPLAY_REEL_WIDTH
 // REEL_WIDTH=33 はレガシー定数として保持 (現在は slot_num.png の 25px を使用)
-const NUMOF_FIGURE        = 10   /* 数字リール数 */
-
-/**
- * レガシー OnInitDialog の RECT計算より:
- * リールは 3 グループに分かれて配置される
- *   グループ1 (i=9,8):  X=137, 170
- *   グループ2 (i=7−4): X=256, 289, 322, 355
- *   グループ3 (i=3−0): X=441, 474, 507, 540
- */
-const REEL_X: number[] = (() => {
-  const REEL_WIDTH = 33
-  const X2 = 256, X3 = 441
-  let left = REEL_CORNER_POS_X
-  const pos = new Array(NUMOF_FIGURE)
-  for (let i = NUMOF_FIGURE - 1; i >= 0; i--) {
-    pos[i] = left
-    if (i === 8)       left = X2
-    else if (i === 4)  left = X3
-    else               left = pos[i] + REEL_WIDTH
-  }
-  return pos
-})()
+const MIN_REEL_COUNT      = 4
 
 interface Props {
   itemName: string
@@ -89,18 +73,44 @@ function moneyString(value: number): string {
 
 function createLotValues(totalAmount: number, count: number): number[] {
   if (count <= 0) return []
-  if (count === 1) return [Math.max(0, Math.trunc(totalAmount))]
   const total = Math.max(0, Math.trunc(totalAmount))
+  if (count === 1) return [total]
   if (total < count) return Array(count).fill(0)
+
+  // CRandomDiv::NormalAllotment port: minimum 1 GP per draw, then random dispersion and adjustment.
   const values = Array.from({ length: count }, () => Math.random())
-  const sum = values.reduce((acc, value) => acc + value, 0) || 1
-  const out = values.map(value => Math.max(1, Math.floor(total * value / sum)))
-  let adjust = total - out.reduce((acc, value) => acc + value, 0)
-  while (adjust > 0) {
-    out[Math.floor(Math.random() * out.length)]++
-    adjust--
+  const randomSum = values.reduce((sum, value) => sum + value, 0) || 1
+  let dispersion = 1
+  if (count >= 70) dispersion = Math.max(1, Math.floor(total / 3_000_000))
+  else if (count >= 6) dispersion = Math.max(1, Math.floor(total / 1_000_000))
+
+  const weightedSum = randomSum * dispersion
+  const result = values.map(value => Math.max(1, Math.floor(total * value / weightedSum)))
+  let adjustment = total - result.reduce((sum, value) => sum + value, 0)
+  let adjustmentPart = adjustment
+  let iteration = 0
+
+  while (dispersion > 1 && adjustment > 0) {
+    let numerator = Math.floor(Math.random() * 10) + 1
+    let denominator = numerator + Math.floor(Math.random() * 10) + 1
+    if (iteration === 0) denominator += Math.floor(dispersion / 50)
+    else if (iteration === 1) {
+      numerator += Math.floor(dispersion / 50)
+      denominator += Math.floor(dispersion / 50)
+    }
+    adjustmentPart -= Math.floor(adjustmentPart * numerator / denominator)
+    dispersion -= Math.floor(dispersion * numerator / denominator)
+    result[Math.floor(Math.random() * count)] += adjustmentPart
+    adjustment -= adjustmentPart
+    iteration++
   }
-  return out
+
+  if (adjustment > 0) result[Math.floor(Math.random() * count)] += adjustment
+  else if (adjustment < 0) {
+    const largestIndex = result.reduce((largest, value, index, array) => value > array[largest] ? index : largest, 0)
+    result[largestIndex] += adjustment
+  }
+  return result
 }
 
 /** ====================================================================
@@ -114,9 +124,20 @@ function SpriteButton({
   disabled?: boolean; title?: string
 }) {
   const [fi, setFi] = useState(disabled ? 1 : 0)
+  const buttonRef = useRef<HTMLButtonElement>(null)
   useEffect(() => { setFi(disabled ? 1 : 0) }, [disabled])
+  useEffect(() => {
+    const button = buttonRef.current
+    if (!button) return
+    button.style.setProperty('width', `${frameW}px`, 'important')
+    button.style.setProperty('height', `${frameH}px`, 'important')
+    button.style.setProperty('background-image', `url(${src})`, 'important')
+    button.style.setProperty('background-position', `${-fi * frameW}px 0`, 'important')
+    button.style.setProperty('background-repeat', 'no-repeat', 'important')
+  }, [fi, frameH, frameW, src])
   return (
     <button
+      ref={buttonRef}
       title={title}
       disabled={disabled}
       onClick={disabled ? undefined : onClick}
@@ -144,20 +165,23 @@ function SpriteButton({
  * ==================================================================== */
 function NumberReel({ digit, spinFrame }: { digit: number; spinFrame: number }) {
   const isRotating = digit < 0
+  const displayedDigit = isRotating ? spinFrame % 10 : digit
   return (
     <div style={{
-      width: 25, height: REEL_HEIGHT,
+      width: DISPLAY_REEL_WIDTH, height: DISPLAY_REEL_HEIGHT,
       overflow: 'hidden',
       position: 'relative',
     }}>
       <div
         style={{
           position: 'absolute', left: 0, top: 0,
-          width: 25, height: REEL_HEIGHT,
-          backgroundImage: `url(${IMG_LOT}/${isRotating ? 'lot_slot1.png' : 'lot_slot_num.png'})`,
-          backgroundPosition: `${-(isRotating ? spinFrame : digit) * 25}px 0`,
+          width: REEL_WIDTH, height: REEL_HEIGHT,
+          backgroundImage: `url(${IMG_LOT}/lot_slot_num.png)`,
+          backgroundPosition: `${-displayedDigit * 25}px 0`,
           backgroundRepeat: 'no-repeat',
           imageRendering: 'pixelated',
+          transform: `scale(${REEL_SCALE})`,
+          transformOrigin: 'top left',
         }}
       />
     </div>
@@ -172,14 +196,17 @@ type Phase = 'idle' | 'spinning' | 'stopped' | 'done'
 export default function LotSlotDlg({
   itemName, lotteryCount, totalAmount = 0, lotValues, nextLotteryCount, imageUrl, onResult, onClose: _onClose,
 }: Props) {
+  const valuesRef = useRef<number[]>(lotValues?.slice(0, lotteryCount) ?? createLotValues(totalAmount, lotteryCount))
+  const reelCount = Math.max(
+    MIN_REEL_COUNT,
+    String(Math.max(0, totalAmount, ...valuesRef.current)).length,
+  )
   const [phase,   setPhase]   = useState<Phase>('idle')
-  const [digits,  setDigits]  = useState<number[]>(Array(NUMOF_FIGURE).fill(0))
+  const [digits,  setDigits]  = useState<number[]>(Array(reelCount).fill(0))
   const [spinFrame, setSpinFrame] = useState(0)
   const [amount,  setAmount]  = useState(0)
   const [lotCnt,  setLotCnt]  = useState(0)
   const [showResultDlg, setShowResultDlg] = useState(false)
-  const valuesRef = useRef<number[]>(lotValues?.slice(0, lotteryCount) ?? createLotValues(totalAmount, lotteryCount))
-
   const spinTimer  = useRef<ReturnType<typeof setInterval>  | null>(null)
   const stopTimer  = useRef<ReturnType<typeof setTimeout>   | null>(null)
 
@@ -196,26 +223,27 @@ export default function LotSlotDlg({
     if (lotteryCount - lotCnt <= 0) return
     setPhase('spinning')
     const result = valuesRef.current[lotCnt] ?? 0
-    const resultDigits = String(result).padStart(NUMOF_FIGURE, '0').slice(-NUMOF_FIGURE).split('').map(Number)
-    setDigits(Array(NUMOF_FIGURE).fill(-1))
+    const resultDigits = String(result).padStart(reelCount, '0').slice(-reelCount).split('').map(Number)
+    setDigits(Array(reelCount).fill(-1))
 
     /* CMJSound::LoadSFX("mjkslotstart") + PlaySFX 相当 */
     playMajakSfx('mjkslotstart')
 
     /* TIMER_LOT_SLOT_ROTATION 相当: lot_slot1 4フレーム回転 */
     spinTimer.current = setInterval(() => {
-      setSpinFrame(frame => (frame + 1) % 4)
+      setSpinFrame(frame => frame + 1)
     }, 30)
 
     stopTimer.current = setTimeout(() => {
       let stopIndex = 0
       stopTimer.current = setInterval(() => {
         playMajakSfx('mjkslotstop')
+        const reelIndex = reelCount - 1 - stopIndex
         setDigits(current => current.map((digit, index) => (
-          index === stopIndex ? resultDigits[index] : digit
+          index === reelIndex ? resultDigits[index] : digit
         )))
         stopIndex++
-        if (stopIndex >= NUMOF_FIGURE) {
+        if (stopIndex >= reelCount) {
           if (spinTimer.current) clearInterval(spinTimer.current)
           if (stopTimer.current) clearInterval(stopTimer.current)
           stopTimer.current = setTimeout(() => {
@@ -226,7 +254,7 @@ export default function LotSlotDlg({
         }
       }, 300)
     }, 900)
-  }, [lotCnt, lotteryCount, phase])
+  }, [lotCnt, lotteryCount, phase, reelCount])
 
   const remaining  = lotteryCount - lotCnt
   const isDone     = phase === 'done'
@@ -241,6 +269,10 @@ export default function LotSlotDlg({
    */
   const handleClose = useCallback(async () => {
     if (isSpinning) return  // 回転中は閉じない
+    if (remaining <= 0) {
+      _onClose()
+      return
+    }
     if (remaining > 0) {
       const ok = await showConfirm(
         '残りカウント分は自動的に全回転STARTされます。\nよろしいですか？'
@@ -250,7 +282,7 @@ export default function LotSlotDlg({
       await showMessage('残りカウントがありませんので\n結果画面を表 示します。')
     }
     setShowResultDlg(true)
-  }, [isSpinning, remaining])
+  }, [_onClose, isSpinning, remaining])
 
   /** OnBtnResultClicked → CloseDlg(TRUE) 相当 */
   const handleResult = useCallback(() => {
@@ -259,142 +291,53 @@ export default function LotSlotDlg({
   }, [])
 
   return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.45)', zIndex: 300,
-    }}>
-      {/* CMJLotSlotDlg クライアント領域: 624×222px */}
-      <div style={{ position: 'relative', width: 624, height: 222 }}>
-
-        {/* ================================================================
-            背景: lot/lot_base1.png (624×222) at (0,0)
-            Create(..., 1, ...) = 1フレーム単一画像
-            ================================================================ */}
-        <img
-          src={`${IMG_LOT}/lot_base1.png`}
-          alt=""
-          draggable={false}
-          style={{ position: 'absolute', left: 0, top: 0, width: 624, height: 222 }}
-        />
-
-        {/* アイテム画像: m_pItemImage->Draw(..., 33, 69, 0) */}
-        {imageUrl && (
-          <img
-            src={imageUrl}
-            alt={itemName}
-            draggable={false}
-            style={{
-              position: 'absolute',
-              left: 33, top: 69,
-              objectFit: 'contain', pointerEvents: 'none',
-            }}
-          />
-        )}
-
-        <div style={{ position: 'absolute', left: 41, top: 53, width: 51, height: 13,
-          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
-          fontWeight: 'bold', color: 'rgb(6,65,2)', lineHeight: '13px', textAlign: 'center', overflow: 'hidden', pointerEvents: 'none' }}>
-          {itemName}
-        </div>
-        <div style={{ position: 'absolute', left: 220, top: 28, width: 51, height: 13,
-          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
-          fontWeight: 'bold', color: 'rgb(6,65,2)', lineHeight: '13px', textAlign: 'right', pointerEvents: 'none' }}>
-          {moneyString(totalAmount)}
-        </div>
-        <div style={{ position: 'absolute', left: 53, top: 116, width: 43, height: 15,
-          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
-          fontWeight: 'bold', color: '#fff', lineHeight: '15px', textAlign: 'right', pointerEvents: 'none' }}>
-          {lotteryCount}回
-        </div>
-        <div style={{ position: 'absolute', left: 35, top: 184, width: 51, height: 13,
-          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
-          fontWeight: 'bold', color: 'rgb(6,65,2)', lineHeight: '13px', textAlign: 'right', pointerEvents: 'none' }}>
-          {remaining}
-        </div>
-        <div style={{ position: 'absolute', left: 221, top: 184, width: 142, height: 13,
-          fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(13px * var(--majak-type-scale))',
-          fontWeight: 'bold', color: 'rgb(6,65,2)', lineHeight: '13px', textAlign: 'right', pointerEvents: 'none' }}>
-          {moneyString(amount)}
-        </div>
-
-        {/* ================================================================
-            1回ボタン: lot/lot_t_btn_1.png (288×42, 4フレーム 72×42)
-            m_btnOnce.Create(0, ..., 430, 161, ..., IDC_BTN_START)
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG_LOT}/lot_t_btn_1.png`}
-          frameW={72} frameH={42}
-          x={430} y={161}
-          onClick={handleOnce}
-          disabled={isSpinning || isDone || remaining <= 0}
-          title="1回"
-        />
-
-        {/* ================================================================
-            全回 / 結果ボタン: 同座標 (510, 161) で状態により切り替え
-            停止前: lot/lot_t_btn_2.png (全回)
-            残り0回後: lot/lot_t_btn_5.png (結果表示)
-            m_btnAll / m_btnResult.Create(0, ..., 510, 161, ..., IDC_BTN_RESULT)
-            ================================================================ */}
-        {showResult ? (
-          <SpriteButton
-            src={`${IMG_LOT}/lot_t_btn_5.png`}
-            frameW={72} frameH={42}
-            x={510} y={161}
-            onClick={handleResult}
-            title="結果"
-          />
-        ) : (
-          <SpriteButton
-            src={`${IMG_LOT}/lot_t_btn_2.png`}
-            frameW={72} frameH={42}
-            x={510} y={161}
-            onClick={handleResult}
-            disabled={isSpinning || isDone}
-            title="全回"
-          />
-        )}
-
-        {/* ================================================================
-            数字リール: 3グループ配置 (REEL_X[] より絶対位置)
-            グループ1: i=9,8  → X=137,170
-            グループ2: i=7−4 → X=256,289,322,355
-            グループ3: i=3−0 → X=441,474,507,540
-            ================================================================ */}
-        {digits.map((d, i) => (
-          <div key={i} style={{ position: 'absolute', left: REEL_X[i], top: REEL_CORNER_POS_Y }}>
-            <NumberReel digit={d} spinFrame={spinFrame} />
+    <div className="majak-popup-overlay majak-lottery-slot-overlay" role="presentation">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${itemName} 抽選`}
+        className="majak-lottery-game-panel"
+      >
+        <header className="majak-lottery-game-panel__header">
+          <div>
+            <strong>{itemName}</strong>
           </div>
-        ))}
-        {/* ================================================================
-            閉じるボタン: lot/lot_btn_close.png (72×18, 4フレーム 18×18) at (599, 7)
-            m_btnClose.Create(0, ..., 599, 7, ..., IDC_BTN_CLOSE)
-            OnBtnCloseClicked → CloseDlg() 相当: 残りあれば確認ダイアログ
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG_LOT}/lot_btn_close.png`}
-          frameW={18} frameH={18}
-          x={599} y={7}
-          onClick={handleClose}
-          disabled={isSpinning}
-          title="閉じる"
-        />
-        {showResultDlg && (
-          <LotResultDlg
-            itemName={itemName}
-            lotteryCount={lotteryCount}
-            entries={resultEntries}
-            totalAmount={resultTotal}
-            nextLotteryCount={nextLotteryCount ?? lotteryCount}
-            onBuyAgain={() => {
-              setShowResultDlg(false)
-              _onClose()
-            }}
-            onClose={() => onResult(resultTotal)}
-          />
-        )}
-      </div>
+          <dl>
+            <div><dt>残り</dt><dd>{remaining}回</dd></div>
+            <div><dt>賞金総額</dt><dd>{moneyString(totalAmount)} GP</dd></div>
+          </dl>
+          <button type="button" className="majak-lottery-game-panel__close" onClick={() => { void handleClose() }} disabled={isSpinning || remaining > 0} aria-label="閉じる" title={remaining > 0 ? '残りの抽選後に閉じられます' : undefined}>×</button>
+        </header>
+        <div className="majak-lottery-game-panel__stage" aria-label="抽選金額">
+          <div className="majak-lottery-game-panel__reels">
+            {digits.map((digit, index) => (
+              <div key={index} className="majak-lottery-game-panel__reel">
+                <NumberReel digit={digit} spinFrame={spinFrame + index} />
+              </div>
+            ))}
+          </div>
+          <p>{isSpinning ? '抽選中...' : `現在の獲得合計 ${moneyString(amount)} GP`}</p>
+          <div className="majak-lottery-game-panel__guide">
+            <span>停止した数字が、その回の獲得GPです。</span>
+            <span>すべての抽選結果の合計を受け取れます。</span>
+          </div>
+        </div>
+        <footer className="majak-lottery-game-panel__actions">
+          <button type="button" className="is-draw" onClick={() => { void handleOnce() }} disabled={isSpinning || isDone || remaining <= 0}>1回抽選</button>
+          <button type="button" className="is-result" onClick={handleResult} disabled={isSpinning || isDone}>{showResult ? '結果を見る' : '結果へ'}</button>
+        </footer>
+      </section>
+      {showResultDlg && <LotResultDlg itemName={itemName} lotteryCount={lotteryCount} entries={resultEntries} totalAmount={resultTotal} nextLotteryCount={nextLotteryCount ?? lotteryCount} onBuyAgain={() => { setShowResultDlg(false); _onClose() }} onClose={() => { setShowResultDlg(false); onResult(resultTotal) }} />}
+      <style>{`
+        .majak-lottery-game-panel { width: min(760px, calc(100vw - 32px)); color: #f8f6e9; overflow: hidden; border: 2px solid #d9bc62; border-radius: 7px; background: repeating-linear-gradient(135deg, #123d31 0 12px, #0e3429 12px 24px); box-shadow: 0 22px 55px rgba(0, 0, 0, .55), inset 0 0 0 4px rgba(255,255,255,.07); }
+        .majak-lottery-game-panel__header { display: flex; min-height: 76px; align-items: center; gap: 24px; padding: 13px 19px; background: linear-gradient(90deg, #1b5a4b, #24705b 48%, #1b5a4b); border-bottom: 2px solid #d9bc62; }
+        .majak-lottery-game-panel__header > div { min-width: 190px; }.majak-lottery-game-panel__header strong { display: block; color: #f8f6e9; font: 700 24px/1 var(--majak-font-family-ui); }
+        .majak-lottery-game-panel__header dl { display: flex; gap: 25px; margin: 0 0 0 auto; }.majak-lottery-game-panel__header dt { color: #d7e3d7; font-size: 11px; }.majak-lottery-game-panel__header dd { margin: 4px 0 0; color: #f8f6e9; font: 700 16px/1 var(--majak-font-family-ui); white-space: nowrap; }
+        .majak-lottery-game-panel__close { width: 28px; height: 28px; border: 1px solid #d9bc62; border-radius: 4px; color: #f8f6e9; background: #1c6b58; font-size: 20px; cursor: pointer; }.majak-lottery-game-panel__close:hover, .majak-lottery-game-panel__close:focus-visible { background: #247c67; }.majak-lottery-game-panel__close:disabled { opacity: .45; }
+        .majak-lottery-game-panel__stage { padding: 28px 30px 23px; text-align: center; background: radial-gradient(ellipse at center, rgba(217,188,98,.15), transparent 60%); }.majak-lottery-game-panel__reels { display: inline-flex; align-items:center; gap: 10px; padding: 13px 16px; border: 2px solid #d9bc62; border-radius: 6px; background: #173d31; box-shadow: inset 0 0 18px #071d16, 0 8px 18px rgba(0,0,0,.3); }.majak-lottery-game-panel__reel { display:flex; justify-content:center; width: ${REEL_FRAME_WIDTH}px; height: ${DISPLAY_REEL_HEIGHT}px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.65); }
+        .majak-lottery-game-panel__stage p { margin: 14px 0 0; color: #d9bc62; font: 700 16px/1 var(--majak-font-family-ui); }.majak-lottery-game-panel__guide { display:flex; justify-content:center; gap:16px; margin-top:11px; color:#d7e3d7; font-size:12px; }.majak-lottery-game-panel__guide span::before { content:'●'; margin-right:5px; color:#d9bc62; }.majak-lottery-game-panel__actions { display: flex; justify-content: flex-end; gap: 10px; padding: 13px 18px; background: rgba(5,31,23,.62); border-top: 1px solid rgba(217,188,98,.55); }.majak-lottery-game-panel__actions button { min-width: 122px; height: 38px; border: 1px solid #255d4e; border-radius: 4px; color: #fff; font: 700 14px/1 var(--majak-font-family-ui); cursor: pointer; }.majak-lottery-game-panel__actions .is-draw { background: #1c6b58; }.majak-lottery-game-panel__actions .is-result { border-color: #698674; background: #315f4d; }.majak-lottery-game-panel__actions button:disabled { cursor: default; opacity: .42; }
+        @media (max-width: 600px) { .majak-lottery-game-panel__header { gap: 12px; padding: 11px 13px; }.majak-lottery-game-panel__header > div { min-width: 0; }.majak-lottery-game-panel__header strong { font-size: 18px; }.majak-lottery-game-panel__header dl { gap: 11px; }.majak-lottery-game-panel__header dd { font-size: 13px; }.majak-lottery-game-panel__stage { padding: 18px 8px; }.majak-lottery-game-panel__reels { gap: 4px; padding: 8px; }.majak-lottery-game-panel__reel { width: ${DISPLAY_REEL_WIDTH + 4}px; }.majak-lottery-game-panel__guide { display:grid; gap:4px; text-align:left; }.majak-lottery-game-panel__actions { padding: 10px; }.majak-lottery-game-panel__actions button { min-width: 108px; } }
+      `}</style>
     </div>
   )
 }

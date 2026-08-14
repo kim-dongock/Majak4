@@ -57,6 +57,8 @@ builder.Services.AddScoped<ItemRepository>();
 builder.Services.AddScoped<LogRepository>();
 builder.Services.AddScoped<GamePlayerRepository>();
 builder.Services.AddScoped<ChannelRepository>();
+builder.Services.AddScoped<EconomyPolicyRepository>();
+builder.Services.AddScoped<GameAnnouncementRepository>();
 
 // ─── Services ─────────────────────────────────────────────────
 builder.Services.AddSingleton<RedisService>();
@@ -74,11 +76,14 @@ builder.Services.AddSingleton<TournamentService>();
 builder.Services.AddSingleton<GradeRankService>();
 builder.Services.AddScoped<RatingService>();
 builder.Services.AddScoped<GameMoneyService>();
+builder.Services.AddScoped<IGameEconomyPolicyService, GameEconomyPolicyService>();
 builder.Services.AddScoped<TitleService>();
 builder.Services.AddScoped<ItemService>();
 builder.Services.AddScoped<MajItemService>();
 builder.Services.AddScoped<MissionService>();
 builder.Services.AddScoped<GameLogicService>();
+builder.Services.AddSingleton<PaifuObjectStore>();
+builder.Services.AddSingleton<PaifuFileService>();
 
 // ─── Admin ────────────────────────────────────────────────────
 builder.Services.AddScoped<AdminRepository>();
@@ -98,6 +103,7 @@ builder.Services.AddHostedService<CupChannelBackgroundService>();
 builder.Services.AddHostedService<AutoMatchingBackgroundService>();
 builder.Services.AddHostedService<ServerStatusBackgroundService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GradeRankBackgroundService>());
+builder.Services.AddHostedService<PaifuArchiveCleanupBackgroundService>();
 
 // ─── Channel Commands ─────────────────────────────────────────
 builder.Services.AddScoped<GetDetailRecCommand>();
@@ -364,6 +370,63 @@ app.MapPost("/api/admin/auth/google", async (
     return Results.Ok(new { token = result.Token, adminNo = result.AdminNo, email = result.Email, role = result.Role });
 }).RequireCors("AdminPolicy");
 
+// ── ゲーム内お知らせ記事 (Super Admin のみ更新) ───────────────────────
+app.MapGet("/api/admin/announcements", async (
+    HttpContext ctx, AdminAuthService adminAuth, GameAnnouncementRepository announcements) =>
+{
+    if (RequireAdminAuth(ctx, adminAuth) is { } err) return err;
+    return Results.Ok(await announcements.GetAllAsync());
+}).RequireCors("AdminPolicy");
+
+app.MapPost("/api/admin/announcements", async (
+    HttpContext ctx, AdminAuthService adminAuth, GameAnnouncementRepository announcements) =>
+{
+    if (RequireAdminAuth(ctx, adminAuth, "super_admin") is { } err) return err;
+    var body = await ctx.Request.ReadFromJsonAsync<GameAnnouncementRequest>();
+    if (body is null || string.IsNullOrWhiteSpace(body.Title) || string.IsNullOrWhiteSpace(body.Body) ||
+        body.Title.Length > 120 || body.Body.Length > 10000)
+        return Results.BadRequest(new { error = "title and body are required (title <= 120, body <= 10000)" });
+    return Results.Ok(await announcements.CreateAsync(body.Title.Trim(), body.Body.Trim(), body.IsPublished, body.IsStartup));
+}).RequireCors("AdminPolicy");
+
+app.MapPut("/api/admin/announcements/{announcementId:long}", async (
+    long announcementId, HttpContext ctx, AdminAuthService adminAuth, GameAnnouncementRepository announcements) =>
+{
+    if (RequireAdminAuth(ctx, adminAuth, "super_admin") is { } err) return err;
+    var body = await ctx.Request.ReadFromJsonAsync<GameAnnouncementRequest>();
+    if (body is null || string.IsNullOrWhiteSpace(body.Title) || string.IsNullOrWhiteSpace(body.Body) ||
+        body.Title.Length > 120 || body.Body.Length > 10000)
+        return Results.BadRequest(new { error = "title and body are required (title <= 120, body <= 10000)" });
+    var updated = await announcements.UpdateAsync(announcementId, body.Title.Trim(), body.Body.Trim(), body.IsPublished, body.IsStartup);
+    return updated is null ? Results.NotFound() : Results.Ok(updated);
+}).RequireCors("AdminPolicy");
+
+app.MapDelete("/api/admin/announcements/{announcementId:long}", async (
+    long announcementId, HttpContext ctx, AdminAuthService adminAuth, GameAnnouncementRepository announcements) =>
+{
+    if (RequireAdminAuth(ctx, adminAuth, "super_admin") is { } err) return err;
+    return await announcements.DeleteAsync(announcementId) ? Results.NoContent() : Results.NotFound();
+}).RequireCors("AdminPolicy");
+
+app.MapGet("/api/announcements/startup", async (
+    HttpContext ctx, GameAuthTokenService gameAuth, GameAnnouncementRepository announcements) =>
+{
+    if (RequireGameAuth(ctx, gameAuth) is null) return Results.Unauthorized();
+    var announcement = await announcements.GetStartupAsync();
+    return announcement is null ? Results.NoContent() : Results.Ok(announcement);
+});
+
+app.MapGet("/api/announcements", async (
+    HttpContext ctx, GameAuthTokenService gameAuth, GameAnnouncementRepository announcements,
+    int offset = 0, int limit = 20) =>
+{
+    if (RequireGameAuth(ctx, gameAuth) is null) return Results.Unauthorized();
+    if (offset < 0) offset = 0;
+    limit = Math.Clamp(limit, 1, 50);
+    var items = await announcements.GetPublishedAsync(offset, limit);
+    return Results.Ok(new { items, hasMore = items.Count == limit });
+});
+
 // ── GET /api/admin/dashboard ────────────────────────────────────────────
 app.MapGet("/api/admin/dashboard", async (
     HttpContext ctx,
@@ -498,6 +561,53 @@ app.MapGet("/api/admin/cash/revenue", async (
     if (RequireAdminAuth(ctx, adminAuth) is { } err) return err;
     if (days > 365) days = 365;
     return Results.Ok(await adminRepo.GetDailyRevenueAsync(days));
+}).RequireCors("AdminPolicy");
+
+// ── GET/PUT /api/admin/economy-policy (Super Admin のみ) ─────────────────
+app.MapGet("/api/admin/economy-policy", async (
+    HttpContext ctx,
+    AdminAuthService adminAuth,
+    IGameEconomyPolicyService economyPolicy) =>
+{
+    if (RequireAdminAuth(ctx, adminAuth, "super_admin") is { } err) return err;
+    return Results.Ok(await economyPolicy.GetCurrentAsync());
+}).RequireCors("AdminPolicy");
+
+app.MapPut("/api/admin/economy-policy", async (
+    HttpContext ctx,
+    AdminAuthService adminAuth,
+    EconomyPolicyRepository economyPolicyRepo,
+    LogDbContext logDb) =>
+{
+    if (RequireAdminAuth(ctx, adminAuth, "super_admin") is { } err) return err;
+    var body = await ctx.Request.ReadFromJsonAsync<EconomyPolicyRequest>();
+    if (body is null || body.InitialGp < 0 || body.FreeReplenishTargetGp < 0 ||
+        body.FreeReplenishDailyLimit < 0 || body.FreeReplenishDailyLimit > 100)
+        return Results.BadRequest(new { error = "GP values must be non-negative and daily limit must be between 0 and 100" });
+
+    var operatorNo = GetAdminNoClaim(ctx, adminAuth);
+    if (operatorNo is null) return Results.Unauthorized();
+    var before = await economyPolicyRepo.GetAsync();
+    var updated = await economyPolicyRepo.UpdateAsync(
+        body.InitialGp,
+        body.FreeReplenishTargetGp,
+        body.FreeReplenishDailyLimit);
+
+    var role = adminAuth.ValidateJwt(ctx.Request.Headers.Authorization.FirstOrDefault()? ["Bearer ".Length..].Trim() ?? string.Empty)
+        ?.FindFirst("role")?.Value ?? "super_admin";
+    await using var logConn = await logDb.CreateConnectionAsync();
+    await using var logCmd = new MySqlConnector.MySqlCommand(@"
+        INSERT INTO admin_operation_log
+            (operator_no, operator_role, action, target_type, target_id, payload_before, payload_after, client_ip, occurred_at)
+        VALUES (@operatorNo, @role, 'UPDATE', 'GAME_ECONOMY_POLICY', '1', @before, @after, @ip, CURRENT_TIMESTAMP(3))", logConn);
+    logCmd.Parameters.AddWithValue("@operatorNo", operatorNo.Value);
+    logCmd.Parameters.AddWithValue("@role", role);
+    logCmd.Parameters.AddWithValue("@before", (object?)System.Text.Json.JsonSerializer.Serialize(before) ?? DBNull.Value);
+    logCmd.Parameters.AddWithValue("@after", System.Text.Json.JsonSerializer.Serialize(updated));
+    logCmd.Parameters.AddWithValue("@ip", (object?)ctx.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value);
+    await logCmd.ExecuteNonQueryAsync();
+
+    return Results.Ok(updated);
 }).RequireCors("AdminPolicy");
 
 // ── GET /api/admin/accounts ─────────────────────────────────────────────
@@ -924,7 +1034,7 @@ app.MapGet("/api/player/profile", async (HttpContext ctx, string? memberNo, Play
 
     // MJKCOMMONRAT が未存在なら初回作成
     if (!await playerRepo.ExistsCommonRatAsync(memberNo))
-        await moneyService.CreateCommonRatWithDefaultMoneyHistAsync(memberNo, MajakServer.Models.Protocol.GameConst.DefaultMoney, "");
+        await moneyService.CreateCommonRatWithConfiguredMoneyHistAsync(memberNo, "");
 
     await playerRepo.LoadCommonRatAsync(player);
     ratingService.UpdatePlayerLevel(player);
@@ -959,6 +1069,48 @@ app.MapGet("/api/player/collection", async (HttpContext ctx, PlayerRepository pl
         equippedMajakTitle = player.MajakTitle,
         equippedTrickTitle = player.TrickTitle,
     });
+});
+
+// ─── 牌譜アーカイブ REST API ──────────────────────────────────────────
+// JWT の member_no だけで所有者を判定する。アップロード本文や URL の会員IDは受け取らない。
+app.MapGet("/api/player/paifu", async (
+    HttpContext ctx,
+    PaifuFileService paifuFiles,
+    GameAuthTokenService gameAuth,
+    DateTime? from,
+    DateTime? to,
+    string? room,
+    string? member,
+    string? result,
+    string? matchKind,
+    int limit = 100) =>
+{
+    var auth = RequireGameAuth(ctx, gameAuth);
+    if (auth is null) return Results.Unauthorized();
+    var kind = matchKind?.ToLowerInvariant() switch
+    {
+        "normal" => PaifuMatchKind.Normal,
+        "tournament" => PaifuMatchKind.Tournament,
+        _ => PaifuMatchKind.All,
+    };
+    var query = new PaifuArchiveQuery(
+        from?.Date,
+        to?.Date.AddDays(1),
+        room?.Trim(),
+        member?.Trim(),
+        result?.Trim(),
+        kind,
+        limit);
+    return Results.Ok(await paifuFiles.ListAsync(auth.MemberNo, query));
+});
+
+app.MapPost("/api/player/paifu/{archiveId:long}/replay", async (long archiveId, HttpContext ctx, PaifuFileService paifuFiles, GameAuthTokenService gameAuth) =>
+{
+    var auth = RequireGameAuth(ctx, gameAuth);
+    if (auth is null) return Results.Unauthorized();
+    if (archiveId <= 0) return Results.NotFound();
+    var source = await paifuFiles.GetReplaySourceAsync(auth.MemberNo, (ulong)archiveId);
+    return source is null ? Results.NotFound() : Results.Ok(source);
 });
 
 app.MapPost("/api/player/collection/equip", async (HttpContext ctx, CollectionEquipRequest? body, PlayerRepository playerRepo, TitleService titleService, PlayerSessionService sessions, GameAuthTokenService gameAuth) =>
@@ -1449,9 +1601,11 @@ internal sealed record NoticeRequest(
     string Message,
     [property: System.Text.Json.Serialization.JsonPropertyName("color")]
     int Color = 0);
+internal sealed record GameAnnouncementRequest(string Title, string Body, bool IsPublished, bool IsStartup);
 
 /// <summary>POST /api/admin/cash/adjust のリクエストボディ</summary>
 internal sealed record CashAdjustRequest(ulong MemberNo, int Amount, string Memo);
+internal sealed record EconomyPolicyRequest(long InitialGp, long FreeReplenishTargetGp, int FreeReplenishDailyLimit);
 internal sealed record SuspendRequest(string? Reason);
 
 /// <summary>POST /api/admin/accounts のリクエストボディ</summary>

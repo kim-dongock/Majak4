@@ -38,7 +38,9 @@ public class InviteCommand : ICommand
         var player = ctx.Player;
         if (player == null || player.RoomId == null) return;
 
-        string targetMemberNo = _session.ResolveMemberNo(ctx.GetString("targetMemberNo"));
+        string targetId = ctx.GetString("targetMemberNo");
+        if (string.IsNullOrEmpty(targetId)) targetId = ctx.GetString("targetPix");
+        string targetMemberNo = _session.ResolveMemberNo(targetId);
         int requestRoomId = ctx.GetInt(GKey.RoomId);
         if (requestRoomId == 0) requestRoomId = ctx.GetInt("roomId");
         if (requestRoomId != 0 && requestRoomId != player.RoomId.Value) return;

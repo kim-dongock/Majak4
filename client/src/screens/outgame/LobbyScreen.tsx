@@ -25,6 +25,8 @@ import { readNoticePayload, type NoticeDisplay } from '../../utils/notice'
 import { sendAccuseComplaint } from '../../utils/accuse'
 import { getTabSessionId } from '../../utils/tabSession'
 import WelcomeDlg    from './dialogs/WelcomeDlg'
+import GetCoinDlg from './dialogs/GetCoinDlg'
+import SerialCodeDlg from './dialogs/SerialCodeDlg'
 import GetReqGameDialog from './dialogs/GetReqGameDialog'
 import PlayerInfoWnd, { type PlayerInfo as DlgPlayerInfo } from './dialogs/PlayerInfoWnd'
 import OptDlg, { DEFAULT_OPTION, optionToString, type MJOption, type MJOptionMask } from './dialogs/OptDlg'
@@ -46,6 +48,7 @@ import { gpReplenishmentFailureMessage, isOwnGpReplenishmentResponse, readGpAsse
 
 const IMG = '/assets/images/game'
 const ABANDON_ROOM_STORAGE_KEY = 'majak:abandonRoomOnNextLobbyEnter'
+const SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY = 'majak:showWelcomeAfterRegistration'
 
 function readAbandonRoomOnEnter(channelId: string) {
   const raw = window.sessionStorage.getItem(ABANDON_ROOM_STORAGE_KEY)
@@ -1953,6 +1956,8 @@ export default function LobbyScreen() {
 
   /** ダイアログ表示状態 */
   const [showWelcome,  setShowWelcome]  = useState(false)
+  const [showGetCoin, setShowGetCoin] = useState(false)
+  const [showSerialCode, setShowSerialCode] = useState(false)
   const [showOpt,      setShowOpt]      = useState(false)
   const [showCfg,      setShowCfg]      = useState(false)
   const [showCustom,   setShowCustom]   = useState(false)
@@ -2012,6 +2017,12 @@ export default function LobbyScreen() {
   const [rejectInvite, setRejectInvite] = useState(false)
 
   useEffect(() => {
+    if (window.sessionStorage.getItem(SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY) !== '1') return
+    window.sessionStorage.removeItem(SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY)
+    setShowWelcome(true)
+  }, [])
+
+  useEffect(() => {
     if (!oneToOneChat || layoutMode === 'desktop') return
     const visualViewport = window.visualViewport
     const update = () => setOneToOneChatViewport({
@@ -2046,6 +2057,7 @@ export default function LobbyScreen() {
   const trainingChannel = isTrainingChannel(channelId)
   const replayChannel = isReplayChannel(channelId)
   const tournamentChannel = isTournamentChannel(channelId)
+  const useResponsiveDesktopLayout = layoutMode === 'desktop' && !tournamentChannel
   const showShopButtons = !trainingChannel
   const showRankingButton = !trainingChannel && daniChannel && !tournamentChannel
   const showMissionButton = !trainingChannel && !daniChannel && !tournamentChannel
@@ -2102,6 +2114,7 @@ export default function LobbyScreen() {
         if (!mounted) return
         const channel = channels.find(c => c.subId === channelId || c.chanelId === channelId)
         setRoomSlotCount(channel?.maxRoom && channel.maxRoom > 0 ? channel.maxRoom : DEFAULT_ROOM_SLOT_COUNT)
+        if (channel?.chanelName) setChannelName(channel.chanelName)
       }).catch(() => {
         if (mounted) setRoomSlotCount(DEFAULT_ROOM_SLOT_COUNT)
       })
@@ -2651,8 +2664,28 @@ export default function LobbyScreen() {
               ...(assetUpdate.nlevel !== undefined ? { nlevel: assetUpdate.nlevel } : {}),
             }
           : member))
+        setShowGetCoin(true)
       }
       SignalR.on('mjkc17e', onMoneyReplenishment)
+
+      /** mjkc34e — OnBtnSerialCodeClicked → SendSerialCode 応答 */
+      const onSerialBonus = (data: Record<string, unknown>) => {
+        if (!mounted) return
+        const message = String(data.message ?? data.k2e ?? '')
+        if (!isOk(data.result ?? data.k1e)) {
+          showMessage(message || 'シリアルコードを確認できませんでした。', 'シリアルコード')
+          return
+        }
+
+        const assetUpdate = readGpAssetUpdate(data)
+        const nextGemCount = Number(data.gemcount ?? data.mjkk55e)
+        if (assetUpdate.gamMoney !== undefined) setGamMoney(assetUpdate.gamMoney)
+        if (assetUpdate.slevel !== undefined) setSlevel(assetUpdate.slevel)
+        if (Number.isFinite(nextGemCount)) setGemCount(nextGemCount)
+        useGamePlayerStore.getState().setData(assetUpdate)
+        showMessage(message || 'シリアルコード特典を受け取りました。', 'シリアルコード特典')
+      }
+      SignalR.on('mjkc34e', onSerialBonus)
 
       /** mjkc25e — OnBtnRankingClicked → ShowRankingDialog 相当 */
       const onRatingRankInfo = (data: Record<string, unknown>) => {
@@ -2806,6 +2839,7 @@ export default function LobbyScreen() {
         SignalR.off('c22e',              onInviteGame)
         SignalR.off('c23e',              onInviteResponse)
         SignalR.off('mjkc17e',           onMoneyReplenishment)
+        SignalR.off('mjkc34e',           onSerialBonus)
         SignalR.off('mjkc25e',           onRatingRankInfo)
         SignalR.off('mjkc2e',            onAutoMatching)
         SignalR.off('mjkc3e',            onCancelAutoMatching)
@@ -3027,6 +3061,22 @@ export default function LobbyScreen() {
 
   /** 終了 (IDC_SETTING_BTN_EXT 相当) */
   const onExit = () => window.dispatchEvent(new Event(MAJAK_EXIT_REQUEST_EVENT))
+
+  /** OnBtnInsuranceClicked 相当 — 無料GP補充を要求する。 */
+  const onFreeGpReplenish = async () => {
+    if (isMatching) {
+      setChatLog(prev => [...prev, ...systemChatMessages(['対局参加表明中は無料補充できません。'], '#c00000')])
+      return
+    }
+    await SignalR.send('mjkc17e', { 'mjkk42e': '0' }).catch(() => {})
+  }
+
+  /** OnBtnSerialCodeClicked → SendSerialCode 相当 */
+  const onSerialCodeSubmit = async (serialCode: string) => {
+    await SignalR.send('mjkc34e', { mjkk130e: serialCode }).catch(() => {
+      showError('サーバーへの送信に失敗しました')
+    })
+  }
 
   /** ルーム作成 (CHgChannelWnd::OnCreateRoom 相当)
    * AP-04 §8: ルーム数が最少のサーバー URL を取得して RoomScreen へ遷移する。
@@ -3325,6 +3375,20 @@ export default function LobbyScreen() {
     <>
       {showWelcome && <WelcomeDlg onClose={() => setShowWelcome(false)} />}
 
+      {showGetCoin && (
+        <GetCoinDlg
+          storageKey={useAuthStore.getState().player?.pix ?? 'default'}
+          onClose={() => setShowGetCoin(false)}
+        />
+      )}
+
+      {showSerialCode && (
+        <SerialCodeDlg
+          onOK={serialCode => { void onSerialCodeSubmit(serialCode) }}
+          onClose={() => setShowSerialCode(false)}
+        />
+      )}
+
       {inviteData && (
         <GetReqGameDialog
           {...inviteData}
@@ -3498,7 +3562,7 @@ export default function LobbyScreen() {
     )
   }
 
-  if (layoutMode === 'mobileLandscape' && tournamentChannel) {
+  if (tournamentChannel) {
     const mobileTitle = channelName || 'トーナメント'
     const tournamentDetailLines = getTournamentDetailLines(selectedTournament, memberNameByPix)
     return (
@@ -3600,8 +3664,8 @@ export default function LobbyScreen() {
                     }
                     setShowTournamentRegist(true)
                   }}
-                ><span>新規</span><span>大会登録</span></button>
-                <button type="button" onClick={() => void onTournamentPage()} disabled={!selectedTournament}><span>トーナメント</span><span>ページ</span></button>
+                >新規大会登録</button>
+                <button type="button" onClick={() => void onTournamentPage()} disabled={!selectedTournament}>トーナメントページ</button>
               </div>
             </aside>
           </div>
@@ -3611,13 +3675,12 @@ export default function LobbyScreen() {
     )
   }
 
-  if (layoutMode !== 'desktop') {
+  if (layoutMode !== 'desktop' || useResponsiveDesktopLayout) {
     const mobileTitle = channelName
     return (
-      <div className="majak-mobile-screen majak-mobile-lobby-screen">
+      <div className={`majak-mobile-screen majak-mobile-lobby-screen${useResponsiveDesktopLayout ? ' majak-responsive-desktop-lobby' : ''}`}>
         <section className="majak-mobile-lobby-toolbar majak-mobile-lobby-toolbar--with-user">
           <div>
-            <div className="majak-mobile-eyebrow">LOBBY</div>
             <h1>{mobileTitle}</h1>
           </div>
           <MobileUserSummary
@@ -3628,13 +3691,18 @@ export default function LobbyScreen() {
             loadProfile={false}
             className="majak-mobile-user-summary--lobby"
           />
-          <div className="majak-mobile-lobby-actions">
-            {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>}
-            {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>}
-            {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>}
-            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
-            <button type="button" className="majak-mobile-lobby-header-button" onClick={onChangeLobby}>ロビー変更</button>
-          </div>
+          {!useResponsiveDesktopLayout && (
+            <div className="majak-mobile-lobby-actions">
+              <button type="button" className="majak-mobile-lobby-header-button" onClick={onRefreshRoomList}>更新</button>
+              {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>}
+              {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>}
+              {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowSerialCode(true)}>シリアルコード</button>}
+              {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>}
+              <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
+              {showFreeChargeButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
+              <button type="button" className="majak-mobile-lobby-header-button" onClick={onChangeLobby}>ロビー変更</button>
+            </div>
+          )}
         </section>
         {notice && <div className="majak-mobile-lobby-notice" style={{ color: notice.color }}>{notice.text}</div>}
         <div className="majak-mobile-lobby-body">
@@ -3688,6 +3756,38 @@ export default function LobbyScreen() {
             />
           </aside>
         </div>
+        <section className="majak-responsive-lobby-chat" aria-label="チャット">
+          <div ref={chatLogRef} className="majak-responsive-lobby-chat__log" aria-live="polite">
+            {chatLog.map(msg => {
+              const isSystem = msg.name === 'System'
+              return (
+                <p key={msg.id} style={{ color: msg.color ?? '#332217' }}>
+                  {msg.name && !isSystem ? `[${msg.name}] ` : ''}{msg.text}
+                </p>
+              )
+            })}
+          </div>
+          <input
+            value={chatText}
+            onChange={event => setChatText(event.target.value)}
+            onKeyDown={onChatKeyDown}
+            maxLength={80}
+            placeholder="メッセージを入力"
+            aria-label="チャットメッセージ"
+          />
+        </section>
+        {useResponsiveDesktopLayout && (
+          <nav className="majak-responsive-lobby-actions" aria-label="ロビー操作">
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onRefreshRoomList}>更新</button>
+            {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowShop(true)}>ショップ</button>}
+            {showMissionButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowMission(true)}>ミッション</button>}
+            {showMissionButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowSerialCode(true)}>シリアルコード</button>}
+            {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>}
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCollection(true)}>コレクション</button>
+            {showFreeChargeButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onChangeLobby}>ロビー変更</button>
+          </nav>
+        )}
         {lobbyDialogs}
       </div>
     )
@@ -4093,20 +4193,21 @@ export default function LobbyScreen() {
         title="終了"
       />
 
+      <SpriteButton
+        src={`${IMG}/mj_btn_sirial.png`}
+        frameW={80} frameH={32}
+        x={934 - LOBBY_LEFT_NUDGE} y={591}
+        onClick={() => setShowSerialCode(true)}
+        title="シリアルコード"
+        hidden={!showMissionButton}
+      />
+
       {/* ── 無料補充ボタン mj_btn_insurance2.png (138×29) at (X_BTN_CHARGE=866, Y_BTN_CHARGE=171) ── */}
       <SpriteButton
         src={`${IMG}/mj_btn_insurance2.png`}
         frameW={138} frameH={29}
         x={866} y={140}
-        onClick={async () => {
-          /* OnBtnInsuranceClicked 相当 — commandMoneyReplenishment (mjkc17e)
-           * Key.ReplenishmentType = "mjkk42e"; 0=無料補充 */
-          if (isMatching) {
-            setChatLog(prev => [...prev, ...systemChatMessages(['対局参加表明中は無料補充できません。'], '#c00000')])
-            return
-          }
-          await SignalR.send('mjkc17e', { 'mjkk42e': '0' }).catch(() => {})
-        }}
+        onClick={() => { void onFreeGpReplenish() }}
         title="無料GP補充"
         hidden={!showFreeChargeButton}
       />

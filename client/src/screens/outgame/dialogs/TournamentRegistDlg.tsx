@@ -205,16 +205,18 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
     })
   }
 
-  if (layoutMode === 'mobileLandscape') {
-    return (
-      <div className="majak-mobile-tournament-regist-overlay">
+  return (
+      <div className="majak-mobile-tournament-regist-overlay majak-mobile-dialog-overlay majak-room-setup-overlay majak-popup-overlay">
         <form
-          className="majak-mobile-tournament-regist"
+          className="majak-mobile-tournament-regist majak-mobile-dialog-panel majak-room-setup-dialog majak-popup-panel"
           onSubmit={event => { event.preventDefault(); submit() }}
+          role="dialog"
+          aria-modal="true"
+          aria-label="大会登録"
         >
-          <header>大会登録</header>
-          <div className="majak-mobile-tournament-regist__body">
-            <fieldset>
+          <header className="majak-mobile-dialog-titlebar majak-popup-titlebar"><span>大会登録</span><button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button></header>
+          <div className="majak-mobile-tournament-regist__body majak-mobile-dialog-body majak-popup-body">
+            <fieldset className="majak-mobile-dialog-section">
               <legend>大会設定</legend>
               <label className="majak-mobile-tournament-regist__wide"><span>大会名</span><input value={name} onChange={event => setName(event.target.value.slice(0, 30))} maxLength={30} autoFocus /></label>
               <label className="majak-mobile-tournament-regist__wide"><span>開催日時</span><input type="datetime-local" value={dateTime} onChange={event => setDateTime(event.target.value)} /></label>
@@ -224,7 +226,7 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
               <label><span>大会形式</span><select value={matchFormat} onChange={event => setMatchFormat(Number(event.target.value))}><option value={0}>選択</option><option value={1}>4人/1人勝抜</option><option value={2}>16人/1人勝抜</option><option value={3}>64人/1人勝抜</option><option value={4}>8人/2人勝抜</option><option value={5}>16人/2人勝抜</option><option value={6}>32人/2人勝抜</option></select></label>
             </fieldset>
 
-            <fieldset>
+            <fieldset className="majak-mobile-dialog-section">
               <legend>参加費・賞金</legend>
               <label className="majak-mobile-tournament-regist__wide"><span>参加費</span><input inputMode="numeric" value={joinMoney} onChange={event => setJoinMoney(event.target.value.replace(/\D/g, '').slice(0, 5))} /></label>
               <label><span>賞金 1位</span><input inputMode="numeric" value={prize1} onChange={event => setPrize1(event.target.value.replace(/\D/g, '').slice(0, 6))} /></label>
@@ -235,7 +237,7 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
               <label><span>アガリ</span><select value={agari} onChange={event => setAgari(Number(event.target.value))}><option value={0}>頭ハネ</option><option value={1}>ダブロン</option><option value={2}>トリロン</option></select></label>
             </fieldset>
 
-            <fieldset className="majak-mobile-tournament-regist__rules">
+            <fieldset className="majak-mobile-tournament-regist__rules majak-mobile-dialog-section">
               <legend>ルール設定</legend>
               <div className="majak-mobile-tournament-regist__checks">
                 <label><input type="checkbox" checked={wareme} onChange={event => setWareme(event.target.checked)} />ワレメあり</label>
@@ -252,15 +254,15 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
               </div>
             </fieldset>
           </div>
-          <footer>
-            <button type="submit">大会登録</button>
-            <button type="button" onClick={onCancel}>キャンセル</button>
+          <footer className="majak-mobile-dialog-actions majak-popup-actions">
+            <button type="submit" className="majak-standard-dialog__primary is-primary">大会登録</button>
+            <button type="button" className="majak-standard-dialog__secondary" onClick={onCancel}>キャンセル</button>
           </footer>
         </form>
       </div>
     )
-  }
 
+  /* Legacy fixed-coordinate tournament registration UI intentionally removed.
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 280, background: 'rgba(0,0,0,0.35)', overflowY: 'auto' }}>
       <div style={{ position: 'relative', width: 500, height: 830, margin: '4px auto 16px' }}>
@@ -360,5 +362,5 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
         />
       </div>
     </div>
-  )
+  ) */
 }

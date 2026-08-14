@@ -35,13 +35,7 @@
  *   m_strMessage[9]  TextOut(17, 364)       緑文字 RGB(40,160,100) — 常に Empty()
  * ────────────────────────────────────────────────────────────────────────
  */
-import { useRef, useEffect, useState } from 'react'
-import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
-
-const IMG      = '/assets/images/game'
 const IMG_ITEM = '/assets/images/game/items/custom'
-const DIALOG_W = 390
-const DIALOG_H = 470
 
 interface Props {
   pix: string
@@ -55,92 +49,11 @@ interface Props {
   onClose: () => void
 }
 
-/** ====================================================================
- * CMJBmpButton 相当 — AP-06 §2 4フレームスプライトボタン
- * ==================================================================== */
-function SpriteButton({
-  src, frameW, frameH, x, y, onClick, title,
-}: {
-  src: string; frameW: number; frameH: number
-  x: number; y: number; onClick: () => void; title?: string
-}) {
-  const [fi, setFi] = useState(0)
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      onMouseEnter={() => setFi(2)}
-      onMouseLeave={() => setFi(0)}
-      onMouseDown={() => setFi(3)}
-      onMouseUp={() => setFi(2)}
-      style={{
-        position: 'absolute', left: x, top: y,
-        width: frameW, height: frameH,
-        appearance: 'none', WebkitAppearance: 'none',
-        backgroundColor: 'transparent',
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-fi * frameW}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none', padding: 0,
-        cursor: 'pointer', outline: 'none',
-        overflow: 'hidden', zIndex: 2,
-        imageRendering: 'pixelated',
-      }}
-    />
-  )
-}
-
-/** ====================================================================
- * CMJCustomReceiptDlg 本体
- * ==================================================================== */
 export default function CustomReceiptDlg({
   pix, memberName, itemId, itemName, price, gameMoney,
   coinBefore, coinAfter,
   onClose,
 }: Props) {
-  /* ドラッグ移動 (OnNcHitTest: pt.y < 41 → HTCAPTION) */
-  const [pos, setPos]   = useState({ x: 0, y: 0 })
-  const layoutMode = useOutgameLayoutMode()
-  const isMobile = layoutMode !== 'desktop'
-  const [dialogScale, setDialogScale] = useState(1)
-  const dragging        = useRef(false)
-  const dragOffset      = useRef({ dx: 0, dy: 0 })
-
-  const onDragStart = (e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    if (e.clientY - rect.top >= 41) return
-    dragging.current   = true
-    dragOffset.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
-    e.preventDefault()
-  }
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!dragging.current) return
-      setPos({ x: e.clientX - dragOffset.current.dx, y: e.clientY - dragOffset.current.dy })
-    }
-    const onUp = () => { dragging.current = false }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isMobile) {
-      setDialogScale(1)
-      return
-    }
-    const updateScale = () => {
-      const margin = 16
-      setDialogScale(Math.min(1, (window.innerWidth - margin) / DIALOG_W, (window.innerHeight - margin) / DIALOG_H))
-    }
-    updateScale()
-    window.addEventListener('resize', updateScale)
-    return () => window.removeEventListener('resize', updateScale)
-  }, [isMobile])
-
   /* アイテム画像パス: MAJAK4_ITEM_LIST_CUSTOM_ITEM + ItemID:02d + MAJAK4_EXTENSION_HIM 相当 */
   const itemImageSrc = `${IMG_ITEM}/mj_custom_${String(itemId).padStart(2, '0')}.png`
 
@@ -154,123 +67,28 @@ export default function CustomReceiptDlg({
   const msg6 = `${itemName}を購入しました`
   const msg7 = `${moneyString(gameMoney)}が補充されました。`
 
-  /* テキストスタイル */
-  const tBase = {
-    position: 'absolute' as const,
-    fontFamily: 'var(--majak-font-family-ui)' as const,
-    fontSize: 'calc(13px * var(--majak-type-scale))',
-    fontWeight: 'bold' as const,
-    color: '#000' as const,
-    pointerEvents: 'none' as const,
-    overflow: 'hidden' as const,
-    whiteSpace: 'nowrap' as const,
-  }
-  const right = (l: number, t: number, w: number, h: number) => ({
-    ...tBase, left: l, top: t, width: w, height: h, textAlign: 'right' as const,
-  })
-  const center = (l: number, t: number, w: number, h: number) => ({
-    ...tBase, left: l, top: t, width: w, height: h, textAlign: 'center' as const,
-  })
-
   return (
-    /* モーダルオーバーレイ */
-    <div style={{
-      position: isMobile ? 'fixed' : 'absolute', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'transparent', zIndex: 300,
-    }}>
-      <div style={{ width: DIALOG_W * dialogScale, height: DIALOG_H * dialogScale }}>
-      {/* CMJCustomReceiptDlg クライアント領域: 390×470px */}
-      <div style={{
-        position: 'relative',
-        width: DIALOG_W, height: DIALOG_H,
-        left: isMobile ? 0 : pos.x, top: isMobile ? 0 : pos.y,
-        transform: `scale(${dialogScale})`,
-        transformOrigin: 'top left',
-      }}>
-
-        {/* ================================================================
-            背景: _ShopReceiptMainCustom.png (390×470) at (0,0)
-            Create(..., 1, ...) = 1フレーム単一画像
-            ================================================================ */}
-        <img
-          src={`${IMG}/_ShopReceiptMainCustom.png`}
-          alt=""
-          draggable={false}
-          onMouseDown={onDragStart}
-          style={{
-            position: 'absolute', left: 0, top: 0,
-            width: 390, height: 470,
-            cursor: 'move', userSelect: 'none',
-          }}
-        />
-
-        {/* ================================================================
-            アイテム画像: items/custom/mj_custom_{id:02d}.png at (162, 74)
-            m_pItemImage->Draw(&dc, 162, 74, 0)
-            ================================================================ */}
-        <img
-          src={itemImageSrc}
-          alt={itemName}
-          draggable={false}
-          style={{
-            position: 'absolute', left: 162, top: 74,
-            pointerEvents: 'none',
-          }}
-          onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-        />
-
-        {/* ================================================================
-            テキスト (OnPaint — 13px bold MS Pゴシック, 透過背景)
-            ================================================================ */}
-        {/* msg0 TextOut(15, 50) */}
-        <span style={{ ...tBase, left: 15, top: 50 }}>{msg0}</span>
-
-        {/* itemName CRect(198,170,372,207) DT_CENTER */}
-        <div style={center(198, 170, 174, 37)}>{itemName}</div>
-
-          {/* msg1 CRect(198,205,372,222) DT_RIGHT — 購入前GEM */}
-        <div style={right(198, 205, 174, 17)}>{msg1}</div>
-
-        {/* msg3 CRect(198,245,372,262) DT_RIGHT — 購入価格 */}
-        <div style={right(198, 245, 174, 17)}>{msg3}</div>
-
-          {/* msg4 CRect(198,265,372,282) DT_RIGHT — 購入後GEM */}
-        <div style={right(198, 265, 174, 17)}>{msg4}</div>
-
-        {/* msg6 TextOut(17, 308) */}
-        <span style={{ ...tBase, left: 17, top: 308 }}>{msg6}</span>
-
-        {/* msg7 TextOut(17, 322) */}
-        <span style={{ ...tBase, left: 17, top: 322 }}>{msg7}</span>
-
-        {/* msg8/9 TextOut(17, 350/364) RGB(40,160,100) — 現在は常に Empty() */}
-
-        {/* ================================================================
-            Exit ✕: _ShopReceiptExitBtn.png (72×18, 4フレーム 18×18) at (358,12)
-            m_btnExit.Create(0, ..., 358, 12, ..., IDOK)
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG}/_ShopReceiptExitBtn.png`}
-          frameW={18} frameH={18}
-          x={358} y={12}
-          onClick={onClose}
-          title="閉じる"
-        />
-
-        {/* ================================================================
-            OK閉じる: _ShopReceiptOkBtn.png (448×20, 4フレーム 112×20) at (139,427)
-            m_btnClose.Create(0, ..., 139, 427, ..., IDOK)
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG}/_ShopReceiptOkBtn.png`}
-          frameW={112} frameH={20}
-          x={139} y={427}
-          onClick={onClose}
-          title="OK"
-        />
-      </div>
-      </div>
+    <div className="majak-popup-overlay">
+      <section className="majak-popup-panel majak-receipt-dialog" role="dialog" aria-modal="true" aria-labelledby="custom-receipt-title">
+        <header id="custom-receipt-title" className="majak-popup-titlebar"><span>購入完了</span><button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button></header>
+        <div className="majak-popup-body majak-receipt-dialog__body">
+          <p className="majak-receipt-dialog__purchaser">{msg0}</p>
+          <div className="majak-receipt-dialog__item">
+            <img src={itemImageSrc} alt={itemName} onError={event => { event.currentTarget.hidden = true }} />
+            <strong>{itemName}</strong>
+          </div>
+          <dl className="majak-receipt-dialog__details">
+            <div><dt>購入前MP</dt><dd>{msg1}</dd></div>
+            <div><dt>購入価格</dt><dd>{msg3}</dd></div>
+            <div><dt>購入後MP</dt><dd>{msg4}</dd></div>
+          </dl>
+          <p>{msg6}</p>
+          <p>{msg7}</p>
+        </div>
+        <footer className="majak-popup-actions">
+          <button type="button" className="is-primary" onClick={onClose}>OK</button>
+        </footer>
+      </section>
     </div>
   )
 }

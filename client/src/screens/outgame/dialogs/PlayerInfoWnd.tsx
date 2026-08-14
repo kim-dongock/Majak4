@@ -359,9 +359,12 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
   const averageTip = tabRecord.tipMatchCnt > 0 ? `${(tabRecord.tipPoint / tabRecord.tipMatchCnt).toFixed(2)}` : '---.--'
 
   return (
-    <div className="majak-player-profile-overlay" role="presentation">
-      <section className="majak-player-profile" role="dialog" aria-modal="true" aria-labelledby="majak-player-profile-name">
-        <button type="button" className="majak-player-profile__close" onClick={onClose} aria-label="閉じる">×</button>
+    <div className="majak-popup-overlay majak-player-profile-overlay" role="presentation">
+      <section className="majak-popup-panel majak-player-profile" role="dialog" aria-modal="true" aria-labelledby="majak-player-profile-name">
+        <header className="majak-popup-titlebar majak-player-profile__titlebar">
+          <span>プレイヤー情報</span>
+          <button type="button" className="majak-popup-titlebar__close" onClick={onClose} aria-label="閉じる">×</button>
+        </header>
         <header className="majak-player-profile__hero">
           <div className="majak-player-profile__avatar">
             <img
@@ -371,7 +374,6 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
             />
           </div>
           <div className="majak-player-profile__identity">
-            <div className="majak-player-profile__eyebrow">PLAYER PROFILE</div>
             <h2 id="majak-player-profile-name">{detail?.name ?? player.name}</h2>
             <div className="majak-player-profile__badges">
               <span>{titleText}</span>
@@ -401,14 +403,14 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
           ))}
         </div>
 
-        <div className="majak-player-profile__summary">
+        <div className="majak-popup-body majak-player-profile__summary">
           <div><span>対局数</span><strong>{matchCnt.toLocaleString()}</strong></div>
           <div><span>平均順位</span><strong>{averageRank}</strong></div>
           <div><span>平均収支</span><strong>{averageSet}</strong></div>
           <div><span>順位構成</span><strong>{tabRecord.grade1} / {tabRecord.grade2} / {tabRecord.grade3} / {tabRecord.grade4}</strong></div>
         </div>
 
-        <div className="majak-player-profile__metrics">
+        <div className="majak-popup-body majak-player-profile__metrics">
           <section>
             <h3>順位・収支</h3>
             <dl>
@@ -444,7 +446,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
           </section>
         </div>
 
-        <footer className="majak-player-profile__footer">
+        <footer className="majak-popup-actions majak-player-profile__footer">
           <p>{activeTab === 0 ? '全ての対局戦績を表示しています。' : activeTab === 1 ? '交流広場の対局戦績を表示しています。' : '段位戦の対局戦績を表示しています。'}</p>
           <div>
             <button type="button" className="majak-player-profile__done" onClick={onClose}>閉じる</button>

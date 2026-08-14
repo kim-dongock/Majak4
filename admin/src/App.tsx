@@ -13,7 +13,9 @@ import GemStatsPage from './pages/gem/GemStatsPage'
 import GemProductPage from './pages/master/GemProductPage'
 import ChannelListPage from './pages/master/ChannelListPage'
 import NoticePage from './pages/operations/NoticePage'
+import AnnouncementPage from './pages/operations/AnnouncementPage'
 import AdminAccountPage from './pages/settings/AdminAccountPage'
+import EconomyPolicyPage from './pages/settings/EconomyPolicyPage'
 
 export default function App() {
   return (
@@ -37,8 +39,10 @@ export default function App() {
               <Route path="master/channels" element={<ChannelListPage />} />
               {/* 運営ツール */}
               <Route path="operations/notice" element={<NoticePage />} />
+              <Route path="operations/announcements" element={<AnnouncementPage />} />
               {/* 設定 */}
               <Route path="settings/accounts" element={<AdminAccountPage />} />
+              <Route path="settings/economy" element={<EconomyPolicyPage />} />
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

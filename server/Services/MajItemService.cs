@@ -245,7 +245,11 @@ public class MajItemService
             if (mast.Category == CatBilling)
                 player.CashCount = await _itemRepo.GetCashCountAsync(player.MemberNo);
 
-            result = result with { CashCount = player.CashCount };
+            result = result with
+            {
+                CashCount = player.CashCount,
+                MoneyChange = mast.CostMoney < 0 ? -mast.CostMoney : 0,
+            };
 
             int conditionType = mast.Category == CatBilling
                 ? MissionConditionBuyBillingItem
@@ -478,6 +482,7 @@ public record BuyMajItemResult
     public DateTime EndDt    { get; init; }
     public int      Qty      { get; init; }
     public long     GamMoney { get; init; }
+    public long     MoneyChange { get; init; }
     public int      GemCount { get; init; }
     public int      CashCount { get; init; }
 

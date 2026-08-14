@@ -6,14 +6,12 @@
  *   最小化 : MajakChannelWnd.cpp/MJRoomWnd1.cpp MINBOX_CREATE("mj_minbox.him", x=947, y=4)
  *   最大化 : MajakChannelWnd.cpp/MJRoomWnd1.cpp MAXBOX_CREATE("mj_maxbox.him", "mj_rstbox.him", x=970, y=4)
  *   閉じる : MajakChannelWnd.cpp/MJRoomWnd1.cpp EXITBOX_CREATE("mj_clsbox.him", x=993, y=4)
- *   遊び方 : MajakChannelWnd.cpp HLPBOX_CREATE("mj_capbox_howtoplay.him", x=859, y=4)
  *   設定   : MajakChannelWnd.cpp SNDBOX_CREATE("mj_sndbox.him", x=901, y=4)
  *   通報   : MajakChannelWnd.cpp ACCBOX_CREATE("mj_accbox.him", x=817, y=4)
  *            MJRoomWnd1.cpp       ACCBOX_CREATE("mj_accbox.him", x=733, y=4)
  *   ルーム : MJRoomWnd1.cpp CAPBOX_CREATE("mj_capbox.him", x=775, y=4)
  *            MJRoomWnd1.cpp BNSBOX_CREATE("mj_banbox.him", x=817, y=4)
  *
- * 遊び方 URL: http://redirect.hange.jp/majak2/help/guide/?m=guide
  * 設定ボタン: onOpenSettings コールバック (省略可)
  *   省略時は CMJCfgDlg (CfgDlg) を内部で開く
  *   レガシー: CMajakChannelWnd::OnSoundOptionIconBoxClicked()
@@ -38,7 +36,6 @@ import EndingPopupWnd from '../screens/outgame/dialogs/EndingPopupWnd'
 import MobileUserSummary from './MobileUserSummary'
 
 const MAJAK3 = '/assets/images/game'
-const HOWTOPLAY_URL = 'http://redirect.hange.jp/majak2/help/guide/?m=guide'
 export const MAJAK_ACCUSE_EVENT = 'majak:accuse-click'
 export const MAJAK_EXIT_REQUEST_EVENT = 'majak:exit-request'
 const IS_NATIVE_APP = Capacitor.isNativePlatform()
@@ -95,6 +92,12 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const frameWidth = accBox === 'room' ? 1024 : 1014
   const frameHeight = accBox === 'room' ? 735 : undefined
+  const isResponsiveDesktopScreen = location.pathname === '/channel'
+    || location.pathname.startsWith('/channel/select/')
+    || /\/channel\/[^/]+\/lobby$/.test(location.pathname)
+    || /\/channel\/[^/]+\/lobby\/room\/[^/]+$/.test(location.pathname)
+  const desktopFrameWidth = isResponsiveDesktopScreen ? 'min(1320px, calc(100vw - 48px))' : frameWidth
+  const desktopFrameHeight = isResponsiveDesktopScreen ? 'min(860px, calc(100dvh - 48px))' : frameHeight
   const routeState = (location.state ?? {}) as { customBgId?: number; customBoardType?: number }
   const fallbackSkin = useCustomSkinStore()
   const routeCustomBoardId = Number(routeState.customBgId ?? 0)
@@ -116,7 +119,7 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
   const frameChromeShadow = useRoomBoardSkin ? '#333333' : '#147d1f'
   const frameBottomColor = useRoomBoardSkin ? '#e8e8e8' : frameChromeColor
   const layoutMode = useOutgameLayoutMode()
-  const desktopScale = useDesktopScreenScale(layoutMode === 'desktop')
+  const desktopScale = useDesktopScreenScale(layoutMode === 'desktop' && !isResponsiveDesktopScreen)
 
   /** OnSoundOptionIconBoxClicked 相当 */
   const handleOpenSettings = onOpenSettings ?? (() => setShowCfg(true))
@@ -213,7 +216,6 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
             <MobileUserSummary />
             <div className="majak-mobile-frame__tools">
               {!IS_NATIVE_APP && <button type="button" onClick={enterFullscreen} title="全画面表示">全画面</button>}
-              <button type="button" onClick={() => window.open(HOWTOPLAY_URL, '_blank', 'noopener,noreferrer')}>遊び方</button>
               <button type="button" onClick={handleOpenSettings}>設定</button>
               {showMobileExit && <button type="button" onClick={handleClose}>終了</button>}
               {accBox && <button type="button" onClick={handleAccuse}>通報</button>}
@@ -230,22 +232,37 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
   }
 
   return (
-    <div style={{
+    <div className={isResponsiveDesktopScreen ? 'majak-responsive-desktop-frame' : undefined} style={{
       position: 'relative',
-      width: frameWidth,
-      height: frameHeight,
+      width: desktopFrameWidth,
+      height: desktopFrameHeight,
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: frameChromeColor,
-      outline: `2px solid ${frameChromeColor}`,
-      boxShadow: `inset 0 0 0 2px ${frameChromeShadow}`,
+      border: isResponsiveDesktopScreen ? '2px solid #0b552a' : undefined,
+      boxSizing: isResponsiveDesktopScreen ? 'border-box' : undefined,
+      outline: isResponsiveDesktopScreen ? undefined : `2px solid ${frameChromeColor}`,
+      boxShadow: isResponsiveDesktopScreen
+        ? 'inset 0 0 0 2px #063618, 0 0 0 1px rgba(84, 168, 91, 0.48)'
+        : `inset 0 0 0 2px ${frameChromeShadow}`,
       transform: desktopScale === 1 ? undefined : `scale(${desktopScale})`,
       transformOrigin: 'center center',
     }}>
 
-      {/* ── タイトルバー 1014×31px ─────────────────────────────────── */}
-      {/* mj_ttlhgc1024.png (1024×31) にロゴ・麻雀4タイトル込み → MJDrawFrame::Draw() m_Title.Draw(pDC,0,0) 相当 */}
-      <div style={{ position: 'relative', width: frameWidth, height: 31, flexShrink: 0, overflow: 'hidden' }}>
+      {isResponsiveDesktopScreen ? (
+        <header className="majak-responsive-desktop-frame__bar">
+          <strong className="majak-type-lg">麻雀4</strong>
+          <div>
+            <button type="button" className="majak-responsive-control-button" onClick={handleOpenSettings}>設定</button>
+            {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleAccuse}>通報</button>}
+            {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleCapture}>キャプチャ</button>}
+            {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleBanish}>追放</button>}
+            {!IS_NATIVE_APP && <button type="button" className="majak-responsive-control-button" onClick={handleMaximize}>{isFullScreen ? '元に戻す' : '全画面'}</button>}
+            <button type="button" className="majak-responsive-control-button" onClick={handleClose}>終了</button>
+          </div>
+        </header>
+      ) : (
+        <div style={{ position: 'relative', width: frameWidth, height: 31, flexShrink: 0, overflow: 'hidden' }}>
 
         {/* 背景: mj_ttlhgc1024.png — ロゴ・タイトル文字すべて込み */}
         <img
@@ -254,16 +271,6 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
           draggable={false}
           onError={event => { event.currentTarget.src = `${MAJAK3}/mj_ttlhgc1024.png` }}
           style={{ position: 'absolute', left: 0, top: 0, width: 1024, height: 31, imageRendering: 'pixelated', pointerEvents: 'none' }}
-        />
-
-        {/* 遊び方ボタン — mj_capbox_howtoplay.png (40×22, 4フレーム) HLPBOX_CREATE x=859 y=4 */}
-        <TitleBtn
-          src={roomSkinSrc('mj_capbox_howtoplay')}
-          fallbackSrc={roomSkinFallbackSrc('mj_capbox_howtoplay')}
-          frameW={40} frameH={22}
-          x={859} y={4}
-          onClick={() => window.open(HOWTOPLAY_URL, '_blank', 'noopener,noreferrer')}
-          title="遊び方"
         />
 
         {/* 設定ボタン — mj_sndbox.png (40×23, 4フレーム) SNDBOX_CREATE x=901 y=4
@@ -338,7 +345,8 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
           </>
         )}
 
-      </div>
+        </div>
+      )}
 
       {/* ── コンテンツ領域 ────────────────────────────────────────── */}
       {children}

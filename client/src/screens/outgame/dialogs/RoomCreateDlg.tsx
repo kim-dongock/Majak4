@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { showError } from '../../../utils/msgbox'
+import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 const SX = (du: number) => Math.round(du * 1.5)
 const SY = (du: number) => Math.round(du * 1.625)
@@ -49,6 +50,7 @@ const ROOM_TITLES = [
 ]
 
 export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK, onCancel }: Props) {
+  const layoutMode = useOutgameLayoutMode()
   const [title, setTitle] = useState(() => initialTitle || RANDOM_ROOM_TITLES[Math.floor(Math.random() * RANDOM_ROOM_TITLES.length)])
   const [isPrivate, setIsPrivate] = useState(false)
   const [password, setPassword] = useState('')
@@ -84,9 +86,12 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
 
   {
     return (
-      <div className="majak-mobile-dialog-overlay">
-        <div className="majak-mobile-room-create-dialog majak-mobile-dialog-panel">
-          <div className="majak-mobile-dialog-titlebar">部屋を作る</div>
+      <div className={`majak-mobile-dialog-overlay majak-room-setup-overlay majak-room-setup-overlay--${layoutMode} majak-popup-overlay`} role="presentation">
+        <div className="majak-mobile-room-create-dialog majak-room-setup-dialog majak-mobile-dialog-panel majak-popup-panel" role="dialog" aria-modal="true" aria-labelledby="room-create-dialog-title">
+          <header id="room-create-dialog-title" className="majak-mobile-dialog-titlebar majak-popup-titlebar">
+            <span>部屋を作る</span>
+            <button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button>
+          </header>
           <div className="majak-mobile-dialog-body majak-mobile-room-create-body">
             <label className="majak-mobile-dialog-field majak-mobile-dialog-field--wide">
               <span>部屋の名前</span>
@@ -129,9 +134,9 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
               </fieldset>
             )}
           </div>
-          <div className="majak-mobile-dialog-actions">
-            <button type="button" onClick={submit}>OK</button>
-            <button type="button" onClick={onCancel}>キャンセル</button>
+          <div className="majak-mobile-dialog-actions majak-popup-actions">
+            <button type="button" className="majak-standard-dialog__primary is-primary" onClick={submit}>OK</button>
+            <button type="button" className="majak-standard-dialog__secondary" onClick={onCancel}>キャンセル</button>
           </div>
         </div>
       </div>

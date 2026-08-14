@@ -73,6 +73,7 @@ export default function AdminLayout() {
       label: '運営ツール',
       children: [
         { key: '/operations/notice', label: '公知送信' },
+        { key: '/operations/announcements', label: 'お知らせ記事' },
       ],
     },
     {
@@ -81,6 +82,7 @@ export default function AdminLayout() {
       label: '設定',
       children: [
         { key: '/settings/accounts', label: '管理者アカウント' },
+        { key: '/settings/economy', label: 'GP経済設定' },
       ],
     },
   ]

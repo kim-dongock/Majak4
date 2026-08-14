@@ -445,6 +445,25 @@ public class PushOkButtonCommandTests
         Assert.True(dict.ContainsKey(Key.LackMoney));
     }
 
+    [Fact]
+    public async Task Execute_BasicTableChargeFailure_ReturnsGpMessage()
+    {
+        var (_, player) = SetupRoom2(money: 499);
+        var room = _session.GetRoom(player.RoomId!.Value)!;
+        room.SubId = "0082B";
+        var cmd = new PushOkButtonCommand(_session, _gameLogicMock.Object, new RatingService());
+        var (ctx, sent) = CommandTestHelper.MakeContext(player);
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Single(sent);
+        Assert.Equal(Cmd.PushOkButton, sent[0].method);
+        var dict = CommandTestHelper.AsDict(sent[0].packet);
+        Assert.Equal(1L, (long)dict[Key.LackMoney]!);
+        Assert.Contains("場代 500 GP", (string)dict["message"]!);
+        Assert.False(room.OkButtonStates[0]);
+    }
+
     // シナリオ3: ゲーム進行中 → 無視
     [Fact]
     public async Task Execute_GamePlaying_NothingSent()

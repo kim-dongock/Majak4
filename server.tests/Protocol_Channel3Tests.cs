@@ -747,6 +747,7 @@ public class HanChatAllRelayCommandTests
         Assert.Equal(player.Pix, ((JsonElement)pkt["memberNo"]!).GetString());
         Assert.NotEqual(player.MemberNo, ((JsonElement)pkt["memberNo"]!).GetString());
         Assert.Equal("Hello!", ((JsonElement)pkt["string"]!).GetString());
+        Assert.Equal(player.NickName, ((JsonElement)pkt["nickname"]!).GetString());
         Assert.Equal(GKey.ValueAll, ((JsonElement)pkt["target"]!).GetString());
     }
 

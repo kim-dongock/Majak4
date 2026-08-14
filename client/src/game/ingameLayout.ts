@@ -4,7 +4,15 @@ export const INGAME_WORLD = {
   height: 735,
 } as const
 
-export type IngameLayoutMode = 'desktop' | 'mobileLandscape'
+export type IngameLayoutMode = 'desktop' | 'mobileLandscape' | 'responsiveDesktop'
+
+export function isCenteredIngameLayout(mode: IngameLayoutMode): boolean {
+  return mode === 'mobileLandscape'
+}
+
+export function isMobileIngameLayout(mode: IngameLayoutMode): boolean {
+  return mode === 'mobileLandscape'
+}
 
 export const DESKTOP_INGAME_LAYOUT = {
   board: {
@@ -270,5 +278,5 @@ export const MOBILE_INGAME_LAYOUT: IngameLayout = {
 }
 
 export function getIngameLayout(mode: IngameLayoutMode = 'desktop'): IngameLayout {
-  return mode === 'mobileLandscape' ? MOBILE_INGAME_LAYOUT : DESKTOP_INGAME_LAYOUT
+  return isMobileIngameLayout(mode) ? MOBILE_INGAME_LAYOUT : DESKTOP_INGAME_LAYOUT
 }

@@ -108,8 +108,8 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
     width: GAME_WIDTH,
     height: GAME_HEIGHT,
     parent,
-    backgroundColor: options.layoutMode === 'mobileLandscape' ? 'rgba(0,0,0,0)' : '#000000',
-    transparent: options.layoutMode === 'mobileLandscape',
+    backgroundColor: options.layoutMode === 'desktop' ? '#000000' : 'rgba(0,0,0,0)',
+    transparent: options.layoutMode !== 'desktop',
     disableContextMenu: true,
     audio: {
       noAudio: true,

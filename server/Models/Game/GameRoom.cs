@@ -204,6 +204,9 @@ public class GameRoom
     // プレイ履歴 (原典: m_vecPlayHist — 牌譜データ)
     public List<object> PlayHistory { get; } = new();
 
+    // 完了局をまたいで保持するファイル保存用履歴。PlayHistory は再接続用の局スナップショット。
+    public List<object> PaifuHistory { get; } = new();
+
     // 最終結果 payload。c32e を取り逃したクライアントの resync で再送する。
     public IReadOnlyDictionary<string, object?>? LastGameReportPayload { get; set; }
 

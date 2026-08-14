@@ -9,16 +9,6 @@ interface MobileAvatarSlotState {
   alt: string
 }
 
-interface MobileTurnMarkState {
-  url: string
-  x: number
-  y: number
-  width: number
-  height: number
-  visible: boolean
-  tileFrame?: boolean
-}
-
 interface MobileCallAvatarState {
   url: string
   fallbackUrl: string
@@ -58,8 +48,6 @@ interface MobileAvatarSlot {
 export default class MobileAvatarLayer {
   private readonly root: HTMLDivElement
   private readonly slots: MobileAvatarSlot[]
-  private readonly turnMark: HTMLDivElement
-  private turnMarkAnimation?: Animation
 
   constructor(parent: HTMLElement, onActivate: (loc: number) => void) {
     this.root = document.createElement('div')
@@ -93,17 +81,6 @@ export default class MobileAvatarLayer {
       this.root.appendChild(image)
       return { image, requestId: 0, url: '', fallbackUrl: '' }
     })
-
-    this.turnMark = document.createElement('div')
-    Object.assign(this.turnMark.style, {
-      position: 'absolute',
-      display: 'none',
-      zIndex: '1',
-      imageRendering: 'pixelated',
-      pointerEvents: 'none',
-      backgroundRepeat: 'no-repeat',
-    })
-    this.root.appendChild(this.turnMark)
 
     parent.appendChild(this.root)
   }
@@ -148,34 +125,6 @@ export default class MobileAvatarLayer {
         if (slot.requestId === requestId) showLoadedImage(state.fallbackUrl)
       }).catch(() => {})
     })
-  }
-
-  updateTurnMark(state: MobileTurnMarkState): void {
-    const tileFrame = Boolean(state.tileFrame)
-    Object.assign(this.turnMark.style, {
-      display: state.visible && state.url ? 'block' : 'none',
-      left: `${state.x}px`,
-      top: `${state.y}px`,
-      width: `${state.width}px`,
-      height: `${state.height}px`,
-      backgroundImage: state.url ? `url("${state.url}")` : 'none',
-      backgroundSize: tileFrame ? `${state.width * 37}px ${state.height}px` : `${state.width}px ${state.height}px`,
-      backgroundPosition: '0 0',
-    })
-    this.turnMarkAnimation?.cancel()
-    this.turnMarkAnimation = undefined
-    if (state.visible && state.url) {
-      this.turnMarkAnimation = this.turnMark.animate(
-        [{ opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }],
-        { duration: 1000, iterations: Infinity },
-      )
-    }
-  }
-
-  hideTurnMark(): void {
-    this.turnMarkAnimation?.cancel()
-    this.turnMarkAnimation = undefined
-    this.turnMark.style.display = 'none'
   }
 
   showCallAvatar(state: MobileCallAvatarState): () => void {

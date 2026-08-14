@@ -36,17 +36,23 @@ const PROGRESS_MAX      = 100   // SetRange(0, 100)
 interface Props {
   onYes: () => void  // IDYES: 続ける
   onNo:  () => void  // IDNO:  やめる
+  deadlineAt?: number
 }
 
-export default function AskEndDlg({ onYes, onNo }: Props) {
+export default function AskEndDlg({ onYes, onNo, deadlineAt }: Props) {
   /** m_wndProgress.GetPos() 相当 */
-  const [progress, setProgress] = useState(PROGRESS_MAX)
+  const [progress, setProgress] = useState(() => deadlineAt === undefined
+    ? PROGRESS_MAX
+    : Math.min(PROGRESS_MAX, Math.max(0, Math.ceil((deadlineAt - performance.now()) / TIMER_INTERVAL_MS)))
+  )
 
   /** OnTimer() 相当: 100ms ごとに -1 → 0 で自動退出 */
   useEffect(() => {
     const id = setInterval(() => {
       setProgress(p => {
-        const next = p - 1
+        const next = deadlineAt === undefined
+          ? p - 1
+          : Math.min(PROGRESS_MAX, Math.max(0, Math.ceil((deadlineAt - performance.now()) / TIMER_INTERVAL_MS)))
         if (next <= 0) {
           clearInterval(id)
           onYes()   /* EndDialog(IDYES) 相当 */
@@ -56,90 +62,29 @@ export default function AskEndDlg({ onYes, onNo }: Props) {
       })
     }, TIMER_INTERVAL_MS)
     return () => clearInterval(id)
-  }, [onYes])
+  }, [deadlineAt, onYes])
 
-  /** バー残り % */
-  const pct = (progress / PROGRESS_MAX) * 100
-
-  // IDD_ASKEND_DLG: 127×65 DU → client 190×105px + titlebar 22px
-  // CAPTION "あがりやめ"  FONT 9,"ＭＳ Ｐゴシック"
-  // DU→px: 1DU_x=1.5px, 1DU_y=1.625px
-  const SX = (du: number) => Math.round(du * 1.5)
-  const SY = (du: number) => Math.round(du * 1.625)
-  const FONT    = 'var(--majak-font-family-ui)'
-  const DLG_BG  = '#d4d0c8'
-  const DLG_W   = SX(127)  // 190
-  const DLG_H   = SY(65)   // 105
-  const TITLE_H = 22
-
-  const btnStyle: React.CSSProperties = {
-    position: 'absolute', fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
-    background: DLG_BG,
-    borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
-    borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
-    cursor: 'pointer', outline: 'none',
-  }
+  const remainingSeconds = Math.ceil(progress / (1000 / TIMER_INTERVAL_MS))
 
   return (
-    <div
-      style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'transparent', zIndex: 500,
-      }}
-    >
-      {/* IDD_ASKEND_DLG ウィンドウ (DS_MODALFRAME|WS_CAPTION) */}
-      <div style={{ position: 'relative', width: DLG_W, boxShadow: '3px 3px 8px rgba(0,0,0,0.6)' }}>
-
-        {/* タイトルバー CAPTION "退室確認" */}
-        <div style={{
-          height: TITLE_H,
-          background: 'linear-gradient(to right, #000080, #1060d0)',
-          display: 'flex', alignItems: 'center', paddingLeft: 8,
-        }}>
-          <span style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#fff', fontWeight: 'bold' }}>あがりやめ</span>
-        </div>
-
-        {/* クライアントエリア: 190×105px */}
-        <div style={{ position: 'relative', width: DLG_W, height: DLG_H, background: DLG_BG }}>
-
-          {/* LTEXT "あがりやめせずに対局を続けますか？" (7,7,113,8) */}
-          <div style={{
-            position: 'absolute', left: SX(7), top: SY(7), width: SX(113),
-            fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
-          }}>
-            あがりやめせずに対局を続けますか？
+    <div className="majak-popup-overlay">
+      <section className="majak-popup-panel majak-ask-end-dialog" role="dialog" aria-modal="true" aria-labelledby="ask-end-dialog-title">
+        <header id="ask-end-dialog-title" className="majak-popup-titlebar">
+          <span>あがりやめ</span>
+          <button className="majak-popup-titlebar__close" type="button" onClick={onNo} aria-label="閉じる">×</button>
+        </header>
+        <div className="majak-popup-body majak-ask-end-dialog__body">
+          <p>あがりやめせずに対局を続けますか？</p>
+          <p className="majak-ask-end-dialog__timer">残り {remainingSeconds} 秒</p>
+          <div className="majak-ask-end-dialog__progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+            <div style={{ width: `${progress}%`, transition: `width ${TIMER_INTERVAL_MS}ms linear` }} />
           </div>
-
-          {/* CProgressCtrl IDC_PROGRESS (5,25,117,9)
-              SetRange(0,100), SetPos(100), SetStep(-1) → 100ms × 100 = 10秒カウントダウン */}
-          <div style={{
-            position: 'absolute', left: SX(5), top: SY(25),
-            width: SX(117), height: SY(9),
-            background: '#c0c0c0', border: '1px solid #404040',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              width: `${pct}%`, height: '100%',
-              background: '#000080',
-              transition: `width ${TIMER_INTERVAL_MS}ms linear`,
-            }} />
-          </div>
-
-          {/* DEFPUSHBUTTON "続ける(&Y)" IDYES (17,42,40,14) */}
-          <button onClick={onYes}
-            style={{ ...btnStyle, left: SX(17), top: SY(42), width: SX(40), height: SY(14), fontWeight: 'bold' }}>
-            続ける
-          </button>
-
-          {/* PUSHBUTTON "やめる(&N)" IDNO (69,42,40,14) */}
-          <button onClick={onNo}
-            style={{ ...btnStyle, left: SX(69), top: SY(42), width: SX(40), height: SY(14) }}>
-            やめる
-          </button>
-
         </div>
-      </div>
+        <footer className="majak-popup-actions">
+          <button type="button" className="is-primary" onClick={onYes}>続ける</button>
+          <button type="button" onClick={onNo}>やめる</button>
+        </footer>
+      </section>
     </div>
   )
 }

@@ -52,9 +52,9 @@
  *     LTEXT "カーソルが合っている牌を捨てたときの\n各待ち牌の残り枚数と確定翻数を表示します" (20,135,196,19)
  */
 import { useState } from 'react'
+import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 import { GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig } from '../../../game/assistConfig'
 import { GAME_PAIFU_RECORDING_CONFIG_EVENT } from '../../../game/paifuRecording'
-import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 // DU→px 変換 (9pt "MS UI Gothic" @96dpi: baseX=6px → 6/4=1.5, baseY=13px → 13/8=1.625)
 const SX = (du: number) => Math.round(du * 1.5)
@@ -224,11 +224,13 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
     onModify?.(next)
   }
 
-  if (layoutMode === 'mobileLandscape' || layoutMode === 'desktop') {
-    return (
-      <div className="majak-mobile-dialog-overlay">
-        <div className="majak-mobile-config-dialog majak-mobile-dialog-panel">
-          <div className="majak-mobile-dialog-titlebar">設定</div>
+  return (
+      <div className={`majak-mobile-dialog-overlay majak-mobile-config-overlay--${layoutMode} majak-popup-overlay`}>
+        <div className="majak-mobile-config-dialog majak-mobile-dialog-panel majak-popup-panel" role="dialog" aria-modal="true" aria-labelledby="config-dialog-title">
+          <header id="config-dialog-title" className="majak-mobile-dialog-titlebar majak-popup-titlebar">
+            <span>設定</span>
+            <button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button>
+          </header>
           <div className="majak-mobile-config-tabs" role="tablist" aria-label="設定">
             {(['環境設定', 'アシスト'] as const).map((label, index) => (
               <button
@@ -239,7 +241,7 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
               >{label}</button>
             ))}
           </div>
-          <div className="majak-mobile-dialog-body majak-mobile-config-body">
+          <div className="majak-popup-body majak-mobile-dialog-body majak-mobile-config-body">
             {activeTab === 0 ? (
               <>
                 <fieldset className="majak-mobile-dialog-section majak-mobile-config-section">
@@ -291,209 +293,11 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
               </div>
             )}
           </div>
-          <div className="majak-mobile-dialog-actions">
-            <button type="button" onClick={() => onOK(cfg)}>OK</button>
+          <div className="majak-mobile-dialog-actions majak-popup-actions">
+            <button type="button" className="is-primary" onClick={() => onOK(cfg)}>OK</button>
             <button type="button" onClick={() => { onModify?.(initial); onCancel() }}>キャンセル</button>
           </div>
         </div>
       </div>
-    )
-  }
-
-  // IDD_CONFIG_DLG_EX: 246×250 DU → client 369×406px + titlebar 22px
-  const DLG_W = SX(246)  // 369
-  const DLG_H = SY(250)  // 406
-  const TITLE_H = 22
-  // Tab content area: SY(220)=358 - tab header 24px = 334px
-  const TAB_CONTENT_H = SY(220) - 24
-
-  return (
-    <div style={{
-      position: 'absolute', inset: 0, zIndex: 210,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.25)',
-    }}>
-      {/* IDD_CONFIG_DLG_EX ウィンドウ (DS_MODALFRAME|WS_CAPTION) */}
-      <div style={{ position: 'relative', width: DLG_W, height: TITLE_H + DLG_H, background: DLG_BG, border: '1px solid #808080', boxShadow: '3px 3px 8px rgba(0,0,0,0.45)' }}>
-
-        {/* ── タイトルバー (CAPTION "設定") ── */}
-        <div style={{
-          position: 'absolute', left: 0, top: 0, width: DLG_W, boxSizing: 'border-box',
-          height: TITLE_H,
-          background: TITLE_BG,
-          display: 'flex', alignItems: 'center', paddingLeft: 8,
-        }}>
-          <span style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#111' }}>設定</span>
-        </div>
-
-        {/* ── クライアントエリア: 369×406px ── */}
-        <div style={{ position: 'absolute', left: 0, top: TITLE_H, width: DLG_W, height: DLG_H, background: DLG_BG }}>
-
-          {/* IDC_TAB SysTabControl32 (5,5,235,220) */}
-          <div style={{
-            position: 'absolute',
-            left: SX(5), top: SY(5),
-            width: SX(235), height: SY(220),
-          }}>
-            {/* タブヘッダー (TCN_SELCHANGE 相当) */}
-            <div style={{ display: 'flex', alignItems: 'flex-end', paddingLeft: 4 }}>
-              {(['環境設定', 'アシスト'] as const).map((label, i) => (
-                <button key={i} onClick={() => setActiveTab(i)} style={{
-                  padding: '2px 10px',
-                  fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
-                  background: activeTab === i ? DLG_BG : '#bbb',
-                  border: '1px solid #808080',
-                  borderBottom: activeTab === i ? `1px solid ${DLG_BG}` : '1px solid #808080',
-                  marginRight: 2,
-                  cursor: 'pointer', outline: 'none',
-                  position: 'relative', bottom: activeTab === i ? -1 : 0,
-                  zIndex: activeTab === i ? 2 : 1,
-                }}>{label}</button>
-              ))}
-            </div>
-
-            {/* タブコンテンツ枠 */}
-            <div style={{
-              position: 'relative',
-              border: '1px solid #808080',
-              background: DLG_BG,
-              height: TAB_CONTENT_H,
-              overflow: 'hidden',
-            }}>
-
-              {/* ============================================================
-                  Tab 0: IDD_CONFIG_DLG (230×195 DU)
-                  ============================================================ */}
-              {activeTab === 0 && (
-                <div style={{ position: 'relative', width: SX(230), height: SY(195) }}>
-
-                  {/* GROUPBOX "サウンド" (5,6,85,60) */}
-                  <GB x={SX(5)} y={SY(6)} w={SX(85)} h={SY(60)} label="サウンド" />
-                  {/* IDC_CHKBGM "BGM" (10,19) — OnChkBGM→OnModify 相当 */}
-                  <Chk x={SX(10)} y={SY(19)} label="BGM"
-                    checked={cfg.bChkBGM}
-                    onChange={v => set('bChkBGM', v)} />
-                  {/* IDC_CHKSND "効果音" (10,34) — OnChkSND: EnableWindow(CHKPIO) のみ */}
-                  <Chk x={SX(10)} y={SY(34)} label="効果音"
-                    checked={cfg.bChkSND} onChange={v => set('bChkSND', v)} />
-                  {/* IDC_CHKPIO "チャット音" (15,49) — SND OFF 時 disabled */}
-                  <Chk x={SX(15)} y={SY(49)} label="チャット音"
-                    checked={cfg.bChkPIO} disabled={!cfg.bChkSND}
-                    onChange={v => set('bChkPIO', v)} />
-                  {/* IDC_VOLBGM (43,20,45,10) — OnHScroll→OnModify 相当 */}
-                  <input type="range" min={0} max={255} value={cfg.nVolBGM}
-                    onChange={e => set('nVolBGM', +e.target.value)}
-                    style={{ position: 'absolute', left: SX(43), top: SY(20), width: SX(45), height: SY(10), margin: 0 }} />
-                  {/* IDC_VOLSND (43,35,45,10) */}
-                  <input type="range" min={0} max={255} value={cfg.nVolSND}
-                    onChange={e => set('nVolSND', +e.target.value)}
-                    style={{ position: 'absolute', left: SX(43), top: SY(35), width: SX(45), height: SY(10), margin: 0 }} />
-
-                  {/* GROUPBOX "牌譜の記録" (5,70,85,60) */}
-                  <GB x={SX(5)} y={SY(70)} w={SX(85)} h={SY(60)} label="牌譜の記録" />
-                  {/* IDC_SELREC0 "記録しない" (10,84) */}
-                  <Rad x={SX(10)} y={SY(84)} name="nChkREC" val={0} label="記録しない"
-                    checked={cfg.nChkREC === 0} onChange={v => set('nChkREC', v)} />
-                  {/* IDC_SELREC1 "自分の対局のみ記録" (10,99) */}
-                  <Rad x={SX(10)} y={SY(99)} name="nChkREC" val={1} label="自分の対局のみ記録"
-                    checked={cfg.nChkREC === 1} onChange={v => set('nChkREC', v)} />
-                  {/* IDC_SELREC2 "観戦した対局も記録" (10,114) */}
-                  <Rad x={SX(10)} y={SY(114)} name="nChkREC" val={2} label="観戦した対局も記録"
-                    checked={cfg.nChkREC === 2} onChange={v => set('nChkREC', v)} />
-
-                  {/* GROUPBOX "オートパス" (95,6,130,60) */}
-                  <GB x={SX(95)} y={SY(6)} w={SX(130)} h={SY(60)} label="オートパス" />
-                  {/* IDC_SELPAS0 "毎局解除する" (100,19) */}
-                  <Rad x={SX(100)} y={SY(19)} name="nChkPAS" val={0} label="毎局解除する"
-                    checked={cfg.nChkPAS === 0} onChange={v => set('nChkPAS', v)} />
-                  {/* IDC_SELPAS1 "毎局設定する（超光速では解除）" (100,34) */}
-                  <Rad x={SX(100)} y={SY(34)} name="nChkPAS" val={1} label="毎局設定する（超光速では解除）"
-                    checked={cfg.nChkPAS === 1} onChange={v => set('nChkPAS', v)} />
-                  {/* IDC_SELPAS2 "毎局設定する（超光速でも設定）" (100,48) */}
-                  <Rad x={SX(100)} y={SY(48)} name="nChkPAS" val={2} label="毎局設定する（超光速でも設定）"
-                    checked={cfg.nChkPAS === 2} onChange={v => set('nChkPAS', v)} />
-
-                  {/* GROUPBOX "ツモ切り" (95,70,130,30) */}
-                  <GB x={SX(95)} y={SY(70)} w={SX(130)} h={SY(30)} label="ツモ切り" />
-                  {/* IDC_CHKAUT "立直時に設定する" (100,84) */}
-                  <Chk x={SX(100)} y={SY(84)} label="立直時に設定する"
-                    checked={cfg.bChkAUT} onChange={v => set('bChkAUT', v)} />
-
-                  {/* GROUPBOX "パスに使用するキー" (95,105,130,45) */}
-                  <GB x={SX(95)} y={SY(105)} w={SX(130)} h={SY(45)} label="パスに使用するキー" />
-                  {/* IDC_SELPASKEY0 "[Enter]・[Space]・[Num 0]を使用する" (100,118) */}
-                  <Rad x={SX(100)} y={SY(118)} name="nSelPasKey" val={0}
-                    label="[Enter]・[Space]・[Num 0]を使用する"
-                    checked={cfg.nSelPasKey === 0} onChange={v => set('nSelPasKey', v)} />
-                  {/* IDC_SELPASKEY1 "[↑]を使用する" (100,133) */}
-                  <Rad x={SX(100)} y={SY(133)} name="nSelPasKey" val={1}
-                    label="[↑]を使用する"
-                    checked={cfg.nSelPasKey === 1} onChange={v => set('nSelPasKey', v)} />
-
-                </div>
-              )}
-
-              {/* ============================================================
-                  Tab 1: IDD_CONFIG_DLG3 (230×169 DU)
-                  ============================================================ */}
-              {activeTab === 1 && (
-                <div style={{ position: 'relative', width: SX(230), height: SY(169) }}>
-
-                  {/* IDC_CHKTAP "手出し/自摸切り表示" (10,15,78,10) */}
-                  <Chk x={SX(10)} y={SY(15)} label="手出し/自摸切り表示"
-                    checked={cfg.bChkTap} onChange={v => set('bChkTap', v)} />
-                  {/* LTEXT (20,30,122,8) */}
-                  <LTxt x={SX(20)} y={SY(30)} w={SX(122)}
-                    text="手出しと自摸切りの区別を手牌に残します" />
-
-                  {/* IDC_CHKPAI "隣接牌表示" (10,50,50,10) */}
-                  <Chk x={SX(10)} y={SY(50)} label="隣接牌表示"
-                    checked={cfg.bChkPai} onChange={v => set('bChkPai', v)} />
-                  {/* LTEXT (20,65,156,8) */}
-                  <LTxt x={SX(20)} y={SY(65)} w={SX(156)}
-                    text="マウスでポイントしている牌と隣接牌を強調表示します" />
-
-                  {/* IDC_CHKTNP "聴牌表示" (10,85,43,10) */}
-                  <Chk x={SX(10)} y={SY(85)} label="聴牌表示"
-                    checked={cfg.bChkTnp} onChange={v => set('bChkTnp', v)} />
-                  {/* LTEXT (20,101,139,8) */}
-                  <LTxt x={SX(20)} y={SY(101)} w={SX(139)}
-                    text="捨てたときに聴牌になる牌にマークを表示します" />
-
-                  {/* IDC_CHKHOR "和了表示" (10,120,43,10) */}
-                  <Chk x={SX(10)} y={SY(120)} label="和了表示"
-                    checked={cfg.bChkHor} onChange={v => set('bChkHor', v)} />
-                  {/* LTEXT (20,135,196,19) */}
-                  <LTxt x={SX(20)} y={SY(135)} w={SX(196)}
-                    text={"カーソルが合っている牌を捨てたときの\n各待ち牌の残り枚数と確定翻数を表示します"} />
-
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* DEFPUSHBUTTON "OK" (135,230,50,14) */}
-          <button onClick={() => onOK(cfg)} style={{
-            position: 'absolute', left: SX(135), top: SY(230),
-            width: SX(50), height: SY(14),
-            fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', background: DLG_BG,
-            borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
-            borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
-            cursor: 'pointer', outline: 'none',
-          }}>OK</button>
-
-          {/* PUSHBUTTON "キャンセル" (190,230,50,14) */}
-          <button onClick={() => { onModify?.(initial); onCancel() }} style={{
-            position: 'absolute', left: SX(190), top: SY(230),
-            width: SX(50), height: SY(14),
-            fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', background: DLG_BG,
-            borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
-            borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
-            cursor: 'pointer', outline: 'none',
-          }}>キャンセル</button>
-
-        </div>
-      </div>
-    </div>
   )
 }

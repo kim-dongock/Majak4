@@ -123,6 +123,7 @@ export interface HanResPlayer {
   gemCount?: number
   experience?: number
   expGain?: number
+  lentMoney?: number
   horaCnt?: number
   horaPoint?: number
   hojuCnt?: number

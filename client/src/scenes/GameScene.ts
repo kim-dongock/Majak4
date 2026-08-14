@@ -52,6 +52,8 @@ import {
 import {
   DESKTOP_INGAME_LAYOUT,
   getIngameLayout,
+  isCenteredIngameLayout,
+  isMobileIngameLayout,
   MOBILE_DEAD_WALL_SHIFT_X,
   MOBILE_DISCARD_CENTER_INFO_OFFSETS,
   MOBILE_TOP_MELD_CENTER_INFO_OFFSET,
@@ -65,6 +67,9 @@ import {
   mobileEffectPointFromAnchor,
   mobileVisibleWorldBounds,
   mobileVisibleWorldLayoutKey,
+  responsiveDesktopCenterOffset,
+  responsiveDesktopSeatOffset,
+  responsiveDesktopVisibleWorldBounds,
 } from '../game/mobileIngameViewport'
 import { canCompleteGameResync, restoreVisiblePaiCodes } from '../game/resyncState'
 import {
@@ -164,10 +169,12 @@ const MATCH_START_OPEN_OFFSETS = [
   { x: 0, y: 18 },
 ] as const
 let DISCARD_COLS = DESKTOP_DISCARD_COLS
+let CURRENT_INGAME_LAYOUT_MODE: IngameLayoutMode = 'desktop'
 
 function applyIngameLayout(mode: IngameLayoutMode) {
+  CURRENT_INGAME_LAYOUT_MODE = mode
   INGAME_LAYOUT = getIngameLayout(mode)
-  DISCARD_COLS = mode === 'mobileLandscape' ? MOBILE_DISCARD_COLS : DESKTOP_DISCARD_COLS
+  DISCARD_COLS = isMobileIngameLayout(mode) ? MOBILE_DISCARD_COLS : DESKTOP_DISCARD_COLS
   BOARD_X = INGAME_LAYOUT.board.x
   BOARD_Y = INGAME_LAYOUT.board.y
   BOARD_W = INGAME_LAYOUT.board.width
@@ -200,7 +207,13 @@ function applyIngameLayout(mode: IngameLayoutMode) {
 }
 
 function boardLocalPoint(point: { x: number; y: number }): { x: number; y: number } {
-  return { x: BOARD_X + point.x, y: BOARD_Y + point.y }
+  const offset = responsiveDesktopCenterOffset(CURRENT_INGAME_LAYOUT_MODE)
+  return { x: BOARD_X + point.x + offset.x, y: BOARD_Y + point.y + offset.y }
+}
+
+function boardEdgePoint(point: { x: number; y: number }, loc: 0 | 1 | 2 | 3, mode: IngameLayoutMode): { x: number; y: number } {
+  const offset = responsiveDesktopSeatOffset(mode, loc)
+  return { x: BOARD_X + point.x + offset.x, y: BOARD_Y + point.y + offset.y }
 }
 
 let OPN_OFS = INGAME_LAYOUT.handOpenOffset
@@ -262,10 +275,10 @@ function handPos(loc: 0 | 1 | 2 | 3, idx: number, isDrawTile: boolean, isOpenMod
   const tableLoc = loc === 0 ? 4 : loc
   const offset = isDrawTile ? MOH_OFS[tableLoc] : { x: 0, y: 0 }
   const openOffset = isOpenMode ? OPN_OFS[tableLoc] : { x: 0, y: 0 }
-  return boardLocalPoint({
+  return boardEdgePoint({
     x: TEH_POS[tableLoc].x + TEH_COL[tableLoc].x * idx + offset.x + openOffset.x,
     y: TEH_POS[tableLoc].y + TEH_COL[tableLoc].y * idx + offset.y + openOffset.y,
-  })
+  }, loc, CURRENT_INGAME_LAYOUT_MODE)
 }
 
 function mobileOuterHandPos(loc: 0 | 1 | 2 | 3, idx: number, _count: number, isDrawTile: boolean, scale: number): { x: number; y: number } | null {
@@ -342,7 +355,7 @@ function discardTexture(loc: 0 | 1 | 2 | 3, flag: number): string {
 }
 
 function discardBasePos(loc: 0 | 1 | 2 | 3, mode: IngameLayoutMode): { x: number; y: number } {
-  if (mode === 'mobileLandscape') {
+  if (isMobileIngameLayout(mode)) {
     const offset = MOBILE_DISCARD_CENTER_INFO_OFFSETS[loc]
     return { x: CENTER_INFO.x + offset.x, y: CENTER_INFO.y + offset.y }
   }
@@ -357,7 +370,7 @@ function discardPos(loc: 0 | 1 | 2 | 3, idx: number, flag: number, mode: IngameL
   const col = idx % DISCARD_COLS
   const row = Math.floor(idx / DISCARD_COLS)
   const base = discardBasePos(loc, mode)
-  const layoutScale = mode === 'mobileLandscape' ? mobileDiscardScale(MOBILE_DISCARD_LAYOUT_SCALE) : 1
+  const layoutScale = isMobileIngameLayout(mode) ? mobileDiscardScale(MOBILE_DISCARD_LAYOUT_SCALE) : 1
   let x = base.x + (STH_COL[loc].x * col + STH_ROW[loc].x * row) * layoutScale
   let y = base.y + (STH_COL[loc].y * col + STH_ROW[loc].y * row) * layoutScale
   if (flag === 2) {
@@ -368,7 +381,7 @@ function discardPos(loc: 0 | 1 | 2 | 3, idx: number, flag: number, mode: IngameL
     x += (STH_ROW[nextLoc].x - STH_COL[loc].x) * layoutScale
     y += (STH_ROW[nextLoc].y - STH_COL[loc].y) * layoutScale
   }
-  const centerOffset = mobileCenterHudOffset(mode)
+  const centerOffset = isMobileIngameLayout(mode) ? mobileCenterHudOffset(mode) : { x: 0, y: 0 }
   x += centerOffset.x
   y += centerOffset.y
   return boardLocalPoint({ x, y })
@@ -404,9 +417,9 @@ function mobileMeldBasePos(loc: 0 | 1 | 2 | 3, meldScale: number): { x: number; 
 function meldPos(loc: 0 | 1 | 2 | 3, row: number, col: number, flag: number, mode: IngameLayoutMode = 'desktop', scale = 1): { x: number; y: number } {
   const dir = flag === 2 ? ((loc + 1) % 4) as 0 | 1 | 2 | 3 : loc
   const meldLayout = DESKTOP_INGAME_LAYOUT
-  const mobileBase = mode === 'mobileLandscape' ? mobileMeldBasePos(loc, scale) : null
+  const mobileBase = isMobileIngameLayout(mode) ? mobileMeldBasePos(loc, scale) : null
   const base = mobileBase ?? meldLayout.meldPosition[loc]
-  const stepScale = mode === 'mobileLandscape' ? scale : 1
+  const stepScale = isMobileIngameLayout(mode) ? scale : 1
   const rowStep = { x: meldLayout.discardRowStep[loc].x * stepScale, y: meldLayout.discardRowStep[loc].y * stepScale }
   const colStep = { x: meldLayout.discardStep[loc].x * stepScale, y: meldLayout.discardStep[loc].y * stepScale }
   const rotStep = { x: meldLayout.rotatedDiscardOffset[loc].x * stepScale, y: meldLayout.rotatedDiscardOffset[loc].y * stepScale }
@@ -420,7 +433,7 @@ function meldPos(loc: 0 | 1 | 2 | 3, row: number, col: number, flag: number, mod
     x += colStep.x - meldLayout.discardRowStep[nextLoc].x * stepScale
     y += colStep.y - meldLayout.discardRowStep[nextLoc].y * stepScale
   }
-  return mobileBase ? { x, y } : boardLocalPoint({ x, y })
+  return mobileBase ? { x, y } : boardEdgePoint({ x, y }, loc, mode)
 }
 
 function meldTexture(loc: 0 | 1 | 2 | 3, flag: number, isDown: boolean): { key: string; frame?: number } {
@@ -446,7 +459,7 @@ function mobileDeadWallBasePos(): { x: number; y: number } | null {
 }
 
 function deadWallPos(idx: number, mode: IngameLayoutMode): { x: number; y: number } {
-  const base = mode === 'mobileLandscape' ? mobileDeadWallBasePos() ?? WAN_POS : WAN_POS
+  const base = isMobileIngameLayout(mode) ? mobileDeadWallBasePos() ?? WAN_POS : WAN_POS
   return boardLocalPoint({
     x: base.x + (6 - Math.floor(idx / 2)) * TEH_COL[0].x,
     y: base.y - (idx % 2 === 0 ? WAN_EXPOSE_OFFSET_Y : 0),
@@ -1066,8 +1079,10 @@ export default class GameScene extends Phaser.Scene {
 
     /* ── ボード背景 mj_board.png (789×704) at (5,31) ── */
     this.boardBackground = this.add.image(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, this.resolveSkinTextureKey('mj_board')).setDepth(-100)
-    if (this.layoutMode === 'mobileLandscape') {
+    if (isMobileIngameLayout(this.layoutMode)) {
       this.clipToBoard(this.boardBackground.setScale(MOBILE_BOARD_BACKGROUND_SCALE))
+    } else if (this.layoutMode === 'responsiveDesktop') {
+      this.boardBackground.setVisible(false)
     }
     if (this.textures.exists('mj_taku_dragon_skin')) {
       this.dragonOverlayBg = this.clipToBoard(this.add.image(BOARD_X + DRAGON_OVERLAY.x, BOARD_Y + DRAGON_OVERLAY.y, 'mj_taku_dragon_skin')
@@ -1077,7 +1092,9 @@ export default class GameScene extends Phaser.Scene {
     }
 
     /* ── サイドバー mj_sideBg.png (225×704) at (794,31) ── */
-    this.add.image(SIDE_PANEL.x + SIDE_PANEL.width / 2, SIDE_PANEL.y + SIDE_PANEL.height / 2, this.resolveSkinTextureKey('mj_sideBg')).setDepth(-100)
+    if (this.layoutMode !== 'responsiveDesktop') {
+      this.add.image(SIDE_PANEL.x + SIDE_PANEL.width / 2, SIDE_PANEL.y + SIDE_PANEL.height / 2, this.resolveSkinTextureKey('mj_sideBg')).setDepth(-100)
+    }
 
     /* ── ゲーム情報エリア mj_h_bg.png (265×161) at board-local (262,275) ── */
     this.centerInfoBg = this.clipToBoard(this.add.image(BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2, BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2, this.resolveSkinTextureKey('mj_h_bg')).setDepth(-50))
@@ -1086,7 +1103,10 @@ export default class GameScene extends Phaser.Scene {
     /* ── CMJGameWnd::PutPanel: PANELMODE_VIEW uses mj_watchBoard; PLAY uses mj_uiBoard ── */
     if (!this.isReplay) {
       const panelKey = this.isViewer ? 'mj_watchBoard' : 'mj_uiBoard'
-      this.actionPanelSprite = this.clipToBoard(this.add.image(BOARD_X + X_PANEL + W_PANEL / 2, BOARD_Y + Y_PANEL + H_PANEL / 2, this.resolveSkinTextureKey(panelKey))
+      const panelOffset = this.layoutMode === 'responsiveDesktop'
+        ? responsiveDesktopSeatOffset(this.layoutMode, 0)
+        : mobileCenterHudOffset(this.layoutMode)
+      this.actionPanelSprite = this.clipToBoard(this.add.image(BOARD_X + X_PANEL + panelOffset.x + W_PANEL / 2, BOARD_Y + Y_PANEL + panelOffset.y + H_PANEL / 2, this.resolveSkinTextureKey(panelKey))
         .setDisplaySize(W_PANEL, H_PANEL)
         .setDepth(Z_PANEL)
         .setVisible(this.layoutMode !== 'mobileLandscape'))
@@ -1137,14 +1157,23 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private createBoardMask() {
-    this.boardMaskGraphics?.destroy()
-    const graphics = this.make.graphics({ x: 0, y: 0 })
+    const graphics = this.boardMaskGraphics ?? this.make.graphics({ x: 0, y: 0 })
+    graphics.clear()
     graphics.fillStyle(0xffffff)
-    const maskX = this.layoutMode === 'mobileLandscape' ? 0 : BOARD_X
-    const maskW = this.layoutMode === 'mobileLandscape' ? BOARD_X + BOARD_W : BOARD_W
-    graphics.fillRect(maskX, BOARD_Y, maskW, BOARD_H)
+    const responsiveBounds = responsiveDesktopVisibleWorldBounds()
+    const maskX = this.layoutMode === 'responsiveDesktop' && responsiveBounds
+      ? responsiveBounds.left
+      : isMobileIngameLayout(this.layoutMode) ? 0 : BOARD_X
+    const maskY = this.layoutMode === 'responsiveDesktop' && responsiveBounds ? responsiveBounds.top : BOARD_Y
+    const maskW = this.layoutMode === 'responsiveDesktop' && responsiveBounds
+      ? responsiveBounds.right - responsiveBounds.left
+      : isMobileIngameLayout(this.layoutMode) ? BOARD_X + BOARD_W : BOARD_W
+    const maskH = this.layoutMode === 'responsiveDesktop' && responsiveBounds
+      ? responsiveBounds.bottom - responsiveBounds.top
+      : BOARD_H
+    graphics.fillRect(maskX, maskY, maskW, maskH)
     this.boardMaskGraphics = graphics
-    this.boardMask = graphics.createGeometryMask()
+    this.boardMask ??= graphics.createGeometryMask()
   }
 
   private clipToBoard<T extends Phaser.GameObjects.GameObject>(obj: T): T {
@@ -1155,17 +1184,19 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private updateCenterInfoLayout() {
-    const offset = mobileCenterHudOffset(this.layoutMode)
+    const offset = this.layoutMode === 'responsiveDesktop'
+      ? responsiveDesktopCenterOffset(this.layoutMode)
+      : mobileCenterHudOffset(this.layoutMode)
     const centerX = BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2 + offset.x
     const centerY = BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2 + offset.y
     if (this.boardBackground) {
       this.boardBackground.setPosition(
-        this.layoutMode === 'mobileLandscape' ? centerX : BOARD_X + BOARD_W / 2 + offset.x,
-        this.layoutMode === 'mobileLandscape' ? centerY : BOARD_Y + BOARD_H / 2 + offset.y,
+        isMobileIngameLayout(this.layoutMode) ? centerX : BOARD_X + BOARD_W / 2 + offset.x,
+        isMobileIngameLayout(this.layoutMode) ? centerY : BOARD_Y + BOARD_H / 2 + offset.y,
       )
     }
     if (this.dragonOverlayBg) {
-      if (this.layoutMode === 'mobileLandscape') {
+      if (isMobileIngameLayout(this.layoutMode)) {
         this.dragonOverlayBg
           .setOrigin(0.5, 0.5)
           .setScale(0.25)
@@ -1175,11 +1206,21 @@ export default class GameScene extends Phaser.Scene {
         this.dragonOverlayBg
           .setOrigin(0, 0)
           .setScale(1)
-          .setPosition(BOARD_X + DRAGON_OVERLAY.x, BOARD_Y + DRAGON_OVERLAY.y)
+          .setPosition(BOARD_X + DRAGON_OVERLAY.x + offset.x, BOARD_Y + DRAGON_OVERLAY.y + offset.y)
       }
     }
     if (!this.centerInfoBg) return
     this.centerInfoBg.setPosition(centerX, centerY)
+    if (this.actionPanelSprite) {
+      const actionOffset = this.layoutMode === 'responsiveDesktop'
+        ? responsiveDesktopSeatOffset(this.layoutMode, 0)
+        : offset
+      this.actionPanelSprite.setPosition(
+        BOARD_X + X_PANEL + actionOffset.x + W_PANEL / 2,
+        BOARD_Y + Y_PANEL + actionOffset.y + H_PANEL / 2,
+      )
+    }
+    this.updateActionButtonPositions(new Set(this.currentActionOffers))
   }
 
   /* ======================================================================
@@ -2487,7 +2528,7 @@ export default class GameScene extends Phaser.Scene {
       this.time.delayedCall(finishDelay, () => {
         playMajakSfx('mjkFan01', this.soundSkinOptions())
         const fallbackPoint = boardLocalPoint({ x: 115, y: 139 })
-        const bounds = this.layoutMode === 'mobileLandscape' ? mobileVisibleWorldBounds() : null
+        const bounds = isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
         const point = bounds ? centerMobileEffectPoint(LEGACY_YAKUMAN_FINISH_SIZE, bounds) : fallbackPoint
         this.playLegacyFrameSequence(
           numberedLegacyKeys('mj_ef_yakuman', 13, 0, ''),
@@ -2569,7 +2610,7 @@ export default class GameScene extends Phaser.Scene {
       const prefix = level === 3 ? 'eff_tumoeff_c' : level === 2 ? 'eff_tumoeff_b' : 'eff_tumoeff'
       const count = level === 3 ? 15 : level === 2 ? 13 : 12
       let position = [{ x: 1, y: 501 }, { x: 650, y: 0 }, { x: 1, y: -14 }, { x: -24, y: 0 }][loc]
-      if (this.layoutMode === 'mobileLandscape') {
+      if (isMobileIngameLayout(this.layoutMode)) {
         const desktopHand = DESKTOP_INGAME_LAYOUT.handPosition[loc]
         const mobileHand = this.mobileHandAnchor(odr, loc)
         position = loc % 2 === 0
@@ -2643,7 +2684,7 @@ export default class GameScene extends Phaser.Scene {
       if (!definition) return
       const loc = odrToLoc(odr, this.myOdr)
       const desktopPoint = boardLocalPoint(positions[loc])
-      const point = this.layoutMode === 'mobileLandscape'
+      const point = isMobileIngameLayout(this.layoutMode)
         ? this.mobileHandAnchoredEffectPoint(desktopPoint, odr, loc)
         : desktopPoint
       if (this.isLocalPlayerOdr(odr)) {
@@ -2690,7 +2731,7 @@ export default class GameScene extends Phaser.Scene {
     this.time.delayedCall(delay, () => {
       playMajakSfx(sound, this.soundSkinOptions())
       const fallbackPoint = boardLocalPoint({ x: 227, y: 212 })
-      const bounds = this.layoutMode === 'mobileLandscape' ? mobileVisibleWorldBounds() : null
+      const bounds = isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
       const point = bounds ? centerMobileEffectPoint(LEGACY_GEM_EFFECT_SIZE, bounds) : fallbackPoint
       this.playLegacyFrameSequence(
         numberedLegacyKeys(prefix, 10, 1),
@@ -2773,7 +2814,7 @@ export default class GameScene extends Phaser.Scene {
       const isDrawTile = idx === tiles.length - 1 && tiles.length % 3 === 2
       const useOpenOrDownLayout = this.isViewer || (this.isReplay && this.replayHandOpen)
       const handScale = this.handTileScale(odr, loc)
-      const position = this.layoutMode === 'mobileLandscape'
+      const position = isMobileIngameLayout(this.layoutMode)
         ? mobileOuterHandPos(loc, idx, tiles.length, isDrawTile, handScale) ?? handPos(loc, idx, isDrawTile, useOpenOrDownLayout)
         : handPos(loc, idx, isDrawTile, useOpenOrDownLayout)
       const { x, y } = position
@@ -2825,10 +2866,44 @@ export default class GameScene extends Phaser.Scene {
       }
       this.handSprites[odr].push(spr)
     })
+    this.centerResponsiveHorizontalHand(odr, loc)
+    this.alignResponsiveLocalHandAbovePanel(odr, loc)
     this.updateMobileActionHandVisibility()
     if (!this.isViewer && odr === this.myOdr) this.redrawTenpaiMarkers()
     this.redrawDiscardSourceMarker(odr)
     this.redrawPaifuGraphContent()
+  }
+
+  private centerResponsiveHorizontalHand(odr: number, loc: 0 | 1 | 2 | 3) {
+    if (this.layoutMode !== 'responsiveDesktop' || (loc !== 0 && loc !== 2)) return
+    const bounds = responsiveDesktopVisibleWorldBounds()
+    const sprites = this.handSprites[odr].filter(sprite => sprite.active)
+    if (!bounds || sprites.length === 0) return
+    const left = Math.min(...sprites.map(sprite => sprite.getBounds().left))
+    const right = Math.max(...sprites.map(sprite => sprite.getBounds().right))
+    const shiftX = (bounds.left + bounds.right - left - right) / 2
+    sprites.forEach(sprite => { sprite.x += shiftX })
+    if (odr !== this.myOdr) return
+    if (this.selectedCursor) this.selectedCursor.x += shiftX
+    if (this.drawnTileCursor) this.drawnTileCursor.x += shiftX
+  }
+
+  private alignResponsiveLocalHandAbovePanel(odr: number, loc: 0 | 1 | 2 | 3) {
+    if (this.layoutMode !== 'responsiveDesktop' || loc !== 0 || !this.actionPanelSprite) return
+    const sprites = this.handSprites[odr].filter(sprite => sprite.active)
+    if (sprites.length === 0) return
+    const handBottom = Math.max(...sprites.map(sprite => sprite.getBounds().bottom))
+    const panelTop = this.actionPanelSprite.getBounds().top
+    const shiftY = Math.min(0, panelTop - handBottom)
+    if (shiftY === 0) return
+    sprites.forEach(sprite => { sprite.y += shiftY })
+    if (odr !== this.myOdr) return
+    if (this.selectedCursor) this.selectedCursor.y += shiftY
+    if (this.drawnTileCursor) this.drawnTileCursor.y += shiftY
+  }
+
+  getActionPanelBounds() {
+    return this.actionPanelSprite?.getBounds() ?? null
   }
 
   private redrawDiscardSourceMarker(odr: number) {
@@ -2840,10 +2915,10 @@ export default class GameScene extends Phaser.Scene {
     if (loc === 0) return
     const scale = this.handTileScale(odr, loc)
     const isDrawTile = !state.isTedashi
-    let position = this.layoutMode === 'mobileLandscape'
+    let position = isMobileIngameLayout(this.layoutMode)
       ? mobileOuterHandPos(loc, state.displayIdx, state.handCount, isDrawTile, scale) ?? handPos(loc, state.displayIdx, isDrawTile, true)
       : handPos(loc, state.displayIdx, isDrawTile, true)
-    if (this.layoutMode === 'mobileLandscape') {
+    if (isMobileIngameLayout(this.layoutMode)) {
       position = offsetDiscardSourceMarker(position, OPN_OFS[loc], scale)
     }
     const texture = loc % 2 === 0 ? 'mj_tapai_0' : 'mj_tapai_1'
@@ -3004,8 +3079,9 @@ export default class GameScene extends Phaser.Scene {
     this.latestDiscardFrame?.setVisible(false)
 
     const progress = { value: 0 }
-    const centerX = BOARD_X + BOARD_W / 2
-    const centerY = BOARD_Y + BOARD_H / 2
+    const bounds = isCenteredIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
+    const centerX = bounds ? (bounds.left + bounds.right) / 2 : BOARD_X + BOARD_W / 2
+    const centerY = bounds ? (bounds.top + bounds.bottom) / 2 : BOARD_Y + BOARD_H / 2
     const controlX = (origin.x + target.x) / 2 + (centerX - (origin.x + target.x) / 2) * 0.08
     const controlY = (origin.y + target.y) / 2 + (centerY - (origin.y + target.y) / 2) * 0.08
     const tiltDirection = odrToLoc(odr, this.myOdr) % 2 === 0 ? 1 : -1
@@ -3096,11 +3172,22 @@ export default class GameScene extends Phaser.Scene {
     if (!shouldReveal) return 0
 
     const scale = this.tileScale()
+    const centerOffset = mobileCenterHudOffset(this.layoutMode)
+    const seatPoint = (loc: 0 | 1 | 2 | 3, offset = { x: 0, y: 0 }) => {
+      if (isMobileIngameLayout(this.layoutMode)) {
+        const point = mobileOuterHandPos(loc, 6, MOBILE_OTHER_HAND_FIXED_COUNT, false, scale)
+        if (point) return { x: point.x + offset.x, y: point.y + offset.y }
+      }
+      const base = MATCH_START_SEAT_POSITIONS[loc]
+      return boardLocalPoint({
+        x: base.x + offset.x + centerOffset.x,
+        y: base.y + offset.y + centerOffset.y,
+      })
+    }
     const sprites = this.players.map((_player, odr) => {
       const loc = odrToLoc(odr, this.myOdr)
-      const base = MATCH_START_SEAT_POSITIONS[loc]
       const offset = MATCH_START_OPEN_OFFSETS[loc]
-      const point = boardLocalPoint({ x: base.x + offset.x, y: base.y + offset.y })
+      const point = seatPoint(loc, offset)
       const sprite = this.clipToBoard(this.add.image(point.x, point.y, this.resolveSkinTextureKey(downTexture(loc)))
         .setOrigin(0, 0)
         .setScale(scale)
@@ -3112,7 +3199,7 @@ export default class GameScene extends Phaser.Scene {
     this.time.delayedCall(1000, () => {
       sprites.forEach(({ sprite, loc, odr }) => {
         if (!sprite.active) return
-        const point = boardLocalPoint(MATCH_START_SEAT_POSITIONS[loc])
+        const point = seatPoint(loc)
         const frame = paiToFrame(0x31 + odr)
         if (loc === 0) sprite.setTexture(this.resolveSkinTextureKey('hai_dora'), frame)
         else sprite.setTexture(this.resolveSkinTextureKey(`hai_tachi_${loc}`))
@@ -3124,9 +3211,8 @@ export default class GameScene extends Phaser.Scene {
     this.time.delayedCall(1100, () => {
       sprites.forEach(({ sprite, loc, odr }) => {
         if (!sprite.active) return
-        const base = MATCH_START_SEAT_POSITIONS[loc]
         const offset = MATCH_START_OPEN_OFFSETS[loc]
-        const point = boardLocalPoint({ x: base.x + offset.x, y: base.y + offset.y })
+        const point = seatPoint(loc, offset)
         const texture = loc === 0 ? 'hai_sute' : `hai_open_${loc}`
         sprite.setTexture(this.resolveSkinTextureKey(texture), paiToFrame(0x31 + odr))
         sprite.setPosition(point.x, point.y)
@@ -3572,7 +3658,7 @@ export default class GameScene extends Phaser.Scene {
     const yH = 71
     const guideHeight = 85
     let yPos = 488
-    if (this.layoutMode === 'mobileLandscape') {
+    if (isMobileIngameLayout(this.layoutMode)) {
       const bounds = mobileVisibleWorldBounds()
       const handScale = MOBILE_SELF_HAND_TILE_SCALE * mobileContentScale()
       const handStart = mobileOuterHandPos(0, 0, MOBILE_SELF_HAND_FIXED_COUNT, false, handScale)
@@ -4521,12 +4607,23 @@ export default class GameScene extends Phaser.Scene {
 
   private updateActionButtonPositions(visibleActs: Set<string>) {
     if (this.layoutMode !== 'mobileLandscape') {
+      const centerOffset = responsiveDesktopCenterOffset(this.layoutMode)
+      const seatOffset = responsiveDesktopSeatOffset(this.layoutMode, 0)
+      const offset = this.layoutMode === 'responsiveDesktop'
+        ? { x: seatOffset.x - centerOffset.x, y: seatOffset.y - centerOffset.y }
+        : mobileCenterHudOffset(this.layoutMode)
       for (const def of this.ACT_BTNS) {
         const btn = this.actionButtonSprites.get(def.act)
         if (!btn) continue
         const pos = boardLocalPoint({ x: def.x, y: def.y })
-        btn.setPosition(pos.x + def.w / 2, pos.y + def.h / 2)
+        btn.setPosition(pos.x + offset.x + def.w / 2, pos.y + offset.y + def.h / 2)
       }
+      const horaErrorLayout = ACTION_BUTTON_LAYOUT.horaError
+      const horaPos = boardLocalPoint({ x: horaErrorLayout.x, y: horaErrorLayout.y })
+      this.horaErrorSprite?.setPosition(
+        horaPos.x + offset.x + horaErrorLayout.width / 2,
+        horaPos.y + offset.y + horaErrorLayout.height / 2,
+      )
       return
     }
 
@@ -4709,13 +4806,15 @@ export default class GameScene extends Phaser.Scene {
     const centerInfoLayoutKey = mobileVisibleWorldLayoutKey(this.layoutMode)
     if (centerInfoLayoutKey !== this.mobileCenterInfoLayoutKey) {
       this.mobileCenterInfoLayoutKey = centerInfoLayoutKey
+      this.createBoardMask()
       this.updateCenterInfoLayout()
-      if (this.layoutMode === 'mobileLandscape') {
+      if (isCenteredIngameLayout(this.layoutMode) || this.layoutMode === 'responsiveDesktop') {
         this.players.forEach((_player, odr) => {
           this.redrawHand(odr)
           this.redrawDiscards(odr)
           this.redrawMelds(odr)
         })
+        this.redrawDeadWall()
       }
     }
 
@@ -4948,7 +5047,10 @@ export default class GameScene extends Phaser.Scene {
     const prefix = this.boardEffectPrefix(action)
     if (!prefix) return
     const loc = odrToLoc(odr, this.myOdr)
-    const point = boardLocalPoint(BOARD_EFFECT_POS[loc])
+    const basePoint = boardLocalPoint(BOARD_EFFECT_POS[loc])
+    const point = isMobileIngameLayout(this.layoutMode)
+      ? this.mobileHandAnchoredEffectPoint(basePoint, odr, loc)
+      : basePoint
     let frame = 1
     const sprite = this.clipToBoard(this.add.image(point.x, point.y, `${prefix}_${String(frame).padStart(2, '0')}`)
       .setOrigin(0, 0)

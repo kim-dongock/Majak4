@@ -31,9 +31,7 @@
  *   チェックなしの場合 → localStorage のキーを削除
  * ────────────────────────────────────────────────────────────────────────
  */
-import { useState, useEffect, useRef } from 'react'
-
-const IMG = '/assets/images/game'
+import { useState, useEffect } from 'react'
 
 interface Props {
   /** m_szKey — localStorage のキー識別子 */
@@ -72,77 +70,9 @@ function needsToShow(storageKey: string): boolean {
   return !isWithin7Days(storageKey)
 }
 
-/** ====================================================================
- * CMJBmpButton 相当 — AP-06 §2 4フレームスプライトボタン
- * ==================================================================== */
-function SpriteButton({
-  src, frameW, frameH, x, y, onClick, title,
-}: {
-  src: string; frameW: number; frameH: number
-  x: number; y: number; onClick: () => void; title?: string
-}) {
-  const [fi, setFi] = useState(0)
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      onMouseEnter={() => setFi(2)}
-      onMouseLeave={() => setFi(0)}
-      onMouseDown={() => setFi(3)}
-      onMouseUp={() => setFi(2)}
-      style={{
-        position: 'absolute', left: x, top: y,
-        width: frameW, height: frameH,
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-fi * frameW}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none', padding: 0,
-        cursor: 'pointer', outline: 'none',
-        imageRendering: 'pixelated',
-      }}
-    />
-  )
-}
-
-/** ====================================================================
- * CMJChkBtn 相当 — mj_pop_check.png (56×14, 4フレーム 14×14)
- * CMJGetCoinDlg では COwnerCheckBox (m_ckNoOpen) を使用
- * ==================================================================== */
-function CheckSprite({
-  x, y, checked, onToggle,
-}: {
-  x: number; y: number; checked: boolean; onToggle: () => void
-}) {
-  const [pressed, setPressed] = useState(false)
-  const nState = (pressed ? 1 : 0) | (checked ? 2 : 0)
-  return (
-    <div
-      onClick={onToggle}
-      onMouseDown={() => setPressed(true)}
-      onMouseUp={()   => setPressed(false)}
-      onMouseLeave={() => setPressed(false)}
-      style={{
-        position: 'absolute', left: x, top: y,
-        width: 14, height: 14,
-        backgroundImage: `url(${IMG}/mj_pop_check.png)`,
-        backgroundPosition: `${-nState * 14}px 0`,
-        backgroundRepeat: 'no-repeat',
-        imageRendering: 'pixelated',
-        cursor: 'pointer',
-      }}
-    />
-  )
-}
-
-/** ====================================================================
- * CMJGetCoinDlg 本体
- * ==================================================================== */
 export default function GetCoinDlg({ storageKey = 'default', onClose }: Props) {
   const [noOpen, setNoOpen] = useState(false)
   const [visible, setVisible] = useState(false)
-  const [pos, setPos] = useState({ x: 0, y: 0 })
-  const dragging = useRef(false)
-  const dragOffset = useRef({ dx: 0, dy: 0 })
 
   /* OnInitDialog 相当: 7日以内に表示済みなら即閉じる */
   useEffect(() => {
@@ -152,26 +82,6 @@ export default function GetCoinDlg({ storageKey = 'default', onClose }: Props) {
       setVisible(true)
     }
   }, [storageKey, onClose])
-
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!dragging.current) return
-      setPos({ x: e.clientX - dragOffset.current.dx, y: e.clientY - dragOffset.current.dy })
-    }
-    const onUp = () => { dragging.current = false }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup', onUp)
-    }
-  }, [])
-
-  const onDragStart = (e: React.MouseEvent) => {
-    dragging.current = true
-    dragOffset.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
-    e.preventDefault()
-  }
 
   /** OnOK() 相当: チェック状態を localStorage に保存 */
   const handleClose = () => {
@@ -189,57 +99,23 @@ export default function GetCoinDlg({ storageKey = 'default', onClose }: Props) {
   if (!visible) return null
 
   return (
-    /* モーダルオーバーレイ */
-    <div style={{
-      position: 'absolute', inset: 0,
-      background: 'transparent', zIndex: 300,
-    }}>
-      {/* CMJGetCoinDlg クライアント領域: 508×366px */}
-      <div
-        style={{ position: 'absolute', width: 508, height: 366, left: 146 + pos.x, top: 192 + pos.y }}
-        onMouseDown={onDragStart}
-      >
-
-        {/* ================================================================
-            背景: mj_ive_window_07.png (508×366) at (0,0)
-            Create(..., 1, ...) = 1フレーム単一画像
-            タイトル / コイン画像 / 説明テキスト / チェックラベルは焼き込み済み
-            ================================================================ */}
-        <img
-          src={`${IMG}/mj_ive_window_07.png`}
-          alt=""
-          draggable={false}
-          style={{
-            position: 'absolute', left: 0, top: 0,
-            width: 508, height: 366,
-          }}
-        />
-
-        {/* ================================================================
-            ×とじる: mj_shp_btn_close.png (352×32, 4フレーム 88×32) at (210,297)
-            m_btnClose.Create(0, ..., 210, 297, ..., IDOK)
-            背景の "×とじる" 表示位置に重ねて配置
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG}/mj_shp_btn_close.png`}
-          frameW={88} frameH={32}
-          x={210} y={297}
-          onClick={handleClose}
-          title="×とじる"
-        />
-
-        {/* ================================================================
-            「一週間このウィンドウを開かない」チェック
-            mj_pop_check.png (56×14, 4フレーム 14×14) at (349, 338)
-            COwnerCheckBox m_ckNoOpen at CPoint(349, 338)
-            ラベルテキストは背景に焼き込み済み
-            ================================================================ */}
-        <CheckSprite
-          x={349} y={338}
-          checked={noOpen}
-          onToggle={() => setNoOpen(v => !v)}
-        />
-      </div>
+    <div className="majak-popup-overlay">
+      <section className="majak-popup-panel majak-reward-notice" role="dialog" aria-modal="true" aria-label="無料GP補充">
+        <div className="majak-popup-body majak-reward-notice__body majak-free-gp-notice__body">
+          <section className="majak-free-gp-notice__summary" aria-label="補充完了">
+            <p className="majak-reward-notice__success">GPが補充されました。</p>
+            <p>GPは交流広場・段位戦の場代に使用します。</p>
+          </section>
+          <div className="majak-free-gp-notice__rules">
+            <p className="majak-free-gp-notice__rule">所持GPが1,000 GP未満の時、1日1回1,000 GPまで補充できます。</p>
+          </div>
+          <p className="majak-free-gp-notice__reset">無料GP補充の切り替え時間は午前6時です。</p>
+        </div>
+        <footer className="majak-popup-actions majak-reward-notice__actions">
+          <label><input type="checkbox" checked={noOpen} onChange={event => setNoOpen(event.target.checked)} />一週間このウィンドウを開かない</label>
+          <button type="button" className="is-primary" onClick={handleClose}>閉じる</button>
+        </footer>
+      </section>
     </div>
   )
 }

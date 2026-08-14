@@ -55,6 +55,29 @@ public class GameMoneyServiceTests
             "1.2.3.4"), Times.Once);
     }
 
+    [Fact]
+    public async Task ConfiguredEconomyPolicy_AppliesToNewPlayerAndFreeReplenishment()
+    {
+        var policy = new Mock<IGameEconomyPolicyService>();
+        policy.Setup(service => service.GetCurrentAsync()).ReturnsAsync(
+            new GameEconomyPolicy(750, 1500, 2, DateTime.UtcNow));
+        var service = new GameMoneyService(
+            _playerRepoMock.Object,
+            _ratingService,
+            _histMock.Object,
+            policy.Object);
+
+        await service.CreateCommonRatWithConfiguredMoneyHistAsync("user01", "1.2.3.4");
+        var player = new MajakPlayer { MemberNo = "user01", GamMoney = 200, AllinCnt = 0 };
+        var (ok, newMoney, _, restAllIn, _) = await service.ReplenishAsync(player, 0);
+
+        Assert.True(ok);
+        Assert.Equal(1500, newMoney);
+        Assert.Equal(1, restAllIn);
+        _playerRepoMock.Verify(repository => repository.CreateCommonRatAsync("user01", 750), Times.Once);
+        policy.Verify(service => service.GetCurrentAsync(), Times.Exactly(2));
+    }
+
     // ─── AddMoneyAsync ─────────────────────────────────────────────────────
 
     [Fact]

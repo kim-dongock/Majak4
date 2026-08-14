@@ -44,6 +44,7 @@
  * mask フィールドが >=0 の場合、対応項目を無効化 (GetMask 相当)
  */
 import { useState } from 'react'
+import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 
 // DU→px (9pt "MS UI Gothic" @96dpi)
 const SX = (du: number) => Math.round(du * 1.5)
@@ -201,6 +202,7 @@ function applyOptionMask(option: MJOption, mask: MJOptionMask, viewerEnable: boo
 }
 
 export default function OptDlg({ initial, mask = {}, viewerEnable = true, onOK, onCancel }: Props) {
+  const layoutMode = useOutgameLayoutMode()
   const [opt, setOpt] = useState<MJOption>(() => applyOptionMask(initial, mask, viewerEnable))
 
   const set = <K extends keyof MJOption>(k: K, v: MJOption[K]) =>
@@ -220,10 +222,13 @@ export default function OptDlg({ initial, mask = {}, viewerEnable = true, onOK, 
 
   {
     return (
-      <div className="majak-mobile-dialog-overlay">
-        <div className="majak-mobile-option-dialog majak-mobile-dialog-panel">
-          <div className="majak-mobile-dialog-titlebar">部屋の設定</div>
-          <div className="majak-mobile-dialog-body majak-mobile-option-body">
+      <div className={`majak-mobile-dialog-overlay majak-room-setup-overlay majak-room-setup-overlay--${layoutMode} majak-popup-overlay`} role="presentation">
+        <div className="majak-mobile-option-dialog majak-room-setup-dialog majak-mobile-dialog-panel majak-popup-panel" role="dialog" aria-modal="true" aria-labelledby="room-option-dialog-title">
+          <header id="room-option-dialog-title" className="majak-mobile-dialog-titlebar majak-popup-titlebar">
+            <span>部屋の設定</span>
+            <button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button>
+          </header>
+          <div className="majak-popup-body majak-mobile-dialog-body majak-mobile-option-body">
             <fieldset className="majak-mobile-dialog-section">
               <legend>対戦種別</legend>
               <div className="majak-mobile-choice-grid majak-mobile-choice-grid--two">
@@ -261,7 +266,7 @@ export default function OptDlg({ initial, mask = {}, viewerEnable = true, onOK, 
 
             <fieldset className="majak-mobile-dialog-section">
               <legend>スピード</legend>
-              <div className="majak-mobile-choice-grid majak-mobile-choice-grid--four">
+              <div className="majak-mobile-choice-grid majak-mobile-choice-grid--four majak-mobile-option-speed-grid">
                 <label className="majak-mobile-choice"><input type="radio" name="nSpd-mobile" checked={opt.nSpd === 0} disabled={dis('nSpd')} onChange={() => set('nSpd', 0)} />超光速</label>
                 <label className="majak-mobile-choice"><input type="radio" name="nSpd-mobile" checked={opt.nSpd === 1} disabled={dis('nSpd')} onChange={() => set('nSpd', 1)} />サクサク</label>
                 <label className="majak-mobile-choice"><input type="radio" name="nSpd-mobile" checked={opt.nSpd === 2} disabled={dis('nSpd')} onChange={() => set('nSpd', 2)} />標準</label>
@@ -281,9 +286,9 @@ export default function OptDlg({ initial, mask = {}, viewerEnable = true, onOK, 
               </div>
             </fieldset>
           </div>
-          <div className="majak-mobile-dialog-actions">
-            <button type="button" onClick={() => onOK(applyOptionMask(opt, mask, viewerEnable))}>OK</button>
-            <button type="button" onClick={onCancel}>キャンセル</button>
+          <div className="majak-mobile-dialog-actions majak-popup-actions">
+            <button type="button" className="majak-standard-dialog__primary is-primary" onClick={() => onOK(applyOptionMask(opt, mask, viewerEnable))}>OK</button>
+            <button type="button" className="majak-standard-dialog__secondary" onClick={onCancel}>キャンセル</button>
           </div>
         </div>
       </div>

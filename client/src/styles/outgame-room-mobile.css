@@ -1,0 +1,79 @@
+/* Touch landscape-only outgame room layout. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .majak-room-setup-overlay--mobileLandscape .majak-mobile-room-create-dialog {
+    width: min(600px, calc(100vw - 24px));
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-mobile-option-dialog {
+    width: min(828px, calc(100vw - 16px));
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog .majak-mobile-dialog-titlebar {
+    min-height: 42px;
+    padding: 0 12px;
+    font-size: var(--majak-text-lg);
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog .majak-mobile-dialog-body {
+    padding: 8px 10px;
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog .majak-mobile-dialog-actions {
+    padding: 8px 10px 10px;
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__primary,
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__secondary {
+    height: 34px;
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-option-body {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    overflow: hidden;
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-section {
+    padding: 3px 4px;
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-section legend,
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice,
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-actions button {
+    font-size: var(--majak-text-sm);
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice-grid {
+    gap: 2px;
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-option-speed-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-section--checks .majak-mobile-choice-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice--wide {
+    grid-column: span 2;
+  }
+
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice {
+    min-height: 22px;
+    padding: 1px 3px;
+    white-space: nowrap;
+  }
+
+  .majak-mobile-lobby-room-grid {
+    --majak-mobile-room-cell-scale: calc((100cqw - 18px) / 450px);
+    gap: 5px;
+    padding: 4px;
+  }
+}
+
+@media (orientation: landscape) and (min-width: 850px) and (max-height: 540px) and (pointer: coarse) {
+  .majak-mobile-lobby-room-grid {
+    --majak-mobile-room-cell-scale: calc((100cqw - 18px) / 600px);
+  }
+}

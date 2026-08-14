@@ -1,0 +1,21 @@
+/* Mobile landscape-only invite dialog layout. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .majak-mini-channel--mobileLandscape .majak-invite-dialog {
+    width: 100%;
+    height: 100%;
+  }
+
+  .majak-mini-channel--mobileLandscape .majak-invite-dialog__header {
+    min-height: 46px;
+    padding: 7px 12px;
+  }
+
+  .majak-mini-channel--mobileLandscape .majak-invite-dialog__member {
+    min-height: 34px;
+  }
+
+  .majak-mini-channel--mobileLandscape .majak-invite-dialog__actions {
+    grid-template-columns: repeat(3, var(--majak-popup-command-width));
+    padding: 7px 12px;
+  }
+}

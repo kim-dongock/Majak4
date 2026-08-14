@@ -244,6 +244,7 @@ export function ResponsiveHanResult({ players, hasTor, hasTip, isViewer, isTourn
   const me = players.find(player => player.isMe)
   const showYakitori = hasTor || players.some(player => player.setTor !== undefined)
   const showTip = hasTip || players.some(player => player.setTip !== undefined)
+  const showRoomCharge = players.some(player => (player.dealerFee ?? 0) > 0)
 
   return (
     <div className="majak-result-overlay" role="dialog" aria-modal="true" aria-label="最終結果">
@@ -257,7 +258,7 @@ export function ResponsiveHanResult({ players, hasTor, hasTip, isViewer, isTourn
           <div className="majak-han-result-table__head" role="row">
             <span>順位</span><span>プレイヤー</span><span>最終点</span><span>合計</span>
             <span className="majak-han-result-table__detail-head">
-              <span>点数</span><span>ウマ</span>{showYakitori && <span>焼き鳥</span>}{showTip && <span>チップ</span>}
+              <span>点数</span><span>ウマ</span>{showYakitori && <span>焼き鳥</span>}{showTip && <span>チップ</span>}{showRoomCharge && <span>場代</span>}
             </span>
           </div>
           {rankedPlayers.map((player, index) => (
@@ -271,6 +272,7 @@ export function ResponsiveHanResult({ players, hasTor, hasTip, isViewer, isTourn
                 <div><dt>ウマ</dt><dd><AnimatedNumber value={player.setUma} signed delay={index * 110 + 220} /></dd></div>
                 {showYakitori && <div><dt>焼き鳥</dt><dd><AnimatedNumber value={player.setTor ?? 0} signed delay={index * 110 + 260} /></dd></div>}
                 {showTip && <div><dt>チップ</dt><dd><AnimatedNumber value={player.setTip ?? 0} signed delay={index * 110 + 300} /></dd></div>}
+                {showRoomCharge && <div><dt>場代</dt><dd><AnimatedNumber value={-(player.dealerFee ?? 0)} signed delay={index * 110 + 340} suffix="GP" /></dd></div>}
               </dl>
             </div>
           ))}

@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import * as SignalR from '../../api/signalr'
+import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 
 const MAJAK_IMG = '/assets/images/game'
 
@@ -296,7 +297,7 @@ function InviteMemberList({
       </div>
       <footer className="majak-invite-dialog__actions">
         <button type="button" onClick={() => selectedMember && onViewProfile?.(selectedMember.pix)} disabled={!selectedMember || !onViewProfile}>プロフィール</button>
-        <button type="button" className="majak-invite-dialog__submit" onClick={() => selectedMember && onReqGame?.(selectedMember.pix)} disabled={!selectedMember || !onReqGame}>対戦を申し込む</button>
+        <button type="button" className="majak-invite-dialog__submit" onClick={() => selectedMember && onReqGame?.(selectedMember.pix)} disabled={!selectedMember || !onReqGame}>対戦申込</button>
         <button type="button" onClick={onClose}>閉じる</button>
       </footer>
     </div>
@@ -315,6 +316,7 @@ export default function MiniChannelWnd({
   onViewProfile,
   onReqGame,
 }: Props) {
+  const layoutMode = useOutgameLayoutMode()
   const [chatLog, setChatLog] = useState<ChatMsg[]>([])
   const [chatText, setChatText] = useState('')
   const [selectedPix, setSelectedPix] = useState(members[0]?.pix ?? '')
@@ -370,8 +372,16 @@ export default function MiniChannelWnd({
     event.stopPropagation()
   }
 
-  const width = fullScreen ? 'min(420px, calc(100vw - 24px))' : 915
-  const height = fullScreen ? 'min(480px, calc(100dvh - 24px))' : 575
+  const width = fullScreen
+    ? layoutMode === 'mobileLandscape'
+      ? 'min(700px, calc(100vw - 32px))'
+      : 'min(420px, calc(100vw - 24px))'
+    : 915
+  const height = fullScreen
+    ? layoutMode === 'mobileLandscape'
+      ? 'min(320px, calc(100dvh - 24px))'
+      : 'min(480px, calc(100dvh - 24px))'
+    : 575
   const title = fullScreen ? '観戦' : 'ロビー'
   const bottomPlacement = placement === 'bottom'
 
@@ -379,6 +389,7 @@ export default function MiniChannelWnd({
     <div
       role="dialog"
       aria-label={`${title}${channelId ? ` ${channelId}` : ''}`}
+      className={`majak-mini-channel majak-mini-channel--${layoutMode}`}
       onMouseDown={stopPopupMouseDown}
       style={{
         position: 'fixed',

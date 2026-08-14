@@ -41,6 +41,7 @@ import { useEffect, useRef, useState } from 'react'
 import * as SignalR from '../../../api/signalr'
 import { showError, showMessage } from '../../../utils/msgbox'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
+import MissionRewardGuideDlg from './MissionRewardGuideDlg'
 
 const IMG = '/assets/images/game'
 const MISSION_W = 697
@@ -127,11 +128,13 @@ function ResponsiveMissionDialog({
   data,
   onReceive,
   onRefresh,
+  onShowGuide,
   onClose,
 }: {
   data: MissionData
   onReceive: (rewardId: number) => void
   onRefresh: () => void
+  onShowGuide: () => void
   onClose: () => void
 }) {
   const layoutMode = useOutgameLayoutMode()
@@ -139,20 +142,17 @@ function ResponsiveMissionDialog({
   const dailyProgress = data.pointDayMax > 0 ? Math.min(100, data.pointDayOwn / data.pointDayMax * 100) : 0
   const weeklyProgress = data.pointWeekMax > 0 ? Math.min(100, data.pointWeekOwn / data.pointWeekMax * 100) : 0
 
-  return <div className={`mission-dialog-overlay${modeClass}`} role="dialog" aria-modal="true" aria-label="ミッション">
-    <section className={`mission-dialog${modeClass}`}>
-      <header className="mission-dialog__header">
-        <div><p>MAJAK4 MISSION</p><h2>ミッション</h2></div>
-        <div className="mission-dialog__header-actions">
-          <button type="button" onClick={onRefresh}>更新</button>
-          <button type="button" onClick={onClose} aria-label="閉じる">x</button>
-        </div>
+  return <div className={`majak-popup-overlay mission-dialog-overlay${modeClass}`}>
+    <section className={`majak-popup-panel mission-dialog${modeClass}`} role="dialog" aria-modal="true" aria-label="ミッション">
+      <header className="majak-popup-titlebar mission-dialog__header">
+        <h2>ミッション</h2>
+        <button type="button" className="majak-popup-titlebar__close" onClick={onClose} aria-label="閉じる">×</button>
       </header>
       <div className="mission-dialog__summary">
         <div><span>本日の達成</span><strong>{data.pointDayOwn} / {data.pointDayMax}</strong><i><b style={{ width: `${dailyProgress}%` }} /></i></div>
         <div><span>今週のポイント</span><strong>{data.pointWeekOwn} / {data.pointWeekMax}</strong><i><b style={{ width: `${weeklyProgress}%` }} /></i></div>
       </div>
-      <main className="mission-dialog__content">
+      <main className="majak-popup-body mission-dialog__content">
         <section className="mission-dialog__daily">
           <h3>デイリーミッション</h3>
           <ol>
@@ -181,27 +181,30 @@ function ResponsiveMissionDialog({
           </div>
         </section>
       </main>
-      <footer><button type="button" onClick={onClose}>閉じる</button></footer>
+      <footer className="majak-popup-actions">
+        <button type="button" onClick={onShowGuide}>GPガイド</button>
+        <button type="button" onClick={onRefresh}>更新</button>
+        <button type="button" onClick={onClose}>閉じる</button>
+      </footer>
     </section>
     <style>{`
       .mission-dialog-overlay { position: absolute; inset: 0; z-index: 250; display: grid; place-items: center; padding: 20px; overflow: hidden; background: rgba(8,16,20,.7); box-sizing: border-box; font-family: var(--majak-font-family-ui); }
       .mission-dialog { width: min(1050px, 100%); height: min(650px, 100%); min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: #172323; background: #f5f2e9; border: 1px solid #7d8e80; box-shadow: 0 24px 72px rgba(0,0,0,.42); }
-      .mission-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px 24px; color: #fff; background: #174b43; }
-      .mission-dialog__header p { margin: 0; color: #d7b95d; font: 700 calc(10px * var(--majak-type-scale))/1 var(--majak-font-family-ui); letter-spacing: 1px; }
-      .mission-dialog__header h2 { margin: 2px 0 0; font-size: calc(25px * var(--majak-type-scale)); font-weight: 700; letter-spacing: 0; }
+      .mission-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 24px; color: #fff; background: #174b43; }
+      .mission-dialog__header h2 { margin: 0; font-size: var(--majak-dialog-title-font-size); font-weight: 700; letter-spacing: 0; }
       .mission-dialog__header-actions { display: flex; gap: 8px; }
       .mission-dialog__header button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); box-sizing: border-box; border: 1px solid rgba(255,255,255,.7); border-radius: 0; padding: 0 10px; color: #fff; background: transparent; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
       .mission-dialog__header-actions button:last-child { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; font-size: var(--majak-popup-close-font-size); }
       .mission-dialog__summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #c1cbc0; border-bottom: 1px solid #c1cbc0; }
       .mission-dialog__summary > div { min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; padding: 11px 18px; background: #f7faf4; }
-      .mission-dialog__summary span { color: #607069; font: 700 calc(11px * var(--majak-type-scale))/1 var(--majak-font-family-ui); }
-      .mission-dialog__summary strong { color: #1f4d42; font: 700 calc(17px * var(--majak-type-scale))/1.1 var(--majak-font-family-ui); text-align: right; }
+      .mission-dialog__summary span { color: #607069; font: 700 var(--majak-dialog-caption-font-size)/1 var(--majak-font-family-ui); }
+      .mission-dialog__summary strong { color: #1f4d42; font: 700 var(--majak-dialog-body-font-size)/1.1 var(--majak-font-family-ui); text-align: right; }
       .mission-dialog__summary i { grid-column: 1 / -1; height: 6px; overflow: hidden; background: #d8e0d5; }
       .mission-dialog__summary b { display: block; height: 100%; background: #b84228; }
       .mission-dialog__content { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr); gap: 18px; padding: 18px 24px; overflow: auto; }
       .mission-dialog__content section { min-width: 0; }
-      .mission-dialog__content h3 { margin: 0 0 10px; color: #31473f; font-size: calc(16px * var(--majak-type-scale)); font-weight: 700; }
-      .mission-dialog__daily h3 { font-size: var(--majak-font-17); }
+      .mission-dialog__content h3 { margin: 0 0 10px; color: #31473f; font-size: var(--majak-dialog-body-font-size); font-weight: 700; }
+      .mission-dialog__daily h3 { font-size: var(--majak-dialog-body-font-size); }
       .mission-dialog__daily ol { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
       .mission-dialog__daily li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 9px; align-items: center; min-height: 34px; padding: 7px 10px; border: 1px solid #d2dacf; background: #fffdf8; color: #52645d; font: var(--majak-font-13)/1.3 var(--majak-font-family-ui); }
       .mission-dialog__daily li.is-complete { color: #1f4d42; border-color: #aebfab; background: #edf3e8; }
@@ -221,16 +224,15 @@ function ResponsiveMissionDialog({
       .mission-dialog--mobileLandscape, .mission-dialog--mobilePortrait { width: 100%; height: 100%; }
       .mission-dialog-overlay--mobileLandscape, .mission-dialog-overlay--mobilePortrait { padding: 0; }
       .mission-dialog--mobileLandscape .mission-dialog__header, .mission-dialog--mobilePortrait .mission-dialog__header { padding: 8px 10px; }
-      .mission-dialog--mobileLandscape .mission-dialog__header p, .mission-dialog--mobilePortrait .mission-dialog__header p { display: none; }
-      .mission-dialog--mobileLandscape .mission-dialog__header h2, .mission-dialog--mobilePortrait .mission-dialog__header h2 { margin: 0; font-size: calc(17px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__header h2, .mission-dialog--mobilePortrait .mission-dialog__header h2 { margin: 0; font-size: var(--majak-dialog-compact-title-font-size); }
       .mission-dialog--mobileLandscape .mission-dialog__header button, .mission-dialog--mobilePortrait .mission-dialog__header button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 7px; font-size: var(--majak-popup-command-font-size); }
       .mission-dialog--mobileLandscape .mission-dialog__header-actions button:last-child, .mission-dialog--mobilePortrait .mission-dialog__header-actions button:last-child { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); font-size: var(--majak-popup-close-font-size); }
       .mission-dialog--mobileLandscape .mission-dialog__summary, .mission-dialog--mobilePortrait .mission-dialog__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .mission-dialog--mobileLandscape .mission-dialog__summary > div, .mission-dialog--mobilePortrait .mission-dialog__summary > div { gap: 4px; padding: 7px 8px; }
-      .mission-dialog--mobileLandscape .mission-dialog__summary span, .mission-dialog--mobilePortrait .mission-dialog__summary span { font-size: calc(10px * var(--majak-type-scale)); }
-      .mission-dialog--mobileLandscape .mission-dialog__summary strong, .mission-dialog--mobilePortrait .mission-dialog__summary strong { font-size: calc(16px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__summary span, .mission-dialog--mobilePortrait .mission-dialog__summary span { font-size: var(--majak-dialog-compact-font-size); }
+      .mission-dialog--mobileLandscape .mission-dialog__summary strong, .mission-dialog--mobilePortrait .mission-dialog__summary strong { font-size: var(--majak-dialog-body-font-size); }
       .mission-dialog--mobileLandscape .mission-dialog__content, .mission-dialog--mobilePortrait .mission-dialog__content { gap: 10px; padding: 9px; }
-      .mission-dialog--mobileLandscape .mission-dialog__content h3, .mission-dialog--mobilePortrait .mission-dialog__content h3 { margin-bottom: 6px; font-size: calc(13px * var(--majak-type-scale)); }
+      .mission-dialog--mobileLandscape .mission-dialog__content h3, .mission-dialog--mobilePortrait .mission-dialog__content h3 { margin-bottom: 6px; font-size: var(--majak-dialog-label-font-size); }
       .mission-dialog--mobileLandscape .mission-dialog__daily h3, .mission-dialog--mobilePortrait .mission-dialog__daily h3 { font-size: var(--majak-font-14); }
       .mission-dialog--mobileLandscape .mission-dialog__daily ol, .mission-dialog--mobilePortrait .mission-dialog__daily ol { gap: 3px; }
       .mission-dialog--mobileLandscape .mission-dialog__daily li, .mission-dialog--mobilePortrait .mission-dialog__daily li { grid-template-columns: 16px minmax(0, 1fr) auto; gap: 4px; min-height: 25px; padding: 4px; font-size: var(--majak-font-11); }
@@ -250,6 +252,7 @@ function ResponsiveMissionDialog({
 
 export default function MissionDlg({ onClose, onMoneyUpdate, onGemUpdate }: Props) {
   const [data, setData] = useState<MissionData>(EMPTY_DATA)
+  const [showRewardGuide, setShowRewardGuide] = useState(false)
   const [dialogScale, setDialogScale] = useState(1)
   const pendingRewardId = useRef<number | null>(null)
 
@@ -371,12 +374,16 @@ export default function MissionDlg({ onClose, onMoneyUpdate, onGemUpdate }: Prop
 
   const useResponsiveMission = true
   if (useResponsiveMission) {
-    return <ResponsiveMissionDialog
-      data={data}
-      onReceive={handleReceive}
-      onRefresh={() => { SignalR.send('mjkc32e', {}).catch(() => {}) }}
-      onClose={onClose}
-    />
+    return <>
+      <ResponsiveMissionDialog
+        data={data}
+        onReceive={handleReceive}
+        onRefresh={() => { SignalR.send('mjkc32e', {}).catch(() => {}) }}
+        onShowGuide={() => setShowRewardGuide(true)}
+        onClose={onClose}
+      />
+      {showRewardGuide && <MissionRewardGuideDlg onClose={() => setShowRewardGuide(false)} />}
+    </>
   }
 
   return (

@@ -81,6 +81,34 @@ CREATE TABLE training_player_result_log (
     INDEX idx_training_player_result_member (member_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- テーブル: paifu_archive_log
+-- 実際の圧縮牌譜は S3 に保存する。ここには検索用メタデータ、S3 キー、有効期限だけを残す。
+CREATE TABLE paifu_archive_log (
+    paifu_archive_id  BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    played_at         DATETIME(3) NOT NULL,
+    channel_id        VARCHAR(30) NOT NULL,
+    room_id           INT UNSIGNED NOT NULL,
+    room_name         VARCHAR(100) NOT NULL DEFAULT '',
+    room_option       VARCHAR(200) NOT NULL DEFAULT '',
+    result_text       VARCHAR(100) NOT NULL DEFAULT '',
+    members_json      JSON NOT NULL,
+    packet_count      INT UNSIGNED NOT NULL,
+    s3_object_key     VARCHAR(512) NOT NULL,
+    expires_at        DATETIME(3) NOT NULL,
+    created_at        DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (paifu_archive_id),
+    INDEX idx_paifu_archive_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- テーブル: paifu_archive_member_log
+-- 牌譜に参加した会員だけがアーカイブを参照できる。
+CREATE TABLE paifu_archive_member_log (
+    paifu_archive_id BIGINT UNSIGNED NOT NULL,
+    member_no        BIGINT UNSIGNED NOT NULL,
+    PRIMARY KEY (paifu_archive_id, member_no),
+    INDEX idx_paifu_archive_member_played (member_no, paifu_archive_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- テーブル: weekly_reward_claim_log
 CREATE TABLE weekly_reward_claim_log (
     weekly_reward_claim_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

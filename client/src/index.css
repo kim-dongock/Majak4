@@ -1,3 +1,749 @@
+.majak-popup-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  background: rgba(12, 29, 24, .64);
+  font-family: var(--majak-font-family-ui);
+}
+
+.majak-popup-panel {
+  width: min(720px, 100%);
+  max-height: min(680px, calc(100dvh - 32px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #557864;
+  border-radius: 6px;
+  color: #244137;
+  background: #f6f8f1;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .44), inset 0 1px 0 #ffffff;
+}
+
+.majak-popup-titlebar {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+  box-sizing: border-box;
+  color: #f8f6e9;
+  background: #1b5a4b;
+  font-size: var(--majak-text-xl);
+  font-weight: var(--majak-weight-title);
+}
+
+.majak-popup-titlebar__close {
+  width: var(--majak-popup-close-size);
+  height: var(--majak-popup-close-size);
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .66);
+  border-radius: 4px;
+  color: #ffffff;
+  background: transparent;
+  font: 400 var(--majak-popup-close-font-size)/1 var(--majak-font-family-ui);
+  cursor: pointer;
+}
+
+.majak-popup-titlebar__close:hover,
+.majak-popup-titlebar__close:focus-visible {
+  background: rgba(255, 255, 255, .14);
+}
+
+.majak-popup-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 18px;
+  overflow: auto;
+  box-sizing: border-box;
+}
+
+.majak-popup-actions {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 18px 18px;
+  border-top: 1px solid #d0dbd0;
+  background: #f6f8f1;
+}
+
+.majak-popup-actions button {
+  min-width: var(--majak-popup-command-width);
+  height: 40px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border: 1px solid #698674;
+  border-radius: 3px;
+  color: #2e5848;
+  background: #ffffff;
+  font: var(--majak-weight-strong) var(--majak-text-md)/1 var(--majak-font-family-ui);
+  cursor: pointer;
+}
+
+.majak-popup-actions .is-primary {
+  border-color: #255d4e;
+  color: #ffffff;
+  background: #1c6b58;
+}
+
+.majak-popup-actions button:hover:not(:disabled),
+.majak-popup-actions button:focus-visible {
+  border-color: #4d7560;
+  background: #edf3e9;
+}
+
+.majak-popup-actions .is-primary:hover:not(:disabled),
+.majak-popup-actions .is-primary:focus-visible {
+  border-color: #16483d;
+  background: #247c67;
+}
+
+.majak-popup-actions button:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+/* Shared popup content roles. Individual dialogs must use these structural roles. */
+.majak-popup-panel > .majak-popup-titlebar {
+  font-size: var(--majak-dialog-heading-font-size);
+  line-height: var(--majak-leading-tight);
+}
+
+.majak-popup-panel > .majak-popup-titlebar > h1,
+.majak-popup-panel > .majak-popup-titlebar > h2,
+.majak-popup-panel > .majak-popup-titlebar > span {
+  margin: 0;
+  font: inherit;
+}
+
+.majak-popup-panel > .majak-popup-body {
+  color: var(--majak-dialog-panel-text-color);
+  font-size: var(--majak-dialog-body-font-size);
+  line-height: var(--majak-leading-body);
+}
+
+.majak-popup-panel > .majak-popup-body > h1,
+.majak-popup-panel > .majak-popup-body > h2,
+.majak-popup-panel > .majak-popup-body > h3 {
+  margin: 0;
+  color: var(--majak-dialog-panel-text-color);
+  font-size: var(--majak-dialog-heading-font-size) !important;
+  font-weight: var(--majak-weight-title);
+  line-height: var(--majak-leading-tight);
+}
+
+.majak-popup-panel > .majak-popup-body > p {
+  margin: 0;
+  color: var(--majak-dialog-panel-text-color);
+  font-size: var(--majak-dialog-body-font-size);
+}
+
+.majak-popup-panel > .majak-popup-actions label {
+  color: var(--majak-dialog-panel-text-color);
+  font-size: var(--majak-dialog-label-font-size);
+  line-height: var(--majak-leading-body);
+}
+
+/* Responsive outgame dialogs share the same panel, header, and command palette. */
+.responsive-shop,
+.shop-transaction,
+.mission-dialog,
+.mission-reward-guide,
+.custom-inventory,
+.responsive-owned-items,
+.majak-ranking-dialog,
+.majak-collection-dialog,
+.majak-invite-request {
+  border-color: var(--majak-dialog-panel-border-color) !important;
+  color: var(--majak-dialog-panel-text-color) !important;
+  background: var(--majak-dialog-panel-color) !important;
+}
+
+.responsive-shop-overlay,
+.shop-transaction-overlay,
+.mission-dialog-overlay,
+.mission-reward-guide-overlay,
+.custom-inventory-overlay,
+.responsive-owned-items-overlay,
+.majak-ranking-dialog-overlay,
+.majak-collection-overlay,
+.majak-invite-request-overlay {
+  background: var(--majak-dialog-overlay-color) !important;
+}
+
+.responsive-shop__header,
+.shop-transaction header,
+.mission-dialog__header,
+.mission-reward-guide header,
+.custom-inventory__header,
+.responsive-owned-items__header,
+.majak-ranking-dialog__header,
+.majak-collection-header,
+.majak-invite-request__header {
+  color: var(--majak-dialog-header-text-color) !important;
+  background: var(--majak-dialog-header-color) !important;
+}
+
+.responsive-shop__tabs,
+.custom-inventory__tabs {
+  background: #e0e8df !important;
+  border-bottom-color: #9eb49a !important;
+}
+
+.responsive-shop__tabs button,
+.custom-inventory__tabs button {
+  border-color: #b8cab8 !important;
+  color: var(--majak-dialog-panel-text-color) !important;
+}
+
+.responsive-shop__tabs button.is-active,
+.custom-inventory__tabs button.is-active {
+  color: #ffffff !important;
+  background: var(--majak-dialog-button-color) !important;
+}
+
+.responsive-shop .shop-card button,
+.responsive-shop__footer button,
+.shop-transaction footer button,
+.mission-dialog__header button,
+.mission-dialog__reward-grid button,
+.mission-dialog footer button,
+.mission-reward-guide footer button,
+.custom-inventory__item button,
+.custom-inventory__footer button,
+.responsive-owned-items__equip,
+.responsive-owned-items__footer button,
+.majak-ranking-dialog__footer button,
+.majak-collection-item > button,
+.majak-collection-footer button,
+.majak-invite-request__actions .majak-invite-request__accept {
+  border-color: var(--majak-dialog-button-border-color) !important;
+  color: #ffffff !important;
+  background: var(--majak-dialog-button-color) !important;
+}
+
+.responsive-shop .shop-card button:hover:not(:disabled),
+.responsive-shop__footer button:hover:not(:disabled),
+.shop-transaction footer button:hover:not(:disabled),
+.mission-dialog__header button:hover:not(:disabled),
+.mission-dialog__reward-grid button:hover:not(:disabled),
+.mission-dialog footer button:hover:not(:disabled),
+.mission-reward-guide footer button:hover:not(:disabled),
+.custom-inventory__item button:hover:not(:disabled),
+.custom-inventory__footer button:hover:not(:disabled),
+.responsive-owned-items__equip:hover:not(:disabled),
+.responsive-owned-items__footer button:hover:not(:disabled),
+.majak-ranking-dialog__footer button:hover:not(:disabled),
+.majak-collection-item > button:hover:not(:disabled),
+.majak-collection-footer button:hover:not(:disabled),
+.majak-invite-request__actions .majak-invite-request__accept:hover:not(:disabled) {
+  background: var(--majak-dialog-button-hover-color) !important;
+}
+
+.shop-transaction__cancel,
+.mission-dialog footer button,
+.mission-reward-guide footer button,
+.custom-inventory__close,
+.responsive-owned-items__footer button,
+.majak-invite-request__actions button:not(.majak-invite-request__accept) {
+  color: var(--majak-dialog-panel-text-color) !important;
+  background: #ffffff !important;
+}
+
+.responsive-shop .shop-card button:disabled,
+.mission-dialog__reward-grid button:disabled,
+.custom-inventory__item button:disabled,
+.custom-inventory__pager button:disabled,
+.responsive-owned-items__equip:disabled,
+.shop-transaction__primary:disabled,
+.majak-collection-item > button:disabled,
+.majak-collection-footer button:disabled {
+  border-color: #b7c4b8 !important;
+  color: #75877a !important;
+  background: #dce5dc !important;
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .majak-popup-overlay {
+    padding: 8px 12px;
+  }
+
+  .majak-popup-panel {
+    max-height: calc(100dvh - 16px);
+  }
+
+  .majak-popup-titlebar {
+    min-height: 38px;
+    padding: 0 12px;
+    font-size: var(--majak-dialog-compact-title-font-size);
+  }
+
+  .majak-popup-titlebar__close {
+    width: 26px;
+    height: 26px;
+    font-size: var(--majak-dialog-heading-font-size);
+  }
+
+  .majak-popup-body {
+    padding: 8px 12px;
+  }
+
+  .majak-popup-actions {
+    gap: 7px;
+    padding: 6px 12px 8px;
+  }
+
+  .majak-popup-actions button {
+    height: 32px;
+    font-size: var(--majak-dialog-compact-font-size);
+  }
+}
+
+.majak-paifu-save-dialog {
+  width: min(560px, 100%);
+}
+
+.majak-paifu-save-dialog__body {
+  display: grid;
+  gap: 14px;
+}
+
+.majak-paifu-save-dialog__scope {
+  display: grid;
+  gap: 6px;
+}
+
+.majak-ask-end-dialog {
+  width: min(440px, 100%);
+}
+
+.majak-ask-end-dialog__body {
+  display: grid;
+  gap: 14px;
+}
+
+.majak-ask-end-dialog__body p {
+  margin: 0;
+  color: #305548;
+  font-size: var(--majak-text-md);
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-ask-end-dialog__timer {
+  color: #80501f !important;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.majak-ask-end-dialog__progress {
+  height: 12px;
+  overflow: hidden;
+  border: 1px solid #89a88f;
+  background: #dce8d9;
+}
+
+.majak-ask-end-dialog__progress > div {
+  height: 100%;
+  background: #1c6b58;
+}
+
+.majak-receipt-dialog {
+  width: min(520px, 100%);
+}
+
+.majak-receipt-dialog__body {
+  display: grid;
+  gap: 14px;
+}
+
+.majak-receipt-dialog__body p {
+  margin: 0;
+}
+
+.majak-receipt-dialog__purchaser {
+  color: #305548;
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-receipt-dialog__success {
+  color: #1c6b58;
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-receipt-dialog__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #c6d7c9;
+  background: #eef5eb;
+  text-align: center;
+}
+
+.majak-receipt-dialog__item img {
+  max-width: 96px;
+  max-height: 96px;
+  object-fit: contain;
+}
+
+.majak-receipt-dialog__details {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid #c6d7c9;
+}
+
+.majak-receipt-dialog__details > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(0, 1.5fr);
+}
+
+.majak-receipt-dialog__details > div + div {
+  border-top: 1px solid #d5e0d5;
+}
+
+.majak-receipt-dialog__details dt,
+.majak-receipt-dialog__details dd {
+  min-width: 0;
+  margin: 0;
+  padding: 9px 12px;
+}
+
+.majak-receipt-dialog__details dt {
+  color: #345a4a;
+  background: #edf3e9;
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-receipt-dialog__details dd {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.majak-receipt-dialog__notices {
+  display: grid;
+  gap: 4px;
+  color: #486454;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-ending-popup {
+  width: min(440px, 100%);
+}
+
+.majak-ending-popup__body {
+  display: grid;
+  gap: 16px;
+}
+
+.majak-ending-popup__body > p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.majak-ending-popup__banner {
+  display: block;
+}
+
+.majak-ending-popup__banner-image {
+  display: block;
+  width: 100%;
+  max-height: 110px;
+  object-fit: contain;
+}
+
+.majak-debug-login-dialog {
+  width: min(460px, 100%);
+}
+
+.majak-debug-login-dialog__body {
+  display: grid;
+  gap: 12px;
+}
+
+.majak-debug-login-dialog__body > label {
+  display: grid;
+  gap: 6px;
+  color: #345a4a;
+  font-size: var(--majak-text-sm);
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-debug-login-dialog input:not([type='checkbox']) {
+  width: 100%;
+  min-height: 38px;
+  box-sizing: border-box;
+  border: 1px solid #89a88f;
+  border-radius: 3px;
+  color: #244137;
+  background: #ffffff;
+  font: inherit;
+}
+
+.majak-debug-login-dialog__secure {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #345a4a;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-start-popup__body {
+  gap: 12px;
+}
+
+.majak-start-popup__body h2 {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.majak-start-popup__body p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.majak-start-popup__banner {
+  display: block;
+  width: 100%;
+  min-height: min(480px, 60dvh);
+  border: 0;
+}
+
+.majak-start-popup__actions {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.majak-start-popup__actions label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #345a4a;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.majak-start-popup__actions button {
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.majak-welcome-dialog {
+  width: min(560px, 100%);
+}
+
+.majak-welcome-dialog__body {
+  display: grid;
+  gap: 14px;
+  padding: 28px;
+  color: #305548;
+  font-size: var(--majak-text-md);
+  line-height: var(--majak-leading-body);
+}
+
+.majak-welcome-dialog__body p {
+  margin: 0;
+}
+
+.majak-welcome-dialog__lead {
+  color: #1c6b58;
+  font-size: var(--majak-text-xl);
+  font-weight: var(--majak-weight-title);
+  line-height: var(--majak-leading-tight);
+}
+
+.majak-welcome-dialog__notice {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+  border: 1px solid #c6d7c9;
+  background: #eef5eb;
+}
+
+.majak-welcome-dialog__notice strong {
+  color: #244137;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-welcome-dialog__notice span {
+  color: #486454;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-levelup-dialog {
+  width: min(460px, 100%);
+}
+
+.majak-levelup-dialog__body {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.majak-levelup-dialog__body p {
+  margin: 0;
+}
+
+.majak-levelup-dialog__level {
+  padding: 8px 18px;
+  border: 1px solid #a8c4a9;
+  color: #1c6b58;
+  background: #edf5e9;
+  font-size: var(--majak-text-xl);
+}
+
+.majak-levelup-dialog__body .majak-receipt-dialog__details {
+  width: 100%;
+  text-align: left;
+}
+
+.majak-levelup-dialog__note {
+  color: #486454;
+  font-size: var(--majak-text-sm);
+  text-align: left;
+}
+
+.majak-reward-notice {
+  width: min(520px, 100%);
+}
+
+.majak-reward-notice__body {
+  display: grid;
+  gap: 14px;
+}
+
+.majak-reward-notice__body p {
+  margin: 0;
+}
+
+.majak-reward-notice__success {
+  color: #1c6b58;
+  font-size: var(--majak-text-lg);
+  font-weight: var(--majak-weight-title);
+  text-align: center;
+}
+
+.majak-reward-notice__actions {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.majak-reward-notice__actions label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #345a4a;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-item-popup-dialog {
+  width: min(760px, 100%);
+}
+
+.majak-item-popup-dialog__body {
+  display: grid;
+  gap: 16px;
+}
+
+.majak-item-popup-dialog__message {
+  margin: 0;
+  white-space: pre-line;
+  color: #305548;
+  font-weight: var(--majak-weight-strong);
+  text-align: center;
+}
+
+.majak-item-popup-dialog__items {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.majak-item-popup-dialog__item {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 12px 12px;
+  border: 1px solid #c6d7c9;
+  background: #ffffff;
+  text-align: center;
+}
+
+.majak-item-popup-dialog__item.is-recommended {
+  border-color: #5d9571;
+  background: #eef6ed;
+}
+
+.majak-item-popup-dialog__recommendation {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 3px 7px;
+  color: #ffffff;
+  background: #1c6b58;
+  font-size: var(--majak-text-sm);
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-item-popup-dialog__item img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
+}
+
+.majak-item-popup-dialog__item strong,
+.majak-item-popup-dialog__item span,
+.majak-item-popup-dialog__item em {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.majak-item-popup-dialog__item span {
+  color: #48745b;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-item-popup-dialog__item em {
+  color: #1c6b58;
+  font-style: normal;
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-item-popup-dialog__item button {
+  min-width: 100%;
+  min-height: 36px;
+  border: 1px solid #255d4e;
+  border-radius: 3px;
+  color: #ffffff;
+  background: #1c6b58;
+  font: var(--majak-weight-strong) var(--majak-text-md)/1 var(--majak-font-family-ui);
+  cursor: pointer;
+}
+
+.majak-item-popup-dialog__item button:hover,
+.majak-item-popup-dialog__item button:focus-visible {
+  border-color: #16483d;
+  background: #247c67;
+}
+
+@media (max-width: 560px) {
+  .majak-item-popup-dialog__items {
+    grid-template-columns: 1fr;
+  }
+}
+
 .majak-lobby-collection-button {
   position: absolute;
   left: 864px;
@@ -237,33 +983,69 @@
   --majak-popup-command-font-size: var(--majak-font-13);
   --majak-popup-tab-height: 40px;
   --majak-popup-tab-font-size: var(--majak-font-14);
+  --majak-popup-overlay-color: rgba(12, 29, 24, .64);
+  --majak-popup-panel-color: #f6f8f1;
+  --majak-popup-panel-border-color: #557864;
+  --majak-popup-title-color: #1b5a4b;
+  --majak-popup-command-color: #1c6b58;
+  --majak-popup-command-hover-color: #247c67;
+  --majak-popup-command-border-color: #255d4e;
+  --majak-dialog-panel-color: var(--majak-popup-panel-color);
+  --majak-dialog-panel-border-color: var(--majak-popup-panel-border-color);
+  --majak-dialog-panel-text-color: #244137;
+  --majak-dialog-header-color: var(--majak-popup-title-color);
+  --majak-dialog-header-text-color: #f8f6e9;
+  --majak-dialog-overlay-color: var(--majak-popup-overlay-color);
+  --majak-dialog-button-color: var(--majak-popup-command-color);
+  --majak-dialog-button-hover-color: var(--majak-popup-command-hover-color);
+  --majak-dialog-button-border-color: var(--majak-popup-command-border-color);
   /* Change these two values to update the entire client, including Phaser text. */
   --majak-font-family-ui: 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', Meiryo, 'Noto Sans JP', sans-serif;
   --majak-type-scale: 1;
-  --majak-font-caption: calc(11px * var(--majak-type-scale));
-  --majak-font-label: calc(13px * var(--majak-type-scale));
-  --majak-font-body: calc(14px * var(--majak-type-scale));
-  --majak-font-number: calc(16px * var(--majak-type-scale));
-  --majak-font-heading: calc(20px * var(--majak-type-scale));
-  --majak-font-title: calc(30px * var(--majak-type-scale));
-  --majak-font-9: calc(9px * var(--majak-type-scale));
-  --majak-font-10: calc(10px * var(--majak-type-scale));
-  --majak-font-11: calc(11px * var(--majak-type-scale));
-  --majak-font-12: calc(12px * var(--majak-type-scale));
-  --majak-font-13: calc(13px * var(--majak-type-scale));
-  --majak-font-14: calc(14px * var(--majak-type-scale));
-  --majak-font-15: calc(15px * var(--majak-type-scale));
-  --majak-font-16: calc(16px * var(--majak-type-scale));
-  --majak-font-17: calc(17px * var(--majak-type-scale));
-  --majak-font-18: calc(18px * var(--majak-type-scale));
-  --majak-font-19: calc(19px * var(--majak-type-scale));
-  --majak-font-20: calc(20px * var(--majak-type-scale));
-  --majak-font-22: calc(22px * var(--majak-type-scale));
-  --majak-font-24: calc(24px * var(--majak-type-scale));
-  --majak-font-26: calc(26px * var(--majak-type-scale));
-  --majak-font-30: calc(30px * var(--majak-type-scale));
-  --majak-font-40: calc(40px * var(--majak-type-scale));
-  --majak-font-48: calc(48px * var(--majak-type-scale));
+  /* Responsive Web UI typography: meta, label, body, subtitle, title, display. */
+  --majak-text-xs: calc(12px * var(--majak-type-scale));
+  --majak-text-sm: calc(14px * var(--majak-type-scale));
+  --majak-text-md: calc(16px * var(--majak-type-scale));
+  --majak-text-lg: calc(20px * var(--majak-type-scale));
+  --majak-text-xl: calc(24px * var(--majak-type-scale));
+  --majak-text-display: calc(32px * var(--majak-type-scale));
+  --majak-dialog-caption-font-size: var(--majak-text-xs);
+  --majak-dialog-label-font-size: var(--majak-text-sm);
+  --majak-dialog-body-font-size: var(--majak-text-md);
+  --majak-dialog-heading-font-size: var(--majak-text-lg);
+  --majak-dialog-title-font-size: var(--majak-text-xl);
+  --majak-dialog-compact-font-size: var(--majak-text-xs);
+  --majak-dialog-compact-title-font-size: var(--majak-text-md);
+  --majak-menu-description-size: var(--majak-text-md);
+  --majak-leading-tight: 1.2;
+  --majak-leading-body: 1.5;
+  --majak-weight-regular: 500;
+  --majak-weight-strong: 700;
+  --majak-weight-title: 900;
+  --majak-font-caption: var(--majak-text-xs);
+  --majak-font-label: var(--majak-text-sm);
+  --majak-font-body: var(--majak-text-md);
+  --majak-font-number: var(--majak-text-md);
+  --majak-font-heading: var(--majak-text-lg);
+  --majak-font-title: var(--majak-text-display);
+  --majak-font-9: var(--majak-text-xs);
+  --majak-font-10: var(--majak-text-xs);
+  --majak-font-11: var(--majak-text-xs);
+  --majak-font-12: var(--majak-text-xs);
+  --majak-font-13: var(--majak-text-sm);
+  --majak-font-14: var(--majak-text-sm);
+  --majak-font-15: var(--majak-text-md);
+  --majak-font-16: var(--majak-text-md);
+  --majak-font-17: var(--majak-text-md);
+  --majak-font-18: var(--majak-text-lg);
+  --majak-font-19: var(--majak-text-lg);
+  --majak-font-20: var(--majak-text-lg);
+  --majak-font-22: var(--majak-text-lg);
+  --majak-font-24: var(--majak-text-xl);
+  --majak-font-26: var(--majak-text-xl);
+  --majak-font-30: var(--majak-text-display);
+  --majak-font-40: var(--majak-text-display);
+  --majak-font-48: var(--majak-text-display);
 }
 
 /* 日本語フォント全体適用 — 画面ごとのレガシーフォント指定を妨げない */
@@ -271,13 +1053,261 @@
   font-family: var(--majak-font-family-ui);
 }
 
+.majak-type-xs { font-size: var(--majak-text-xs) !important; line-height: var(--majak-leading-body) !important; }
+.majak-type-sm { font-size: var(--majak-text-sm) !important; line-height: var(--majak-leading-body) !important; }
+.majak-type-md { font-size: var(--majak-text-md) !important; line-height: var(--majak-leading-body) !important; }
+.majak-type-lg { font-size: var(--majak-text-lg) !important; line-height: var(--majak-leading-tight) !important; }
+.majak-type-xl { font-size: var(--majak-text-xl) !important; line-height: var(--majak-leading-tight) !important; }
+.majak-type-display { font-size: var(--majak-text-display) !important; line-height: var(--majak-leading-tight) !important; }
+
+.majak-popup-preview {
+  height: 100dvh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+  overflow: hidden;
+  color: #f8f6e9;
+  font-family: var(--majak-font-family-ui);
+}
+
+.majak-popup-preview__sidebar {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: 24px;
+  padding: 28px 20px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-right: 1px solid rgba(216, 230, 211, .3);
+  background: rgba(7, 35, 27, .88);
+}
+
+.majak-popup-preview__eyebrow {
+  margin: 0 0 6px;
+  color: #d9bc62;
+  font-size: var(--majak-text-xs);
+  font-weight: var(--majak-weight-strong);
+  text-transform: uppercase;
+}
+
+.majak-popup-preview h1,
+.majak-popup-preview h2 {
+  margin: 0;
+  color: #ffffff;
+  font-weight: var(--majak-weight-title);
+}
+
+.majak-popup-preview h1 { font-size: var(--majak-text-xl); }
+.majak-popup-preview h2 { font-size: var(--majak-text-display); }
+
+.majak-popup-preview__description,
+.majak-popup-preview__content > p:not(.majak-popup-preview__eyebrow) {
+  margin: 10px 0 0;
+  color: #d7e3d7;
+  font-size: var(--majak-text-sm);
+  line-height: var(--majak-leading-body);
+}
+
+.majak-popup-preview__list {
+  display: grid;
+  gap: 7px;
+}
+
+.majak-popup-preview__list button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 10px;
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid rgba(202, 223, 204, .3);
+  border-radius: 4px;
+  color: #f8f6e9;
+  background: rgba(245, 250, 239, .07);
+  text-align: left;
+  cursor: pointer;
+}
+
+.majak-popup-preview__list button.is-selected,
+.majak-popup-preview__list button:hover,
+.majak-popup-preview__list button:focus-visible {
+  border-color: #d9bc62;
+  background: rgba(217, 188, 98, .18);
+}
+
+.majak-popup-preview__list span { font-size: var(--majak-text-sm); font-weight: var(--majak-weight-strong); }
+.majak-popup-preview__list small { grid-column: 1; color: #c3d5c4; font-size: var(--majak-text-xs); }
+.majak-popup-preview__list b { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: #d9bc62; font-size: var(--majak-text-xs); }
+
+.majak-popup-preview__content {
+  align-self: center;
+  width: min(600px, calc(100% - 48px));
+  margin: 24px;
+  padding: 30px;
+  border: 1px solid rgba(217, 188, 98, .52);
+  background: rgba(13, 57, 43, .74);
+}
+
+.majak-popup-preview__content dl {
+  display: grid;
+  gap: 1px;
+  margin: 24px 0 0;
+  background: rgba(217, 232, 215, .22);
+}
+
+.majak-popup-preview__content dl > div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  background: rgba(8, 42, 32, .82);
+}
+
+.majak-popup-preview__content dt,
+.majak-popup-preview__content dd { margin: 0; padding: 10px 12px; }
+.majak-popup-preview__content dt { color: #d7e3d7; font-weight: var(--majak-weight-strong); }
+.majak-popup-preview__content dd { color: #d9bc62; }
+
+.majak-popup-preview__open {
+  min-width: var(--majak-popup-command-width);
+  height: var(--majak-popup-command-height);
+  margin-top: 24px;
+  padding: 0 14px;
+  border: 1px solid var(--majak-popup-command-border-color);
+  border-radius: 3px;
+  color: #ffffff;
+  background: var(--majak-popup-command-color);
+  font: var(--majak-weight-strong) var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui);
+  cursor: pointer;
+}
+
+.majak-popup-preview__open:hover,
+.majak-popup-preview__open:focus-visible { background: var(--majak-popup-command-hover-color); }
+
+@media (max-width: 720px) {
+  .majak-popup-preview { height: auto; grid-template-columns: 1fr; overflow: auto; }
+  .majak-popup-preview__sidebar { overflow: visible; border-right: 0; border-bottom: 1px solid rgba(216, 230, 211, .3); }
+  .majak-popup-preview__content { width: auto; margin: 20px; }
+}
+
+/* Shared popup surface for dialogs that retain their own layout structure. */
+:is(
+  .majak-popup-overlay,
+  .majak-collection-overlay,
+  .majak-ranking-dialog-overlay,
+  .majak-player-profile-overlay,
+  .responsive-owned-items-overlay,
+  .custom-inventory-overlay,
+  .mission-dialog-overlay,
+  .responsive-shop-overlay,
+  .shop-transaction-overlay,
+  .registration-overlay
+) {
+  background: var(--majak-popup-overlay-color) !important;
+  font-family: var(--majak-font-family-ui);
+}
+
+:is(
+  .majak-popup-panel,
+  .majak-collection-dialog,
+  .majak-ranking-dialog,
+  .majak-player-profile,
+  .responsive-owned-items,
+  .custom-inventory,
+  .mission-dialog,
+  .responsive-shop,
+  .shop-transaction,
+  .registration-panel
+) {
+  color: #244137 !important;
+  background: var(--majak-popup-panel-color) !important;
+  border-color: var(--majak-popup-panel-border-color) !important;
+  font-family: var(--majak-font-family-ui);
+}
+
+:is(
+  .majak-popup-titlebar,
+  .majak-collection-header,
+  .majak-ranking-dialog__header,
+  .majak-player-profile__hero,
+  .responsive-owned-items__header,
+  .custom-inventory__header,
+  .mission-dialog__header,
+  .responsive-shop__header,
+  .shop-transaction > header,
+  .registration-panel__header
+) {
+  background: var(--majak-popup-title-color) !important;
+  color: #f8f6e9 !important;
+  font-family: var(--majak-font-family-ui);
+}
+
+:is(
+  .majak-popup-actions,
+  .majak-collection-footer,
+  .majak-ranking-dialog__footer,
+  .majak-player-profile__footer,
+  .responsive-owned-items__footer,
+  .custom-inventory__footer,
+  .mission-dialog__footer,
+  .responsive-shop__footer,
+  .shop-transaction > footer,
+  .registration-actions
+) > button,
+:is(
+  .majak-popup-actions,
+  .majak-collection-footer,
+  .majak-ranking-dialog__footer,
+  .majak-player-profile__footer,
+  .responsive-owned-items__footer,
+  .custom-inventory__footer,
+  .mission-dialog__footer,
+  .responsive-shop__footer,
+  .shop-transaction > footer,
+  .registration-actions
+) button {
+  min-width: var(--majak-popup-command-width);
+  height: var(--majak-popup-command-height);
+  border-color: var(--majak-popup-command-border-color) !important;
+  border-radius: 3px;
+  color: #ffffff !important;
+  background: var(--majak-popup-command-color) !important;
+  font: var(--majak-weight-strong) var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui) !important;
+}
+
+:is(
+  .majak-popup-actions,
+  .majak-collection-footer,
+  .majak-ranking-dialog__footer,
+  .majak-player-profile__footer,
+  .responsive-owned-items__footer,
+  .custom-inventory__footer,
+  .mission-dialog__footer,
+  .responsive-shop__footer,
+  .shop-transaction > footer,
+  .registration-actions
+) button:hover:not(:disabled),
+:is(
+  .majak-popup-actions,
+  .majak-collection-footer,
+  .majak-ranking-dialog__footer,
+  .majak-player-profile__footer,
+  .responsive-owned-items__footer,
+  .custom-inventory__footer,
+  .mission-dialog__footer,
+  .responsive-shop__footer,
+  .shop-transaction > footer,
+  .registration-actions
+) button:focus-visible {
+  background: var(--majak-popup-command-hover-color) !important;
+}
+
 body {
   margin: 0;
-  background-color: var(--majak-screen-surface-color);
-  background-image: var(--majak-screen-surface-image);
-  background-position: var(--majak-screen-surface-position);
-  background-size: var(--majak-screen-surface-size);
-  background-repeat: var(--majak-screen-surface-repeat);
+  background-color: #0b1614;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, .025) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(255, 255, 255, .018) 25%, transparent 25%);
+  background-position: 0 0, 0 0;
+  background-size: 20px 20px, 20px 20px;
+  background-repeat: repeat, repeat;
   color: #fff;
   user-select: none;
   overflow: hidden;
@@ -299,7 +1329,6 @@ body {
   box-shadow: inset 0 0 0 2px rgba(216, 183, 94, .62), inset 0 0 0 7px rgba(3, 31, 23, .48);
 }
 
-.majak-title-select-brand,
 .majak-lobby-select-title {
   position: absolute;
   z-index: 1;
@@ -312,17 +1341,17 @@ body {
   text-shadow: 0 3px 0 #684b10, 0 6px 16px rgba(0, 0, 0, .72);
 }
 
-.majak-title-select-brand {
-  top: 38px;
-  left: 250px;
-  width: 500px;
-  font-size: var(--majak-font-48);
-}
-
-.majak-title-select-brand span {
-  margin-left: 8px;
-  color: #e6b94d;
-  font-size: 1.35em;
+.majak-title-select-logo {
+  position: absolute;
+  top: 18px;
+  left: 292px;
+  z-index: 1;
+  width: 430px;
+  height: 148px;
+  object-fit: cover;
+  object-position: center 34%;
+  border-radius: 6px;
+  pointer-events: none;
 }
 
 .majak-lobby-select-title {
@@ -361,8 +1390,1016 @@ body {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .62), 0 5px 16px rgba(0, 0, 0, .3);
 }
 
+.majak-desktop-channel-group {
+  --majak-menu-gold: #e6c45e;
+  --majak-menu-ink: #08271d;
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(12px, 2dvh, 24px);
+  padding: clamp(14px, 3dvh, 34px) clamp(28px, 4vw, 56px);
+  box-sizing: border-box;
+  background-color: #0b4732;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, .04) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(0, 0, 0, .11) 25%, transparent 25%);
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+}
+
+.majak-responsive-desktop-frame > .majak-desktop-channel-group {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.majak-paifu-archive {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 18px;
+  padding: clamp(16px, 3dvh, 32px) clamp(20px, 4vw, 52px);
+  box-sizing: border-box;
+  color: #f8f6e9;
+  background: #0b4732;
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, .04) 25%, transparent 25%), linear-gradient(315deg, rgba(0, 0, 0, .11) 25%, transparent 25%);
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+}
+
+.majak-paifu-archive__header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.majak-paifu-archive__header p,
+.majak-paifu-archive__header h1 { margin: 0; }
+.majak-paifu-archive__header p { color: #e6c45e; font-size: var(--majak-text-sm); font-weight: var(--majak-weight-strong); }
+.majak-paifu-archive__header h1 { font-size: var(--majak-text-display); }
+
+.majak-paifu-archive__filters {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr)) auto;
+  gap: 10px;
+  align-items: end;
+  padding: 14px;
+  border: 1px solid rgba(229, 242, 218, .35);
+  background: rgba(4, 37, 27, .58);
+}
+
+.majak-paifu-archive__filters label { display: grid; gap: 5px; color: #d7e3d7; font-size: var(--majak-text-xs); }
+.majak-paifu-archive__filters input,
+.majak-paifu-archive__filters select { min-width: 0; height: 32px; box-sizing: border-box; border: 1px solid #93ad95; color: #172e25; background: #f5f2e6; }
+
+.majak-paifu-archive__content { min-height: 0; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, .8fr); gap: 16px; }
+.majak-paifu-archive__list,
+.majak-paifu-archive__detail { min-height: 0; overflow: auto; border: 1px solid rgba(229, 242, 218, .35); background: rgba(4, 37, 27, .72); }
+.majak-paifu-archive__list { display: grid; align-content: start; }
+.majak-paifu-archive__list > p,
+.majak-paifu-archive__detail > p { margin: 18px; color: #d7e3d7; }
+.majak-paifu-archive__list button { display: grid; grid-template-columns: minmax(130px, .8fr) minmax(0, 1.2fr) auto; gap: 12px; width: 100%; padding: 14px; border: 0; border-bottom: 1px solid rgba(229, 242, 218, .2); color: #f8f6e9; background: transparent; text-align: left; cursor: pointer; }
+.majak-paifu-archive__list button:hover,
+.majak-paifu-archive__list button.is-selected { background: rgba(230, 196, 94, .2); }
+.majak-paifu-archive__list time { color: #d7e3d7; font-variant-numeric: tabular-nums; }
+.majak-paifu-archive__list span { color: #e6c45e; }
+.majak-paifu-archive__detail { padding: 18px; }
+.majak-paifu-archive__detail h2 { margin: 0 0 16px; font-size: var(--majak-text-xl); }
+.majak-paifu-archive__detail dl { margin: 0 0 16px; }
+.majak-paifu-archive__detail dl > div { display: grid; grid-template-columns: 88px minmax(0, 1fr); padding: 7px 0; border-bottom: 1px solid rgba(229, 242, 218, .18); }
+.majak-paifu-archive__detail dt { color: #d7e3d7; }
+.majak-paifu-archive__detail dd { margin: 0; }
+.majak-paifu-archive__detail table { width: 100%; margin-bottom: 18px; border-collapse: collapse; font-size: var(--majak-text-sm); }
+.majak-paifu-archive__detail th,
+.majak-paifu-archive__detail td { padding: 7px; border-bottom: 1px solid rgba(229, 242, 218, .18); text-align: left; }
+.majak-paifu-archive__detail .is-primary { width: 100%; }
+
+@media (max-width: 900px) {
+  .majak-paifu-archive__filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .majak-paifu-archive__content { grid-template-columns: 1fr; }
+  .majak-paifu-archive__list { max-height: 42dvh; }
+}
+
+.majak-responsive-desktop-frame::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  content: '';
+  border: 2px solid #0b552a;
+  box-sizing: border-box;
+  box-shadow: inset 0 0 0 2px #063618;
+  pointer-events: none;
+}
+
+.majak-responsive-desktop-frame__bar {
+  min-height: 48px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 8px 14px;
+  box-sizing: border-box;
+  color: #ffffff;
+  background: #176b2a;
+  border-bottom: 1px solid rgba(227, 255, 184, .42);
+}
+
+.majak-responsive-desktop-frame:has(.majak-inline-game-stage) > .majak-responsive-desktop-frame__bar {
+  display: none;
+}
+
+.majak-responsive-ingame-shell {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  overflow: hidden;
+  background: #071713;
+}
+
+.majak-responsive-ingame-shell.is-loading {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.majak-responsive-ingame-playfield {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.majak-responsive-ingame-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transform: scale(1.4);
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.majak-responsive-ingame-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.majak-responsive-ingame-world {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1019px;
+  height: 735px;
+  transform: translate(-50%, -50%);
+  transform-origin: top left;
+}
+
+.majak-responsive-ingame-world > .majak-inline-game-stage {
+  position: absolute !important;
+  left: 0;
+  top: 31px;
+}
+
+.majak-responsive-ingame-sidebar {
+  position: relative;
+  z-index: 20;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: minmax(110px, .75fr) minmax(180px, 1.45fr) auto auto;
+  gap: 8px;
+  padding: 10px;
+  border-left: 2px solid rgba(230, 189, 114, .72);
+  color: #102014;
+  background: #9aa88b url('/assets/images/game/mj_sideBg.png') center top / cover;
+  box-sizing: border-box;
+}
+
+.majak-responsive-ingame-sidebar__status,
+.majak-responsive-ingame-sidebar__chat {
+  min-height: 0;
+  padding: 8px;
+  overflow: auto;
+  border: 2px inset #d4d0c8;
+  color: #061b0c;
+  background: rgba(247, 255, 235, .94);
+  font-family: var(--majak-font-family-ui);
+  font-size: var(--majak-text-sm);
+  font-weight: 700;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.majak-responsive-ingame-sidebar__input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  gap: 6px;
+}
+
+.majak-responsive-ingame-sidebar__input input,
+.majak-responsive-ingame-sidebar__input button,
+.majak-responsive-ingame-sidebar__actions button {
+  min-height: 34px;
+  box-sizing: border-box;
+  font-family: var(--majak-font-family-ui);
+  font-size: var(--majak-text-sm);
+  font-weight: 800;
+}
+
+.majak-responsive-ingame-sidebar__input input {
+  min-width: 0;
+  padding: 0 8px;
+  border: 2px inset #d4d0c8;
+  color: #111;
+  background: #f5f3df;
+}
+
+.majak-responsive-ingame-sidebar__actions button {
+  min-height: 42px;
+  border: 2px solid #cdebbd;
+  border-radius: 5px;
+  color: #ffffff;
+  background: #1f4b2d;
+  box-shadow: inset 0 1px 0 rgba(240, 255, 234, .28), inset 0 -3px 0 rgba(7, 38, 18, .46), 0 3px 0 #0a3517, 0 5px 9px rgba(0, 0, 0, .22);
+}
+
+.majak-responsive-ingame-sidebar__input button {
+  border: 1px solid rgba(255, 255, 255, .66);
+  border-radius: 4px;
+  color: #ffffff;
+  background: #1f4b2d;
+  box-shadow: inset 0 1px 0 rgba(222, 246, 218, .18), inset 0 -2px 0 rgba(7, 38, 18, .42);
+}
+
+.majak-responsive-ingame-sidebar__input button:hover:not(:disabled),
+.majak-responsive-ingame-sidebar__input button:focus-visible {
+  border-color: rgba(236, 255, 230, .9);
+  background: #28633a;
+  outline: 2px solid rgba(165, 224, 155, .34);
+  outline-offset: 2px;
+}
+
+.majak-responsive-ingame-sidebar__actions button:hover:not(:disabled),
+.majak-responsive-ingame-sidebar__actions button:focus-visible {
+  border-color: #efffe9;
+  background: #28633a;
+  outline: 2px solid rgba(165, 224, 155, .34);
+  outline-offset: 2px;
+}
+
+.majak-responsive-ingame-sidebar__actions button:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: inset 0 2px 5px rgba(7, 38, 18, .58), 0 1px 0 #0a3517;
+}
+
+.majak-responsive-ingame-sidebar__actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.majak-responsive-ingame-sidebar__actions button.is-active {
+  color: #efffe9;
+  background: #377d47;
+  border-color: #b8e6a9;
+  box-shadow: inset 0 1px 0 rgba(236, 255, 230, .28), inset 0 -3px 0 rgba(12, 66, 28, .48), 0 3px 0 #155827, 0 5px 9px rgba(0, 0, 0, .22);
+}
+
+.majak-responsive-ingame-sidebar button:disabled {
+  cursor: default;
+  opacity: .48;
+}
+
+@media (max-width: 980px) {
+  .majak-responsive-ingame-shell {
+    grid-template-columns: minmax(0, 1fr) 240px;
+  }
+}
+
+.majak-responsive-desktop-frame__bar strong {
+  font-weight: var(--majak-weight-title);
+}
+
+.majak-responsive-desktop-frame__bar > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.majak-responsive-control-button {
+  min-width: 80px;
+  height: 32px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, .66);
+  border-radius: 4px;
+  color: #ffffff;
+  background: #1f4b2d;
+  box-shadow: inset 0 1px 0 rgba(222, 246, 218, .18), inset 0 -2px 0 rgba(7, 38, 18, .42);
+  cursor: pointer;
+  font-size: var(--majak-text-sm);
+  font-family: var(--majak-font-family-ui);
+  font-weight: var(--majak-weight-strong);
+  line-height: var(--majak-leading-tight);
+  transition: transform 140ms ease-out, border-color 140ms ease-out, background-color 140ms ease-out;
+}
+
+.majak-responsive-control-button:hover,
+.majak-responsive-control-button:focus-visible {
+  background: #28633a;
+  border-color: rgba(236, 255, 230, .9);
+  outline: 2px solid rgba(165, 224, 155, .34);
+  outline-offset: 2px;
+}
+
+.majak-responsive-control-button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 5px rgba(7, 38, 18, .55);
+}
+
+.majak-responsive-control-button:disabled {
+  cursor: default;
+  filter: grayscale(.45);
+  opacity: .5;
+}
+
+.majak-responsive-menu-button {
+  position: relative;
+  border-color: #e6bd72;
+  background: #a56839;
+  box-shadow: inset 0 0 0 2px #714525, inset 0 3px 0 rgba(255, 235, 195, .2), inset 0 -4px 0 rgba(57, 25, 10, .32), 0 7px 17px rgba(0, 0, 0, .34);
+}
+
+.majak-responsive-menu-button::before {
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 5px;
+  content: '';
+  background: #e6c45e;
+  box-shadow: 1px 0 0 rgba(255, 249, 211, .5);
+}
+
+.majak-responsive-menu-button:hover,
+.majak-responsive-menu-button:focus-visible {
+  border-color: #ffe29a;
+  background: #c2824c;
+}
+
+.majak-responsive-desktop-frame__bar .majak-responsive-control-button {
+  min-height: 0;
+}
+
+.majak-desktop-channel-group__header {
+  display: grid;
+  grid-template-columns: minmax(260px, 430px) minmax(260px, 1fr);
+  align-items: start;
+  justify-content: space-between;
+  gap: clamp(24px, 5vw, 72px);
+}
+
+.majak-desktop-channel-group__logo {
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 430 / 148;
+  object-fit: cover;
+  object-position: center 34%;
+  border: 2px solid var(--majak-menu-gold);
+  border-radius: 5px;
+  box-shadow: 0 0 0 4px rgba(4, 35, 23, .7), 0 10px 20px rgba(0, 0, 0, .34);
+}
+
+.majak-desktop-channel-group .majak-desktop-channel-group__user-summary {
+  justify-self: end;
+  width: min(100%, 440px);
+  min-height: 142px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+  padding: 10px 12px 12px;
+  color: #fff3db;
+  background: #2f211b;
+  border: 1px solid #e0b96e;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 3px #68442d, inset 0 1px 0 4px rgba(255, 232, 181, .14), 0 8px 20px rgba(0, 0, 0, .34);
+}
+
+.majak-desktop-channel-group .majak-desktop-channel-group__user-summary::before {
+  content: 'プレイヤー情報';
+  color: #d4ae68;
+  font-size: var(--majak-text-xs);
+  font-weight: var(--majak-weight-title);
+  line-height: var(--majak-leading-tight);
+  letter-spacing: .08em;
+}
+
+.majak-desktop-channel-group .majak-mobile-user-summary__name {
+  color: #fff1bd;
+  max-width: none;
+  font-weight: var(--majak-weight-title);
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(224, 185, 110, .52);
+}
+
+.majak-desktop-channel-group .majak-mobile-user-summary__fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.majak-desktop-channel-group .majak-mobile-user-summary__fields > span {
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 5px 5px;
+  overflow: hidden;
+  border: 1px solid #76503a;
+  border-radius: 3px;
+  background: #f3e5cb;
+  box-shadow: inset 0 1px 0 #ffffff, 0 1px 0 rgba(0, 0, 0, .28);
+}
+
+.majak-desktop-channel-group .majak-mobile-user-summary__fields b {
+  width: auto;
+  min-height: 0;
+  display: block;
+  color: #875a31;
+  background: transparent;
+  font-weight: var(--majak-weight-strong);
+  text-align: left;
+}
+
+.majak-desktop-channel-group .majak-mobile-user-summary__fields em {
+  min-width: 0;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  color: #332217;
+  font-weight: var(--majak-weight-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-desktop-channel-group__menu {
+  width: min(100%, 1100px);
+  align-self: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(22px, 3vw, 40px);
+  row-gap: clamp(32px, 5dvh, 54px);
+}
+
+.majak-desktop-channel-group__menu-entry {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.majak-desktop-channel-group__action {
+  min-height: clamp(60px, 9dvh, 84px);
+  display: grid;
+  align-content: center;
+  padding: 14px 22px 14px 28px;
+  text-align: left;
+}
+
+.majak-desktop-channel-group__action:hover,
+.majak-desktop-channel-group__action:focus-visible {
+  transform: translateX(6px);
+}
+
+.majak-desktop-channel-group__action strong {
+  color: #ffdf70;
+  font-weight: var(--majak-weight-title);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .34);
+}
+
+.majak-desktop-channel-group__description {
+  min-height: calc(var(--majak-text-sm) * var(--majak-leading-tight));
+  margin: 0;
+  padding: 0 8px;
+  color: #fff0d5;
+  font-size: var(--majak-menu-description-size) !important;
+  font-weight: var(--majak-weight-strong);
+  line-height: var(--majak-leading-body) !important;
+}
+
+.majak-desktop-channel-group__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.majak-desktop-channel-group__exit {
+  min-width: 132px;
+  min-height: 42px;
+  padding: 0 22px;
+  font-weight: var(--majak-weight-title);
+}
+
+.majak-desktop-channel-group__exit:hover,
+.majak-desktop-channel-group__exit:focus-visible {
+  transform: translateY(-1px);
+}
+
+.majak-desktop-lobby-select {
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(14px, 2.4dvh, 26px);
+  padding: clamp(18px, 3dvh, 36px) clamp(28px, 4vw, 56px);
+  box-sizing: border-box;
+  background-color: #0b4732;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, .04) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(0, 0, 0, .11) 25%, transparent 25%);
+  background-position: 0 0, 10px 10px;
+  background-size: 20px 20px;
+}
+
+.majak-desktop-lobby-select:has(.majak-desktop-lobby-select__rule-tabs) {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
+.majak-responsive-desktop-frame > .majak-desktop-lobby-select {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.majak-desktop-lobby-select__header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  align-items: start;
+  gap: clamp(24px, 5vw, 72px);
+}
+
+.majak-desktop-lobby-select__header p {
+  margin: 0 0 4px;
+  color: #d4ae68;
+  font-weight: var(--majak-weight-title);
+  letter-spacing: .08em;
+}
+
+.majak-desktop-lobby-select__header h1 {
+  margin: 0;
+  color: #fff1bd;
+  font-weight: var(--majak-weight-title);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .34);
+}
+
+.majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary {
+  justify-self: end;
+  width: min(100%, 440px);
+  min-height: 142px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 7px;
+  padding: 10px 12px 12px;
+  box-sizing: border-box;
+  color: #fff3db;
+  background: #2f211b;
+  border: 1px solid #e0b96e;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 3px #68442d, inset 0 1px 0 4px rgba(255, 232, 181, .14), 0 8px 20px rgba(0, 0, 0, .34);
+}
+
+.majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary::before {
+  content: 'プレイヤー情報';
+  color: #d4ae68;
+  font-size: var(--majak-text-xs);
+  font-weight: var(--majak-weight-title);
+  line-height: var(--majak-leading-tight);
+  letter-spacing: .08em;
+}
+
+.majak-desktop-lobby-select .majak-mobile-user-summary__name {
+  color: #fff1bd;
+  max-width: none;
+  font-weight: var(--majak-weight-title);
+  padding-bottom: 7px;
+  border-bottom: 1px solid rgba(224, 185, 110, .52);
+}
+
+.majak-desktop-lobby-select .majak-mobile-user-summary__fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.majak-desktop-lobby-select .majak-mobile-user-summary__fields > span {
+  min-width: 0;
+  min-height: 52px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 4px 5px 5px;
+  overflow: hidden;
+  border: 1px solid #76503a;
+  border-radius: 3px;
+  background: #f3e5cb;
+  box-shadow: inset 0 1px 0 #ffffff, 0 1px 0 rgba(0, 0, 0, .28);
+}
+
+.majak-desktop-lobby-select .majak-mobile-user-summary__fields b {
+  width: auto;
+  min-height: 0;
+  display: block;
+  color: #875a31;
+  background: transparent;
+  font-weight: var(--majak-weight-strong);
+  text-align: left;
+}
+
+.majak-desktop-lobby-select .majak-mobile-user-summary__fields em {
+  min-width: 0;
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  color: #332217;
+  font-weight: var(--majak-weight-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-desktop-lobby-select__list {
+  width: min(100%, 1100px);
+  align-self: start;
+  margin-top: clamp(16px, 3dvh, 30px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: clamp(18px, 2.5vw, 30px);
+  row-gap: clamp(22px, 3.5dvh, 34px);
+}
+
+.majak-desktop-lobby-select__list.is-dani {
+  align-self: stretch;
+  min-height: 0;
+  margin-top: 0;
+  padding: 0 4px 12px;
+  box-sizing: border-box;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  row-gap: clamp(18px, 3dvh, 28px);
+}
+
+.majak-desktop-lobby-select__rule-tabs {
+  width: min(100%, 520px);
+  justify-self: center;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  padding: 4px;
+  background: #261b16;
+  border: 1px solid #d8ad62;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 2px #5d3a26, 0 4px 10px rgba(0, 0, 0, .3);
+}
+
+.majak-desktop-lobby-select__rule-tab {
+  position: relative;
+  min-height: 38px;
+  padding: 0 18px;
+  color: #d8c19a;
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  box-shadow: none;
+  font-weight: var(--majak-weight-title);
+}
+
+.majak-desktop-lobby-select__rule-tab:hover,
+.majak-desktop-lobby-select__rule-tab:focus-visible {
+  background: #654329;
+  border: 0;
+  transform: none;
+}
+
+.majak-desktop-lobby-select__rule-tab.is-active {
+  color: #382112;
+  background: #f0c86f;
+  border: 0;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, .58), inset 0 -3px 0 rgba(128, 75, 30, .34);
+}
+
+.majak-desktop-lobby-select__rule-tab.is-active::after {
+  position: absolute;
+  right: 18px;
+  bottom: 4px;
+  left: 18px;
+  height: 3px;
+  content: '';
+  background: #935420;
+  border-radius: 2px;
+}
+
+.majak-desktop-lobby-select__entry {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: 4px;
+}
+
+.majak-desktop-lobby-select__card {
+  min-width: 0;
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto;
+  align-items: start;
+  gap: 4px 12px;
+  padding: 15px 18px;
+  padding-left: 28px;
+  text-align: left;
+}
+
+.majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
+  min-height: 54px;
+  padding: 9px 14px;
+}
+
+.majak-desktop-lobby-select__card:hover,
+.majak-desktop-lobby-select__card:focus-visible {
+  transform: translateY(-3px);
+}
+
+.majak-desktop-lobby-select__card-title {
+  min-width: 0;
+  color: #ffdf70;
+  font-weight: var(--majak-weight-title);
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .34);
+}
+
+.majak-desktop-lobby-select__card-match {
+  justify-self: end;
+  color: #ffe8a4;
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-desktop-lobby-select__card-description {
+  min-height: calc(var(--majak-menu-description-size) * var(--majak-leading-body) * 2);
+  margin: 0;
+  padding: 0 8px;
+  color: #fff0d5;
+  font-size: var(--majak-menu-description-size) !important;
+  font-weight: var(--majak-weight-strong);
+  line-height: var(--majak-leading-body) !important;
+  overflow-wrap: anywhere;
+}
+
+.majak-desktop-lobby-select__card-count {
+  position: absolute;
+  right: 10px;
+  top: 32px;
+  z-index: 1;
+  min-width: 48px;
+  padding: 3px 9px;
+  color: #fff8d7;
+  background: #293319;
+  border: 1px solid #f0ca70;
+  border-radius: 3px;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, .35);
+  font-size: var(--majak-text-lg);
+  font-weight: var(--majak-weight-title);
+  line-height: var(--majak-leading-tight);
+  text-align: right;
+  transform: translateY(-50%);
+}
+
+.majak-desktop-lobby-select__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.majak-desktop-lobby-select__footer .majak-responsive-control-button {
+  min-width: 120px;
+  min-height: 42px;
+  padding: 0 20px;
+}
+.majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card-count {
+  top: 27px;
+}
+
+.majak-responsive-desktop-frame .majak-desktop-lobby-select__list.is-dani {
+  margin-top: clamp(28px, 4dvh, 40px);
+}
+
+.majak-responsive-desktop-frame .majak-desktop-lobby-select__rule-tab {
+  min-height: 64px;
+}
+
+.majak-responsive-desktop-frame .majak-desktop-lobby-select__rule-tabs {
+  margin-top: clamp(12px, 2dvh, 20px);
+}
+
+@media (max-width: 900px) {
+  .majak-desktop-channel-group__header {
+    grid-template-columns: 1fr;
+  }
+
+  .majak-desktop-channel-group .majak-desktop-channel-group__user-summary {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .majak-desktop-channel-group__menu {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .majak-desktop-channel-group__action {
+    gap: 6px;
+  }
+
+  .majak-desktop-lobby-select__header {
+    grid-template-columns: 1fr;
+  }
+
+  .majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary {
+    justify-self: stretch;
+    width: 100%;
+  }
+
+  .majak-desktop-lobby-select__list,
+  .majak-desktop-lobby-select__list.is-dani {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The title and lobby selectors use the desktop markup at every viewport.
+   Preserve its two-column composition on phone landscape screens and only compact it. */
+@media (max-width: 900px) and (orientation: landscape) {
+  .majak-mobile-frame__content > .majak-desktop-channel-group,
+  .majak-mobile-frame__content > .majak-desktop-lobby-select {
+    --majak-type-scale: .78;
+    min-height: 100%;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .majak-desktop-channel-group__header {
+    width: min(100%, 700px);
+    justify-self: center;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 60px;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__logo {
+    width: 100%;
+    max-height: 76px;
+    justify-self: start;
+  }
+
+  .majak-desktop-channel-group .majak-desktop-channel-group__user-summary,
+  .majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary {
+    justify-self: stretch;
+    width: min(100%, 300px);
+    min-height: 0;
+    padding: 5px 6px 6px;
+    gap: 3px;
+    box-shadow: inset 0 0 0 2px #68442d, inset 0 1px 0 2px rgba(255, 232, 181, .14), 0 3px 8px rgba(0, 0, 0, .24);
+  }
+
+  .majak-desktop-channel-group .majak-mobile-user-summary__name,
+  .majak-desktop-lobby-select .majak-mobile-user-summary__name {
+    padding-bottom: 2px;
+    font-size: var(--majak-text-sm);
+  }
+
+  .majak-desktop-channel-group .majak-mobile-user-summary__fields > span,
+  .majak-desktop-lobby-select .majak-mobile-user-summary__fields > span {
+    min-height: 29px;
+    padding: 2px 3px;
+  }
+
+  .majak-desktop-channel-group .majak-mobile-user-summary__fields b,
+  .majak-desktop-lobby-select .majak-mobile-user-summary__fields b {
+    font-size: var(--majak-text-xs);
+  }
+
+  .majak-desktop-channel-group .majak-mobile-user-summary__fields em,
+  .majak-desktop-lobby-select .majak-mobile-user-summary__fields em {
+    font-size: var(--majak-text-sm);
+  }
+
+  .majak-desktop-channel-group__menu {
+    width: min(100%, 700px);
+    justify-self: center;
+    margin-top: 18px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 60px;
+    row-gap: 30px;
+  }
+
+  .majak-desktop-channel-group__action {
+    min-height: 56px;
+    padding: 10px 14px 10px 20px;
+    border: 2px solid #f0ca70;
+    border-radius: 6px;
+    background: #9a592e;
+    box-shadow: inset 0 0 0 2px #60351c, inset 0 2px 0 rgba(255, 232, 181, .3), inset 0 -4px 0 rgba(57, 25, 10, .42), 0 3px 0 #4d2b18, 0 5px 10px rgba(0, 0, 0, .28);
+  }
+
+  .majak-desktop-channel-group__action::before,
+  .majak-desktop-lobby-select__card::before {
+    top: 9px;
+    bottom: 9px;
+    width: 4px;
+    background: #ffe08a;
+  }
+
+  .majak-desktop-channel-group__action:hover,
+  .majak-desktop-channel-group__action:focus-visible,
+  .majak-desktop-lobby-select__card:hover,
+  .majak-desktop-lobby-select__card:focus-visible {
+    border-color: #fff0b2;
+    background: #bf7341;
+    transform: translateY(-1px);
+  }
+
+  .majak-desktop-channel-group__action:active,
+  .majak-desktop-lobby-select__card:active {
+    transform: translateY(2px);
+    box-shadow: inset 0 2px 5px rgba(57, 25, 10, .52), 0 1px 0 #4d2b18;
+  }
+
+  .majak-desktop-channel-group__description {
+    padding: 0 4px;
+    font-size: var(--majak-text-xs) !important;
+    line-height: 1.2 !important;
+  }
+
+  .majak-desktop-lobby-select__header {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, .72fr);
+    gap: 14px;
+  }
+
+  .majak-desktop-lobby-select__list,
+  .majak-desktop-lobby-select__list.is-dani {
+    width: min(100%, 700px);
+    justify-self: center;
+    margin-top: 0;
+    column-gap: 60px;
+    row-gap: 30px;
+  }
+
+  .majak-desktop-lobby-select__card {
+    min-height: 52px;
+    padding: 9px 12px 9px 20px;
+    border: 2px solid #f0ca70;
+    border-radius: 6px;
+    background: #9a592e;
+    box-shadow: inset 0 0 0 2px #60351c, inset 0 2px 0 rgba(255, 232, 181, .3), inset 0 -4px 0 rgba(57, 25, 10, .42), 0 3px 0 #4d2b18, 0 5px 10px rgba(0, 0, 0, .28);
+  }
+
+  .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
+    min-height: 48px;
+    padding: 8px 10px;
+  }
+
+  .majak-desktop-lobby-select__card-description {
+    min-height: 0;
+    padding: 0 4px;
+    font-size: var(--majak-text-xs) !important;
+    line-height: 1.2 !important;
+  }
+
+  .majak-desktop-lobby-select__card-count {
+    top: 24px;
+    right: 6px;
+    padding: 2px 6px;
+  }
+
+  .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card-count {
+    top: 22px;
+  }
+
+  .majak-desktop-lobby-select__footer .majak-responsive-control-button,
+  .majak-desktop-channel-group__exit {
+    min-height: 34px;
+  }
+}
+
 body:has(.majak-game-screen) {
   overflow: auto;
+  background-color: #0b1614;
+  background-image:
+    linear-gradient(135deg, rgba(255, 255, 255, .025) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(255, 255, 255, .018) 25%, transparent 25%);
+  background-size: 20px 20px;
 }
 
 .majak-invite-dialog {
@@ -413,10 +2450,11 @@ body:has(.majak-game-screen) {
   width: var(--majak-popup-close-size);
   height: var(--majak-popup-close-size);
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(255, 255, 255, .66);
   border-radius: 4px;
   color: #ffffff;
   background: #1f4b2d;
+  box-shadow: inset 0 1px 0 rgba(222, 246, 218, .18), inset 0 -2px 0 rgba(7, 38, 18, .42);
   font-size: var(--majak-popup-close-font-size);
   line-height: 1;
 }
@@ -508,27 +2546,41 @@ body:has(.majak-game-screen) {
 
 .majak-invite-dialog__actions button {
   width: var(--majak-popup-command-width);
-  height: var(--majak-popup-command-height);
+  height: 40px;
   padding: 4px 8px;
   box-sizing: border-box;
-  border: 1px solid #8fa68a;
+  border: 1px solid rgba(255, 255, 255, .66);
   border-radius: 4px;
-  color: #1b301f;
-  background: #ffffff;
-  font-size: var(--majak-popup-command-font-size);
-  font-weight: 800;
+  color: #ffffff;
+  background: #1f4b2d;
+  box-shadow: inset 0 1px 0 rgba(222, 246, 218, .18), inset 0 -2px 0 rgba(7, 38, 18, .42);
+  font-family: var(--majak-font-family-ui);
+  font-size: var(--majak-text-md);
+  font-weight: var(--majak-weight-strong);
+  line-height: var(--majak-leading-tight);
 }
 
 .majak-invite-dialog__actions .majak-invite-dialog__submit {
   color: #ffffff;
-  background: #28623a;
-  border-color: #1c4b2a;
+  background: #1f4b2d;
+  border-color: rgba(255, 255, 255, .66);
+}
+
+.majak-invite-dialog__close:hover,
+.majak-invite-dialog__close:focus-visible,
+.majak-invite-dialog__actions button:hover:not(:disabled),
+.majak-invite-dialog__actions button:focus-visible {
+  border-color: rgba(236, 255, 230, .9);
+  background: #28633a;
+  outline: 2px solid rgba(165, 224, 155, .34);
+  outline-offset: 2px;
 }
 
 .majak-invite-dialog__actions button:disabled {
-  color: #7b8578;
-  background: #e2e5de;
-  border-color: #c9cec4;
+  border-color: rgba(255, 255, 255, .66);
+  color: #ffffff;
+  background: #1f4b2d;
+  opacity: .46;
 }
 
 @media (max-width: 460px) {
@@ -605,6 +2657,14 @@ body:has(.majak-game-screen) {
   display: flex;
   justify-content: center;
   align-items: center;
+  /* Shared responsive dialog hierarchy: caption, label, body, heading, title. */
+  --majak-dialog-caption-font-size: var(--majak-text-xs);
+  --majak-dialog-label-font-size: var(--majak-text-sm);
+  --majak-dialog-body-font-size: var(--majak-text-md);
+  --majak-dialog-heading-font-size: var(--majak-text-lg);
+  --majak-dialog-title-font-size: var(--majak-text-xl);
+  --majak-dialog-compact-font-size: var(--majak-text-xs);
+  --majak-dialog-compact-title-font-size: var(--majak-text-md);
   width: 100vw;
   height: 100vh;
   height: 100dvh;
@@ -724,6 +2784,49 @@ body:has(.majak-game-screen) {
   text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35);
 }
 
+.majak-mobile-frame__bar > .majak-mobile-user-summary {
+  display: none;
+}
+
+.majak-mobile-frame .majak-desktop-lobby-select__user-summary {
+  display: none;
+}
+
+.majak-mobile-frame .majak-desktop-lobby-select__user-summary::before {
+  content: none;
+}
+
+.majak-mobile-frame .majak-desktop-lobby-select__header {
+  min-height: 0;
+  align-items: center;
+}
+
+.majak-mobile-frame .majak-desktop-lobby-select {
+  position: relative;
+}
+
+.majak-mobile-frame .majak-desktop-lobby-select__footer {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 3;
+}
+
+.majak-mobile-frame .majak-desktop-lobby-select__footer .majak-responsive-control-button {
+  min-width: 88px;
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+.majak-mobile-frame .majak-desktop-lobby-select__rule-tabs {
+  transform: translateY(-10px);
+}
+
+.majak-mobile-frame .majak-desktop-lobby-select__list,
+.majak-mobile-frame .majak-desktop-lobby-select__list.is-dani {
+  margin-top: 0;
+}
+
 .majak-mobile-user-summary {
   min-width: 0;
   flex: 1 1 auto;
@@ -743,6 +2846,18 @@ body:has(.majak-game-screen) {
   min-width: 0;
   max-width: clamp(72px, 14vw, 150px);
   flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.majak-mobile-user-summary__name-label {
+  display: none;
+}
+
+.majak-mobile-user-summary__name-value {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   color: #d9ff8a;
   font-size: var(--majak-font-14);
@@ -1130,6 +3245,39 @@ body:has(.majak-game-screen) {
   gap: 6px;
 }
 
+.majak-mobile-room-prompt-message {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: min(86%, 600px);
+  margin: 0;
+  padding: 13px 20px;
+  border: 2px solid #ffe29a;
+  border-radius: 5px;
+  color: #3b2410;
+  background: #f4d887;
+  font-size: var(--majak-text-lg);
+  font-weight: 900;
+  line-height: var(--majak-leading-tight);
+  text-align: center;
+  box-sizing: border-box;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .62);
+  box-shadow: inset 0 0 0 2px rgba(109, 71, 20, .3), 0 5px 18px rgba(0, 0, 0, .34);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: majak-room-prompt-fade 2s linear infinite;
+}
+
+@keyframes majak-room-prompt-fade {
+  0%, 100% { opacity: .58; transform: translate(-50%, -50%) scale(.98); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .majak-mobile-room-prompt-message { animation: none; }
+}
+
 .majak-mobile-room-seat {
   position: relative;
   min-width: 0;
@@ -1357,6 +3505,147 @@ body:has(.majak-game-screen) {
   border-color: rgba(142, 230, 255, 0.58);
   color: #ffffff;
   background: rgba(8, 23, 29, 0.96);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting {
+  --majak-room-surface-color: #285d48;
+  --majak-room-surface-pattern:
+    linear-gradient(45deg, rgba(255, 255, 255, .09) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, .09) 75%),
+    linear-gradient(-45deg, rgba(0, 42, 29, .16) 25%, transparent 25%, transparent 75%, rgba(0, 42, 29, .16) 75%);
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 28vw);
+  gap: 14px;
+  padding: 14px;
+  color: #f8f6e9;
+  background-color: var(--majak-room-surface-color);
+  background-image: var(--majak-room-surface-pattern);
+  background-position: 0 0, 12px 12px;
+  background-size: 24px 24px;
+  background-repeat: repeat;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-table,
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-side {
+  border-color: rgba(237, 250, 221, .58);
+  border-radius: 6px;
+  background: rgba(12, 69, 46, .86);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-table {
+  gap: 14px;
+  padding: 16px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-table__header h1 {
+  font-size: var(--majak-text-xl);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-eyebrow {
+  font-size: var(--majak-text-sm);
+  font-weight: 800;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-table__meta {
+  font-size: var(--majak-text-sm);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-table__meta span {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seats {
+  gap: 12px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-prompt-message {
+  padding: 15px 24px;
+  font-size: var(--majak-text-xl);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat {
+  grid-template-columns: 114px minmax(0, 1fr);
+  gap: 12px;
+  padding: 14px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat img {
+  width: 114px;
+  height: 168px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat__info {
+  gap: 7px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat__info strong {
+  font-size: var(--majak-text-xl);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat__info span,
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat__info em {
+  font-size: var(--majak-text-md);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat__empty {
+  font-size: var(--majak-text-lg);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-primary-actions {
+  gap: 8px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-primary-actions button,
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row button {
+  min-height: 40px;
+  border: 2px solid #e6bd72;
+  border-radius: 5px;
+  color: #fff9ed;
+  background: #a56839;
+  box-shadow: inset 0 0 0 2px #714525, inset 0 2px 0 rgba(255, 235, 195, .2), inset 0 -3px 0 rgba(57, 25, 10, .32), 0 4px 10px rgba(0, 0, 0, .24);
+  font-size: var(--majak-text-md);
+  font-family: var(--majak-font-family-ui);
+  font-weight: var(--majak-weight-strong);
+  line-height: var(--majak-leading-tight);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-ready-button,
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row button {
+  border-color: #e6bd72 !important;
+  color: #fff9ed !important;
+  background: #a56839 !important;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-primary-actions button:hover:not(:disabled),
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row button:hover:not(:disabled) {
+  border-color: #ffe29a;
+  color: #fff9ed;
+  background: #c2824c;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-primary-actions button:focus-visible,
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row button:focus-visible {
+  outline: 2px solid rgba(255, 226, 154, .3);
+  outline-offset: 2px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-side {
+  gap: 10px;
+  padding: 10px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-log {
+  padding: 9px 10px;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row {
+  grid-template-columns: minmax(0, 1fr) 88px;
+  gap: 8px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row input {
+  min-height: 40px;
+  font-size: var(--majak-text-md);
 }
 
 .majak-mobile-rotate {
@@ -1703,6 +3992,66 @@ body:has(.majak-game-screen) {
   padding: 0;
 }
 
+.majak-mobile-frame .majak-mobile-user-summary--lobby {
+  min-height: 48px;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 8px;
+  padding: 5px 8px;
+  color: #fff3db;
+}
+
+.majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name {
+  max-width: none;
+  flex: 0 0 240px;
+}
+
+.majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name-label {
+  width: 68px;
+  min-height: 18px;
+  flex: 0 0 68px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  color: #173522;
+  background: #cfe89c;
+  font-size: var(--majak-text-xs) !important;
+  font-weight: var(--majak-weight-strong);
+  line-height: var(--majak-leading-tight);
+}
+
+.majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name-value {
+  overflow: visible;
+  color: #ffffff;
+  font-size: var(--majak-text-md) !important;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields > span {
+  min-width: 0;
+  gap: 3px;
+}
+
+.majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields b {
+  width: 30px;
+  min-height: 18px;
+  flex-basis: 30px;
+  font-size: var(--majak-text-xs) !important;
+}
+
+.majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields em {
+  overflow: visible;
+  font-size: var(--majak-text-sm) !important;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
 .majak-mobile-lobby-toolbar h1 {
   margin: 0;
   color: #ffffff;
@@ -1818,6 +4167,145 @@ body:has(.majak-game-screen) {
   font-weight: 700;
   line-height: 18px;
   white-space: nowrap;
+}
+
+.majak-responsive-lobby-chat {
+  flex: 0 0 min(19dvh, 150px);
+  min-height: 96px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 36px;
+  overflow: hidden;
+  border: 1px solid #6d895e;
+  background: #f6f0df;
+  box-shadow: inset 0 1px 0 #ffffff, 0 2px 0 rgba(0, 0, 0, .18);
+}
+
+.majak-responsive-lobby-chat__log {
+  min-height: 0;
+  padding: 7px 10px;
+  overflow-y: auto;
+  color: #332217;
+  font-size: var(--majak-text-sm);
+  line-height: var(--majak-leading-body);
+}
+
+.majak-responsive-lobby-chat__log p {
+  margin: 0 0 2px;
+  overflow-wrap: anywhere;
+}
+
+.majak-responsive-lobby-chat input {
+  min-width: 0;
+  border: 0;
+  border-top: 1px solid #b89e75;
+  padding: 0 10px;
+  color: #332217;
+  background: #fffdf5;
+  font: inherit;
+  font-size: var(--majak-text-md);
+}
+
+.majak-responsive-lobby-actions {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.majak-responsive-lobby-actions .majak-responsive-control-button {
+  min-width: 112px;
+  min-height: 40px;
+  padding: 0 16px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby {
+  --majak-mobile-lobby-side-width: clamp(280px, 25vw, 340px);
+  --majak-mobile-room-cell-scale: calc((100cqw - 52px) / 690px);
+  gap: 12px;
+  padding: clamp(14px, 2dvh, 24px) clamp(20px, 3vw, 40px);
+  box-sizing: border-box;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-toolbar {
+  margin-bottom: 0;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-toolbar--with-user {
+  grid-template-columns: minmax(180px, max-content) minmax(0, 1fr);
+  grid-template-areas: "heading user";
+  column-gap: 10px;
+  row-gap: 0;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby {
+  justify-self: end;
+  width: 100%;
+  max-width: 760px;
+  min-height: 48px;
+  grid-template-columns: 210px minmax(0, 1fr);
+  padding: 5px 8px;
+  color: #fff3db;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name {
+  max-width: none;
+  flex: 0 0 210px;
+  white-space: nowrap;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name-label {
+  width: 68px;
+  min-height: 18px;
+  flex: 0 0 68px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #173522;
+  background: #cfe89c;
+  border-radius: 3px;
+  font-size: var(--majak-text-xs);
+  font-weight: var(--majak-weight-strong);
+  line-height: var(--majak-leading-tight);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name-value {
+  overflow: visible;
+  color: #ffffff;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields > span {
+  min-width: 0;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields em {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-actions {
+  justify-content: flex-end;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-header-button,
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-command-button {
+  border-color: #e0b96e;
+  color: #fff0d5;
+  background: #a56839;
+  box-shadow: inset 0 1px 0 rgba(255, 235, 195, .2), inset 0 -3px 0 rgba(57, 25, 10, .32), 0 2px 0 rgba(0, 0, 0, .25);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-header-button:hover,
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-command-button:hover {
+  background: #c2824c;
 }
 
 
@@ -2508,8 +4996,19 @@ body:has(.majak-game-screen) {
 .majak-mobile-tournament-actions {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 4px;
+}
+
+@media (min-width: 901px) {
+  .majak-mobile-tournament-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .majak-mobile-tournament-actions button {
+    min-width: 0;
+    padding-inline: 8px;
+  }
 }
 
 .majak-mobile-tournament-actions button,
@@ -2525,8 +5024,13 @@ body:has(.majak-game-screen) {
 
 .majak-mobile-tournament-actions button,
 .majak-mobile-tournament-match-actions button {
-  min-height: 30px;
-  font-size: var(--majak-font-11);
+  min-height: 40px;
+  padding: 0 12px;
+  border-color: #72947c;
+  border-radius: 3px;
+  color: #f7f3e7;
+  background: #1c5a4d;
+  font-size: var(--majak-font-13);
 }
 
 .majak-tournament-entry-actions button {
@@ -2537,11 +5041,21 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-tournament-actions button {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  line-height: 1.05;
+  overflow: hidden;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-mobile-tournament-actions button:hover:not(:disabled),
+.majak-mobile-tournament-actions button:focus-visible,
+.majak-mobile-tournament-match-actions button:hover:not(:disabled),
+.majak-mobile-tournament-match-actions button:focus-visible {
+  border-color: #a4c6aa;
+  background: #286b5b;
 }
 
 .majak-mobile-tournament-actions button:disabled,
@@ -2672,22 +5186,23 @@ body:has(.majak-game-screen) {
   align-items: center;
   justify-content: center;
   padding: 6px max(6px, env(safe-area-inset-right)) 6px max(6px, env(safe-area-inset-left));
-  background: rgba(0, 0, 0, 0.62);
+  background: rgba(12, 29, 24, .64);
   box-sizing: border-box;
 }
 
 .majak-mobile-tournament-regist {
-  width: min(900px, 100%);
-  height: 100%;
+  width: min(900px, calc(100vw - 32px));
+  max-height: min(680px, calc(100dvh - 32px));
+  height: auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid #b9d2a5;
+  border: 1px solid #557864;
   border-radius: 6px;
-  color: #15351a;
-  background: #e9f2dc;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.48);
+  color: #244137;
+  background: #f6f8f1;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .44), inset 0 1px 0 #ffffff;
   box-sizing: border-box;
 }
 
@@ -2696,19 +5211,20 @@ body:has(.majak-game-screen) {
   display: flex;
   align-items: center;
   padding: 0 12px;
-  color: #ffffff;
-  background: #185b2b;
-  font-size: var(--majak-font-15);
+  color: #f8f6e9;
+  background: #1b5a4b;
+  font-size: var(--majak-text-xl);
   font-weight: 800;
 }
 
 .majak-mobile-tournament-regist__body {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1.15fr 0.9fr 1fr;
-  gap: 6px;
-  padding: 6px;
+  grid-template-columns: 1.08fr .92fr 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 12px;
   overflow: auto;
   box-sizing: border-box;
 }
@@ -2716,18 +5232,21 @@ body:has(.majak-game-screen) {
 .majak-mobile-tournament-regist fieldset {
   min-width: 0;
   margin: 0;
-  padding: 5px;
+  padding: 9px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-content: start;
-  gap: 5px;
-  border: 1px solid #8eae7f;
+  gap: 9px;
+  border: 1px solid #c4d4c0;
+  border-radius: 4px;
+  background: #fbfcf8;
   box-sizing: border-box;
 }
 
 .majak-mobile-tournament-regist legend {
-  padding: 0 4px;
-  font-size: var(--majak-font-11);
+  padding: 0 5px;
+  color: #1b5a4b;
+  font-size: var(--majak-text-sm);
   font-weight: 800;
 }
 
@@ -2735,8 +5254,8 @@ body:has(.majak-game-screen) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  font-size: var(--majak-font-10);
+  gap: 4px;
+  font-size: var(--majak-text-sm);
   font-weight: 800;
 }
 
@@ -2748,13 +5267,13 @@ body:has(.majak-game-screen) {
 .majak-mobile-tournament-regist select {
   width: 100%;
   min-width: 0;
-  height: 28px;
-  padding: 2px 5px;
-  border: 1px solid #708a69;
+  height: 34px;
+  padding: 3px 7px;
+  border: 1px solid #b9cbbb;
   border-radius: 3px;
   color: #111111;
   background: #ffffff;
-  font-size: var(--majak-font-12);
+  font-size: var(--majak-text-md);
   box-sizing: border-box;
 }
 
@@ -2762,7 +5281,7 @@ body:has(.majak-game-screen) {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
+  gap: 6px 10px;
 }
 
 .majak-mobile-tournament-regist__checks label,
@@ -2771,8 +5290,8 @@ body:has(.majak-game-screen) {
   display: flex;
   align-items: center;
   gap: 3px;
-  min-height: 24px;
-  font-size: var(--majak-font-10);
+  min-height: 28px;
+  font-size: var(--majak-text-sm);
   font-weight: 700;
   white-space: nowrap;
 }
@@ -2789,7 +5308,7 @@ body:has(.majak-game-screen) {
   display: grid;
   grid-template-columns: 92px minmax(0, 1fr);
   align-items: end;
-  gap: 5px;
+  gap: 9px;
 }
 
 .majak-mobile-tournament-regist__password > label:last-child {
@@ -2807,21 +5326,34 @@ body:has(.majak-game-screen) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 4px 8px;
-  border-top: 1px solid #8eae7f;
-  background: #d9e8ca;
+  padding: 8px 12px;
+  border-top: 1px solid #c4d4c0;
+  background: #edf3e9;
   box-sizing: border-box;
 }
 
 .majak-mobile-tournament-regist > footer button {
-  min-width: 112px;
-  min-height: 30px;
+  min-width: 126px;
+  min-height: 34px;
   border: 1px solid #b8cf95;
   border-radius: 4px;
   color: #f8ffe7;
   background: #235c2c;
   font-size: var(--majak-font-11);
   font-weight: 800;
+}
+
+@media (max-width: 900px), (max-height: 560px) {
+  .majak-mobile-tournament-regist {
+    width: min(900px, 100%);
+    max-height: 100%;
+  }
+}
+
+@media (max-width: 600px) and (orientation: portrait) {
+  .majak-mobile-tournament-regist__body {
+    grid-template-columns: 1fr;
+  }
 }
 
 .majak-mobile-dialog-overlay {
@@ -2849,11 +5381,177 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-room-create-dialog {
-  width: min(560px, calc(100vw - 16px));
+  width: min(650px, calc(100vw - 24px));
 }
 
 .majak-mobile-option-dialog {
-  width: min(610px, calc(100vw - 16px));
+  width: min(720px, calc(100vw - 24px));
+}
+
+.majak-room-setup-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 16px);
+}
+
+.majak-room-setup-dialog {
+  border-color: #557864;
+  border-radius: 6px;
+  color: #244137;
+  background: #f6f8f1;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .44), inset 0 1px 0 #ffffff;
+}
+
+.majak-room-setup-overlay {
+  position: fixed;
+  z-index: 250;
+  background: rgba(12, 29, 24, .64);
+  font-family: var(--majak-font-family-ui);
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-titlebar {
+  min-height: 58px;
+  padding: 0 16px;
+  border-bottom: 0;
+  color: #f8f6e9;
+  background: #1b5a4b;
+  font-size: var(--majak-text-xl);
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-body {
+  padding: 18px;
+}
+
+.majak-room-setup-dialog .majak-mobile-option-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-actions {
+  flex: 0 0 auto;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-section {
+  border-color: #cbd8cb;
+  border-radius: 3px;
+  background: #edf3e9;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-section legend {
+  color: #305548;
+  font-size: var(--majak-text-md);
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-field {
+  color: #305548;
+  gap: 6px;
+  font-size: var(--majak-text-md);
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-field input,
+.majak-room-setup-dialog .majak-mobile-dialog-field select,
+.majak-room-setup-dialog .majak-mobile-room-title-select,
+.majak-room-setup-dialog .majak-mobile-choice {
+  border-color: #b9cbbb;
+  color: #244b3d;
+  background: #ffffff;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-field input,
+.majak-room-setup-dialog .majak-mobile-dialog-field select,
+.majak-room-setup-dialog .majak-mobile-room-title-select {
+  min-height: 38px;
+  font-size: var(--majak-text-md);
+}
+
+.majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice {
+  min-height: 32px;
+  padding: 4px 7px;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-actions {
+  padding: 14px 18px 18px;
+  border-top-color: #d0dbd0;
+  background: #f6f8f1;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__primary,
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__secondary {
+  width: var(--majak-popup-command-width);
+  height: 40px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  border: 1px solid #698674;
+  border-radius: 3px;
+  color: #2e5848;
+  background: #ffffff;
+  font-family: var(--majak-font-family-ui);
+  font-size: var(--majak-text-md);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__primary {
+  border-color: #255d4e;
+  color: #ffffff;
+  background: #1c6b58;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__primary:hover,
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__primary:focus-visible {
+  border-color: #16483d;
+  background: #247c67;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__secondary:hover,
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__secondary:focus-visible {
+  border-color: #4d7560;
+  background: #edf3e9;
+}
+
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__primary:focus-visible,
+.majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__secondary:focus-visible {
+  outline: 2px solid rgba(27, 90, 75, .3);
+  outline-offset: 2px;
+}
+
+.majak-room-setup-dialog.majak-mobile-tournament-regist fieldset > label,
+.majak-room-setup-dialog .majak-mobile-tournament-regist__password > label:last-child {
+  color: #305548;
+  gap: 6px;
+  font-size: var(--majak-text-md);
+}
+
+.majak-room-setup-dialog.majak-mobile-tournament-regist input:not([type='checkbox']),
+.majak-room-setup-dialog.majak-mobile-tournament-regist select {
+  min-height: 38px;
+  border-color: #b9cbbb;
+  color: #244b3d;
+  font-size: var(--majak-text-md);
+}
+
+.majak-room-setup-dialog .majak-mobile-tournament-regist__checks label,
+.majak-room-setup-dialog .majak-mobile-tournament-regist__password > label:first-child {
+  min-height: 30px;
+  color: #305548;
+  font-size: var(--majak-text-sm);
+}
+
+.majak-mobile-tournament-regist.majak-popup-panel {
+  border-color: #557864;
+  color: #244137;
+  background: #f6f8f1;
+}
+
+.majak-mobile-tournament-regist.majak-popup-panel > .majak-popup-titlebar {
+  color: #f8f6e9;
+  background: #1b5a4b;
+}
+
+.majak-mobile-tournament-regist.majak-popup-panel > .majak-popup-actions {
+  background: #f6f8f1;
 }
 
 .majak-mobile-config-dialog {
@@ -3144,14 +5842,22 @@ body:has(.majak-game-screen) {
 }
 
 @media (max-width: 520px) {
-  .majak-ranking-dialog { height: calc(100dvh - 24px); }
-  .majak-ranking-dialog__header { min-height: 64px; padding: 11px 48px 9px 12px; }
+  .majak-ranking-dialog { height: calc(100dvh - 16px); }
+  .majak-ranking-dialog__header { min-height: 56px; padding: 8px 48px 7px 12px; }
   .majak-ranking-dialog__header h2 { font-size: var(--majak-font-18); }
   .majak-ranking-dialog__body { gap: 8px; padding: 8px; }
   .majak-ranking-dialog__self { grid-template-columns: 68px 49px minmax(0, 1fr); gap: 7px; min-height: 62px; padding: 7px 9px; }
   .majak-ranking-dialog__self > strong { font-size: var(--majak-font-22); }
   .majak-ranking-dialog__self em { display: none; }
-  .majak-ranking-dialog__columns { display: none; }
+  .majak-ranking-dialog__columns {
+    flex: 0 0 31px;
+    display: grid;
+    grid-template-columns: 43px minmax(0, 1fr) auto;
+    column-gap: 7px;
+    padding: 0 9px;
+  }
+  .majak-ranking-dialog__columns span:nth-child(3) { text-align: right; }
+  .majak-ranking-dialog__columns span:nth-child(4) { display: none; }
   .majak-ranking-dialog__row { grid-template-columns: 43px minmax(0, 1fr) auto; grid-template-areas: 'place name rating' 'place grade grade'; column-gap: 7px; min-height: 57px; padding: 7px 9px; }
   .majak-ranking-dialog__place { grid-area: place; font-size: var(--majak-font-17); }
   .majak-ranking-dialog__name { grid-area: name; }
@@ -3620,19 +6326,6 @@ body:has(.majak-game-screen) {
   margin-top: 14px;
 }
 
-@media (orientation: landscape) and (max-height: 540px), (max-width: 767px) {
-  .majak-start-popup-overlay {
-    position: fixed !important;
-    padding: 8px max(8px, env(safe-area-inset-right)) 8px max(8px, env(safe-area-inset-left));
-    box-sizing: border-box;
-  }
-
-  .majak-start-popup {
-    transform: scale(0.72);
-    transform-origin: center;
-  }
-}
-
 @media (orientation: landscape) and (max-height: 540px) {
   .majak-mobile-frame__bar {
     min-height: 44px;
@@ -3949,7 +6642,7 @@ body:has(.majak-game-screen) {
 
 .majak-player-profile-overlay {
   position: fixed;
-  z-index: 150;
+  z-index: 250;
   inset: 0;
   display: grid;
   place-items: center;
@@ -3971,31 +6664,13 @@ body:has(.majak-game-screen) {
   box-shadow: 0 18px 50px rgba(0, 0, 0, .44), inset 0 1px 0 #ffffff;
 }
 
-.majak-player-profile__close {
-  position: absolute;
-  z-index: 2;
-  top: 10px;
-  right: 11px;
-  width: var(--majak-popup-close-size);
-  height: var(--majak-popup-close-size);
-  padding: 0;
-  box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, .55);
-  border-radius: 3px;
-  color: #ffffff;
-  background: rgba(19, 70, 57, .72);
-  font-size: var(--majak-popup-close-font-size);
-  line-height: 1;
-  cursor: pointer;
-}
-
 .majak-player-profile__hero {
   min-height: 132px;
   display: grid;
   grid-template-columns: 100px minmax(0, 1fr) auto;
   align-items: center;
   gap: 15px;
-  padding: 18px 58px 18px 18px;
+  padding: 18px;
   box-sizing: border-box;
   color: #f8f6e9;
   background: #1b5a4b;
@@ -4370,3 +7045,1000 @@ body:has(.majak-result-overlay) {
   .majak-han-result-panel .majak-result-actions > span { display: none; }
   .majak-han-result-panel .majak-result-actions button { min-height: 30px; }
 }
+
+/* WelcomeDlg is the visual contract for responsive popup shells. */
+.responsive-shop__header,
+.mission-dialog__header,
+.mission-reward-guide header,
+.majak-ranking-dialog__header,
+.majak-collection-header,
+.majak-invite-request__header {
+  min-height: 38px !important;
+  padding: 0 12px !important;
+  color: #f8f6e9 !important;
+  background: #1b5a4b !important;
+  font-size: var(--majak-dialog-heading-font-size) !important;
+  line-height: var(--majak-leading-tight) !important;
+}
+
+.responsive-shop__header h1,
+.responsive-shop__header h2,
+.mission-dialog__header h1,
+.mission-dialog__header h2,
+.mission-reward-guide header h1,
+.mission-reward-guide header h2,
+.majak-ranking-dialog__header h1,
+.majak-ranking-dialog__header h2,
+.majak-collection-header h1,
+.majak-collection-header h2,
+.majak-invite-request__header h1,
+.majak-invite-request__header h2 {
+  margin: 0 !important;
+  color: inherit !important;
+  font-size: inherit !important;
+  line-height: inherit !important;
+}
+
+.responsive-shop__close,
+.mission-dialog__header .majak-popup-titlebar__close,
+.mission-reward-guide .majak-popup-titlebar__close,
+.majak-ranking-dialog__close,
+.majak-collection-header .majak-popup-titlebar__close,
+.majak-invite-request__header .majak-popup-titlebar__close,
+.majak-player-profile__close {
+  width: 26px !important;
+  height: 26px !important;
+  padding: 0 !important;
+  border: 1px solid rgba(255, 255, 255, .66) !important;
+  border-radius: 4px !important;
+  color: #ffffff !important;
+  background: transparent !important;
+  font: 400 20px/1 var(--majak-font-family-ui) !important;
+}
+
+.mission-dialog footer,
+.mission-reward-guide footer,
+.majak-ranking-dialog__footer,
+.majak-collection-footer,
+.responsive-shop__footer,
+.majak-invite-request__actions {
+  min-height: 49px !important;
+  padding: 6px 12px 8px !important;
+  border-top: 1px solid #d0dbd0 !important;
+  background: #f6f8f1 !important;
+}
+
+.mission-dialog footer > button,
+.mission-reward-guide footer > button,
+.majak-ranking-dialog__footer > button,
+.majak-collection-footer > button,
+.responsive-shop__footer > button,
+.majak-invite-request__actions > button {
+  min-width: 110px !important;
+  width: auto !important;
+  height: 34px !important;
+  padding: 0 14px !important;
+  border: 1px solid #255d4e !important;
+  border-radius: 3px !important;
+  color: #ffffff !important;
+  background: #1c6b58 !important;
+  font: 700 14px/1 var(--majak-font-family-ui) !important;
+}
+
+/* Exact WelcomeDlg header dimensions and title typography. */
+.majak-popup-titlebar,
+.majak-mobile-dialog-titlebar,
+.responsive-shop__header,
+.mission-dialog__header,
+.mission-reward-guide header,
+.majak-ranking-dialog__header,
+.majak-collection-header,
+.majak-invite-request__header {
+  height: 38px !important;
+  min-height: 38px !important;
+  font-size: 20px !important;
+  line-height: 24px !important;
+}
+
+.majak-popup-titlebar > span,
+.majak-popup-titlebar > h1,
+.majak-popup-titlebar > h2,
+.majak-mobile-dialog-titlebar > span,
+.responsive-shop__header > span,
+.responsive-shop__header h1,
+.responsive-shop__header h2,
+.mission-dialog__header h1,
+.mission-dialog__header h2,
+.mission-reward-guide header h1,
+.mission-reward-guide header h2,
+.majak-ranking-dialog__header h1,
+.majak-ranking-dialog__header h2,
+.majak-collection-header h1,
+.majak-collection-header h2,
+.majak-invite-request__header h1,
+.majak-invite-request__header h2 {
+  font-size: 20px !important;
+  line-height: 24px !important;
+}
+
+.majak-popup-titlebar__close,
+.responsive-shop__close,
+.mission-dialog__header .majak-popup-titlebar__close,
+.mission-reward-guide .majak-popup-titlebar__close,
+.majak-ranking-dialog__close,
+.majak-collection-header .majak-popup-titlebar__close,
+.majak-invite-request__header .majak-popup-titlebar__close,
+.majak-player-profile__close {
+  font-size: 20px !important;
+  line-height: 20px !important;
+}
+
+/* WelcomeDlg content typography: body 16px, labels 14px, section headings 16px. */
+.majak-popup-body,
+.majak-mobile-dialog-body,
+.majak-invite-request__body,
+.majak-accuse-dialog__body,
+.mission-dialog__content,
+.mission-reward-guide main,
+.responsive-shop__content,
+.majak-collection-content,
+.majak-ranking-dialog__body,
+.majak-player-profile__summary,
+.majak-player-profile__metrics {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.majak-popup-body > p,
+.majak-mobile-dialog-body > p,
+.majak-invite-request__body > p,
+.majak-accuse-dialog__body > p,
+.mission-dialog__content > p,
+.mission-reward-guide main > p,
+.responsive-shop__content > p,
+.majak-collection-content > p,
+.majak-ranking-dialog__body > p,
+.majak-player-profile__summary > p {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.majak-popup-body h3,
+.majak-mobile-dialog-body h3,
+.majak-invite-request__body h3,
+.majak-accuse-dialog__body h3,
+.mission-dialog__content h3,
+.mission-reward-guide main h3,
+.responsive-shop__content h3,
+.majak-collection-content h3,
+.majak-ranking-dialog__body h3,
+.majak-player-profile__metrics h3 {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.majak-popup-body label,
+.majak-popup-body legend,
+.majak-mobile-dialog-body label,
+.majak-mobile-dialog-body legend,
+.majak-invite-request__body label,
+.majak-accuse-dialog__body label,
+.mission-dialog__content label,
+.mission-reward-guide main label,
+.responsive-shop__content label,
+.majak-collection-content label,
+.majak-ranking-dialog__body label,
+.majak-player-profile__summary label,
+.majak-player-profile__metrics dt {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.mission-reward-guide__note,
+.responsive-shop__empty,
+.majak-collection-status,
+.majak-ranking-dialog__empty,
+.majak-player-profile__footer p,
+.majak-invite-request__message p {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.majak-paifu-select-dialog {
+  width: min(920px, 100%);
+  max-height: min(760px, calc(100dvh - 24px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.majak-paifu-select-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+}
+
+.majak-paifu-select-dialog__file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.majak-paifu-select-dialog__file label,
+.majak-paifu-select-dialog__filter-grid > label {
+  display: grid;
+  gap: 4px;
+  color: var(--majak-dialog-panel-text-color);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.majak-paifu-select-dialog input {
+  min-width: 0;
+  height: 34px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border: 1px solid #9eb49a;
+  border-radius: 3px;
+  color: var(--majak-dialog-panel-text-color);
+  background: #ffffff;
+  font: 15px/1 var(--majak-font-family-ui);
+}
+
+.majak-paifu-select-dialog__file button,
+.majak-paifu-select-dialog__filters > button {
+  min-width: 110px;
+  height: 34px;
+  align-self: end;
+  border: 1px solid #255d4e;
+  border-radius: 3px;
+  color: #ffffff;
+  background: #1c6b58;
+  font: 700 15px/1 var(--majak-font-family-ui);
+}
+
+.majak-paifu-select-dialog__filters {
+  padding: 10px;
+  border: 1px solid #c6d7c9;
+  background: #eef5eb;
+}
+
+.majak-paifu-select-dialog__filters summary {
+  color: var(--majak-dialog-panel-text-color);
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.majak-paifu-select-dialog__filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.majak-paifu-select-dialog__filter-grid fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid #c6d7c9;
+}
+
+.majak-paifu-select-dialog__filter-grid legend,
+.majak-paifu-select-dialog__filter-grid fieldset label {
+  color: var(--majak-dialog-panel-text-color);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.majak-paifu-select-dialog__filter-grid fieldset label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 8px;
+}
+
+.majak-paifu-select-dialog__filter-grid input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+}
+
+.majak-paifu-select-dialog__results {
+  min-height: 230px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, .7fr);
+  gap: 12px;
+}
+
+.majak-paifu-select-dialog__results section {
+  min-width: 0;
+  overflow: auto;
+  border: 1px solid #c6d7c9;
+  background: #ffffff;
+}
+
+.majak-paifu-select-dialog__results h3 {
+  margin: 0;
+  padding: 7px 10px;
+  border-bottom: 1px solid #c6d7c9;
+  color: var(--majak-dialog-panel-text-color);
+  background: #eef5eb;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.majak-paifu-select-dialog table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--majak-dialog-panel-text-color);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.majak-paifu-select-dialog th,
+.majak-paifu-select-dialog td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #dce5dc;
+  text-align: left;
+}
+
+.majak-paifu-select-dialog th button {
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.majak-paifu-select-dialog tr.is-selected {
+  color: #ffffff;
+  background: #1c6b58;
+}
+
+.majak-paifu-select-dialog__results dl {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.majak-paifu-select-dialog__results dl > div {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #dce5dc;
+}
+
+.majak-paifu-select-dialog__results dt { font-size: 14px; }
+.majak-paifu-select-dialog__results dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.majak-paifu-select-dialog__results section > p { margin: 12px; }
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .majak-paifu-select-dialog {
+    max-height: calc(100dvh - 16px);
+  }
+  .majak-paifu-select-dialog__body {
+    gap: 7px;
+  }
+  .majak-paifu-select-dialog__filters {
+    padding: 6px;
+  }
+  .majak-paifu-select-dialog__filter-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; margin: 6px 0; }
+  .majak-paifu-select-dialog__filter-grid fieldset { padding: 3px 5px; }
+  .majak-paifu-select-dialog__results { min-height: 145px; }
+  .majak-paifu-select-dialog__results h3 { padding: 4px 7px; }
+  .majak-paifu-select-dialog th, .majak-paifu-select-dialog td { padding: 3px 6px; }
+}
+
+/* Start announcement: keep the shell title at 20px and use one 15px content scale. */
+.majak-start-popup__body,
+.majak-start-popup__body p,
+.majak-start-popup__actions label {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.majak-popup-panel.majak-start-popup > .majak-popup-body.majak-start-popup__body > h2 {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.majak-popup-panel.majak-start-popup > .majak-popup-actions.majak-start-popup__actions > button {
+  font: 700 15px/22px var(--majak-font-family-ui) !important;
+}
+
+/* Popup visual contract: one shared header and one uninterrupted body surface. */
+.shop-transaction header,
+.custom-inventory__header,
+.responsive-owned-items__header,
+.majak-collection-header,
+.majak-invite-request__header {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 16px !important;
+  box-sizing: border-box !important;
+  color: #f8f6e9 !important;
+  background: #1b5a4b !important;
+  font-size: 20px !important;
+  line-height: 24px !important;
+}
+
+.shop-transaction header :is(h1, h2, span),
+.custom-inventory__header :is(h1, h2, span),
+.responsive-owned-items__header :is(h1, h2, span),
+.majak-collection-header :is(h1, h2, span),
+.majak-invite-request__header :is(h1, h2, span) {
+  color: inherit !important;
+  font-size: 20px !important;
+  line-height: 24px !important;
+}
+
+/* Decorative section fills use the same surface as their parent popup. */
+.majak-welcome-dialog__notice,
+.majak-levelup-dialog__level,
+.majak-receipt-dialog__item,
+.majak-receipt-dialog__details dt,
+.majak-item-popup-dialog__item.is-recommended,
+.responsive-shop__tabs,
+.custom-inventory__tabs,
+.mission-dialog__summary,
+.mission-dialog__summary > div,
+.responsive-shop__balances,
+.shop-transaction__image,
+.majak-collection-tabs,
+.majak-collection-footer,
+.majak-collection-image,
+.majak-accuse-dialog__notice,
+.majak-paifu-select-dialog__filters,
+.majak-paifu-select-dialog__results h3 {
+  background: #f6f8f1 !important;
+}
+
+/* One body type scale for every dialog using the shared popup panel. */
+.majak-popup-panel > :not(.majak-popup-titlebar),
+.majak-popup-panel > :not(.majak-popup-titlebar) * {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+.majak-popup-panel :is(input, select, textarea, button) {
+  font-size: 15px !important;
+  line-height: 22px !important;
+}
+
+/* Final popup shell contract: a 38px header and one uninterrupted body surface. */
+.majak-popup-panel > .majak-popup-titlebar,
+.majak-popup-panel > .majak-mobile-dialog-titlebar,
+.majak-popup-panel > .responsive-shop__header,
+.majak-popup-panel > .mission-dialog__header,
+.majak-popup-panel > .majak-collection-header,
+.majak-popup-panel > .majak-invite-request__header,
+.majak-popup-panel > header {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.majak-popup-panel.majak-player-profile > .majak-player-profile__hero {
+  height: auto !important;
+  min-height: 132px !important;
+  padding: 18px !important;
+}
+
+.majak-popup-panel > :not(.majak-popup-titlebar):not(.majak-mobile-dialog-titlebar):not(.responsive-shop__header):not(.mission-dialog__header):not(.majak-collection-header):not(.majak-invite-request__header):not(.majak-player-profile__hero),
+.majak-popup-panel > :not(.majak-popup-titlebar):not(.majak-mobile-dialog-titlebar):not(.responsive-shop__header):not(.mission-dialog__header):not(.majak-collection-header):not(.majak-invite-request__header):not(.majak-player-profile__hero) :not(button):not(input):not(select):not(textarea):not(option):not(.majak-ranking-dialog__columns):not(.majak-invite-request__progress):not(.majak-invite-request__progress > *):not(.majak-mobile-choice:has(input[type='radio']:checked)):not(label:has(input[type='radio']:checked)) {
+  background-color: transparent !important;
+  background-image: none !important;
+}
+
+/* Room creation content uses the common regular body weight. */
+.majak-mobile-room-create-body,
+.majak-mobile-room-create-body :is(label, legend, span, input, select, option) {
+  font-weight: 400 !important;
+}
+
+/* Popup content has one regular text weight; titles and action controls are separate. */
+.majak-popup-panel > :not(.majak-popup-titlebar):not(.majak-mobile-dialog-titlebar):not(.majak-popup-actions),
+.majak-popup-panel > :not(.majak-popup-titlebar):not(.majak-mobile-dialog-titlebar):not(.majak-popup-actions) * {
+  font-weight: 400 !important;
+}
+
+/* Room settings follows the standard single-column responsive dialog layout. */
+.majak-mobile-option-dialog {
+  width: min(560px, calc(100dvw - 32px)) !important;
+}
+
+.majak-popup-panel > .majak-mobile-option-body.majak-popup-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  max-height: none;
+  padding: 18px;
+  overflow-y: auto !important;
+}
+
+.majak-mobile-option-dialog .majak-mobile-dialog-section {
+  width: 100%;
+  padding: 10px;
+  border-color: #cbd8cb;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.majak-mobile-option-dialog .majak-mobile-choice-grid {
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.majak-mobile-option-dialog .majak-mobile-choice {
+  min-height: 34px;
+  align-items: center;
+  padding: 5px 8px;
+  border-color: #b9cbbb;
+  line-height: 22px !important;
+}
+
+/* Popup data values remain single-line at every supported viewport width. */
+.majak-popup-panel :is(dt, dd, th, td) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Game settings uses the same responsive form flow as every other popup. */
+.majak-mobile-config-dialog {
+  width: min(560px, calc(100dvw - 32px)) !important;
+  height: min(680px, calc(100dvh - 32px)) !important;
+  max-height: min(680px, calc(100dvh - 32px));
+}
+
+.majak-mobile-config-tabs {
+  flex: 0 0 auto;
+  gap: 0;
+  padding: 0 18px;
+  border-bottom: 1px solid #cbd8cb;
+}
+
+.majak-mobile-config-tabs button {
+  min-height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 0;
+  color: #244137;
+  background: transparent;
+}
+
+.majak-mobile-config-tabs button.is-active {
+  color: #244137;
+  background: transparent;
+  box-shadow: inset 0 -2px 0 #1c6b58;
+}
+
+.majak-popup-panel > .majak-mobile-config-body.majak-popup-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  max-height: none;
+  padding: 18px;
+  overflow: auto;
+}
+
+.majak-mobile-config-section,
+.majak-mobile-config-section--wide {
+  width: 100%;
+  padding: 10px;
+  border-color: #cbd8cb;
+  border-radius: 3px;
+  box-sizing: border-box;
+}
+
+.majak-mobile-config-dialog .majak-mobile-choice-grid,
+.majak-mobile-config-section--wide .majak-mobile-choice-grid--two {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.majak-mobile-config-dialog .majak-mobile-choice {
+  min-height: 34px;
+  align-items: center;
+  padding: 5px 8px;
+  border-color: #b9cbbb;
+  line-height: 22px !important;
+}
+
+.majak-mobile-config-assist {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.majak-mobile-config-assist-row {
+  min-height: 0;
+  padding: 10px;
+  border-color: #cbd8cb;
+  border-radius: 3px;
+  background: transparent;
+}
+
+/* Fixed-height popup headers always contain one line of title data. */
+.majak-popup-titlebar > :not(.majak-popup-titlebar__close),
+.majak-mobile-dialog-titlebar > :not(.majak-popup-titlebar__close) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-ranking-dialog__header {
+  overflow: visible !important;
+}
+
+.majak-ranking-dialog__meta {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #526158;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Popup command buttons share one visual and sizing contract. */
+.majak-popup-panel button:not(.majak-popup-titlebar__close):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button) {
+  width: auto !important;
+  min-width: 0 !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 16px !important;
+  border: 1px solid #255d4e !important;
+  border-radius: 3px !important;
+  color: #ffffff !important;
+  background: #1c6b58 !important;
+  font-weight: 400 !important;
+  line-height: 22px !important;
+  white-space: nowrap !important;
+}
+
+.majak-popup-panel button:not(.majak-popup-titlebar__close):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):hover:not(:disabled),
+.majak-popup-panel button:not(.majak-popup-titlebar__close):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):focus-visible:not(:disabled) {
+  border-color: #16483d !important;
+  background: #247c67 !important;
+}
+
+.majak-popup-panel button:not(.majak-popup-titlebar__close):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):disabled {
+  color: #ffffff !important;
+  background: #1c6b58 !important;
+  opacity: .45;
+}
+
+/* Tabs remain selection controls, with the same green palette and compact text sizing. */
+.majak-popup-panel :is([role='tab'], .majak-player-profile__tabs button, .responsive-shop__tabs button, .custom-inventory__tabs button, .majak-collection-tabs button, .majak-mobile-config-tabs button) {
+  width: auto !important;
+  min-width: 0 !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 16px !important;
+  border: 1px solid #255d4e !important;
+  border-radius: 3px !important;
+  color: #255d4e !important;
+  background: transparent !important;
+  font-weight: 400 !important;
+  line-height: 22px !important;
+  white-space: nowrap !important;
+}
+
+.majak-popup-panel :is([role='tab'][aria-selected='true'], .majak-player-profile__tabs button.is-active, .responsive-shop__tabs button.is-active, .custom-inventory__tabs button.is-active, .majak-collection-tabs button.is-active, .majak-mobile-config-tabs button.is-active) {
+  color: #ffffff !important;
+  background: #1c6b58 !important;
+  box-shadow: none !important;
+}
+
+/* Game settings keeps selection tabs balanced and avoids nested option-card borders. */
+.majak-popup-panel .majak-mobile-config-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 18px 0;
+}
+
+.majak-popup-panel .majak-mobile-config-tabs button {
+  width: 100% !important;
+}
+
+.majak-popup-panel .majak-mobile-config-section .majak-mobile-choice {
+  min-height: 34px;
+  padding: 5px 0;
+  border: 0;
+  border-bottom: 1px solid #d6dfd5;
+  border-radius: 0;
+  background: transparent;
+}
+
+.majak-popup-panel .majak-mobile-config-section .majak-mobile-choice:last-child {
+  border-bottom: 0;
+}
+
+@media (min-width: 900px) {
+  .majak-mobile-option-dialog {
+    width: min(680px, calc(100dvw - 64px)) !important;
+  }
+
+  .majak-mobile-option-dialog .majak-mobile-choice-grid--three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.majak-ranking-dialog__self > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.majak-ranking-dialog__self > div b {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.majak-ranking-dialog__self > div span {
+  flex: 0 0 auto;
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+.majak-ranking-dialog__columns {
+  background-color: #1b5a4b !important;
+}
+
+/* Game invitations use the same responsive popup shell as the rest of outgame. */
+.majak-invite-request {
+  width: min(560px, calc(100dvw - 32px)) !important;
+}
+
+.majak-popup-panel > .majak-invite-request__body.majak-popup-body {
+  display: flex !important;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.majak-invite-request__message {
+  padding: 0 0 0 12px;
+  border-left: 3px solid #1c6b58;
+  background: transparent !important;
+}
+
+.majak-invite-request__player {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.majak-invite-request__avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 3px;
+  background: transparent !important;
+}
+
+.majak-invite-request__actions {
+  display: flex !important;
+  grid-template-columns: none !important;
+  justify-content: flex-end;
+}
+
+.majak-invite-request__actions > button {
+  width: auto !important;
+  min-width: 0 !important;
+}
+
+/* Radio options remain plain until selected, regardless of their dialog. */
+.majak-popup-panel label:has(input[type='radio']) {
+  min-height: 34px !important;
+  padding: 5px 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.majak-popup-panel label:has(input[type='radio']:checked) {
+  outline: 1px solid #8eb29b;
+  outline-offset: -1px;
+  background: #e2eee5 !important;
+}
+
+.majak-popup-panel.mission-reward-guide > main.majak-popup-body .mission-reward-guide__flow > div > .mission-reward-guide__step-title {
+  font-weight: 700 !important;
+}
+
+.majak-popup-panel .majak-lead-notice__body {
+  gap: 12px;
+}
+
+.majak-lead-notice__eligibility {
+  display: grid;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 3px solid #1c6b58;
+}
+
+.majak-lead-notice__eligibility .majak-reward-notice__success {
+  text-align: left;
+}
+
+.majak-lead-notice__benefits {
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+  border-top: 1px solid #d6dfd5;
+}
+
+/* Free GP replenishment separates its completion, eligibility, and reset details. */
+.majak-popup-panel .majak-free-gp-notice__body {
+  gap: 14px;
+}
+
+.majak-free-gp-notice__summary {
+  display: grid;
+  gap: 4px;
+  padding-left: 12px;
+  border-left: 3px solid #1c6b58;
+}
+
+.majak-free-gp-notice__summary .majak-reward-notice__success {
+  text-align: left;
+}
+
+.majak-free-gp-notice__rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.majak-free-gp-notice__rule {
+  min-width: 0;
+  margin: 0;
+  padding-left: 10px;
+  border-left: 1px solid #a7c3ad;
+}
+
+.majak-free-gp-notice__reset {
+  margin: 0;
+  padding-top: 10px;
+  border-top: 1px solid #d6dfd5;
+}
+
+@media (max-width: 480px) {
+  .majak-free-gp-notice__rules {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .majak-popup-panel label:has(input[type='radio']) {
+    min-height: 28px !important;
+    padding: 3px 6px !important;
+  }
+}
+
+.majak-mobile-option-dialog .majak-mobile-choice-grid,
+.majak-mobile-config-dialog .majak-mobile-choice-grid {
+  gap: 6px;
+}
+
+@media (min-width: 900px) {
+  .majak-ranking-dialog__self {
+    min-height: 50px;
+  }
+}
+
+@media (max-width: 899px) {
+  .majak-popup-panel.majak-player-profile > .majak-player-profile__hero {
+    min-height: 56px !important;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 10px 14px !important;
+  }
+
+  .majak-player-profile__avatar {
+    display: none;
+  }
+
+  .majak-player-profile__identity {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .majak-player-profile__identity h2 {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .majak-player-profile__badges {
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    margin-top: 0;
+    overflow: hidden;
+  }
+
+  .majak-player-profile__badges span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .majak-player-profile__rating {
+    min-width: 0;
+    display: flex;
+    grid-column: auto;
+    grid-row: auto;
+    align-items: center;
+    gap: 6px;
+    text-align: left;
+  }
+
+  .majak-player-profile > .majak-player-profile__summary,
+  .majak-player-profile > .majak-player-profile__metrics {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .majak-popup-panel > .majak-invite-request__body.majak-popup-body {
+    gap: 8px;
+    padding: 12px;
+    overflow-y: hidden;
+  }
+
+  .majak-invite-request__avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .majak-invite-request__player {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 10px;
+  }
+}
+
+@media (max-width: 520px) {
+  .majak-mobile-config-dialog {
+    width: calc(100dvw - 24px) !important;
+  }
+
+  .majak-popup-panel > .majak-mobile-config-body.majak-popup-body {
+    gap: 10px;
+    padding: 12px;
+  }
+}
+
+@media (max-width: 520px) {
+  .majak-mobile-option-dialog {
+    width: calc(100dvw - 24px) !important;
+  }
+
+  .majak-popup-panel > .majak-mobile-option-body.majak-popup-body {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .majak-mobile-option-dialog .majak-mobile-choice-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+

@@ -141,7 +141,7 @@ export default function LotResultDlg({
 
   /* 再購入メッセージ (m_strBuyAgain 相当) */
   const buyAgainMsg = nextLotteryCount !== lotteryCount
-    ? `※再購入すると\n抽選回数が${lotteryCount}回から\n${nextLotteryCount}回に 増える!`
+    ? `※再購入すると抽選回数が${lotteryCount}回から${nextLotteryCount}回に増える!`
     : ''
 
   const makeMoneyString = (value: number, addCurrency = true) => {
@@ -161,51 +161,19 @@ export default function LotResultDlg({
   }
 
   return (
-    /* モーダルオーバーレイ */
-    <div style={{
-      position: 'absolute', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'transparent', zIndex: 300,
-    }}>
-      {/* CMJLotResultDlg クライアント領域: 301×333px */}
-      <div style={{
-        position: 'relative',
-        width: 301, height: 333,
-        left: pos.x, top: pos.y,
-      }}
-        onMouseDown={onDragStart}
-      >
+    <div className="majak-popup-overlay majak-lottery-result-overlay" role="presentation">
+      <section className="majak-lottery-result-panel" role="dialog" aria-modal="true" aria-label={`${itemName} 抽選結果`}>
 
         {/* ================================================================
             背景: lot/lot_base2.png (301×333) at (0,0)
             Create(..., 1, ...) = 1フレーム単一画像
             ================================================================ */}
-        <img
-          src={`${IMG_LOT}/lot_base2.png`}
-          alt=""
-          draggable={false}
-          style={{
-            position: 'absolute', left: 0, top: 0,
-            width: 301, height: 333,
-            userSelect: 'none',
-          }}
-        />
-
         {/* ================================================================
             テキスト (Draw() 相当)
             ================================================================ */}
 
-        {/* タイトル "{itemName} 今回の獲得金額" CRect(30,34,271,47) DT_CENTER 白 */}
-        <div style={{ ...txtBase, left: 30, top: 34, width: 241, height: 13,
-          color: '#fff', textAlign: 'center' }}>
-          {itemName} 今回の獲得金額
-        </div>
-
-        {/* 合計金額 CRect(80,54,222,67) DT_CENTER 緑 RGB(6,65,2) */}
-        <div style={{ ...txtBase, left: 80, top: 54, width: 142, height: 13,
-          color: 'rgb(6,65,2)', textAlign: 'center' }}>
-          {makeMoneyString(totalAmount)}
-        </div>
+        <header className="majak-lottery-result-panel__header"><strong>{itemName} 抽選結果</strong><button type="button" onClick={onClose} aria-label="閉じる">×</button></header>
+        <section className="majak-lottery-result-panel__total"><span>合計獲得金額</span><strong>{makeMoneyString(totalAmount)}</strong></section>
 
         {/* ================================================================
             データ表示エリア (DrawPageText 相当)
@@ -214,15 +182,13 @@ export default function LotResultDlg({
               金額データ:  CRect(130, 94+16*i, 272, 107+16*i)
             ================================================================ */}
         {pageEntries.map((e, i) => (
-          <div key={e.seq} style={{ position: 'absolute', left: 0, top: 0 }}>
+          <div key={e.seq} className="majak-lottery-result-panel__entry">
             {/* 回数 CNTDATA_CORNER_POS_X=46, Y=94+16*i, WIDTH=50, HEIGHT=13 */}
-            <div style={{ ...txtBase, left: 46, top: 94 + 16 * i, width: 50, height: 13,
-              color: 'rgb(6,65,2)', textAlign: 'right' }}>
+            <div>
               {e.seq}回目
             </div>
             {/* 金額 MONEYDATA_CORNER_POS_X=130, Y=94+16*i, WIDTH=142, HEIGHT=13 */}
-            <div style={{ ...txtBase, left: 130, top: 94 + 16 * i, width: 142, height: 13,
-              color: 'rgb(6,65,2)', textAlign: 'right' }}>
+            <div>
               {makeMoneyString(e.amount)}
             </div>
           </div>
@@ -231,24 +197,13 @@ export default function LotResultDlg({
         {/* ================================================================
             ページ表示 s_rcPage CRect(190,250,290,270) 中央
             ================================================================ */}
-        <div style={{ ...txtBase, left: 190, top: 250, width: 100, height: 20,
-          color: 'rgb(6,65,2)', textAlign: 'center' }}>
+        <div className="majak-lottery-result-panel__page">
           {curPage} / {maxPage}
         </div>
 
         {/* 再購入メッセージ CRect(12,275,143,316) DT_CENTER 白 */}
         {buyAgainMsg && (
-          <div style={{
-            position: 'absolute',
-            left: 12, top: 275, width: 131, height: 41,
-            fontFamily: FONT,
-            fontSize: 'calc(13px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
-            lineHeight: '13px',
-            textAlign: 'center',
-            whiteSpace: 'pre-line',
-            pointerEvents: 'none',
-            overflow: 'hidden',
-          }}>
+          <div className="majak-lottery-result-panel__note">
             {buyAgainMsg}
           </div>
         )}
@@ -257,54 +212,12 @@ export default function LotResultDlg({
             ← 矢印: lot/lot_btn_mark_l.png (36×14, 4フレーム 9×14) at (193,254)
             m_btnArrowL.Create(0, ..., 193, 254, ..., IDC_BTN_LARROW)
             ================================================================ */}
-        <SpriteButton
-          src={`${IMG_LOT}/lot_btn_mark_l.png`}
-          frameW={9} frameH={14}
-          x={193} y={254}
-          onClick={() => setCurPage(p => Math.max(1, p - 1))}
-          title="前のページ"
-        />
-
-        {/* ================================================================
-            → 矢印: lot/lot_btn_mark_r.png (36×14, 4フレーム 9×14) at (277,254)
-            m_btnArrowR.Create(0, ..., 277, 254, ..., IDC_BTN_RARROW)
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG_LOT}/lot_btn_mark_r.png`}
-          frameW={9} frameH={14}
-          x={277} y={254}
-          onClick={() => setCurPage(p => Math.min(maxPage, p + 1))}
-          title="次のページ"
-        />
-
-        {/* ================================================================
-            再購入: lot/lot_t_btn_4.png (288×42, 4フレーム 72×42) at (139,274)
-            m_btnBuy.Create(0, ..., 139, 274, ..., IDYES)
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG_LOT}/lot_t_btn_4.png`}
-          frameW={72} frameH={42}
-          x={139} y={274}
-          onClick={onBuyAgain}
-          title="再購入"
-        />
-        <div style={{ ...txtBase, left: 179, top: 297, width: 25, height: 13,
-          color: 'rgb(6,65,2)', textAlign: 'right', zIndex: 1 }}>
-          {nextLotteryCount}
-        </div>
-
-        {/* ================================================================
-            閉じる: lot/lot_t_btn_3.png (288×42, 4フレーム 72×42) at (215,274)
-            m_btnClose.Create(0, ..., 215, 274, ..., IDNO)
-            ================================================================ */}
-        <SpriteButton
-          src={`${IMG_LOT}/lot_t_btn_3.png`}
-          frameW={72} frameH={42}
-          x={215} y={274}
-          onClick={onClose}
-          title="閉じる"
-        />
-      </div>
+        <footer className="majak-lottery-result-panel__actions"><button type="button" onClick={() => setCurPage(p => Math.max(1, p - 1))} disabled={curPage === 1}>前へ</button><button type="button" onClick={() => setCurPage(p => Math.min(maxPage, p + 1))} disabled={curPage === maxPage}>次へ</button><button type="button" className="is-buy" onClick={onBuyAgain}>次回 {nextLotteryCount}回で再購入</button><button type="button" onClick={onClose}>閉じる</button></footer>
+      </section>
+      <style>{`
+        .majak-lottery-result-panel { width: min(760px, calc(100vw - 32px)); overflow: hidden; border: 2px solid #d9bc62; border-radius: 7px; color: #f8f6e9; background: #123d31; box-shadow: 0 22px 55px rgba(0,0,0,.55); }.majak-lottery-result-panel__header { display: flex; align-items: center; gap: 14px; padding: 15px 20px; background: linear-gradient(90deg,#1b5a4b,#24705b 48%,#1b5a4b); border-bottom: 2px solid #d9bc62; }.majak-lottery-result-panel__header strong { font: 700 21px/1 var(--majak-font-family-ui); }.majak-lottery-result-panel__header button { width:28px; height:28px; margin-left:auto; border:1px solid #d9bc62; border-radius:4px; color:#f8f6e9; background:#1c6b58; font-size:20px; cursor:pointer; }.majak-lottery-result-panel__header button:hover, .majak-lottery-result-panel__header button:focus-visible { background:#247c67; }.majak-lottery-result-panel__total { display: flex; align-items: baseline; gap: 20px; padding: 17px 24px; background: rgba(5,31,23,.42); }.majak-lottery-result-panel__total span { color: #d7e3d7; font-size: 13px; }.majak-lottery-result-panel__total strong { color: #d9bc62; font: 700 28px/1 var(--majak-font-family-ui); }.majak-lottery-result-panel__entry { display:grid; grid-template-columns: 100px 1fr; gap: 24px; padding: 11px 24px; border-bottom: 1px solid rgba(215,227,215,.15); color:#d7e3d7; font-weight:700; }.majak-lottery-result-panel__entry div:last-child { color:#d9bc62; text-align:right; }.majak-lottery-result-panel__page { padding: 13px; color:#d7e3d7; text-align:center; }.majak-lottery-result-panel__note { overflow:hidden; padding: 0 24px 14px; color:#d9bc62; white-space:nowrap; text-overflow:ellipsis; text-align:center; font-size:13px; }.majak-lottery-result-panel__actions { display:flex; justify-content:flex-end; gap:10px; padding:13px 18px; border-top:1px solid rgba(217,188,98,.55); background:rgba(5,31,23,.62); }.majak-lottery-result-panel__actions button { min-width:78px; height:38px; border:1px solid #698674; border-radius:4px; color:#fff; background:#315f4d; font:700 13px/1 var(--majak-font-family-ui); }.majak-lottery-result-panel__actions .is-buy { min-width:166px; border-color:#255d4e; background:#1c6b58; }.majak-lottery-result-panel__actions button:disabled { opacity:.4; }
+        @media (max-width:600px) { .majak-lottery-result-panel { max-height:calc(100dvh - 20px); overflow-y:auto; }.majak-lottery-result-panel__header { gap:8px; padding:12px; }.majak-lottery-result-panel__header strong { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:17px; }.majak-lottery-result-panel__total { gap:12px; padding:14px; }.majak-lottery-result-panel__total strong { margin-left:auto; font-size:22px; white-space:nowrap; }.majak-lottery-result-panel__entry { grid-template-columns:80px 1fr; padding:10px 14px; }.majak-lottery-result-panel__actions { position:sticky; bottom:0; display:grid; grid-template-columns:1fr 1fr; padding:10px; }.majak-lottery-result-panel__actions button, .majak-lottery-result-panel__actions .is-buy { min-width:0; width:100%; }.majak-lottery-result-panel__actions button:last-child { border-color:#255d4e; background:#1c6b58; } }
+      `}</style>
     </div>
   )
 }

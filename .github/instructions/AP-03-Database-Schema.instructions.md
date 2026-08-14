@@ -16,7 +16,7 @@ description: "使用条件: MySQLゲーム・ログDBのテーブル、カラム
 | DB | テーブル作成 | 初期データ | テーブル数 |
 |---|---|---|---:|
 | majak_game | scripts/database/game/001_create_tables.sql | scripts/database/game/002_seed_data.sql | 52 |
-| majak_log | scripts/database/log/001_create_tables.sql | scripts/database/log/002_seed_data.sql | 16 |
+| majak_log | scripts/database/log/001_create_tables.sql | scripts/database/log/002_seed_data.sql | 18 |
 
 ## 2. 表記規則
 
@@ -102,6 +102,8 @@ description: "使用条件: MySQLゲーム・ログDBのテーブル、カラム
 | `present_delivery_log` | 9 |
 | `grade_rank_snapshot_log` | 8 |
 | `cup_match_log` | 8 |
+| `paifu_archive_log` | 13 |
+| `paifu_archive_member_log` | 2 |
 
 ## 5. 初期データ
 

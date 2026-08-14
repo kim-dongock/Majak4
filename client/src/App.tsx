@@ -8,6 +8,9 @@ import LobbyScreen from './screens/outgame/LobbyScreen'
 import RoomScreen from './screens/outgame/RoomScreen'
 import GameScreen from './screens/ingame/GameScreen'
 import PaifWnd from './screens/ingame/PaifWnd'
+import PaifuArchiveScreen from './screens/outgame/PaifuArchiveScreen'
+import PopupPreviewScreen from './screens/outgame/PopupPreviewScreen'
+import AnnouncementListScreen from './screens/outgame/AnnouncementListScreen'
 import MajakFrame from './components/MajakFrame'
 import MessageBoxHost from './components/MessageBoxHost'
 import GameReconnectLoading from './components/GameReconnectLoading'
@@ -22,6 +25,7 @@ import { forceDuplicateConnectionLogout } from './utils/msgbox'
 import { signInWithNativeGoogle } from './utils/nativeGoogleAuth'
 
 const ROUTER_STATE_STORAGE_KEY = 'majak:last-router-state'
+const SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY = 'majak:showWelcomeAfterRegistration'
 
 type StoredRouterState = {
   pathname: string
@@ -213,6 +217,13 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [refreshChecked, setRefreshChecked] = useState(false)
   const [registrationRequest, setRegistrationRequest] = useState<{ idToken: string; player: MajakPlayer } | null>(null)
 
+  const completeRegistration = useCallback((registeredPlayer: MajakPlayer) => {
+    window.sessionStorage.setItem(SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY, '1')
+    setRegistrationRequest(null)
+    saveRegisteredPlayerCache(registeredPlayer)
+    setPlayer(registeredPlayer)
+  }, [setPlayer])
+
   useEffect(() => {
     if (window.location.protocol !== 'http:' || window.location.hostname !== '127.0.0.1') return
     const localUrl = new URL(window.location.href)
@@ -346,11 +357,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         idToken={registrationRequest.idToken}
         googleInfo={registrationRequest.player}
         onAuthExpired={handleRegistrationAuthExpired}
-        onComplete={(p) => {
-          setRegistrationRequest(null)
-          saveRegisteredPlayerCache(p)
-          setPlayer(p)
-        }}
+        onComplete={completeRegistration}
       />
     )
   }
@@ -393,7 +400,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         idToken={idToken}
         googleInfo={player}
         onAuthExpired={handleRegistrationAuthExpired}
-        onComplete={(p) => { saveRegisteredPlayerCache(p); setPlayer(p) }}
+        onComplete={completeRegistration}
       />
     )
   }
@@ -559,6 +566,10 @@ function SuspendedScreen() {
 export default function App() {
   const initialRoute = readStoredRouterState()
 
+  if (import.meta.env.DEV && window.location.pathname === '/popup-preview') {
+    return <PopupPreviewScreen />
+  }
+
   return (
     <>
       <AuthGate>
@@ -571,6 +582,7 @@ export default function App() {
             {/* アウトゲーム (CMajakFrame タイトルバー付き) */}
             <Route path="/" element={<Navigate to="/channel" replace />} />
             <Route path="/channel" element={<MajakFrame><ChannelGroupScreen /></MajakFrame>} />
+            <Route path="/announcements" element={<AnnouncementListScreen />} />
             <Route path="/channel/select/:group" element={<MajakFrame><LobbySelectScreen /></MajakFrame>} />
             <Route path="/channel/:channelId" element={<MajakFrame><LobbySelectScreen /></MajakFrame>} />
             <Route path="/channel/:channelId/lobby" element={<MajakFrame accBox="channel"><LobbyScreen /></MajakFrame>} />
@@ -578,8 +590,9 @@ export default function App() {
             <Route path="/channel/:channelId/lobby/:lobbyId/room/:roomId" element={<MajakFrame accBox="room"><RoomScreen /></MajakFrame>} />
             {/* インゲーム (Phaser) — タイトルバーなし */}
             <Route path="/game/:roomId" element={<GameScreen />} />
-            {/* 牏譜再生 (CMJPaifWnd) */}
-            <Route path="/paifu" element={<PaifWnd />} />
+            {/* 牌譜保管庫 → 選択後にリプレイを起動 */}
+            <Route path="/paifu" element={<MajakFrame><PaifuArchiveScreen /></MajakFrame>} />
+            <Route path="/paifu/replay" element={<PaifWnd />} />
             <Route path="/paifu/:roomId" element={<PaifWnd />} />
           </Routes>
         </MemoryRouter>

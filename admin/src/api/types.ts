@@ -66,3 +66,21 @@ export interface PendingPlayer {
   termsAgreedAt: string
   registeredAt: string
 }
+
+export interface GameEconomyPolicy {
+  initialGp: number
+  freeReplenishTargetGp: number
+  freeReplenishDailyLimit: number
+  updatedAt: string
+}
+
+export interface GameAnnouncement {
+  announcementId: number
+  title: string
+  body: string
+  isPublished: boolean
+  isStartup: boolean
+  publishedAt: string | null
+  createdAt: string
+  updatedAt: string
+}

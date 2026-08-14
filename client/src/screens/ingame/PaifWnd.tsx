@@ -21,9 +21,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { createGame, destroyGame } from '../../game/GameInstance'
 import { useDesktopScreenScale } from '../../hooks/useDesktopScreenScale'
 import * as SignalR from '../../api/signalr'
-import SelPaifuDlg, { type PaifuEntry } from '../outgame/dialogs/SelPaifuDlg'
 import PaifuSaveDlg from '../outgame/dialogs/PaifuSaveDlg'
-import { loadLastUsedPaifuFileName, loadRecordedPaifuEntries, saveLastUsedPaifuFileName } from '../../game/paifuRecording'
+import { loadLastUsedPaifuFileName, saveLastUsedPaifuFileName } from '../../game/paifuRecording'
 
 const IMG = '/assets/images/game'
 const CMD_REPLAY_NAVI = 'repnavi'
@@ -115,14 +114,12 @@ export default function PaifWnd() {
   const lastSentReplayNaviRef = useRef<ReplayNaviPayload | null>(null)
   const navigate     = useNavigate()
   const location     = useLocation()
-  const navState = location.state as { paifu?: PaifuSource; paifuEntries?: PaifuEntry[] } | null
+  const navState = location.state as { paifu?: PaifuSource } | null
   const initialSource = navState?.paifu
-  const paifuEntries = navState?.paifuEntries ?? loadRecordedPaifuEntries()
 
   /** m_btnPaifuPlay / m_btnPaifuHide のチェック状態 */
   const [isPlaying, setIsPlaying] = useState(false)
   const [handHidden, setHandHidden] = useState(false)
-  const [showLoadDlg, setShowLoadDlg] = useState(false)
   const [showSaveDlg, setShowSaveDlg] = useState(false)
   const [naviEnabled, setNaviEnabled] = useState(true)
   const [fileActionsEnabled, setFileActionsEnabled] = useState(Boolean(initialSource?.data))
@@ -133,6 +130,10 @@ export default function PaifWnd() {
 
   const [source, setSource] = useState<PaifuSource | undefined>(initialSource)
   const hasPaifu = Boolean(source?.data)
+
+  useEffect(() => {
+    if (!initialSource?.data) navigate('/paifu', { replace: true })
+  }, [initialSource?.data, navigate])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -210,30 +211,9 @@ export default function PaifWnd() {
     })
   }
 
-  /** OnPaifuLoad — CMJSelPaifuDlg を開いて選択牌譜をロード */
-  const loadPaifu = (nextSource: PaifuSource) => {
-    setSource(nextSource)
-    setIsPlaying(false)
-    setPaifuKPos(0)
-    setPaifuStep(0)
-    setPaifuKEnd(false)
-    setPaifuKCount(null)
-    setNaviEnabled(false)
-    setFileActionsEnabled(true)
-    sendReplayNavi({ join: true, paif: true, skip: true, nSkip: 0, data: nextSource.data })
-  }
-
+  /** OnPaifuLoad — サーバー保管庫へ戻り、再生する牌譜を選ぶ */
   const handleLoad = () => {
-    setShowLoadDlg(true)
-  }
-
-  const handleSelectPaifu = (entry: PaifuEntry) => {
-    setShowLoadDlg(false)
-    loadPaifu({
-      data: entry.data ?? entry,
-      title: entry.roomName || entry.fieldName || String(entry.id),
-      comment: 'comment' in entry ? String((entry as PaifuEntry & { comment?: unknown }).comment ?? '') : '',
-    })
+    navigate('/paifu')
   }
 
   /** OnPaifuSave — CPaifuSaveDlg を開いてブラウザダウンロード */
@@ -366,14 +346,6 @@ export default function PaifWnd() {
         <PaifuSpriteButton src={`${IMG}/mj_btPaifuHide.png`} frameW={92} frameH={25} x={202} y={676} onClick={handleHide} title="手牌表示切替" active={handHidden} />
         <PaifuSpriteButton src={`${IMG}/mj_btPaifuExit.png`} frameW={114} frameH={40} x={598} y={647} onClick={handleClose} title="閉じる" />
       </div>
-
-      {showLoadDlg && (
-        <SelPaifuDlg
-          entries={paifuEntries}
-          onSelect={handleSelectPaifu}
-          onCancel={() => setShowLoadDlg(false)}
-        />
-      )}
 
       {showSaveDlg && (
         <PaifuSaveDlg

@@ -2,6 +2,8 @@ import { api } from './client'
 import type {
   DashboardStats, PlayerSummary, PlayerDetail,
   CashProduct, DailyRevenue, AdminAccount,
+  GameEconomyPolicy,
+  GameAnnouncement,
 } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────
@@ -9,6 +11,22 @@ export const authApi = {
   loginWithGoogle: (idToken: string) =>
     api.post<{ token: string; email: string; role: string }>(
       '/api/admin/auth/google', { idToken }),
+}
+
+// ── GP Economy ──────────────────────────────────────────────────────────
+export const economyPolicyApi = {
+  get: () => api.get<GameEconomyPolicy>('/api/admin/economy-policy'),
+  update: (policy: Pick<GameEconomyPolicy, 'initialGp' | 'freeReplenishTargetGp' | 'freeReplenishDailyLimit'>) =>
+    api.put<GameEconomyPolicy>('/api/admin/economy-policy', policy),
+}
+
+export const announcementApi = {
+  list: () => api.get<GameAnnouncement[]>('/api/admin/announcements'),
+  create: (article: Omit<GameAnnouncement, 'announcementId' | 'publishedAt' | 'createdAt' | 'updatedAt'>) =>
+    api.post<GameAnnouncement>('/api/admin/announcements', article),
+  update: (article: GameAnnouncement) =>
+    api.put<GameAnnouncement>(`/api/admin/announcements/${article.announcementId}`, article),
+  remove: (announcementId: number) => api.del<void>(`/api/admin/announcements/${announcementId}`),
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────

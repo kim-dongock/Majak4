@@ -45,65 +45,16 @@ export default function EndingPopupWnd({
   }, [onCancel, onOK])
 
   return (
-    <div
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 1000,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 16,
-        boxSizing: 'border-box',
-        background: 'rgba(8, 24, 15, 0.68)',
-        backdropFilter: 'blur(4px)',
-      }}
-    >
+    <div className="majak-popup-overlay">
       <div
+        className="majak-popup-panel majak-ending-popup"
         role="dialog"
         aria-modal="true"
         aria-labelledby="majak-logout-confirm-title"
-        style={{
-          width: 'min(390px, 100%)',
-          overflow: 'hidden',
-          border: '1px solid rgba(88, 142, 89, 0.38)',
-          borderRadius: 8,
-          color: '#21332a',
-          background: '#fbfcf7',
-          boxShadow: '0 24px 64px rgba(0, 0, 0, 0.42)',
-          fontFamily: 'var(--majak-font-family-ui)',
-        }}
       >
-        <div style={{ height: 6, background: '#2d7b49' }} />
-        <div style={{ padding: '24px 24px 22px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '48px minmax(0, 1fr)', columnGap: 15, alignItems: 'start' }}>
-            <div
-              aria-hidden="true"
-              style={{
-                width: 48,
-                height: 48,
-                display: 'grid',
-                placeItems: 'center',
-                borderRadius: 8,
-                color: '#1d6e41',
-                background: '#e3f2e7',
-                fontSize: 'var(--majak-font-26)',
-                fontWeight: 700,
-                lineHeight: 1,
-                userSelect: 'none',
-              }}
-            >
-              ?
-            </div>
-            <div style={{ minWidth: 0, paddingTop: 2 }}>
-              <div id="majak-logout-confirm-title" style={{ marginBottom: 7, color: '#1c3024', fontSize: 'var(--majak-font-18)', fontWeight: 700, lineHeight: '24px' }}>
-                ログアウト
-              </div>
-              <div style={{ color: '#52635a', fontSize: 'var(--majak-font-13)', lineHeight: '20px', overflowWrap: 'anywhere' }}>
-                {message}
-              </div>
-            </div>
-          </div>
+        <header id="majak-logout-confirm-title" className="majak-popup-titlebar"><span>ログアウト</span><button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button></header>
+        <div className="majak-popup-body majak-ending-popup__body">
+          <p>{message}</p>
 
           {resolvedBannerImageUrl && (
             <a
@@ -113,62 +64,22 @@ export default function EndingPopupWnd({
               onClick={(event) => {
                 if (!resolvedBannerLinkUrl) event.preventDefault()
               }}
-              style={{ display: 'block', marginTop: 18 }}
+              className="majak-ending-popup__banner"
             >
               <img
                 src={resolvedBannerImageUrl}
                 alt="サービス終了案内"
                 draggable={false}
-                style={{ display: 'block', width: '100%', maxHeight: 110, objectFit: 'contain' }}
+                className="majak-ending-popup__banner-image"
               />
             </a>
           )}
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap-reverse', gap: 8, marginTop: 24 }}>
-            <button
-              type="button"
-              onClick={onCancel}
-              accessKey="n"
-              style={{
-                minWidth: 104,
-                height: 38,
-                padding: '0 16px',
-                border: '1px solid #cad9cf',
-                borderRadius: 6,
-                color: '#34443b',
-                background: '#f4f7f3',
-                font: 'inherit',
-                fontSize: 'var(--majak-font-13)',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              キャンセル
-            </button>
-            <button
-              ref={confirmButtonRef}
-              type="button"
-              onClick={onOK}
-              accessKey="y"
-              style={{
-                minWidth: 104,
-                height: 38,
-                padding: '0 16px',
-                border: '1px solid #1c6339',
-                borderRadius: 6,
-                color: '#fff',
-                background: '#267544',
-                boxShadow: '0 7px 16px rgba(30, 96, 55, 0.22)',
-                font: 'inherit',
-                fontSize: 'var(--majak-font-13)',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-            >
-              ログアウト
-            </button>
-          </div>
         </div>
+        <footer className="majak-popup-actions">
+          <button type="button" onClick={onCancel} accessKey="n">キャンセル</button>
+          <button ref={confirmButtonRef} type="button" className="is-primary" onClick={onOK} accessKey="y">ログアウト</button>
+        </footer>
       </div>
     </div>
   )
