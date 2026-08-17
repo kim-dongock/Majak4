@@ -267,7 +267,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
   const txt = (color = '#000') => ({
     position: 'absolute' as const,
     fontFamily: 'var(--majak-font-family-ui)' as const,
-    fontSize: 'calc(13px * var(--majak-type-scale))',
+    fontSize: 'var(--majak-popup-font-body)',
     color,
     whiteSpace: 'nowrap' as const,
     pointerEvents: 'none' as const,
@@ -459,7 +459,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
                 width: 40,
                 height: 22,
                 fontFamily: 'var(--majak-font-family-ui)',
-                fontSize: 'calc(12px * var(--majak-type-scale))',
+                fontSize: 'var(--majak-popup-font-emphasis)',
                 border: '1px solid #888',
               }}
             >
@@ -483,7 +483,7 @@ export default function BuyHanCoinItemDlg({ item, pix, memberName, hanCoin, onCl
             left: 10, top: 366,
             width: 235, height: 15,
             fontFamily: 'var(--majak-font-family-ui)',
-            fontSize: 'calc(13px * var(--majak-type-scale))',
+            fontSize: 'var(--majak-popup-font-emphasis)',
             color: '#000',
             textAlign: 'right',
             pointerEvents: 'none',

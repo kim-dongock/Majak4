@@ -278,7 +278,7 @@ function TabButton({
 
 function StatLine({ label, value, x, y, w = 140 }: { label: string; value: string; x: number; y: number; w?: number }) {
   return (
-    <div style={{ position: 'absolute', left: x, top: y, width: w, height: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '12px', color: '#000' }}>
+    <div style={{ position: 'absolute', left: x, top: y, width: w, height: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', lineHeight: '12px', color: '#000' }}>
       <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>{label}</span>
       <span style={{ flex: '0 0 auto', whiteSpace: 'nowrap', textAlign: 'right' }}>{value}</span>
     </div>
@@ -523,17 +523,17 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
         )}
 
         {/* 基本情報: レガシー OnPaint pt_member/pt_gender/pt_region/pt_rating */}
-        <div style={{ position: 'absolute', left: 193, top: 53, width: 144, height: 12, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: 'rgb(0,114,188)', textAlign: 'center' }}>
+        <div style={{ position: 'absolute', left: 193, top: 53, width: 144, height: 12, fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold', color: 'rgb(0,114,188)', textAlign: 'center' }}>
           {detail?.name ?? player.name}
         </div>
-        <div style={{ position: 'absolute', left: 193, top: 74, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>性別</div>
-        <div style={{ position: 'absolute', left: 240, top: 74, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>{` : ${sexText}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 90, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>地域</div>
-        <div style={{ position: 'absolute', left: 240, top: 90, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>{` : ${player.location ?? '-'}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 106, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>資産</div>
-        <div style={{ position: 'absolute', left: 240, top: 106, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>{` : ${player.slevel ?? '-'}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 122, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>戦績</div>
-        <div style={{ position: 'absolute', left: 240, top: 122, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>{` : R${player.rating ?? '-'}`}</div>
+        <div style={{ position: 'absolute', left: 193, top: 74, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>性別</div>
+        <div style={{ position: 'absolute', left: 240, top: 74, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${sexText}`}</div>
+        <div style={{ position: 'absolute', left: 193, top: 90, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>地域</div>
+        <div style={{ position: 'absolute', left: 240, top: 90, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${player.location ?? '-'}`}</div>
+        <div style={{ position: 'absolute', left: 193, top: 106, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>資産</div>
+        <div style={{ position: 'absolute', left: 240, top: 106, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${player.slevel ?? '-'}`}</div>
+        <div style={{ position: 'absolute', left: 193, top: 122, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>戦績</div>
+        <div style={{ position: 'absolute', left: 240, top: 122, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : R${player.rating ?? '-'}`}</div>
 
         {TABS.map((tab, i) => (
           <TabButton
@@ -547,7 +547,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
         ))}
 
         {/* 戦績概要: CRect(15,251,337,265) DT_CENTER */}
-        <div style={{ position: 'absolute', left: 15, top: 251, width: 322, height: 14, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '14px', color: '#000', textAlign: 'center' }}>
+        <div style={{ position: 'absolute', left: 15, top: 251, width: 322, height: 14, fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', lineHeight: '14px', color: '#000', textAlign: 'center' }}>
           {`戦績 : ${matchCnt}戦 ${tabRecord.winCnt}勝 ${tabRecord.defeatCnt}敗 ${tabRecord.drawCnt}分`}
         </div>
 
@@ -572,7 +572,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
         <StatLine label="平均ドラ枚数" value={tabRecord.horaCnt > 0 ? `${(tabRecord.doraCnt / tabRecord.horaCnt).toFixed(2)}枚` : '--.--枚'} x={185} y={436} />
         <StatLine label="平均裏ドラ枚数" value={tabRecord.richiHoraCnt > 0 ? `${(tabRecord.uraDoraCnt / tabRecord.richiHoraCnt).toFixed(2)}枚` : '--.--枚'} x={185} y={456} />
 
-        <div style={{ position: 'absolute', left: 20, top: 522, width: 314, height: 23, fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', lineHeight: '12px', color: '#000', whiteSpace: 'pre-line' }}>
+        <div style={{ position: 'absolute', left: 20, top: 522, width: 314, height: 23, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', lineHeight: '12px', color: '#000', whiteSpace: 'pre-line' }}>
           {activeTab === 0
             ? '一般広場・ハイクラス・段位戦の合計戦績です。'
             : activeTab === 1

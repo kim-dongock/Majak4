@@ -3,12 +3,6 @@
  * レガシー: legacy/client/HgMajak2/MajakChannelWnd.h/cpp
  *
  * ウィンドウサイズ: 1014×704px (CMajakStadiumWnd と同サイズ)
- *
- * 主要コンポーネント配置 (CMajakChannelWnd::OnCreate() に準拠):
- *   - ルームリスト (CHgRoomListWnd): 背景左パネル x=8-668, y=52-534
- *   - メンバーリスト (CHgMemberListWnd): MoveWindow(678, 212, 336, 403)
- *   - アイコンボタン群 (y=622/659/696)
- *   - 無料補充ボタン (866,171)
  */
 
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -1953,6 +1947,8 @@ export default function LobbyScreen() {
   const keepSignalRForRoomRef = useRef(false)
   const signalRConnectionOwnerRef = useRef<symbol | null>(null)
   const connectedServerUrlRef = useRef('')
+  const manualRefreshRef = useRef<'room' | 'tournament' | null>(null)
+  const manualRefreshTimeoutRef = useRef<number | null>(null)
 
   /** ダイアログ表示状態 */
   const [showWelcome,  setShowWelcome]  = useState(false)
@@ -2328,6 +2324,12 @@ export default function LobbyScreen() {
         setTournamentList(list)
         setTournamentJoinSeqNo(Number(data.tournamentJoinChk ?? 0))
         setSelectedTournamentSeqNo(prev => prev != null && list.some(item => item.seqNo === prev) ? prev : list[0]?.seqNo ?? null)
+        if (manualRefreshRef.current === 'tournament') {
+          manualRefreshRef.current = null
+          if (manualRefreshTimeoutRef.current !== null) window.clearTimeout(manualRefreshTimeoutRef.current)
+          manualRefreshTimeoutRef.current = null
+          void showMessage(`大会一覧を更新しました。${list.length}件の大会を確認しました。`, '更新完了')
+        }
       }
       SignalR.on('mjkc26e', onTournamentList)
 
@@ -2406,14 +2408,29 @@ export default function LobbyScreen() {
        */
       const onRoomList = (data: Record<string, unknown>) => {
         if (!mounted) return
+        const manualRefresh = manualRefreshRef.current === 'room'
         const legacyRoomCount = Number(data.k51e ?? 0)
-        if (data.k51e == null && Number(data.result) !== 1) return  // 静かに無視
+        if (data.k51e == null && Number(data.result) !== 1) {
+          if (manualRefresh) {
+            manualRefreshRef.current = null
+            if (manualRefreshTimeoutRef.current !== null) window.clearTimeout(manualRefreshTimeoutRef.current)
+            manualRefreshTimeoutRef.current = null
+            void showError('ルーム一覧を更新できませんでした。')
+          }
+          return
+        }
         if (legacyRoomCount > 0) setRoomSlotCount(legacyRoomCount)
         const list = Array.isArray(data.rooms)
           ? mergeLegacyRoomSeats(data, (data.rooms as Array<Record<string, unknown>>).map(readRoomEntry))
           : readLegacyRoomList(data)
         _setRooms(list)
         tryContinueRestore(list)
+        if (manualRefresh) {
+          manualRefreshRef.current = null
+          if (manualRefreshTimeoutRef.current !== null) window.clearTimeout(manualRefreshTimeoutRef.current)
+          manualRefreshTimeoutRef.current = null
+          void showMessage(`ルーム一覧を更新しました。${list.length}件のルームを確認しました。`, '更新完了')
+        }
       }
       SignalR.on('c12e', onRoomList)
 
@@ -2993,14 +3010,6 @@ export default function LobbyScreen() {
     await SignalR.send('hc1e', { k38e: CHAT_TARGET_ALL, target: CHAT_TARGET_ALL, k41e: text, string: text }).catch(() => {})
   }
 
-  /** WM_KEYDOWN / Enter キー → 送信 */
-  const onChatKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      void sendChat()
-    }
-  }
-
   /** オートマッチング状態 (m_bWantMatching 相当) */
   const [isMatching, setIsMatching] = useState(false)
 
@@ -3188,12 +3197,34 @@ export default function LobbyScreen() {
 
   /** ルームリスト更新 (RefreshボタンWM_COMMAND 相当) */
   const onRefreshRoomList = async () => {
+    if (manualRefreshRef.current !== null) return
+    const refreshTarget = tournamentChannel ? 'tournament' : 'room'
+    manualRefreshRef.current = refreshTarget
+    manualRefreshTimeoutRef.current = window.setTimeout(() => {
+      if (manualRefreshRef.current !== refreshTarget) return
+      manualRefreshRef.current = null
+      manualRefreshTimeoutRef.current = null
+      void showError(refreshTarget === 'tournament'
+        ? '大会一覧の更新応答がありません。接続を確認してからもう一度お試しください。'
+        : 'ルーム一覧の更新応答がありません。接続を確認してからもう一度お試しください。')
+    }, 10_000)
+
     if (tournamentChannel) {
-      await SignalR.send('mjkc26e', buildTournamentMemberPayload(player?.pix ?? '')).catch(() => {})
+      await SignalR.send('mjkc26e', buildTournamentMemberPayload(player?.pix ?? '')).catch(() => {
+        manualRefreshRef.current = null
+        if (manualRefreshTimeoutRef.current !== null) window.clearTimeout(manualRefreshTimeoutRef.current)
+        manualRefreshTimeoutRef.current = null
+        void showError('大会一覧の更新要求を送信できませんでした。接続を確認してください。')
+      })
       return
     }
     // room:get_list = Cmd.GetRoomList
-    await SignalR.send('c12e', {}).catch(() => {})
+    await SignalR.send('c12e', {}).catch(() => {
+      manualRefreshRef.current = null
+      if (manualRefreshTimeoutRef.current !== null) window.clearTimeout(manualRefreshTimeoutRef.current)
+      manualRefreshTimeoutRef.current = null
+      void showError('ルーム一覧の更新要求を送信できませんでした。接続を確認してください。')
+    })
   }
 
   const onSelectTournament = (entry: TournamentEntry) => {
@@ -3679,18 +3710,20 @@ export default function LobbyScreen() {
     const mobileTitle = channelName
     return (
       <div className={`majak-mobile-screen majak-mobile-lobby-screen${useResponsiveDesktopLayout ? ' majak-responsive-desktop-lobby' : ''}`}>
-        <section className="majak-mobile-lobby-toolbar majak-mobile-lobby-toolbar--with-user">
+        <section className={`majak-mobile-lobby-toolbar${useResponsiveDesktopLayout ? ' majak-mobile-lobby-toolbar--with-user' : ''}`}>
           <div>
             <h1>{mobileTitle}</h1>
           </div>
-          <MobileUserSummary
-            gameMoney={gamMoney}
-            assetTitle={slevel}
-            achievementTitle={majakTitleName}
-            trickTitle={trickTitleName}
-            loadProfile={false}
-            className="majak-mobile-user-summary--lobby"
-          />
+          {useResponsiveDesktopLayout && (
+            <MobileUserSummary
+              gameMoney={gamMoney}
+              assetTitle={slevel}
+              achievementTitle={majakTitleName}
+              trickTitle={trickTitleName}
+              loadProfile={false}
+              className="majak-mobile-user-summary--lobby"
+            />
+          )}
           {!useResponsiveDesktopLayout && (
             <div className="majak-mobile-lobby-actions">
               <button type="button" className="majak-mobile-lobby-header-button" onClick={onRefreshRoomList}>更新</button>
@@ -3756,26 +3789,31 @@ export default function LobbyScreen() {
             />
           </aside>
         </div>
-        <section className="majak-responsive-lobby-chat" aria-label="チャット">
-          <div ref={chatLogRef} className="majak-responsive-lobby-chat__log" aria-live="polite">
-            {chatLog.map(msg => {
-              const isSystem = msg.name === 'System'
-              return (
-                <p key={msg.id} style={{ color: msg.color ?? '#332217' }}>
-                  {msg.name && !isSystem ? `[${msg.name}] ` : ''}{msg.text}
-                </p>
-              )
-            })}
+        <div className="majak-mobile-lobby-chat-row">
+          <section className="majak-responsive-lobby-chat" aria-label="チャット">
+            <div ref={chatLogRef} className="majak-responsive-lobby-chat__log" aria-live="polite">
+              {chatLog.map(msg => {
+                const isSystem = msg.name === 'System'
+                return (
+                  <p key={msg.id} style={{ color: msg.color ?? '#332217' }}>
+                    {msg.name && !isSystem ? `[${msg.name}] ` : ''}{msg.text}
+                  </p>
+                )
+              })}
+            </div>
+          </section>
+          <div className="majak-mobile-lobby-chat-compose">
+            <input
+              className="majak-mobile-lobby-chat-input"
+              value={chatText}
+              onChange={event => setChatText(event.target.value)}
+              maxLength={80}
+              placeholder="メッセージを入力"
+              aria-label="チャットメッセージ"
+            />
+            <button type="button" onClick={() => void sendChat()} disabled={!chatText.trim()}>送信</button>
           </div>
-          <input
-            value={chatText}
-            onChange={event => setChatText(event.target.value)}
-            onKeyDown={onChatKeyDown}
-            maxLength={80}
-            placeholder="メッセージを入力"
-            aria-label="チャットメッセージ"
-          />
-        </section>
+        </div>
         {useResponsiveDesktopLayout && (
           <nav className="majak-responsive-lobby-actions" aria-label="ロビー操作">
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onRefreshRoomList}>更新</button>
@@ -3886,7 +3924,6 @@ export default function LobbyScreen() {
         <input
           value={chatText}
           onChange={e => setChatText(e.target.value)}
-          onKeyDown={onChatKeyDown}
           maxLength={80}
           style={{
             position: 'absolute',

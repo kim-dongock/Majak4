@@ -7,9 +7,21 @@ function formatPlayedAt(value: string): string {
   return value.replace('T', ' ').slice(0, 16)
 }
 
+function formatDateInputValue(value: Date): string {
+  const timezoneOffset = value.getTimezoneOffset() * 60_000
+  return new Date(value.getTime() - timezoneOffset).toISOString().slice(0, 10)
+}
+
+function createDefaultFilter(): PaifuArchiveFilter {
+  const to = new Date()
+  const from = new Date(to)
+  from.setDate(from.getDate() - 7)
+  return { from: formatDateInputValue(from), to: formatDateInputValue(to) }
+}
+
 export default function PaifuArchiveScreen() {
   const navigate = useNavigate()
-  const [filter, setFilter] = useState<PaifuArchiveFilter>({})
+  const [filter, setFilter] = useState<PaifuArchiveFilter>(createDefaultFilter)
   const [archives, setArchives] = useState<PaifuArchiveSummary[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -26,7 +38,7 @@ export default function PaifuArchiveScreen() {
   }
 
   useEffect(() => {
-    void loadArchives({})
+    void loadArchives(createDefaultFilter())
   }, [])
 
   const selected = archives.find(archive => archive.archiveId === selectedId)
@@ -53,35 +65,29 @@ export default function PaifuArchiveScreen() {
     <main className="majak-paifu-archive majak-screen-surface">
       <header className="majak-paifu-archive__header">
         <div><p>牌譜再生</p><h1>牌譜一覧</h1></div>
-        <button type="button" className="majak-responsive-control-button" onClick={() => navigate('/channel')}>戻る</button>
+        <div className="majak-paifu-archive__header-actions">
+          <button type="button" className="majak-responsive-control-button" onClick={() => void startReplay()} disabled={!selected || isStartingReplay}>{isStartingReplay ? '準備中...' : '再生'}</button>
+          <button type="button" className="majak-responsive-control-button" onClick={() => navigate('/channel')}>戻る</button>
+        </div>
       </header>
       <section className="majak-paifu-archive__filters" aria-label="牌譜検索">
         <label>種別<select value={filter.matchKind ?? ''} onChange={event => updateFilter('matchKind', event.target.value as PaifuArchiveFilter['matchKind'])}><option value="">すべて</option><option value="normal">通常</option><option value="tournament">大会</option></select></label>
         <label>対局者<input value={filter.member ?? ''} onChange={event => updateFilter('member', event.target.value)} /></label>
-        <label>ルーム<input value={filter.room ?? ''} onChange={event => updateFilter('room', event.target.value)} /></label>
-        <label>結果<input value={filter.result ?? ''} onChange={event => updateFilter('result', event.target.value)} /></label>
-        <label>開始日<input type="date" value={filter.from ?? ''} onChange={event => updateFilter('from', event.target.value)} /></label>
-        <label>終了日<input type="date" value={filter.to ?? ''} onChange={event => updateFilter('to', event.target.value)} /></label>
+        <label className="majak-paifu-archive__date-range">期間<span><input type="date" value={filter.from ?? ''} onChange={event => updateFilter('from', event.target.value)} /><input type="date" value={filter.to ?? ''} onChange={event => updateFilter('to', event.target.value)} /></span></label>
         <button type="button" className="majak-responsive-control-button" onClick={applyFilter} disabled={isLoading}>検索</button>
       </section>
       <section className="majak-paifu-archive__content">
         <div className="majak-paifu-archive__list" aria-live="polite">
+          <div className="majak-paifu-archive__list-header"><time>対局日時</time><strong>ルーム</strong><span>結果</span><span>参加者</span></div>
           {isLoading && <p>読み込み中...</p>}
           {!isLoading && archives.length === 0 && <p>再生できる牌譜はありません。</p>}
           {!isLoading && archives.map(archive => (
             <button key={archive.archiveId} type="button" className={archive.archiveId === selectedId ? 'is-selected' : undefined} onClick={() => setSelectedId(archive.archiveId)}>
               <time>{formatPlayedAt(archive.playedAt)}</time><strong>{archive.roomName || 'ルーム'}</strong><span>{archive.result || '-'}</span>
+              <div className="majak-paifu-archive__members">{archive.members.map((member, index) => <span key={`${member.name}-${index}`}>{member.name || '-'} <small>{member.title || '-'}</small> {member.result || '-'}</span>)}</div>
             </button>
           ))}
         </div>
-        <aside className="majak-paifu-archive__detail">
-          {selected ? <>
-            <h2>{selected.roomName || 'ルーム'}</h2>
-            <dl><div><dt>開始日時</dt><dd>{formatPlayedAt(selected.playedAt)}</dd></div><div><dt>結果</dt><dd>{selected.result || '-'}</dd></div></dl>
-            <table><thead><tr><th>ニックネーム</th><th>称号</th><th>結果</th></tr></thead><tbody>{selected.members.map((member, index) => <tr key={`${member.name}-${index}`}><td>{member.name || '-'}</td><td>{member.title || '-'}</td><td>{member.result || '-'}</td></tr>)}</tbody></table>
-            <button type="button" className="majak-responsive-control-button is-primary" onClick={() => void startReplay()} disabled={isStartingReplay}>{isStartingReplay ? '準備中...' : '再生'}</button>
-          </> : <p>牌譜を選択してください。</p>}
-        </aside>
       </section>
     </main>
   )

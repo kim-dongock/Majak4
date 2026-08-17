@@ -1,7 +1,0 @@
-/* Desktop-only invite dialog layout. */
-@media (min-width: 769px) and (pointer: fine) {
-  .majak-mini-channel--desktop .majak-invite-dialog {
-    width: 100%;
-    height: 100%;
-  }
-}

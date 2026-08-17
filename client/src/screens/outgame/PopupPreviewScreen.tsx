@@ -2,15 +2,24 @@ import { useState } from 'react'
 import type { GameAnnouncement } from '../../api/announcements'
 import AccuseDlg from './dialogs/AccuseDlg'
 import AskEndDlg from './dialogs/AskEndDlg'
+import BuyCustomItemDlg from './dialogs/BuyCustomItemDlg'
+import BuyExchangeItemDlg from './dialogs/BuyExchangeItemDlg'
+import BuyHanCoinItemDlg from './dialogs/BuyHanCoinItemDlg'
 import CfgDlg, { DEFAULT_CONFIG } from './dialogs/CfgDlg'
+import CircleOptDlg from './dialogs/CircleOptDlg'
 import CollectionDlg from './dialogs/CollectionDlg'
+import ConfirmItemDlg from './dialogs/ConfirmItemDlg'
+import CustomDlg from './dialogs/CustomDlg'
 import CustomReceiptDlg from './dialogs/CustomReceiptDlg'
+import DebugLoginDlg from './dialogs/DebugLoginDlg'
 import EndingPopupWnd from './dialogs/EndingPopupWnd'
 import ExchangeItemReceiptDlg from './dialogs/ExchangeItemReceiptDlg'
+import { Event200912PointDlg } from './dialogs/EventDialogs'
 import GetCoinDlg from './dialogs/GetCoinDlg'
 import GetReqGameDialog from './dialogs/GetReqGameDialog'
 import HanCoinReceiptDlg from './dialogs/HanCoinReceiptDlg'
 import ItemPopupDlg, { POPUP_REASON } from './dialogs/ItemPopupDlg'
+import ItemShopDlg from './dialogs/ItemShopDlg'
 import LeadDlg from './dialogs/LeadDlg'
 import LevelupDlg from './dialogs/LevelupDlg'
 import LotResultDlg from './dialogs/LotResultDlg'
@@ -19,9 +28,12 @@ import MissionDlg from './dialogs/MissionDlg'
 import MissionRewardGuideDlg from './dialogs/MissionRewardGuideDlg'
 import OptDlg, { DEFAULT_OPTION } from './dialogs/OptDlg'
 import PlayerInfoWnd from './dialogs/PlayerInfoWnd'
+import PaifuSaveDlg from './dialogs/PaifuSaveDlg'
 import RankingDlg, { type RankingData } from './dialogs/RankingDlg'
 import RoomCreateDlg from './dialogs/RoomCreateDlg'
 import ResponsiveItemShopDlg from './dialogs/ResponsiveItemShopDlg'
+import RegistrationDlg from './dialogs/RegistrationDlg'
+import SerialCodeDlg from './dialogs/SerialCodeDlg'
 import StartPopupWnd from './dialogs/StartPopupWnd'
 import TournamentRegistDlg from './dialogs/TournamentRegistDlg'
 import WelcomeDlg from './dialogs/WelcomeDlg'
@@ -32,12 +44,15 @@ type PreviewId =
   | 'missionGuide' | 'tournamentRegist'
   | 'shop' | 'collection' | 'hanCoinReceipt' | 'exchangeReceipt' | 'customReceipt' | 'lotSlot' | 'lotResult'
   | 'levelup' | 'coin' | 'lead' | 'item' | 'ending' | 'askEnd'
+  | 'buyHanCoinItem' | 'buyExchangeItem' | 'buyCustomItem' | 'circleOptions' | 'confirmItem'
+  | 'customInventory' | 'debugLogin' | 'eventDialogs' | 'legacyItemShop' | 'registration'
+  | 'shopTransaction' | 'paifuSave' | 'serialCode'
 
 type PreviewEntry = {
   id: PreviewId
   title: string
   group: string
-  status: 'Complete'
+  status: 'Complete' | 'Cataloged'
   summary: string
 }
 
@@ -67,6 +82,19 @@ const PREVIEWS: PreviewEntry[] = [
   { id: 'tournamentRegist', title: 'TournamentRegistDlg', group: 'Tournaments', status: 'Complete', summary: 'Tournament registration form fixture.' },
   { id: 'ending', title: 'EndingPopupWnd', group: 'Startup and account notices', status: 'Complete', summary: 'Logout confirmation fixture.' },
   { id: 'askEnd', title: 'AskEndDlg', group: 'In-game confirmation', status: 'Complete', summary: '10-second continuation confirmation fixture.' },
+  { id: 'buyHanCoinItem', title: 'BuyHanCoinItemDlg', group: 'Shop', status: 'Complete', summary: 'MP item purchase confirmation dialog.' },
+  { id: 'buyExchangeItem', title: 'BuyExchangeItemDlg', group: 'Shop', status: 'Complete', summary: 'Dragon Orb exchange confirmation dialog.' },
+  { id: 'buyCustomItem', title: 'BuyCustomItemDlg', group: 'Shop', status: 'Complete', summary: 'Custom item purchase confirmation dialog.' },
+  { id: 'circleOptions', title: 'CircleOptDlg', group: 'Lobby and rooms', status: 'Complete', summary: 'Circle room option configuration dialog.' },
+  { id: 'confirmItem', title: 'ConfirmItemDlg', group: 'Shop', status: 'Complete', summary: 'Owned item selection and confirmation dialog.' },
+  { id: 'customInventory', title: 'CustomDlg', group: 'Shop', status: 'Complete', summary: 'Custom inventory and equipment dialog.' },
+  { id: 'debugLogin', title: 'DebugLoginDlg', group: 'Development', status: 'Complete', summary: 'Development-only account login dialog.' },
+  { id: 'eventDialogs', title: 'EventDialogs', group: 'Missions and events', status: 'Complete', summary: 'Event introduction, point, and close dialog set.' },
+  { id: 'legacyItemShop', title: 'ItemShopDlg', group: 'Shop', status: 'Complete', summary: 'Legacy fixed-layout item shop dialog.' },
+  { id: 'registration', title: 'RegistrationDlg', group: 'Startup and account notices', status: 'Complete', summary: 'New member registration dialog.' },
+  { id: 'shopTransaction', title: 'ResponsiveShopTransactionDlg', group: 'Shop', status: 'Complete', summary: 'Responsive item purchase transaction dialog.' },
+  { id: 'paifuSave', title: 'PaifuSaveDlg', group: 'Lobby and rooms', status: 'Complete', summary: 'Paifu save dialog.' },
+  { id: 'serialCode', title: 'SerialCodeDlg', group: 'Startup and account notices', status: 'Complete', summary: 'Serial code entry dialog.' },
 ]
 
 const PREVIEW_ANNOUNCEMENT: GameAnnouncement = {
@@ -140,6 +168,34 @@ function renderPreview(id: PreviewId, onClose: () => void) {
       return <EndingPopupWnd onOK={onClose} onCancel={onClose} />
     case 'askEnd':
       return <AskEndDlg onYes={onClose} onNo={onClose} />
+    case 'buyHanCoinItem':
+      return <BuyHanCoinItemDlg item={{ itemCode: 'preview-ticket', sellCode: 'preview-ticket', itemName: '龍珠2倍', price: 300, gameMoney: 1000, description: ['対局終了時に獲得できる', '龍珠が2倍になります。'], imageUrl: '/assets/images/game/items/mj_item_01.png' }} pix="preview-user" memberName="プレビュー雀士" hanCoin={500} onClose={onClose} />
+    case 'buyExchangeItem':
+      return <BuyExchangeItemDlg item={{ sellCode: 'preview-title', itemName: '特別称号', itemKind: '麻雀称号', itemGuid1: '限定称号を獲得できます。', itemGuid2: 'コレクションから装着できます。', costGem: 10, costMoney: 5000, limitDays: -1, quantity: 0 }} pix="preview-user" memberName="プレビュー雀士" userGem={24} userMoney={12000} onClose={onClose} />
+    case 'buyCustomItem':
+      return <BuyCustomItemDlg item={{ itemId: 11, itemName: '和風背景', itemType: '背景', itemDesc: '対局ロビーの背景を変更できます。', price: 200, shopNo: 1, gameMoney: 0 }} pix="preview-user" memberName="プレビュー雀士" hanCoin={500} onClose={onClose} />
+    case 'circleOptions':
+      return <CircleOptDlg circles={[{ circleId: 'circle-1', circleName: '雀友会' }, { circleId: 'circle-2', circleName: '東風クラブ' }, { circleId: 'circle-3', circleName: '麻雀研究会' }]} onOK={() => onClose()} onCancel={onClose} />
+    case 'confirmItem':
+      return <ConfirmItemDlg majItems={[{ itemCode: 'MJ20', buyDt: 1767225600, endDt: 2147483647, qty: 3, useFlag: 0 }]} onClose={onClose} />
+    case 'customInventory':
+      return <CustomDlg hanCoin={500} hanCoupon={12} onEquipChange={() => {}} onRequestShop={() => {}} onClose={onClose} />
+    case 'debugLogin':
+      return <DebugLoginDlg servers={[{ label: 'Preview Server', serverId: 'preview', downloadUrl: 'https://example.invalid' }]} groups={[{ label: 'Preview Group', groupId: 'preview-group' }]} users={[{ id: 'preview-user', password: 'preview-password' }]} onOK={() => onClose()} onCancel={onClose} />
+    case 'eventDialogs':
+      return <Event200912PointDlg info={{ matchCount: 5, bestPoints: [120, 95, 80, 72, 61] }} onClose={onClose} onGoWeb={() => {}} />
+    case 'legacyItemShop':
+      return <ItemShopDlg cashCount={500} gemCount={24} gamMoney={1200} onClose={onClose} />
+    case 'registration':
+      return <RegistrationDlg idToken="popup-preview" googleInfo={{ pix: 'preview-user', name: 'プレビュー雀士', sex: 'M', birthYear: null, avatarId: '', password: '', isTestEnv: true, requiresRegistration: true }} onComplete={() => onClose()} onAuthExpired={onClose} />
+    case 'shopTransaction':
+      return <ResponsiveItemShopDlg cashCount={500} gemCount={24} gamMoney={1200} onClose={onClose} />
+    case 'paifuSave':
+      return <PaifuSaveDlg defaultFileName="preview-paifu.txt" initialComment="プレビュー用の牌譜です。" onSave={() => onClose()} onCancel={onClose} />
+    case 'serialCode':
+      return <SerialCodeDlg onOK={() => {}} onClose={onClose} />
+    default:
+      return null
   }
 }
 
@@ -147,6 +203,7 @@ export default function PopupPreviewScreen() {
   const [selectedId, setSelectedId] = useState<PreviewId>('welcome')
   const [isOpen, setIsOpen] = useState(true)
   const selected = PREVIEWS.find(entry => entry.id === selectedId) ?? PREVIEWS[0]
+  const canPreview = selected.status === 'Complete'
 
   const choosePreview = (id: PreviewId) => {
     setSelectedId(id)
@@ -159,7 +216,7 @@ export default function PopupPreviewScreen() {
         <div>
           <p className="majak-popup-preview__eyebrow">Development only</p>
           <h1>Popup Preview</h1>
-          <p className="majak-popup-preview__description">Select a popup to open it with deterministic fixture data.</p>
+          <p className="majak-popup-preview__description">{PREVIEWS.length} popup screens. Preview-ready screens open with deterministic fixture data.</p>
         </div>
         <nav className="majak-popup-preview__list" aria-label="Popup preview list">
           {PREVIEWS.map(entry => (
@@ -181,12 +238,14 @@ export default function PopupPreviewScreen() {
         <h2>{selected.title}</h2>
         <p>{selected.summary}</p>
         <dl>
-          <div><dt>Source status</dt><dd>Complete</dd></div>
-          <div><dt>Browser status</dt><dd>Ready for manual check</dd></div>
+          <div><dt>Catalog status</dt><dd>{selected.status}</dd></div>
+          <div><dt>Title</dt><dd>--majak-popup-font-title</dd></div>
+          <div><dt>Emphasis</dt><dd>--majak-popup-font-emphasis</dd></div>
+          <div><dt>Body</dt><dd>--majak-popup-font-body</dd></div>
         </dl>
-        {!isOpen && <button type="button" className="majak-popup-preview__open" onClick={() => setIsOpen(true)}>Open {selected.title}</button>}
+        {canPreview && !isOpen && <button type="button" className="majak-popup-preview__open" onClick={() => setIsOpen(true)}>Open {selected.title}</button>}
       </section>
-      {isOpen && renderPreview(selectedId, () => setIsOpen(false))}
+      {canPreview && isOpen && renderPreview(selectedId, () => setIsOpen(false))}
     </main>
   )
 }

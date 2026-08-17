@@ -41,23 +41,23 @@ export default function MissionRewardGuideDlg({ onClose }: Props) {
     </section>
     <style>{`
       .mission-reward-guide-overlay { position: absolute; inset: 0; z-index: 270; display: grid; place-items: center; padding: 20px; overflow: hidden; box-sizing: border-box; background: rgba(8,16,20,.76); font-family: var(--majak-font-family-ui); }
-      .mission-reward-guide { width: min(650px, 100%); color: #172323; border: 1px solid #7d8e80; background: #f5f2e9; box-shadow: 0 24px 72px rgba(0,0,0,.42); }
+      .mission-reward-guide { width: min(650px, 100%); color: #172323; border: 1px solid #7d8e80; background: var(--majak-popup-panel-color); box-shadow: 0 24px 72px rgba(0,0,0,.42); }
       .mission-reward-guide header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 20px; color: #fff; background: #174b43; }
-      .mission-reward-guide header h2 { margin: 0; font-size: var(--majak-dialog-title-font-size); }
+      .mission-reward-guide header h2 { margin: 0; font-size: var(--majak-popup-font-title); line-height: var(--majak-popup-leading-title); }
       .mission-reward-guide main { display: grid; gap: 22px; padding: 22px; }
       .mission-reward-guide__flow { display: grid; gap: 1px; border: 1px solid #c8d0c2; background: #c8d0c2; }
       .mission-reward-guide__flow div { display: grid; grid-template-columns: 27px 1fr; column-gap: 10px; padding: 11px 12px; background: #fffdf8; }
-      .mission-reward-guide__flow b { display: grid; grid-row: span 2; place-items: center; width: 25px; height: 25px; border-radius: 50%; color: #fff; background: #1c5a4d; }
-      .mission-reward-guide__flow strong { margin-left: -8px; color: #1f4d42; font-size: var(--majak-font-14); font-weight: 700 !important; }
-      .mission-reward-guide__flow span { margin-top: 3px; color: #52645d; font-size: var(--majak-font-12); line-height: 1.45; }
-      .mission-reward-guide h3 { margin: 0 0 10px; color: #31473f; font-size: var(--majak-font-16); }
+      .mission-reward-guide__flow b { display: grid; grid-row: span 2; place-items: center; width: 25px; height: 25px; border-radius: 50%; color: #fff; background: #1c5a4d; font-size: var(--majak-popup-font-body); }
+      .mission-reward-guide__flow strong { margin-left: -8px; color: #1f4d42; font-size: var(--majak-popup-font-emphasis); font-weight: 700; line-height: var(--majak-popup-leading-emphasis); }
+      .mission-reward-guide__flow span { margin-top: 3px; color: #52645d; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
+      .mission-reward-guide h3 { margin: 0 0 10px; color: #31473f; font-size: var(--majak-popup-font-emphasis); line-height: var(--majak-popup-leading-emphasis); }
       .mission-reward-guide__rewards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
       .mission-reward-guide__rewards div { display: grid; gap: 4px; padding: 10px; border: 1px solid #d4c58d; background: #fffdf2; text-align: center; }
-      .mission-reward-guide__rewards span { color: #8b6b20; font-size: var(--majak-font-11); }
-      .mission-reward-guide__rewards strong { color: #a64a27; font-size: var(--majak-font-15); }
-      .mission-reward-guide__note { margin: 11px 0 0; color: #607069; font-size: var(--majak-font-12); line-height: 1.5; }
+      .mission-reward-guide__rewards span { color: #8b6b20; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
+      .mission-reward-guide__rewards strong { color: #a64a27; font-size: var(--majak-popup-font-emphasis); line-height: var(--majak-popup-leading-emphasis); }
+      .mission-reward-guide__note { margin: 11px 0 0; color: #607069; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
       .mission-reward-guide footer { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
-      .mission-reward-guide footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); border: 1px solid #839087; border-radius: 3px; color: #32453e; background: transparent; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
+      .mission-reward-guide footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); border: 1px solid #839087; border-radius: 3px; color: #32453e; background: transparent; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; }
       .mission-reward-guide--mobileLandscape, .mission-reward-guide--mobilePortrait { width: 100%; max-height: 100%; overflow: auto; }
       .mission-reward-guide-overlay--mobileLandscape, .mission-reward-guide-overlay--mobilePortrait { padding: 0; }
       .mission-reward-guide--mobileLandscape main, .mission-reward-guide--mobilePortrait main { gap: 5px; padding: 8px; }

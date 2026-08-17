@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { getAnnouncements, type GameAnnouncement } from '../../api/announcements'
 
 const PAGE_SIZE = 20
@@ -10,7 +9,6 @@ function formatPublishedDate(value: string | null): string {
 }
 
 export default function AnnouncementListScreen() {
-  const navigate = useNavigate()
   const [articles, setArticles] = useState<GameAnnouncement[]>([])
   const [selected, setSelected] = useState<GameAnnouncement | null>(null)
   const [hasMore, setHasMore] = useState(true)
@@ -53,11 +51,8 @@ export default function AnnouncementListScreen() {
   }, [articles.length, hasMore])
 
   return <main className="majak-announcement-list majak-screen-surface">
-    <header className="majak-announcement-list__header">
-      <button type="button" onClick={() => navigate('/channel')}>戻る</button>
-      <div><p>MAJAK4 INFORMATION</p><h1>お知らせ</h1></div>
-    </header>
     <section className="majak-announcement-list__intro">
+      <h1>お知らせ</h1>
       <p>最新のお知らせから順に表示しています。</p>
     </section>
     <section className="majak-announcement-list__items" aria-label="お知らせ一覧">
@@ -89,13 +84,9 @@ export default function AnnouncementListScreen() {
     </section>}
     <style>{`
       .majak-announcement-list { min-height: 100dvh; color: #182b29; background: #eef1e9; font-family: var(--majak-font-family-ui); }
-      .majak-announcement-list__header { display: grid; grid-template-columns: 100px minmax(0, 1fr) 100px; align-items: center; min-height: 86px; padding: 0 5vw; color: #fff; background: #174b43; }
-      .majak-announcement-list__header > div { text-align: center; }
-      .majak-announcement-list__header p { margin: 0; color: #d7b95d; font-size: var(--majak-font-11); font-weight: 700; letter-spacing: 1px; }
-      .majak-announcement-list__header h1 { margin: 4px 0 0; font-size: var(--majak-font-25); }
-      .majak-announcement-list__header button { width: fit-content; min-width: 72px; height: 34px; border: 1px solid rgba(255,255,255,.72); border-radius: 3px; color: #fff; background: transparent; font: 700 var(--majak-font-13)/1 var(--majak-font-family-ui); cursor: pointer; }
       .majak-announcement-list__intro, .majak-announcement-list__items, .majak-announcement-list__detail { width: min(940px, calc(100% - 32px)); margin-inline: auto; }
       .majak-announcement-list__intro { padding: 24px 0 12px; color: #607069; font-size: var(--majak-font-13); }
+      .majak-announcement-list__intro h1 { margin: 0 0 8px; color: #1b413a; font-size: var(--majak-font-25); }
       .majak-announcement-list__intro p { margin: 0; }
       .majak-announcement-list__items { display: grid; border-top: 1px solid #c7d0c7; }
       .majak-announcement-list__items > button { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; gap: 16px; align-items: center; min-height: 62px; padding: 12px 16px; border: 0; border-bottom: 1px solid #c7d0c7; color: #263936; background: #fffdf8; text-align: left; cursor: pointer; }
@@ -112,7 +103,7 @@ export default function AnnouncementListScreen() {
       .majak-announcement-list__detail summary { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 14px; padding: 15px 18px; color: #1e4f45; cursor: pointer; list-style: none; }.majak-announcement-list__detail summary::-webkit-details-marker { display: none; }
       .majak-announcement-list__detail summary span { color: #8a681d; font-size: var(--majak-font-12); font-weight: 700; }.majak-announcement-list__detail summary strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .majak-announcement-list__detail article { padding: 22px; border-top: 1px solid #cfd7cd; }.majak-announcement-list__detail article time { color: #68776f; font-size: var(--majak-font-12); }.majak-announcement-list__detail h2 { margin: 10px 0 16px; color: #1b413a; font-size: var(--majak-font-20); }.majak-announcement-list__detail article p { margin: 0; white-space: pre-wrap; color: #34453f; font-size: var(--majak-font-14); line-height: 1.8; }
-      @media (max-width: 640px) { .majak-announcement-list__header { grid-template-columns: 74px minmax(0, 1fr) 74px; min-height: 60px; padding: 0 12px; }.majak-announcement-list__header button { min-width: 58px; height: 28px; font-size: var(--majak-font-11); }.majak-announcement-list__header h1 { font-size: var(--majak-font-19); }.majak-announcement-list__header p { display: none; }.majak-announcement-list__intro, .majak-announcement-list__items, .majak-announcement-list__detail { width: min(100% - 20px, 940px); }.majak-announcement-list__intro { padding-top: 15px; }.majak-announcement-list__items > button { grid-template-columns: 1fr auto; gap: 5px 8px; min-height: 58px; padding: 10px; }.majak-announcement-list__items time { grid-column: 1 / -1; font-size: var(--majak-font-11); }.majak-announcement-list__items strong { font-size: var(--majak-font-13); }.majak-announcement-list__detail { margin-top: 16px; }.majak-announcement-list__detail summary { grid-template-columns: 1fr; gap: 5px; padding: 12px; }.majak-announcement-list__detail article { padding: 16px 12px; }.majak-announcement-list__detail h2 { font-size: var(--majak-font-17); }.majak-announcement-list__detail article p { font-size: var(--majak-font-13); line-height: 1.7; } }
+      @media (max-width: 640px) { .majak-announcement-list__intro, .majak-announcement-list__items, .majak-announcement-list__detail { width: min(100% - 20px, 940px); }.majak-announcement-list__intro { padding-top: 15px; }.majak-announcement-list__intro h1 { font-size: var(--majak-font-19); }.majak-announcement-list__items > button { grid-template-columns: 1fr auto; gap: 5px 8px; min-height: 58px; padding: 10px; }.majak-announcement-list__items time { grid-column: 1 / -1; font-size: var(--majak-font-11); }.majak-announcement-list__items strong { font-size: var(--majak-font-13); }.majak-announcement-list__detail { margin-top: 16px; }.majak-announcement-list__detail summary { grid-template-columns: 1fr; gap: 5px; padding: 12px; }.majak-announcement-list__detail article { padding: 16px 12px; }.majak-announcement-list__detail h2 { font-size: var(--majak-font-17); }.majak-announcement-list__detail article p { font-size: var(--majak-font-13); line-height: 1.7; } }
     `}</style>
   </main>
 }

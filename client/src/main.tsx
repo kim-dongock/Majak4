@@ -4,12 +4,6 @@ import { GoogleOAuthProvider } from '@react-oauth/google'
 import App from './App'
 import { showError } from './utils/msgbox'
 import './index.css'
-import './styles/outgame-room-desktop.css'
-import './styles/outgame-room-mobile.css'
-import './styles/outgame-invite-desktop.css'
-import './styles/outgame-invite-mobile.css'
-import './styles/outgame-invite-request.css'
-import './styles/outgame-accuse-dialog.css'
 
 let lastGlobalErrorMessage = ''
 let lastGlobalErrorAt = 0

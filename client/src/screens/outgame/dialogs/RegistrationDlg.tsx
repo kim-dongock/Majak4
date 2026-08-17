@@ -200,7 +200,7 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
               className="registration-command registration-command--primary"
               style={{
                 minWidth: isMobile ? 100 : 140, minHeight: isMobile ? 30 : 38,
-                fontSize: isMobile ? 'var(--majak-font-13)' : 'var(--majak-font-15)', padding: '0 20px',
+                fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 20px',
                 background: termsChecked ? '#1769aa' : '#aaa',
                 color: '#fff', border: 'none', borderRadius: 3,
                 cursor: termsChecked ? 'pointer' : 'default',
@@ -226,7 +226,7 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
           <div className="registration-heading">ニックネームの設定</div>
 
           <div className="registration-nickname-field">
-            <div style={{ marginBottom: isMobile ? 6 : 10, fontSize: isMobile ? 'var(--majak-font-12)' : 'var(--majak-font-14)' }}>
+            <div style={{ marginBottom: isMobile ? 6 : 10, fontSize: 'var(--majak-popup-font-body)', lineHeight: 'var(--majak-popup-leading-body)' }}>
               ゲーム内で表示されるニックネームを入力してください（4〜16文字）
             </div>
             <input type="text" value={nickname} onChange={e => setNickname(e.target.value)}
@@ -235,13 +235,13 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
               style={{
                 width: '100%', boxSizing: 'border-box',
                 padding: isMobile ? '7px 10px' : '10px 14px',
-                fontSize: isMobile ? 'var(--majak-font-14)' : 'var(--majak-font-17)',
+                fontSize: 'var(--majak-popup-font-emphasis)',
                 border: nicknameMsg
                   ? `2px solid ${nicknameMsg.ok ? '#4caf50' : '#d32f2f'}`
                   : '1px inset #aaa',
               }}
             />
-            <div style={{ minHeight: 20, marginTop: 5, fontSize: isMobile ? 'var(--majak-font-11)' : 'var(--majak-font-13)',
+            <div style={{ minHeight: 20, marginTop: 5, fontSize: 'var(--majak-popup-font-body)', lineHeight: 'var(--majak-popup-leading-body)',
               color: nicknameMsg?.ok ? '#2e7d32' : '#d32f2f' }}>
               {checking && nickname.trim().length > 0 ? '確認中...' : (nicknameMsg?.text ?? '')}
             </div>
@@ -250,14 +250,14 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
           <div className="registration-actions" style={{ marginTop: 'auto', paddingTop: isMobile ? 12 : 24 }}>
             <button type="button" onClick={() => setStep('terms')}
               className="registration-command registration-command--secondary"
-              style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: isMobile ? 'var(--majak-font-12)' : 'var(--majak-font-14)', padding: '0 14px' }}>
+              style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 14px' }}>
               ← 戻る
             </button>
             <button type="button" disabled={!canProceedNickname} onClick={() => setStep('avatar')}
               className="registration-command registration-command--primary"
               style={{
                 minWidth: isMobile ? 100 : 140, minHeight: isMobile ? 30 : 38,
-                fontSize: isMobile ? 'var(--majak-font-13)' : 'var(--majak-font-15)', padding: '0 20px',
+                fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 20px',
                 background: canProceedNickname ? '#1769aa' : '#aaa',
                 color: '#fff', border: 'none', borderRadius: 3,
                 cursor: canProceedNickname ? 'pointer' : 'default',
@@ -282,7 +282,7 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
 
         <div className="registration-heading">プロフィール設定</div>
 
-        <div style={{ flexShrink: 0, marginBottom: isMobile ? 6 : 10, fontSize: isMobile ? 'var(--majak-font-11)' : 'var(--majak-font-14)', color: '#444' }}>
+        <div style={{ flexShrink: 0, marginBottom: isMobile ? 6 : 10, fontSize: 'var(--majak-popup-font-body)', lineHeight: 'var(--majak-popup-leading-body)', color: '#444' }}>
           ニックネーム: <b>{nickname}</b>
         </div>
 
@@ -366,20 +366,20 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
         </div>
 
         {error && (
-          <div style={{ flexShrink: 0, marginTop: 6, color: '#b00020', fontSize: isMobile ? 'var(--majak-font-12)' : 'var(--majak-font-14)' }}>{error}</div>
+          <div style={{ flexShrink: 0, marginTop: 6, color: '#b00020', fontSize: 'var(--majak-popup-font-body)', lineHeight: 'var(--majak-popup-leading-body)' }}>{error}</div>
         )}
 
         <div className="registration-actions" style={{ marginTop: isMobile ? 8 : 0 }}>
           <button type="button" onClick={() => setStep('nickname')} disabled={submitting}
             className="registration-command registration-command--secondary"
-            style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: isMobile ? 'var(--majak-font-12)' : 'var(--majak-font-14)', padding: '0 14px' }}>
+            style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 14px' }}>
             ← 戻る
           </button>
           <button type="button" disabled={submitting || birthYear === ''} onClick={() => void submit()}
             className="registration-command registration-command--primary"
             style={{
               minWidth: isMobile ? 100 : 140, minHeight: isMobile ? 30 : 38,
-              fontSize: isMobile ? 'var(--majak-font-13)' : 'var(--majak-font-15)', padding: '0 20px',
+              fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 20px',
               background: birthYear === '' ? '#aaa' : '#1769aa', color: '#fff', border: 'none',
               borderRadius: 3, cursor: birthYear === '' ? 'default' : 'pointer',
             }}>

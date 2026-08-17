@@ -1,4 +1,5 @@
 using Amazon;
+using Amazon.Runtime.CredentialManagement;
 using Amazon.S3;
 using Amazon.S3.Model;
 
@@ -12,14 +13,23 @@ public sealed class PaifuObjectStore
     private readonly int _presignedUrlMinutes;
     private readonly string? _kmsKeyId;
 
-    public PaifuObjectStore(IConfiguration configuration)
+    public PaifuObjectStore(IConfiguration configuration, IHostEnvironment environment)
     {
         _bucket = configuration["Paifu:S3Bucket"]?.Trim() ?? "";
         _prefix = configuration["Paifu:S3Prefix"]?.Trim().Trim('/') ?? "paifu";
         _presignedUrlMinutes = Math.Clamp(configuration.GetValue("Paifu:PresignedUrlMinutes", 5), 1, 15);
         _kmsKeyId = configuration["Paifu:KmsKeyId"]?.Trim();
         var region = RegionEndpoint.GetBySystemName(configuration["AWS:Region"] ?? "ap-northeast-1");
-        _s3 = new AmazonS3Client(region);
+        var profileName = environment.IsDevelopment() ? configuration["AWS:ProfileName"]?.Trim() : null;
+        if (!string.IsNullOrWhiteSpace(profileName)
+            && new CredentialProfileStoreChain().TryGetAWSCredentials(profileName, out var credentials))
+        {
+            _s3 = new AmazonS3Client(credentials, region);
+        }
+        else
+        {
+            _s3 = new AmazonS3Client(region);
+        }
     }
 
     public string CreateObjectKey(DateTimeOffset playedAt)

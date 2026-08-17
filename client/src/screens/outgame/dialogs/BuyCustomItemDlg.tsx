@@ -235,7 +235,7 @@ export default function BuyCustomItemDlg({
 
   const textStyle = {
     fontFamily: 'var(--majak-font-family-ui)' as const,
-    fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold' as const,
+    fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold' as const,
     color: '#000', pointerEvents: 'none' as const,
     overflow: 'hidden' as const, whiteSpace: 'nowrap' as const,
   }

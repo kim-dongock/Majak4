@@ -78,12 +78,16 @@ function TitleBtn({
 interface MajakFrameProps {
   /** 設定ボタンクリック時のコールバック (省略可) */
   onOpenSettings?: () => void
+  /** お知らせ画面を開くコールバック */
+  onOpenAnnouncements?: () => void
+  /** タイトル画面へ戻るコールバック */
+  onGoHome?: () => void
   /** 通報ボタン表示位置。レガシーで ACCBOX_CREATE がある画面だけ指定する */
   accBox?: 'channel' | 'room'
   children: React.ReactNode
 }
 
-export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFrameProps) {
+export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHome, accBox, children }: MajakFrameProps) {
   const location = useLocation()
   /** CMJCfgDlg 内部管理 — onOpenSettings 未指定時に使用 */
   const [showCfg, setShowCfg] = useState(false)
@@ -93,6 +97,8 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
   const frameWidth = accBox === 'room' ? 1024 : 1014
   const frameHeight = accBox === 'room' ? 735 : undefined
   const isResponsiveDesktopScreen = location.pathname === '/channel'
+    || location.pathname === '/announcements'
+    || location.pathname === '/paifu'
     || location.pathname.startsWith('/channel/select/')
     || /\/channel\/[^/]+\/lobby$/.test(location.pathname)
     || /\/channel\/[^/]+\/lobby\/room\/[^/]+$/.test(location.pathname)
@@ -215,6 +221,8 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
             <div className="majak-mobile-frame__brand">麻雀4</div>
             <MobileUserSummary />
             <div className="majak-mobile-frame__tools">
+              {onGoHome && <button type="button" onClick={onGoHome}>ホーム</button>}
+              {onOpenAnnouncements && <button type="button" onClick={onOpenAnnouncements}>お知らせ</button>}
               {!IS_NATIVE_APP && <button type="button" onClick={enterFullscreen} title="全画面表示">全画面</button>}
               <button type="button" onClick={handleOpenSettings}>設定</button>
               {showMobileExit && <button type="button" onClick={handleClose}>終了</button>}
@@ -253,6 +261,8 @@ export default function MajakFrame({ onOpenSettings, accBox, children }: MajakFr
         <header className="majak-responsive-desktop-frame__bar">
           <strong className="majak-type-lg">麻雀4</strong>
           <div>
+            {onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>ホーム</button>}
+            {onOpenAnnouncements && <button type="button" className="majak-responsive-control-button" onClick={onOpenAnnouncements}>お知らせ</button>}
             <button type="button" className="majak-responsive-control-button" onClick={handleOpenSettings}>設定</button>
             {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleAccuse}>通報</button>}
             {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleCapture}>キャプチャ</button>}

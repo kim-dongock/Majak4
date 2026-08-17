@@ -39,7 +39,7 @@ public class ParameterStoreService : IParameterStoreService
 
     /// <summary>
     /// AWS SSM クライアントを生成する
-    /// - Development: ~/.aws/credentials の "majak2" Named Profile を使用
+    /// - Development: AWS:ProfileName の Named Profile を使用
     /// - その他: EC2 IAM Role (インスタンスプロファイル → 環境変数 → 認証情報ファイル)
     /// </summary>
     private IAmazonSimpleSystemsManagement CreateSsmClient()
@@ -56,7 +56,13 @@ public class ParameterStoreService : IParameterStoreService
 
             if (_environment.IsDevelopment())
             {
-                const string profileName = "majak2";
+                var profileName = _configuration["AWS:ProfileName"]?.Trim();
+                if (string.IsNullOrWhiteSpace(profileName))
+                {
+                    _logger.LogInformation("No AWS development profile is configured. Using the default credential chain.");
+                    return new AmazonSimpleSystemsManagementClient(region);
+                }
+
                 var chain = new Amazon.Runtime.CredentialManagement.CredentialProfileStoreChain();
                 if (chain.TryGetAWSCredentials(profileName, out var profileCredentials))
                 {

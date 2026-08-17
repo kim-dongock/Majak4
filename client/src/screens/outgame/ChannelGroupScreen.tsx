@@ -2,18 +2,13 @@
  * CMJSelGroupWnd 相当 — チャンネルグループ選択画面 (AP-09 §1-3)
  * レガシー: legacy/client/HgMajak2/MJSelGroupWnd.h/cpp
  *
- * レガシーのカテゴリ、遷移先、開始ポップアップ表示条件を維持しつつ、
+ * レガシーのカテゴリと遷移先を維持しつつ、
  * デスクトップはレスポンシブな Web コントロールとして表示する。
- *
- * OnPaint() の m_bShowStartPopup=TRUE → ShowStartPopupDialog() 相当:
- *  マウント時に StartPopupWnd.NeedsToDisplayToday() を確認して表示
  */
 import { useNavigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
-import StartPopupWnd, { needsToDisplayToday } from './dialogs/StartPopupWnd'
+import { useEffect } from 'react'
 import MobileUserSummary from '../../components/MobileUserSummary'
 import * as SignalR from '../../api/signalr'
-import { getStartupAnnouncement, type GameAnnouncement } from '../../api/announcements'
 
 const MOBILE_MAIN_VISUAL_SRC = 'https://images.hange.jp/hangame/easy/majak4/client/bnr/top_majak_20220329.png'
 
@@ -31,19 +26,9 @@ const descriptions = [
 export default function ChannelGroupScreen() {
   const navigate = useNavigate()
 
-  /** OnPaint(): m_bShowStartPopup=TRUE → ShowStartPopupDialog() 相当 */
-  const [showStartPopup, setShowStartPopup] = useState(false)
-  const [announcement, setAnnouncement] = useState<GameAnnouncement | null>(null)
-
   useEffect(() => {
-    SignalR.disconnect().catch(() => {})
-    void getStartupAnnouncement().then(article => {
-      setAnnouncement(article)
-      if (article && needsToDisplayToday()) setShowStartPopup(true)
-    }).catch(() => {})
+    void SignalR.disconnect().catch(() => {})
   }, [])
-
-  const openAnnouncement = () => navigate('/announcements')
 
   /** OnCommand() → GetParent()->SendMessage(WM_COMMAND) に相当するナビゲーション */
   const onKouryu  = () => navigate('/channel/select/kouryu')   // IDC_BTN_CATEGORY_KOURYU → EnterCustom(IDC_CHK_STAND)
@@ -62,7 +47,6 @@ export default function ChannelGroupScreen() {
       <header className="majak-desktop-channel-group__header">
         <img className="majak-desktop-channel-group__logo" src={MOBILE_MAIN_VISUAL_SRC} alt="麻雀4" draggable={false} />
         <MobileUserSummary className="majak-desktop-channel-group__user-summary" />
-        <button type="button" className="majak-responsive-control-button" onClick={openAnnouncement}>お知らせ</button>
       </header>
       <main className="majak-desktop-channel-group__menu" aria-label="対戦メニュー">
         {items.map(item => (
@@ -75,10 +59,6 @@ export default function ChannelGroupScreen() {
         ))}
       </main>
 
-      {/* ── CMJStartPopupWnd: ログイン直後に1回表示 (m_bShowStartPopup) ── */}
-      {showStartPopup && (
-        <StartPopupWnd announcement={announcement} onClose={() => setShowStartPopup(false)} />
-      )}
     </div>
   )
 }

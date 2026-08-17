@@ -83,25 +83,25 @@ export default function ResponsiveShopTransactionDlg({
       </section>
       <style>{`
         .shop-transaction-overlay { position: absolute; inset: 0; z-index: 400; display: grid; place-items: center; padding: 16px; overflow: hidden; background: rgba(8,16,20,.76); font-family: var(--majak-font-family-ui); box-sizing: border-box; }
-        .shop-transaction { width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; color: #18312b; background: #f8f5ec; border: 1px solid #829287; box-shadow: 0 18px 54px rgba(0,0,0,.42); }
+        .shop-transaction { width: min(560px, 100%); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; overflow: hidden; color: #18312b; background: var(--majak-popup-panel-color); border: 1px solid #829287; box-shadow: 0 18px 54px rgba(0,0,0,.42); }
         .shop-transaction header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; color: #fff; background: #174b43; }
-        .shop-transaction header h2 { margin: 0; font-size: var(--majak-dialog-title-font-size); font-weight: 700; line-height: 1; letter-spacing: 0; }
+        .shop-transaction header h2 { margin: 0; font-size: var(--majak-popup-font-title); font-weight: 700; line-height: var(--majak-popup-leading-title); letter-spacing: 0; }
         .shop-transaction__body { min-height: 0; flex: 1 1 auto; padding: 18px; overflow: auto; }
         .shop-transaction__item { display: grid; grid-template-columns: 104px minmax(0,1fr); gap: 14px; align-items: center; }
         .shop-transaction__image { height: 104px; display: grid; place-items: center; background: #e8ede4; }
         .shop-transaction__image img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .shop-transaction__item span { color: #a06425; font: 700 var(--majak-dialog-caption-font-size)/1 var(--majak-font-family-ui); }
-        .shop-transaction__item h3 { margin: 5px 0 8px; font-size: var(--majak-dialog-body-font-size); font-weight: 400; line-height: 1.35; }
-        .shop-transaction__item p { margin: 3px 0; color: #5b6d66; font: var(--majak-dialog-caption-font-size)/1.35 var(--majak-font-family-ui); }
+        .shop-transaction__item span { color: #a06425; font: 700 var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
+        .shop-transaction__item h3 { margin: 5px 0 8px; font-size: var(--majak-popup-font-emphasis); font-weight: 400; line-height: var(--majak-popup-leading-emphasis); }
+        .shop-transaction__item p { margin: 3px 0; color: #5b6d66; font: var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
         .shop-transaction__details, .shop-transaction__balances { margin: 18px 0 0; border-top: 1px solid #c8d0c2; font-family: var(--majak-font-family-ui); }
         .shop-transaction__balances { background: #eaf0e5; }
         .shop-transaction__details div, .shop-transaction__balances div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 2px; border-bottom: 1px solid #d6ddd2; }
         .shop-transaction__balances div { padding-inline: 10px; }
-        .shop-transaction dt { color: #5a6e66; font: var(--majak-dialog-caption-font-size)/1.2 var(--majak-font-family-ui); } .shop-transaction dd { margin: 0; color: #173f36; font: 700 var(--majak-dialog-body-font-size)/1.1 var(--majak-font-family-ui); text-align: right; }
-        .shop-transaction select { min-width: 70px; padding: 3px; border: 1px solid #8e9c90; background: #fff; font: 700 var(--majak-dialog-label-font-size)/1 var(--majak-font-family-ui); }
+        .shop-transaction dt { color: #5a6e66; font: var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); } .shop-transaction dd { margin: 0; color: #173f36; font: 700 var(--majak-popup-font-emphasis)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); text-align: right; }
+        .shop-transaction select { min-width: 70px; padding: 3px; border: 1px solid #8e9c90; background: #fff; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); }
         .shop-transaction footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid #c8d0c2; background: #e7ede4; }
-        .shop-transaction footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 15px; box-sizing: border-box; border: 0; border-radius: 3px; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
-        .shop-transaction__cancel { color: #3e5249; background: transparent; border: 1px solid #87958a !important; }
+        .shop-transaction footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 15px; box-sizing: border-box; border: 0; border-radius: 3px; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
+        .shop-transaction__cancel { color: #3e5249; background: transparent; border: 1px solid #87958a; }
         .shop-transaction__primary { color: #fff; background: #1b5b4d; } .shop-transaction__primary:disabled { color: #84908a; background: #d6ddd5; cursor: not-allowed; }
         @media (max-width: 700px), (max-height: 560px) {
           .shop-transaction-overlay { padding: 16px; }

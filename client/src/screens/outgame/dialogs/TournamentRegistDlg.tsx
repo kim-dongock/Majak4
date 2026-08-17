@@ -72,7 +72,7 @@ function inputStyle(left: number, top: number, width: number): React.CSSProperti
     height: 22,
     boxSizing: 'border-box',
     fontFamily: FONT,
-    fontSize: 'calc(13px * var(--majak-type-scale))',
+    fontSize: 'var(--majak-popup-font-emphasis)',
     color: '#000',
     background: '#fff',
     border: '1px solid #6f8f68',
@@ -96,7 +96,7 @@ function labelStyle(left: number, top: number, width = 120): React.CSSProperties
     width,
     height: 18,
     fontFamily: FONT,
-    fontSize: 'calc(13px * var(--majak-type-scale))',
+    fontSize: 'var(--majak-popup-font-emphasis)',
     lineHeight: '18px',
     color: '#1a401a',
     whiteSpace: 'nowrap',
@@ -113,7 +113,7 @@ function checkStyle(left: number, top: number, width = 110): React.CSSProperties
     alignItems: 'center',
     gap: 4,
     fontFamily: FONT,
-    fontSize: 'calc(13px * var(--majak-type-scale))',
+    fontSize: 'var(--majak-popup-font-emphasis)',
     color: '#1a401a',
     whiteSpace: 'nowrap',
   }
@@ -267,7 +267,7 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
     <div style={{ position: 'absolute', inset: 0, zIndex: 280, background: 'rgba(0,0,0,0.35)', overflowY: 'auto' }}>
       <div style={{ position: 'relative', width: 500, height: 830, margin: '4px auto 16px' }}>
         <img src={`${IMG}/mj_tournament_bg.png`} alt="" draggable={false} style={{ position: 'absolute', left: 0, top: 0, width: 500, height: 830, imageRendering: 'pixelated' }} />
-        <div style={{ position: 'absolute', left: 155, top: 14, width: 190, height: 24, textAlign: 'center', fontFamily: FONT, fontSize: 'calc(15px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff', lineHeight: '24px' }}>大会登録</div>
+        <div style={{ position: 'absolute', left: 155, top: 14, width: 190, height: 24, textAlign: 'center', fontFamily: FONT, fontSize: 'var(--majak-popup-font-title)', fontWeight: 'bold', color: '#fff', lineHeight: '24px' }}>大会登録</div>
 
         <span style={labelStyle(45, 66)}>大会名</span>
         <input value={name} onChange={event => setName(event.target.value.slice(0, 30))} maxLength={30} autoFocus style={inputStyle(150, 64, 265)} />

@@ -68,6 +68,48 @@ function RouterStatePersistence() {
   return null
 }
 
+function ButtonPressFeedback() {
+  useEffect(() => {
+    const pendingButtons = new WeakSet<HTMLButtonElement>()
+
+    const getButton = (eventTarget: EventTarget | null) => {
+      const button = eventTarget instanceof Element ? eventTarget.closest('button:not(:disabled)') : null
+      return button instanceof HTMLButtonElement ? button : null
+    }
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = getButton(event.target)
+      if (!target) return
+      target.classList.add('majak-press-feedback')
+    }
+
+    const onClickCapture = (event: MouseEvent) => {
+      const target = getButton(event.target)
+      if (!target || !event.isTrusted || event.detail === 0) return
+
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      if (pendingButtons.has(target)) return
+
+      pendingButtons.add(target)
+      window.setTimeout(() => {
+        pendingButtons.delete(target)
+        target.classList.remove('majak-press-feedback')
+        if (target.isConnected && !target.disabled) target.click()
+      }, 180)
+    }
+
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('click', onClickCapture, true)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('click', onClickCapture, true)
+    }
+  }, [])
+
+  return null
+}
+
 function SignalRRouteDisconnect() {
   const location = useLocation()
 
@@ -562,6 +604,15 @@ function SuspendedScreen() {
   )
 }
 
+function ChannelGroupRoute() {
+  const navigate = useNavigate()
+  return <MajakFrame onOpenAnnouncements={() => navigate('/announcements')}><ChannelGroupScreen /></MajakFrame>
+}
+
+function AnnouncementRoute() {
+  const navigate = useNavigate()
+  return <MajakFrame onGoHome={() => navigate('/channel')}><AnnouncementListScreen /></MajakFrame>
+}
 
 export default function App() {
   const initialRoute = readStoredRouterState()
@@ -575,14 +626,15 @@ export default function App() {
       <AuthGate>
         <MemoryRouter initialEntries={[initialRoute]}>
           <RouterStatePersistence />
+          <ButtonPressFeedback />
           <SignalRRouteDisconnect />
           <ForcedLogoutListener />
           <ContinueRoomBootstrap />
           <Routes>
             {/* アウトゲーム (CMajakFrame タイトルバー付き) */}
             <Route path="/" element={<Navigate to="/channel" replace />} />
-            <Route path="/channel" element={<MajakFrame><ChannelGroupScreen /></MajakFrame>} />
-            <Route path="/announcements" element={<AnnouncementListScreen />} />
+            <Route path="/channel" element={<ChannelGroupRoute />} />
+            <Route path="/announcements" element={<AnnouncementRoute />} />
             <Route path="/channel/select/:group" element={<MajakFrame><LobbySelectScreen /></MajakFrame>} />
             <Route path="/channel/:channelId" element={<MajakFrame><LobbySelectScreen /></MajakFrame>} />
             <Route path="/channel/:channelId/lobby" element={<MajakFrame accBox="channel"><LobbyScreen /></MajakFrame>} />

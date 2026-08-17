@@ -60,10 +60,10 @@ export default function CircleOptDlg({ circles, onOK, onCancel }: Props) {
   const DLG_BG = '#d4d0c8'
   const DLG_W  = SX(180)  // 270
   const DLG_H  = SY(180)  // 292
-  const TITLE_H = 22
+  const TITLE_H = 32
 
   const btnStyle = (def: boolean, disabled?: boolean): React.CSSProperties => ({
-    position: 'absolute', fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
+    position: 'absolute', fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', lineHeight: 1, color: '#000',
     background: DLG_BG,
     borderTop: '2px solid #fff', borderLeft: '2px solid #fff',
     borderRight: '2px solid #808080', borderBottom: '2px solid #808080',
@@ -78,7 +78,7 @@ export default function CircleOptDlg({ circles, onOK, onCancel }: Props) {
       border: '1px solid #767676', margin: 0, padding: 0, minWidth: 0,
       pointerEvents: 'none',
     }}>
-      <legend style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', padding: '0 3px', marginLeft: 4 }}>
+      <legend style={{ fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', lineHeight: 'var(--majak-popup-leading-emphasis)', color: '#000', padding: '0 3px', marginLeft: 4 }}>
         {label}
       </legend>
     </fieldset>
@@ -92,7 +92,7 @@ export default function CircleOptDlg({ circles, onOK, onCancel }: Props) {
       style={{
         position: 'absolute', left: SX(10), top: yOffset,
         width: SX(160), height: SY(14),
-        fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
+        fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', lineHeight: 'var(--majak-popup-leading-emphasis)', color: '#000',
         background: disableMode ? '#bbb' : '#fff',
         border: '1px solid #767676',
         opacity: disableMode ? 0.5 : 1,
@@ -120,7 +120,7 @@ export default function CircleOptDlg({ circles, onOK, onCancel }: Props) {
           background: 'linear-gradient(to right, #000080, #1060d0)',
           display: 'flex', alignItems: 'center', paddingLeft: 8,
         }}>
-          <span style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#fff', fontWeight: 'bold' }}>
+          <span style={{ fontFamily: FONT, fontSize: 'var(--majak-popup-font-title)', lineHeight: 'var(--majak-popup-leading-title)', color: '#fff', fontWeight: 'bold' }}>
             サークルの設定
           </span>
         </div>
@@ -145,7 +145,7 @@ export default function CircleOptDlg({ circles, onOK, onCancel }: Props) {
           <label style={{
             position: 'absolute', left: SX(10), top: SY(120),
             display: 'flex', alignItems: 'center', gap: 4,
-            fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
+            fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', lineHeight: 'var(--majak-popup-leading-body)', color: '#000',
             cursor: 'pointer', userSelect: 'none',
           }}>
             <input type="checkbox" checked={disableMode}

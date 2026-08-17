@@ -152,7 +152,7 @@ function GB({ x, y, w, h, label }: { x: number; y: number; w: number; h: number;
       border: '1px solid #767676', margin: 0, padding: 0, minWidth: 0,
       pointerEvents: 'none',
     }}>
-      <legend style={{ fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000', padding: '0 3px', marginLeft: 4 }}>
+      <legend style={{ fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', color: '#000', padding: '0 3px', marginLeft: 4 }}>
         {label}
       </legend>
     </fieldset>
@@ -168,7 +168,7 @@ function Chk({ x, y, label, checked, disabled, onChange }: {
     <label style={{
       position: 'absolute', left: x, top: y,
       display: 'flex', alignItems: 'center', gap: 4,
-      fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
+      fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000',
       cursor: disabled ? 'default' : 'pointer',
       opacity: disabled ? 0.5 : 1,
       userSelect: 'none', whiteSpace: 'nowrap',
@@ -190,7 +190,7 @@ function Rad({ x, y, name, val, label, checked, onChange }: {
     <label style={{
       position: 'absolute', left: x, top: y,
       display: 'flex', alignItems: 'center', gap: 4,
-      fontFamily: FONT, fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000',
+      fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000',
       cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
     }}>
       <input type="radio" name={name} value={val} checked={checked}
@@ -205,8 +205,8 @@ function LTxt({ x, y, w, text }: { x: number; y: number; w: number; text: string
   return (
     <div style={{
       position: 'absolute', left: x, top: y, width: w,
-      fontFamily: FONT, fontSize: 'calc(11px * var(--majak-type-scale))', color: '#000',
-      lineHeight: '1.3', whiteSpace: 'pre-wrap',
+      fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000',
+      lineHeight: 'var(--majak-popup-leading-body)', whiteSpace: 'pre-wrap',
     }}>
       {text}
     </div>

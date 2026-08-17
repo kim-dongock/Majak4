@@ -59,7 +59,7 @@ const SHOP_H = 514
 
 // レガシー: CreateFont(..., "ＭＳ Ｐゴシック")
 const FONT = 'var(--majak-font-family-ui)'
-const ITEM_TEXT_FONT_SIZE = 'calc(11px * var(--majak-type-scale))'
+const ITEM_TEXT_FONT_SIZE = 'var(--majak-popup-font-body)'
 
 // レガシータブ定数
 const BUY_CUSTOM = 0
@@ -405,7 +405,7 @@ export function LegacyItemShopDlg({
         {/* タイトル "麻雀ショップ" CRect(218,7,445,22) 15px Bold 白 — L407 */}
         <div style={{
           position: 'absolute', left: 218, top: 7, width: 227, height: 15,
-          fontFamily: FONT, fontSize: 'calc(14px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
+          fontFamily: FONT, fontSize: 'var(--majak-popup-font-title)', fontWeight: 'bold', color: '#fff',
           lineHeight: '15px', textAlign: 'center', overflow: 'hidden', pointerEvents: 'none',
         }}>
           麻雀ショップ
@@ -603,13 +603,13 @@ export function LegacyItemShopDlg({
         {/* 残高テキスト text1: (150,453)-(235,464) DT_RIGHT 12px Bold 黒 */}
         <div style={{
           position: 'absolute', left: 150, top: 453, width: 85, height: 11,
-          fontFamily: FONT, fontSize: 'calc(11px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
+          fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold', color: '#000',
           lineHeight: '11px', textAlign: 'right', overflow: 'hidden', pointerEvents: 'none',
         }}>{text1}</div>
         {/* 残高テキスト text2: (150,480)-(235,491) */}
         <div style={{
           position: 'absolute', left: 150, top: 480, width: 85, height: 11,
-          fontFamily: FONT, fontSize: 'calc(11px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
+          fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold', color: '#000',
           lineHeight: '11px', textAlign: 'right', overflow: 'hidden', pointerEvents: 'none',
         }}>{text2}</div>
 

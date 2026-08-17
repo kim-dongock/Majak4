@@ -185,7 +185,6 @@ export default function LobbySelectScreen() {
           </div>
         ))}
       </main>
-      <p className="majak-desktop-lobby-select__card-description">場代は対局終了時にGPから精算されます。場代分のGPが不足している卓には入室できません。</p>
       <footer className="majak-desktop-lobby-select__footer">
         <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onBack}>戻る</button>
       </footer>

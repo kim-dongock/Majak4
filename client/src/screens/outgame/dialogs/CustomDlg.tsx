@@ -242,42 +242,42 @@ function ResponsiveCustomInventory({
     </section>
     <style>{`
       .custom-inventory-overlay { position: absolute; inset: 0; z-index: 300; display: grid; place-items: center; padding: 20px; overflow: hidden; background: rgba(8,16,20,.72); box-sizing: border-box; font-family: var(--majak-font-family-ui); }
-      .custom-inventory { width: min(1050px, 100%); height: min(650px, 100%); min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: #1d302b; border: 1px solid #748a7c; background: #f5f2e9; box-shadow: 0 24px 72px rgba(0,0,0,.42); }
+      .custom-inventory { width: min(1050px, 100%); height: min(650px, 100%); max-height: calc(100dvh - 40px); min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: #1d302b; border: 1px solid #748a7c; background: var(--majak-popup-panel-color); box-shadow: 0 24px 72px rgba(0,0,0,.42); }
       .custom-inventory__header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; color: #fff; background: #174b43; }
-      .custom-inventory__header h2 { margin: 0; font-size: var(--majak-dialog-title-font-size); font-weight: 700; letter-spacing: 0; }
+      .custom-inventory__header h2 { margin: 0; font-size: var(--majak-popup-font-title); font-weight: 700; letter-spacing: 0; line-height: var(--majak-popup-leading-title); }
       .custom-inventory__header button { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; box-sizing: border-box; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: var(--majak-popup-close-font-size); line-height: 1; cursor: pointer; }
       .custom-inventory__tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #a5afa5; background: #dbe0d7; }
-      .custom-inventory__tabs button { height: var(--majak-popup-tab-height); box-sizing: border-box; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 var(--majak-popup-tab-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
+      .custom-inventory__tabs button { height: var(--majak-popup-tab-height); box-sizing: border-box; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; }
       .custom-inventory__tabs button.is-active { color: #fff; background: #b84228; }
       .custom-inventory__content { min-height: 0; flex: 1; padding: 18px; overflow: auto; }
       .custom-inventory__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
       .custom-inventory__item { min-width: 0; min-height: 210px; display: flex; flex-direction: column; align-items: stretch; padding: 12px; border: 1px solid #c8d0c2; border-radius: 4px; background: #fffdf8; box-shadow: 0 2px 0 rgba(47,79,64,.08); }
       .custom-inventory__image { height: 124px; display: grid; place-items: center; background: #f1eee4; }
       .custom-inventory__image img { max-width: 100%; max-height: 100%; object-fit: contain; }
-      .custom-inventory__item h3 { margin: 10px 0; overflow: hidden; color: #1f302b; font-size: var(--majak-dialog-body-font-size); line-height: 1.35; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-      .custom-inventory__item button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); box-sizing: border-box; margin-top: auto; border: 0; border-radius: 3px; padding: 0 9px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
+      .custom-inventory__item h3 { margin: 10px 0; overflow: hidden; color: #1f302b; font-size: var(--majak-popup-font-emphasis); line-height: var(--majak-popup-leading-emphasis); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+      .custom-inventory__item button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); box-sizing: border-box; margin-top: auto; border: 0; border-radius: 3px; padding: 0 9px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; }
       .custom-inventory__item button:disabled { color: #718078; background: #d7ddd5; cursor: default; }
-      .custom-inventory__empty { padding: 48px; color: #647069; text-align: center; font: var(--majak-dialog-label-font-size) var(--majak-font-family-ui); }
+      .custom-inventory__empty { padding: 48px; color: #647069; text-align: center; font: var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
       .custom-inventory__footer { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px 18px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
-      .custom-inventory__footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); max-width: 100%; box-sizing: border-box; border: 0; border-radius: 3px; padding: 0 14px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
-      .custom-inventory__pager { display: flex; gap: 8px; align-items: center; justify-content: center; color: #385047; font: 700 var(--majak-dialog-label-font-size)/1 var(--majak-font-family-ui); }
+      .custom-inventory__footer button { width: max-content; min-width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); max-width: 100%; box-sizing: border-box; border: 0; border-radius: 3px; padding: 0 14px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); white-space: nowrap; cursor: pointer; }
+      .custom-inventory__pager { display: flex; gap: 8px; align-items: center; justify-content: center; color: #385047; font: 700 var(--majak-popup-font-body)/1 var(--majak-font-family-ui); }
       .custom-inventory__pager button { width: var(--majak-popup-command-height); padding-inline: 0; }
       .custom-inventory__pager button:disabled { color: #87918c; background: #d7ddd5; cursor: default; }
-      .custom-inventory__close { justify-self: end; color: #32453e !important; border: 1px solid #839087 !important; background: transparent !important; }
+      .custom-inventory__close { justify-self: end; color: #32453e; border: 1px solid #839087; background: transparent; }
       .custom-inventory--mobileLandscape, .custom-inventory--mobilePortrait { width: 100%; height: 100%; }
       .custom-inventory-overlay--mobileLandscape, .custom-inventory-overlay--mobilePortrait { padding: 0; }
       .custom-inventory--mobileLandscape .custom-inventory__header, .custom-inventory--mobilePortrait .custom-inventory__header { padding: 8px 10px; }
-      .custom-inventory--mobileLandscape .custom-inventory__header h2, .custom-inventory--mobilePortrait .custom-inventory__header h2 { margin: 0; font-size: var(--majak-dialog-compact-title-font-size); }
+      .custom-inventory--mobileLandscape .custom-inventory__header h2, .custom-inventory--mobilePortrait .custom-inventory__header h2 { margin: 0; font-size: var(--majak-popup-font-title); }
       .custom-inventory--mobileLandscape .custom-inventory__header button, .custom-inventory--mobilePortrait .custom-inventory__header button { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); font-size: var(--majak-popup-close-font-size); }
-      .custom-inventory--mobileLandscape .custom-inventory__tabs button, .custom-inventory--mobilePortrait .custom-inventory__tabs button { height: var(--majak-popup-tab-height); font-size: var(--majak-popup-tab-font-size); }
+      .custom-inventory--mobileLandscape .custom-inventory__tabs button, .custom-inventory--mobilePortrait .custom-inventory__tabs button { height: var(--majak-popup-tab-height); font-size: var(--majak-popup-font-emphasis); }
       .custom-inventory--mobileLandscape .custom-inventory__content, .custom-inventory--mobilePortrait .custom-inventory__content { padding: 8px; }
       .custom-inventory--mobileLandscape .custom-inventory__grid, .custom-inventory--mobilePortrait .custom-inventory__grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
       .custom-inventory--mobileLandscape .custom-inventory__item, .custom-inventory--mobilePortrait .custom-inventory__item { min-height: 150px; padding: 8px; }
       .custom-inventory--mobileLandscape .custom-inventory__image, .custom-inventory--mobilePortrait .custom-inventory__image { height: 76px; }
-      .custom-inventory--mobileLandscape .custom-inventory__item h3, .custom-inventory--mobilePortrait .custom-inventory__item h3 { margin: 5px 0; font-size: var(--majak-dialog-label-font-size); }
-      .custom-inventory--mobileLandscape .custom-inventory__item button, .custom-inventory--mobilePortrait .custom-inventory__item button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); padding: 0 5px; font-size: var(--majak-popup-command-font-size); }
+      .custom-inventory--mobileLandscape .custom-inventory__item h3, .custom-inventory--mobilePortrait .custom-inventory__item h3 { margin: 5px 0; font-size: var(--majak-popup-font-emphasis); }
+      .custom-inventory--mobileLandscape .custom-inventory__item button, .custom-inventory--mobilePortrait .custom-inventory__item button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); padding: 0 5px; font-size: var(--majak-popup-font-emphasis); }
       .custom-inventory--mobileLandscape .custom-inventory__footer, .custom-inventory--mobilePortrait .custom-inventory__footer { gap: 7px; padding: 8px; }
-      .custom-inventory--mobileLandscape .custom-inventory__footer button, .custom-inventory--mobilePortrait .custom-inventory__footer button { height: var(--majak-popup-command-height); padding: 0 8px; font-size: var(--majak-popup-command-font-size); }
+      .custom-inventory--mobileLandscape .custom-inventory__footer button, .custom-inventory--mobilePortrait .custom-inventory__footer button { height: var(--majak-popup-command-height); padding: 0 8px; font-size: var(--majak-popup-font-emphasis); }
       .custom-inventory--mobilePortrait .custom-inventory__item { min-height: 178px; }
       .custom-inventory--mobilePortrait .custom-inventory__image { height: 100px; }
     `}</style>
@@ -510,7 +510,7 @@ export default function CustomDlg({
             position: 'absolute',
             left: 218, top: 7, width: 227, height: 15,
             fontFamily: 'var(--majak-font-family-ui)',
-            fontSize: 'calc(15px * var(--majak-type-scale))', fontWeight: 'bold', color: '#fff',
+            fontSize: 'var(--majak-popup-font-title)', fontWeight: 'bold', color: '#fff',
             textAlign: 'center', pointerEvents: 'none',
           }}
         >
@@ -610,7 +610,7 @@ export default function CustomDlg({
                   width: 132,
                   height: 24,
                   fontFamily: 'var(--majak-font-family-ui)',
-                  fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
+                  fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold', color: '#000',
                   textAlign: 'center',
                   overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
                   pointerEvents: 'none',
@@ -690,7 +690,7 @@ export default function CustomDlg({
             position: 'absolute',
             left: 150, top: 453, width: 85, height: 11,
             fontFamily: 'var(--majak-font-family-ui)',
-            fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
+            fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold', color: '#000',
             textAlign: 'right', pointerEvents: 'none',
           }}
         >
@@ -701,7 +701,7 @@ export default function CustomDlg({
             position: 'absolute',
             left: 150, top: 480, width: 85, height: 11,
             fontFamily: 'var(--majak-font-family-ui)',
-            fontSize: 'calc(12px * var(--majak-type-scale))', fontWeight: 'bold', color: '#000',
+            fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold', color: '#000',
             textAlign: 'right', pointerEvents: 'none',
           }}
         >

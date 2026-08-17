@@ -11,7 +11,7 @@
 
 .registration-panel {
   position: relative;
-  color: #f5f1df;
+  color: #263b33;
   border: 1px solid #bda45e;
   border-radius: 8px;
   background-color: var(--majak-screen-surface-color);
@@ -34,20 +34,21 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #9db4aa;
-  font-size: var(--majak-font-12);
+  color: #e6efe9;
+  font-size: var(--majak-popup-font-body);
   font-weight: 700;
 }
 
 .registration-step.is-active { color: #fff1bd; }
-.registration-step.is-done { color: #a9d49f; }
+.registration-step.is-done { color: #eff7e9; }
 
 .registration-heading {
   flex-shrink: 0;
   margin-bottom: 14px;
-  color: #fff;
-  font-size: var(--majak-font-20);
+  color: #183d31;
+  font-size: var(--majak-popup-font-title);
   font-weight: 800;
+  line-height: var(--majak-popup-leading-title);
 }
 
 .registration-panel--flow {
@@ -69,7 +70,7 @@
   margin-left: auto;
   padding: 6px 6px 0;
   border-bottom: 2px solid #d8b75e;
-  background: rgba(3, 31, 23, .48);
+  background: transparent;
 }
 
 .registration-panel--flow .registration-step {
@@ -83,7 +84,7 @@
   border-bottom: 0;
   border-radius: 6px 6px 0 0;
   background: rgba(8, 51, 40, .78);
-  font-size: var(--majak-font-16);
+  font-size: var(--majak-popup-font-emphasis);
 }
 
 .registration-panel--flow .registration-step > span:last-child { white-space: nowrap; }
@@ -130,8 +131,8 @@
   border-radius: 4px;
   background: #f5f1df;
   box-shadow: inset 0 2px 7px rgba(72, 58, 24, .18);
-  font-size: var(--majak-font-15);
-  line-height: 1.8;
+  font-size: var(--majak-popup-font-body);
+  line-height: var(--majak-popup-leading-body);
   scrollbar-color: #9c8955 #e6dfc5;
 }
 
@@ -140,12 +141,12 @@
   padding-bottom: 10px;
   color: #173f33;
   border-bottom: 2px solid #c9b46f;
-  font-size: var(--majak-font-20);
-  line-height: 1.4;
+  font-size: var(--majak-popup-font-title);
+  line-height: var(--majak-popup-leading-title);
 }
 
 .registration-terms section + section { margin-top: 20px; }
-.registration-terms h3 { margin: 0 0 6px; color: #493d1e; font-size: var(--majak-font-16); line-height: 1.5; }
+.registration-terms h3 { margin: 0 0 6px; color: #493d1e; font-size: var(--majak-popup-font-emphasis); line-height: var(--majak-popup-leading-emphasis); }
 .registration-terms p { margin: 0; }
 .registration-terms ol { margin: 8px 0 0; padding-left: 1.7em; }
 .registration-terms li { padding-left: 3px; }
@@ -164,7 +165,7 @@
   flex-shrink: 0;
   align-items: center;
   gap: 8px;
-  color: #fff;
+  color: #263b33;
   cursor: pointer;
 }
 
@@ -195,12 +196,12 @@
 
 .registration-actions--end { justify-content: flex-end; }
 
-.registration-command { font-weight: 800 !important; border-radius: 4px !important; }
+.registration-command { font-weight: 800; border-radius: 4px; }
 .registration-command--primary:not(:disabled) {
-  color: #2d2107 !important;
-  border: 1px solid #f1dc8e !important;
-  border-bottom: 4px solid #8b6821 !important;
-  background: linear-gradient(#f1d879, #c99f3e) !important;
+  color: #2d2107;
+  border: 1px solid #f1dc8e;
+  border-bottom: 4px solid #8b6821;
+  background: linear-gradient(#f1d879, #c99f3e);
   text-shadow: 0 1px rgba(255, 255, 255, .45);
 }
 .registration-command--secondary {
@@ -210,7 +211,7 @@
   background: #365b4d;
 }
 
-.registration-profile-title { color: #fff; }
+.registration-profile-title { color: #183d31; }
 .registration-profile-field { border-color: #54766a; background: rgba(3, 28, 21, .52); }
 .registration-profile-field legend { color: #ecd98f; }
 .registration-birth-control label { color: #e6eee9; }
@@ -221,17 +222,18 @@
   margin-right: var(--registration-terms-gutter);
   margin-left: var(--registration-terms-gutter);
   overflow: hidden;
-  border-color: #54766a !important;
+  border-color: #54766a;
   border-radius: 5px;
   background: rgba(3, 25, 19, .54);
 }
-.registration-avatar-grid button.is-selected { border-color: #f0d77b !important; background: #fffbed !important; box-shadow: 0 0 0 2px #a9822e; }
+.registration-avatar-grid button.is-selected { border-color: #f0d77b; background: #fffbed; box-shadow: 0 0 0 2px #a9822e; }
 
 .registration-profile-title {
   flex-shrink: 0;
   margin-bottom: 10px;
-  font-size: var(--majak-font-20);
+  font-size: var(--majak-popup-font-title);
   font-weight: 800;
+  line-height: var(--majak-popup-leading-title);
 }
 
 .registration-profile-controls {
@@ -254,7 +256,7 @@
 .registration-profile-field legend {
   padding: 0 7px;
   color: #274e41;
-  font-size: var(--majak-font-14);
+  font-size: var(--majak-popup-font-emphasis);
   font-weight: 800;
 }
 
@@ -275,7 +277,7 @@
   border-bottom: 3px solid #61756c;
   border-radius: 4px;
   background: #e8ece8;
-  font: 700 var(--majak-font-16)/1 var(--majak-font-family-ui);
+  font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui);
   cursor: pointer;
 }
 
@@ -306,7 +308,7 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 7px;
-  font-size: var(--majak-font-14);
+  font-size: var(--majak-popup-font-emphasis);
 }
 
 .registration-birth-control select {
@@ -317,7 +319,7 @@
   border: 1px solid #8b9c94;
   border-radius: 4px;
   background: #fffef6;
-  font: 700 var(--majak-font-15)/1 var(--majak-font-family-ui);
+  font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui);
 }
 
 .registration-birth-control select:disabled {
@@ -327,28 +329,28 @@
 
 @media (max-width: 700px), (max-height: 560px) {
   .registration-panel { border-radius: 0; }
-  .registration-panel--profile { padding-top: 4px !important; }
+  .registration-panel--profile { padding-top: 4px; }
   .registration-steps { gap: 7px; margin-bottom: 6px; }
-  .registration-step { gap: 4px; font-size: var(--majak-font-9); }
-  .registration-heading { margin-bottom: 5px; font-size: var(--majak-font-14); }
+  .registration-step { gap: 4px; font-size: var(--majak-popup-font-body); }
+  .registration-heading { margin-bottom: 5px; font-size: var(--majak-popup-font-title); }
   .registration-panel--terms { padding: 12px 16px; }
   .registration-panel--flow .registration-steps { gap: 3px; margin-bottom: 6px; padding: 3px 5px 0; }
-  .registration-panel--flow .registration-step { gap: 6px; min-height: 42px; padding: 4px 8px 6px; font-size: var(--majak-font-14); }
-  .registration-panel--flow .registration-heading { margin-bottom: 8px; font-size: var(--majak-font-17); }
-  .registration-terms { padding: 14px 16px 18px; font-size: var(--majak-font-14); line-height: 1.72; }
-  .registration-terms h2 { margin-bottom: 14px; padding-bottom: 8px; font-size: var(--majak-font-18); }
+  .registration-panel--flow .registration-step { gap: 6px; min-height: 42px; padding: 4px 8px 6px; font-size: var(--majak-popup-font-emphasis); }
+  .registration-panel--flow .registration-heading { margin-bottom: 8px; font-size: var(--majak-popup-font-title); }
+  .registration-terms { padding: 14px 16px 18px; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
+  .registration-terms h2 { margin-bottom: 14px; padding-bottom: 8px; font-size: var(--majak-popup-font-title); }
   .registration-terms section + section { margin-top: 16px; }
-  .registration-terms h3 { margin-bottom: 4px; font-size: var(--majak-font-15); }
+  .registration-terms h3 { margin-bottom: 4px; font-size: var(--majak-popup-font-emphasis); }
   .registration-terms-footer { gap: 12px; padding-top: 10px; }
-  .registration-consent { font-size: var(--majak-font-13); }
-  .registration-profile-title { margin-bottom: 2px; font-size: var(--majak-font-14); }
+  .registration-consent { font-size: var(--majak-popup-font-body); }
+  .registration-profile-title { margin-bottom: 2px; font-size: var(--majak-popup-font-title); }
   .registration-profile-controls { grid-template-columns: minmax(190px, .8fr) minmax(270px, 1.2fr); gap: 7px; margin-bottom: 3px; }
   .registration-profile-field { padding: 4px 6px 3px; }
-  .registration-profile-field legend { font-size: var(--majak-font-13); }
+  .registration-profile-field legend { font-size: var(--majak-popup-font-emphasis); }
   .registration-sex-control { gap: 5px; }
-  .registration-sex-control button { grid-template-columns: 29px 1fr; min-height: 36px; padding: 1px 6px 1px 2px; font-size: var(--majak-font-14); }
+  .registration-sex-control button { grid-template-columns: 29px 1fr; min-height: 36px; padding: 1px 6px 1px 2px; font-size: var(--majak-popup-font-emphasis); }
   .registration-sex-control button img { width: 28px; height: 28px; }
   .registration-birth-control { gap: 5px; }
-  .registration-birth-control label { gap: 4px; font-size: var(--majak-font-13); }
-  .registration-birth-control select { min-height: 34px; padding-left: 7px; font-size: var(--majak-font-14); }
+  .registration-birth-control label { gap: 4px; font-size: var(--majak-popup-font-emphasis); }
+  .registration-birth-control select { min-height: 34px; padding-left: 7px; font-size: var(--majak-popup-font-emphasis); }
 }
