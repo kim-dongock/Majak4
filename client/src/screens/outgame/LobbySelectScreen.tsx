@@ -86,6 +86,7 @@ export default function LobbySelectScreen() {
    */
   const [countKouryu, setCountKouryu] = useState<string[]>(Array(6).fill(DEFAULT_COUNT))
   const [countDani,   setCountDani]   = useState<string[]>(Array(8).fill(DEFAULT_COUNT))
+  const [channelNames, setChannelNames] = useState<Record<string, string>>({})
 
   /** チャンネル比較から人数を読み込む */
   useEffect(() => {
@@ -95,6 +96,11 @@ export default function LobbySelectScreen() {
         const ch = channels.find(c => c.subId === subId)
         return ch ? fmt(ch.memberCnt) : DEFAULT_COUNT
       }
+      setChannelNames(Object.fromEntries(
+        channels
+          .filter(channel => channel.subId && channel.chanelName)
+          .map(channel => [channel.subId, channel.chanelName]),
+      ))
       setCountKouryu(KOURYU_FIELD_IDS.map(id => find(id)))
       setCountDani(DANI_FIELD_IDS.map(id => find(id)))
     }).catch(() => {})
@@ -103,6 +109,7 @@ export default function LobbySelectScreen() {
 
   /** OnPageBack() — 前のページ (チャンネルグループ選択) へ戻る */
   const onBack = () => navigate('/channel')
+  const channelTitle = (subId: string, fallback: string) => channelNames[subId] || fallback
 
   /** OnTakuTypeKouryu/Dani — ToLobby(idx) 相当 → ロビー画面へ遷移
    *  fieldId はサーバーへの参加リクエストに使用する subId
@@ -139,11 +146,11 @@ export default function LobbySelectScreen() {
         { title: '十段位卓', match: '半荘戦', description: INFO_DANI[3], count: countDani[7], onClick: () => toDaniLobby(7) },
       ]
     : [
-        { title: '基本卓（安い部屋）', description: INFO_KOURYU[0], count: countKouryu[0], onClick: () => toKouryuLobby(0) },
-        { title: '基本卓', description: INFO_KOURYU[0], count: countKouryu[1], onClick: () => toKouryuLobby(1) },
-        { title: 'ハイ卓', description: INFO_KOURYU[1], count: countKouryu[2], onClick: () => toKouryuLobby(2) },
-        { title: '基本卓（掛けあり）', description: INFO_KOURYU[0], count: countKouryu[3], onClick: () => toKouryuLobby(3) },
-        { title: '練習卓', description: INFO_KOURYU[2], count: countKouryu[4], onClick: () => toKouryuLobby(4) },
+        { title: channelTitle('0082B', '基本卓（安い部屋）'), description: INFO_KOURYU[0], count: countKouryu[0], onClick: () => toKouryuLobby(0) },
+        { title: channelTitle('0086B', '基本卓'), description: INFO_KOURYU[0], count: countKouryu[1], onClick: () => toKouryuLobby(1) },
+        { title: channelTitle('0085F', 'ハイ卓'), description: INFO_KOURYU[1], count: countKouryu[2], onClick: () => toKouryuLobby(2) },
+        { title: channelTitle('0075B', '基本卓（掛けあり）'), description: INFO_KOURYU[0], count: countKouryu[3], onClick: () => toKouryuLobby(3) },
+        { title: channelTitle('00T5A', '練習卓'), description: INFO_KOURYU[2], count: countKouryu[4], onClick: () => toKouryuLobby(4) },
       ]
   const visibleLobbyItems = isDani
     ? lobbyItems.filter(item => item.match === selectedDaniMatch)

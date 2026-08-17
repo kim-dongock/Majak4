@@ -7,6 +7,7 @@ using MajakServer.Models.Protocol;
 using MajakServer.Repositories.MySQL;
 using MajakServer.Repositories.MySQL;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace MajakServer.Services;
 
@@ -38,8 +39,8 @@ public class GameLogicService
     private const int CasualPointSubTypeTop = 1;
     private const int CasualPointTonpuRate = 1;
     private const int CasualPointHanchanRate = 2;
-    private const int DefaultGameClientReadyTimeoutMs = 30_000;
-    private const int DefaultGamePresentationReadyTimeoutMs = 30_000;
+    private const int DefaultGameClientReadyTimeoutMs = 10_000;
+    private const int DefaultGamePresentationReadyTimeoutMs = 15_000;
 
     private static readonly (int Kind, int Point, string IconCode)[] GameIconMaster =
     [
@@ -61,6 +62,7 @@ public class GameLogicService
     private readonly ILogger<GameLogicService>? _log;
     private readonly RoomRegistryService? _roomRegistry;
     private readonly PaifuFileService? _paifuFiles;
+    private readonly PaifuArchiveUploadQueue? _paifuUploadQueue;
     private readonly ITrainingAiEvaluator _trainingAiEvaluator;
     private readonly TrainingAiLevel      _trainingAiLevel;
     private readonly bool                 _testEnvironment;
@@ -81,7 +83,8 @@ public class GameLogicService
         IConfiguration       config,
         ILogger<GameLogicService>? log = null,
         RoomRegistryService? roomRegistry = null,
-        PaifuFileService? paifuFiles = null)
+        PaifuFileService? paifuFiles = null,
+        PaifuArchiveUploadQueue? paifuUploadQueue = null)
     {
         _session       = session;
         _historyRepo   = historyRepo;
@@ -95,6 +98,7 @@ public class GameLogicService
         _log           = log;
         _roomRegistry  = roomRegistry;
         _paifuFiles    = paifuFiles;
+        _paifuUploadQueue = paifuUploadQueue;
         if (!Enum.TryParse(config["GameSettings:TrainingAiLevel"], ignoreCase: true, out _trainingAiLevel))
             _trainingAiLevel = TrainingAiLevel.Legacy;
         _trainingAiEvaluator = _trainingAiLevel switch
@@ -119,7 +123,8 @@ public class GameLogicService
     /// </summary>
     public virtual async Task StartGameLogicAsync(GameRoom room, CommandContext ctx)
     {
-        _log?.LogInformation("StartGameLogic begin. roomId={RoomId} roomState={RoomState} playerCount={PlayerCount} roomOption={RoomOption}", room.RoomId, room.State, room.PlayerCount, room.RoomOption);
+        var startupTimer = Stopwatch.StartNew();
+        _log?.LogInformation("[GameStartTiming] StartGameLogic begin. roomId={RoomId} roomState={RoomState} playerCount={PlayerCount} clientReadyTimeoutMs={ClientReadyTimeoutMs} presentationReadyTimeoutMs={PresentationReadyTimeoutMs}", room.RoomId, room.State, room.PlayerCount, _gameClientReadyTimeoutMs, _gamePresentationReadyTimeoutMs);
 
 
         room.State = GameRoomState.Playing;
@@ -154,8 +159,10 @@ public class GameLogicService
 
         await ctx.Clients.Group($"room_{room.RoomId}")
             .SendAsync(Cmd.AutoStart, BuildAutoStartPayload(room, gemGame));
+        _log?.LogInformation("[GameStartTiming] AutoStart sent. roomId={RoomId} elapsedMs={ElapsedMs}", room.RoomId, startupTimer.ElapsedMilliseconds);
 
         await WaitForGameClientsReadyAsync(room, TimeSpan.FromMilliseconds(_gameClientReadyTimeoutMs));
+        _log?.LogInformation("[GameStartTiming] client-ready gate completed. roomId={RoomId} elapsedMs={ElapsedMs}", room.RoomId, startupTimer.ElapsedMilliseconds);
 
         await ctx.Clients.Group($"chanel_{room.ChannelId}")
             .SendAsync(Cmd.RoomState, RoomStatePayload.Build(room, "game_started"));
@@ -186,10 +193,13 @@ public class GameLogicService
         room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, hanchanInfo));
         await ctx.Clients.Group($"room_{room.RoomId}")
             .SendAsync(Cmd.GamePlay, hanchanInfo);
+        _log?.LogInformation("[GameStartTiming] MJPID_INIHAN sent. roomId={RoomId} elapsedMs={ElapsedMs}", room.RoomId, startupTimer.ElapsedMilliseconds);
 
 
         await OnInitKyokuAsync(room, ctx);
+        _log?.LogInformation("[GameStartTiming] initial kyoku presentation gate completed. roomId={RoomId} elapsedMs={ElapsedMs}", room.RoomId, startupTimer.ElapsedMilliseconds);
         await StartGameActionsIfClientsReadyAsync(room, ctx);
+        _log?.LogInformation("[GameStartTiming] initial actions dispatch attempted. roomId={RoomId} elapsedMs={ElapsedMs}", room.RoomId, startupTimer.ElapsedMilliseconds);
     }
 
     public Task<bool> MarkGameClientReadyAsync(int roomId, string connectionId)
@@ -250,11 +260,11 @@ public class GameLogicService
 
     public async Task<bool> StartGameActionsIfClientsReadyAsync(GameRoom room, CommandContext ctx)
     {
-        bool areGameClientsReady;
+        bool isGameClientGateComplete;
         lock (room.GameClientReadyLock)
         {
             PruneGameClientReadyLocked(room);
-            areGameClientsReady = IsGameClientReadyLocked(room);
+            isGameClientGateComplete = room.GameClientReadyTcs?.Task.IsCompleted == true;
         }
 
         bool isPresentationReady;
@@ -264,7 +274,7 @@ public class GameLogicService
             isPresentationReady = room.GamePresentationReadyTcs?.Task.IsCompleted == true;
         }
 
-        if (!areGameClientsReady || !isPresentationReady) return false;
+        if (!isGameClientGateComplete || !isPresentationReady) return false;
         return await StartGameActionsCoreAsync(room, ctx);
     }
 
@@ -293,6 +303,7 @@ public class GameLogicService
 
     private async Task WaitForGameClientsReadyAsync(GameRoom room, TimeSpan timeout)
     {
+        var waitTimer = Stopwatch.StartNew();
         Task readyTask;
         int expectedCount;
         lock (room.GameClientReadyLock)
@@ -308,19 +319,22 @@ public class GameLogicService
         var completed = await Task.WhenAny(readyTask, Task.Delay(timeout));
         if (completed == readyTask)
         {
-            _log?.LogInformation("All game clients ready. roomId={RoomId}", room.RoomId);
+            _log?.LogInformation("[GameStartTiming] all game clients ready. roomId={RoomId} waitMs={WaitMs}", room.RoomId, waitTimer.ElapsedMilliseconds);
             return;
         }
 
         int readyCount;
+        string missingPlayers;
         lock (room.GameClientReadyLock)
         {
             PruneGameClientReadyLocked(room);
             readyCount = room.GameClientReadyConnectionIds.Count;
             expectedCount = GetExpectedGameClientConnectionIds(room).Count;
+            missingPlayers = DescribeMissingReadyPlayers(room, room.GameClientReadyConnectionIds);
+            room.GameClientReadyTcs?.TrySetResult(false);
         }
-        _log?.LogWarning("Game client ready wait timed out; continuing startup. roomId={RoomId} ready={ReadyCount}/{ExpectedCount}",
-            room.RoomId, readyCount, expectedCount);
+        _log?.LogWarning("[GameStartTiming] game client ready timed out; continuing startup. roomId={RoomId} ready={ReadyCount}/{ExpectedCount} waitMs={WaitMs} missingPlayers={MissingPlayers}",
+            room.RoomId, readyCount, expectedCount, waitTimer.ElapsedMilliseconds, missingPlayers);
     }
 
     private static bool IsGameClientReadyLocked(GameRoom room)
@@ -344,6 +358,17 @@ public class GameLogicService
             .ToList();
     }
 
+    private static string DescribeMissingReadyPlayers(GameRoom room, HashSet<string> readyConnectionIds)
+    {
+        return string.Join(',', room.Seats
+            .Where(player => player != null
+                && !player.IsViewer
+                && !player.IsOutPlayer
+                && !string.IsNullOrEmpty(player.ConnectionId)
+                && !readyConnectionIds.Contains(player.ConnectionId))
+            .Select(player => $"{player!.MemberNo}/{player.Pix}/{player.ConnectionId}"));
+    }
+
     private static long PrepareGamePresentationReadyGate(GameRoom room)
     {
         lock (room.GamePresentationReadyLock)
@@ -357,6 +382,7 @@ public class GameLogicService
 
     private async Task WaitForGamePresentationReadyAsync(GameRoom room, long presentationId, TimeSpan timeout)
     {
+        var waitTimer = Stopwatch.StartNew();
         Task readyTask;
         int expectedCount;
         lock (room.GamePresentationReadyLock)
@@ -379,20 +405,22 @@ public class GameLogicService
         var completed = await Task.WhenAny(readyTask, Task.Delay(timeout));
         if (completed == readyTask)
         {
-            _log?.LogInformation("All game presentations ready. roomId={RoomId} presentationId={PresentationId}", room.RoomId, presentationId);
+            _log?.LogInformation("[GameStartTiming] all game presentations ready. roomId={RoomId} presentationId={PresentationId} waitMs={WaitMs}", room.RoomId, presentationId, waitTimer.ElapsedMilliseconds);
             return;
         }
 
         int readyCount;
+        string missingPlayers;
         lock (room.GamePresentationReadyLock)
         {
             PruneGamePresentationReadyLocked(room);
             readyCount = room.GamePresentationReadyConnectionIds.Count;
             expectedCount = GetExpectedGameClientConnectionIds(room).Count;
+            missingPlayers = DescribeMissingReadyPlayers(room, room.GamePresentationReadyConnectionIds);
             room.GamePresentationReadyTcs?.TrySetResult(false);
         }
-        _log?.LogWarning("Game presentation ready wait timed out; continuing round. roomId={RoomId} presentationId={PresentationId} ready={ReadyCount}/{ExpectedCount}",
-            room.RoomId, presentationId, readyCount, expectedCount);
+        _log?.LogWarning("[GameStartTiming] game presentation ready timed out; continuing round. roomId={RoomId} presentationId={PresentationId} ready={ReadyCount}/{ExpectedCount} waitMs={WaitMs} missingPlayers={MissingPlayers}",
+            room.RoomId, presentationId, readyCount, expectedCount, waitTimer.ElapsedMilliseconds, missingPlayers);
     }
 
     private static void PruneGamePresentationReadyLocked(GameRoom room)
@@ -2365,11 +2393,24 @@ public class GameLogicService
         {
             try
             {
-                await _paifuFiles.StoreCompletedGameAsync(room, room.PaifuHistory, room.Seats.Where(seat => seat != null).Select(seat => seat!).ToArray(), resultPayload);
+                var paifuWorkItem = PaifuFileService.CreateCompletedGameWorkItem(
+                    room,
+                    room.PaifuHistory,
+                    room.Seats.Where(seat => seat != null).Select(seat => seat!).ToArray(),
+                    resultPayload);
+                if (_paifuUploadQueue is not null)
+                {
+                    if (!_paifuUploadQueue.TryEnqueue(paifuWorkItem))
+                        _log?.LogWarning("Paifu archive queue rejected completed game. roomId={RoomId}", room.RoomId);
+                }
+                else
+                {
+                    await _paifuFiles.StoreCompletedGameAsync(paifuWorkItem);
+                }
             }
             catch (Exception ex)
             {
-                _log?.LogWarning(ex, "Paifu archive write failed but game report continues. roomId={RoomId}", room.RoomId);
+                _log?.LogWarning(ex, "Paifu archive queueing failed but game report continues. roomId={RoomId}", room.RoomId);
             }
         }
         _log?.LogInformation("GameReportProcess sent game report. roomId={RoomId} users={UserCount}", room.RoomId, report.Users.Count(u => u != null));

@@ -1678,7 +1678,7 @@ body {
   width: 100%;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 225px;
   overflow: hidden;
   background: #071713;
 }
@@ -1692,17 +1692,7 @@ body {
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-}
-
-.majak-responsive-ingame-background {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transform: scale(1.4);
-  image-rendering: pixelated;
-  pointer-events: none;
+  background: #176b2a;
 }
 
 .majak-responsive-ingame-loading {
@@ -1716,18 +1706,12 @@ body {
 
 .majak-responsive-ingame-world {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 1019px;
-  height: 735px;
-  transform: translate(-50%, -50%);
-  transform-origin: top left;
+  inset: 0;
 }
 
 .majak-responsive-ingame-world > .majak-inline-game-stage {
   position: absolute !important;
-  left: 0;
-  top: 31px;
+  inset: 0;
 }
 
 .majak-responsive-ingame-sidebar {
@@ -1741,7 +1725,7 @@ body {
   padding: 10px;
   border-left: 2px solid rgba(230, 189, 114, .72);
   color: #102014;
-  background: #9aa88b url('/assets/images/game/mj_sideBg.png') center top / cover;
+  background: #dfe8d4;
   box-sizing: border-box;
 }
 
@@ -1923,17 +1907,23 @@ body {
 }
 
 .majak-desktop-channel-group__header {
+  --majak-channel-menu-width: clamp(620px, 72vw, 920px);
+  --majak-channel-menu-column-gap: clamp(22px, 3vw, 40px);
+  --majak-channel-menu-column-width: calc((var(--majak-channel-menu-width) - var(--majak-channel-menu-column-gap)) / 2);
+  width: 100%;
   display: grid;
-  grid-template-columns: minmax(260px, 430px) minmax(260px, 1fr);
+  grid-template-columns: repeat(2, var(--majak-channel-menu-column-width));
   align-items: start;
-  justify-content: space-between;
-  gap: clamp(24px, 5vw, 72px);
+  justify-content: space-evenly;
+  column-gap: 0;
 }
 
 .majak-desktop-channel-group__logo {
   width: 100%;
-  max-width: 400px;
+  max-width: none;
+  height: auto;
   aspect-ratio: 430 / 148;
+  box-sizing: border-box;
   object-fit: cover;
   object-position: center 34%;
   border: 2px solid var(--majak-menu-gold);
@@ -1942,12 +1932,17 @@ body {
 }
 
 .majak-desktop-channel-group .majak-desktop-channel-group__user-summary {
-  justify-self: end;
-  width: min(100%, 440px);
-  min-height: 142px;
+  min-width: 0;
+  justify-self: stretch;
+  width: 100%;
+  aspect-ratio: 430 / 148;
+  box-sizing: border-box;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 7px;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 4px;
   padding: 10px 12px 12px;
   color: #fff3db;
   background: #2f211b;
@@ -1957,31 +1952,50 @@ body {
 }
 
 .majak-desktop-channel-group .majak-desktop-channel-group__user-summary::before {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
   content: 'プレイヤー情報';
   color: #d4ae68;
-  font-size: var(--majak-text-xs);
+  font-size: var(--majak-text-2xs);
   font-weight: var(--majak-weight-title);
   line-height: var(--majak-leading-tight);
   letter-spacing: .08em;
 }
 
 .majak-desktop-channel-group .majak-mobile-user-summary__name {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
   color: #fff1bd;
   max-width: none;
+  font-size: var(--majak-text-xs);
   font-weight: var(--majak-weight-title);
-  padding-bottom: 7px;
-  border-bottom: 1px solid rgba(224, 185, 110, .52);
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.majak-desktop-channel-group .majak-mobile-user-summary__name-value {
+  font-size: var(--majak-text-sm) !important;
 }
 
 .majak-desktop-channel-group .majak-mobile-user-summary__fields {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
+  padding-top: 3px;
+  box-sizing: border-box;
+  border-top: 1px solid rgba(224, 185, 110, .52);
 }
 
 .majak-desktop-channel-group .majak-mobile-user-summary__fields > span {
   min-width: 0;
-  min-height: 52px;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -2000,6 +2014,7 @@ body {
   display: block;
   color: #875a31;
   background: transparent;
+  font-size: var(--majak-text-2xs) !important;
   font-weight: var(--majak-weight-strong);
   text-align: left;
 }
@@ -2010,18 +2025,28 @@ body {
   padding: 0;
   overflow: hidden;
   color: #332217;
+  font-size: var(--majak-text-xs) !important;
   font-weight: var(--majak-weight-title);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .majak-desktop-channel-group__menu {
-  width: min(100%, 1100px);
+  --majak-channel-menu-width: clamp(620px, 72vw, 920px);
+  --majak-channel-menu-column-gap: clamp(22px, 3vw, 40px);
+  --majak-channel-menu-column-width: calc((var(--majak-channel-menu-width) - var(--majak-channel-menu-column-gap)) / 2);
+  width: 100%;
   align-self: center;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: clamp(22px, 3vw, 40px);
+  grid-template-columns: repeat(2, var(--majak-channel-menu-column-width));
+  justify-content: space-evenly;
+  column-gap: 0;
   row-gap: clamp(32px, 5dvh, 54px);
+}
+
+.majak-responsive-desktop-frame .majak-desktop-channel-group__menu {
+  align-self: start;
+  margin-top: clamp(28px, 4dvh, 52px);
 }
 
 .majak-desktop-channel-group__menu-entry {
@@ -2031,10 +2056,11 @@ body {
 }
 
 .majak-desktop-channel-group__action {
-  min-height: clamp(60px, 9dvh, 84px);
+  min-height: 64px;
   display: grid;
   align-content: center;
   padding: 14px 22px 14px 28px;
+  font-weight: 400;
   text-align: left;
 }
 
@@ -2045,7 +2071,7 @@ body {
 
 .majak-desktop-channel-group__action strong {
   color: #ffdf70;
-  font-weight: var(--majak-weight-title);
+  font-weight: 400;
   text-shadow: 0 2px 0 rgba(0, 0, 0, .34);
 }
 
@@ -2197,12 +2223,16 @@ body {
 }
 
 .majak-desktop-lobby-select__list {
-  width: min(100%, 1100px);
+  --majak-lobby-list-width: clamp(620px, 72vw, 920px);
+  --majak-lobby-list-column-gap: clamp(18px, 2.5vw, 30px);
+  --majak-lobby-list-column-width: calc((var(--majak-lobby-list-width) - var(--majak-lobby-list-column-gap)) / 2);
+  width: 100%;
   align-self: start;
   margin-top: clamp(16px, 3dvh, 30px);
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  column-gap: clamp(18px, 2.5vw, 30px);
+  grid-template-columns: repeat(2, var(--majak-lobby-list-column-width));
+  justify-content: space-evenly;
+  column-gap: 0;
   row-gap: clamp(22px, 3.5dvh, 34px);
 }
 
@@ -2212,7 +2242,6 @@ body {
   margin-top: 0;
   padding: 0 4px 12px;
   box-sizing: border-box;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   row-gap: clamp(18px, 3dvh, 28px);
 }
 
@@ -2267,6 +2296,7 @@ body {
 }
 
 .majak-desktop-lobby-select__entry {
+  --majak-lobby-card-height: 64px;
   position: relative;
   min-width: 0;
   display: grid;
@@ -2277,19 +2307,20 @@ body {
 
 .majak-desktop-lobby-select__card {
   min-width: 0;
-  min-height: 64px;
+  min-height: var(--majak-lobby-card-height);
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   grid-template-rows: auto;
-  align-items: start;
+  align-items: center;
   gap: 4px 12px;
-  padding: 15px 18px;
+  padding: 15px 84px 15px 18px;
   padding-left: 28px;
+  font-weight: 400;
   text-align: left;
 }
 
 .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
-  min-height: 54px;
+  min-height: var(--majak-lobby-card-height);
   padding: 9px 14px;
 }
 
@@ -2300,9 +2331,12 @@ body {
 
 .majak-desktop-lobby-select__card-title {
   min-width: 0;
+  overflow: hidden;
   color: #ffdf70;
-  font-weight: var(--majak-weight-title);
+  font-weight: 400;
   text-shadow: 0 2px 0 rgba(0, 0, 0, .34);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .majak-desktop-lobby-select__card-match {
@@ -2312,20 +2346,25 @@ body {
 }
 
 .majak-desktop-lobby-select__card-description {
+  min-width: 0;
   min-height: calc(var(--majak-menu-description-size) * var(--majak-leading-body) * 2);
   margin: 0;
   padding: 0 8px;
+  display: -webkit-box;
+  overflow: hidden;
   color: #fff0d5;
   font-size: var(--majak-menu-description-size) !important;
   font-weight: var(--majak-weight-strong);
   line-height: var(--majak-leading-body) !important;
-  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 .majak-desktop-lobby-select__card-count {
   position: absolute;
   right: 10px;
-  top: 32px;
+  top: calc(var(--majak-lobby-card-height) / 2);
   z-index: 1;
   min-width: 48px;
   padding: 3px 9px;
@@ -2335,7 +2374,7 @@ body {
   border-radius: 3px;
   box-shadow: 0 2px 0 rgba(0, 0, 0, .35);
   font-size: var(--majak-text-lg);
-  font-weight: var(--majak-weight-title);
+  font-weight: var(--majak-weight-regular);
   line-height: var(--majak-leading-tight);
   text-align: right;
   transform: translateY(-50%);
@@ -2353,7 +2392,7 @@ body {
   padding: 0 20px;
 }
 .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card-count {
-  top: 27px;
+  top: calc(var(--majak-lobby-card-height) / 2);
 }
 
 .majak-responsive-desktop-frame .majak-desktop-lobby-select__list.is-dani {
@@ -2415,29 +2454,33 @@ body {
   }
 
   .majak-desktop-channel-group__header {
-    width: min(100%, 700px);
+    width: min(88%, 700px);
     justify-self: center;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 60px;
+    column-gap: clamp(24px, 7vw, 60px);
   }
 
   .majak-mobile-frame .majak-desktop-channel-group__logo {
     width: 100%;
-    max-height: 76px;
+    max-height: none;
     justify-self: start;
   }
 
   .majak-desktop-channel-group .majak-desktop-channel-group__user-summary,
   .majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary {
     justify-self: stretch;
-    width: min(100%, 300px);
+    width: 100%;
     min-height: 0;
     padding: 5px 6px 6px;
     gap: 3px;
     box-shadow: inset 0 0 0 2px #68442d, inset 0 1px 0 2px rgba(255, 232, 181, .14), 0 3px 8px rgba(0, 0, 0, .24);
   }
 
-  .majak-desktop-channel-group .majak-mobile-user-summary__name,
+  .majak-desktop-channel-group .majak-mobile-user-summary__name {
+    padding-bottom: 2px;
+    font-size: var(--majak-text-xs);
+  }
+
   .majak-desktop-lobby-select .majak-mobile-user-summary__name {
     padding-bottom: 2px;
     font-size: var(--majak-text-sm);
@@ -2449,27 +2492,33 @@ body {
     padding: 2px 3px;
   }
 
-  .majak-desktop-channel-group .majak-mobile-user-summary__fields b,
+  .majak-desktop-channel-group .majak-mobile-user-summary__fields b {
+    font-size: var(--majak-text-2xs);
+  }
+
   .majak-desktop-lobby-select .majak-mobile-user-summary__fields b {
     font-size: var(--majak-text-xs);
   }
 
-  .majak-desktop-channel-group .majak-mobile-user-summary__fields em,
+  .majak-desktop-channel-group .majak-mobile-user-summary__fields em {
+    font-size: var(--majak-text-xs);
+  }
+
   .majak-desktop-lobby-select .majak-mobile-user-summary__fields em {
     font-size: var(--majak-text-sm);
   }
 
   .majak-desktop-channel-group__menu {
-    width: min(100%, 700px);
+    width: min(88%, 700px);
     justify-self: center;
     margin-top: 18px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 60px;
+    column-gap: clamp(24px, 7vw, 60px);
     row-gap: 30px;
   }
 
   .majak-desktop-channel-group__action {
-    min-height: 56px;
+    min-height: 52px;
     padding: 10px 14px 10px 20px;
     border: 2px solid #f0ca70;
     border-radius: 6px;
@@ -2513,15 +2562,15 @@ body {
 
   .majak-desktop-lobby-select__list,
   .majak-desktop-lobby-select__list.is-dani {
-    width: min(100%, 700px);
+    width: min(88%, 700px);
     justify-self: center;
     margin-top: 0;
-    column-gap: 60px;
+    column-gap: clamp(24px, 7vw, 60px);
     row-gap: 30px;
   }
 
   .majak-desktop-lobby-select__card {
-    min-height: 52px;
+    min-height: var(--majak-lobby-card-height);
     padding: 9px 12px 9px 20px;
     border: 2px solid #f0ca70;
     border-radius: 6px;
@@ -2530,7 +2579,7 @@ body {
   }
 
   .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
-    min-height: 48px;
+    min-height: var(--majak-lobby-card-height);
     padding: 8px 10px;
   }
 
@@ -2541,14 +2590,18 @@ body {
     line-height: 1.2 !important;
   }
 
+  .majak-desktop-lobby-select__entry {
+    --majak-lobby-card-height: 52px;
+  }
+
   .majak-desktop-lobby-select__card-count {
-    top: 24px;
+    top: calc(var(--majak-lobby-card-height) / 2);
     right: 6px;
     padding: 2px 6px;
   }
 
   .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card-count {
-    top: 22px;
+    top: calc(var(--majak-lobby-card-height) / 2);
   }
 
   .majak-desktop-lobby-select__footer .majak-responsive-control-button,
@@ -3069,6 +3122,7 @@ body:has(.majak-game-screen) {
 
 .majak-mobile-frame__tools {
   min-width: 0;
+  margin-inline-start: auto;
   flex: 0 1 auto;
   display: flex;
   gap: 8px;
@@ -4271,6 +4325,32 @@ body:has(.majak-game-screen) {
     gap: 2px;
     padding: 0;
   }
+
+  .majak-mobile-lobby-toolbar:not(.majak-mobile-lobby-toolbar--with-user) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: start;
+    gap: 4px;
+    min-height: 0;
+  }
+
+  .majak-mobile-lobby-toolbar:not(.majak-mobile-lobby-toolbar--with-user) h1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .majak-mobile-lobby-toolbar:not(.majak-mobile-lobby-toolbar--with-user) .majak-mobile-lobby-actions {
+    width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .majak-mobile-lobby-toolbar:not(.majak-mobile-lobby-toolbar--with-user) .majak-mobile-lobby-actions::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .majak-mobile-lobby-header-button,
@@ -4910,12 +4990,18 @@ body:has(.majak-game-screen) {
 .majak-lobby-room-card__title {
   min-width: 0;
   overflow: hidden;
+  color: #fff8da;
   font-size: var(--majak-font-10);
   font-weight: 800;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.majak-lobby-room-card__title.is-empty { color: #d8ead5; }
+.majak-lobby-room-card__title.is-waiting { color: #fff0b2; }
+.majak-lobby-room-card__title.is-full { color: #ffd0ad; }
+.majak-lobby-room-card__title.is-playing { color: #c0f2e9; }
 
 .majak-lobby-room-card__lock {
   color: #f2d783;
@@ -6425,7 +6511,8 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-lobby-member__identity {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: baseline;
   gap: 5px;
   overflow: hidden;
@@ -6433,20 +6520,19 @@ body:has(.majak-game-screen) {
 
 .majak-mobile-lobby-member__name,
 .majak-mobile-lobby-member__location {
-  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .majak-mobile-lobby-member__name {
-  flex: 0 1 auto;
   font-size: var(--majak-font-12);
   font-weight: 800;
 }
 
 .majak-mobile-lobby-member__title {
-  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: #9a6322;
   font-size: var(--majak-font-10);
   white-space: nowrap;
@@ -6658,6 +6744,119 @@ body:has(.majak-game-screen) {
 }
 
 @media (orientation: landscape) and (max-height: 430px) {
+  .majak-mobile-frame__content > .majak-desktop-channel-group {
+    --majak-type-scale: .7;
+    gap: 5px;
+    padding: 5px 12px;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__logo {
+    height: auto;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__user-summary {
+    min-height: 0;
+    padding: 4px 6px 5px;
+    gap: 2px;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__user-summary::before {
+    font-size: var(--majak-text-2xs);
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group .majak-mobile-user-summary__name {
+    padding-bottom: 1px;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group .majak-mobile-user-summary__fields > span {
+    min-height: 23px;
+    padding: 1px 3px 2px;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__menu {
+    margin-top: 4px;
+    row-gap: 12px;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__action {
+    min-height: 44px;
+    padding-block: 6px;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__action strong {
+    font-size: var(--majak-text-lg) !important;
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__description {
+    min-height: 0;
+    font-size: var(--majak-text-xs) !important;
+    font-weight: 400;
+    line-height: 1.1 !important;
+  }
+
+  .majak-mobile-frame__content > .majak-desktop-lobby-select {
+    --majak-type-scale: .7;
+    gap: 4px;
+    padding: 5px 12px;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__rule-tabs {
+    width: min(100%, 400px);
+    margin-top: 10px;
+    padding: 3px;
+    transform: none;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__rule-tab {
+    min-height: 32px;
+    padding: 0 12px;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__header p {
+    margin-bottom: 0;
+    font-size: var(--majak-text-xs);
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__header h1 {
+    font-size: var(--majak-text-xl);
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__list,
+  .majak-mobile-frame .majak-desktop-lobby-select__list.is-dani {
+    margin-top: 16px;
+    row-gap: 12px;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__card,
+  .majak-mobile-frame .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
+    min-height: var(--majak-lobby-card-height);
+    padding: 6px 62px 6px 18px;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__card-title {
+    font-size: var(--majak-text-lg) !important;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__entry {
+    --majak-lobby-card-height: 44px;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__card-description {
+    min-height: 0;
+    padding: 0 4px;
+    font-size: var(--majak-text-xs) !important;
+    font-weight: 400;
+    line-height: 1.1 !important;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__card-count,
+  .majak-mobile-frame .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card-count {
+    top: calc(var(--majak-lobby-card-height) / 2);
+    min-width: 38px;
+    padding: 2px 5px;
+    font-size: var(--majak-text-md);
+  }
+
   .majak-mobile-lobby-screen {
     --majak-mobile-lobby-side-width: 226px;
     --majak-mobile-room-action-scale: 1.22;
@@ -7213,6 +7412,15 @@ body:has(.majak-result-overlay) {
   .majak-kyo-result-panel.is-hora .majak-result-players { min-height: 0; overflow: hidden; }
   .majak-result-players__head, .majak-result-player { grid-template-columns: minmax(120px, 1.5fr) minmax(45px, .5fr) minmax(55px, .62fr) repeat(5, minmax(42px, .52fr)) minmax(38px, .42fr); gap: 3px; }
   .majak-result-players__head { padding: 2px 5px; }
+  .majak-result-players__head > span,
+  .majak-result-player > span,
+  .majak-han-result-table__head > span,
+  .majak-han-result-row > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .majak-result-player { min-height: 36px; padding: 2px 5px; }
   .majak-result-player img { width: 26px; height: 32px; }
   .majak-result-player__identity { gap: 5px; }
@@ -7239,6 +7447,13 @@ body:has(.majak-result-overlay) {
   .majak-han-result-player img { width: 34px; height: 34px; }
   .majak-han-result-detail { gap: 1px; }
   .majak-han-result-detail > div { padding: 1px; }
+  .majak-han-result-detail dt,
+  .majak-han-result-detail dd {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .majak-result-reward { margin: 0 5px 5px; padding: 6px 8px; }
   .majak-result-actions { padding: 7px 10px; }
   .majak-result-actions button { min-width: 104px; min-height: 34px; }
@@ -8041,13 +8256,14 @@ body:has(.majak-result-overlay) {
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog .majak-mobile-dialog-actions { padding: 8px 10px 10px; }
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__primary,
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog .majak-mobile-dialog-actions .majak-standard-dialog__secondary { height: 34px; }
-  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-option-body { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; overflow: hidden; }
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-option-body { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow-x: hidden; overflow-y: auto; }
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-section { padding: 3px 4px; }
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-section legend,
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice,
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-actions button { font-size: var(--majak-text-sm); }
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice-grid { gap: 2px; }
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-option-speed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-section--checks { grid-column: 1 / -1; }
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-dialog-section--checks .majak-mobile-choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice--wide { grid-column: span 2; }
   .majak-room-setup-overlay--mobileLandscape .majak-room-setup-dialog.majak-mobile-option-dialog .majak-mobile-choice { min-height: 22px; padding: 1px 3px; white-space: nowrap; }

@@ -87,11 +87,20 @@ export function responsiveDesktopEdgeOffset(mode: IngameLayoutMode, loc: number)
 }
 
 export function responsiveDesktopSeatOffset(mode: IngameLayoutMode, loc: number): HudPoint {
-  const center = responsiveDesktopCenterOffset(mode)
-  const edge = responsiveDesktopEdgeOffset(mode, loc)
-  return loc === 0 || loc === 2
-    ? { x: center.x, y: edge.y }
-    : { x: edge.x, y: center.y }
+  const centerOffset = responsiveDesktopCenterOffset(mode)
+  if (mode !== 'responsiveDesktop') return centerOffset
+
+  const bounds = responsiveDesktopVisibleWorldBounds()
+  if (!bounds) return centerOffset
+
+  const board = getIngameLayout(mode).board
+  const extraHalfWidth = Math.max(0, (bounds.right - bounds.left - board.width) / 2)
+  const sideDirection = loc === 0 || loc === 3 ? -1 : 1
+
+  return {
+    x: centerOffset.x + sideDirection * extraHalfWidth * 0.72,
+    y: centerOffset.y,
+  }
 }
 
 export function responsiveDesktopCornerOffset(mode: IngameLayoutMode, loc: number): HudPoint {

@@ -31,7 +31,7 @@ import {
   type LegacyCostumeId,
 } from '../game/legacyAnimations'
 import MobileAvatarLayer from '../game/MobileAvatarLayer'
-import { mobileCenterHudOffset, mobileEffectPointFromAnchor, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey, responsiveDesktopCenterOffset, responsiveDesktopCornerOffset, responsiveDesktopSeatOffset } from '../game/mobileIngameViewport'
+import { mobileCenterHudOffset, mobileEffectPointFromAnchor, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey, responsiveDesktopCenterOffset, responsiveDesktopSeatOffset } from '../game/mobileIngameViewport'
 import { isTengokuBoardSkin } from '../utils/legacySkinPalette'
 import { playMajakSfx, playMajakSid, SID_RICSTK } from '../utils/majakSound'
 import { getUiFontFamily, getUiFontSize, getUiFontSizePx } from '../utils/typography'
@@ -141,6 +141,16 @@ function boardLocalPoint(point: HudPoint): HudPoint {
   return { x: BOARD_X + point.x + offset.x, y: BOARD_Y + point.y + offset.y }
 }
 
+function playerHudPoint(point: HudPoint, loc: number): HudPoint {
+  const base = boardLocalPoint(point)
+  const centerOffset = responsiveDesktopCenterOffset(UI_LAYOUT_MODE)
+  const seatOffset = responsiveDesktopSeatOffset(UI_LAYOUT_MODE, loc)
+  return {
+    x: base.x + seatOffset.x - centerOffset.x,
+    y: base.y + seatOffset.y - centerOffset.y,
+  }
+}
+
 function skinTextureCandidate(key: string): string {
   return `${key}_skin`
 }
@@ -184,8 +194,8 @@ function avatarTextBounds(loc: number) {
     const txt = boardLocalPoint(pos.txt)
     return { left: txt.x, width: MOBILE_HUD_INFO_WIDTH }
   }
-  const avatar = boardLocalPoint(pos.avt)
-  const name = boardLocalPoint(pos.name)
+  const avatar = playerHudPoint(pos.avt, loc)
+  const name = playerHudPoint(pos.name, loc)
   const seatPanelLeft = name.x
   const seatPanelRight = name.x + HUD_METRICS.nameWidth
   const avatarRight = avatar.x + HUD_METRICS.avatar.width
@@ -253,26 +263,7 @@ function mobileScreenCornerBoxPos(loc: number): OdrBoxPos {
 function odrBoxPos(loc: number): OdrBoxPos {
   if (ODR_BOX_POS === MOBILE_ODR_BOX_POS) return mobileScreenCornerBoxPos(loc)
   const position = ODR_BOX_POS[loc]
-  if (UI_LAYOUT_MODE !== 'responsiveDesktop') return position
-  const centerOffset = responsiveDesktopCenterOffset(UI_LAYOUT_MODE)
-  const cornerOffset = responsiveDesktopCornerOffset(UI_LAYOUT_MODE, loc)
-  const avatarEdge = Math.min(DESKTOP_PLAYER_AVATAR_SIZE.width, DESKTOP_PLAYER_AVATAR_SIZE.height)
-  const horizontalInset = avatarEdge * 0.75
-  const verticalInset = avatarEdge * 0.5
-  const insetX = loc === 1 || loc === 2 ? -horizontalInset : horizontalInset
-  const insetY = loc === 0 || loc === 1 ? -verticalInset : verticalInset
-  const shift = (point: HudPoint): HudPoint => ({
-    x: point.x + cornerOffset.x - centerOffset.x + insetX,
-    y: point.y + cornerOffset.y - centerOffset.y + insetY,
-  })
-  return {
-    avt: shift(position.avt),
-    hst: shift(position.hst),
-    txt: shift(position.txt),
-    name: shift(position.name),
-    ttl: shift(position.ttl),
-    trk: shift(position.trk),
-  }
+  return position
 }
 
 function centerHudOffset(): HudPoint {
@@ -481,11 +472,11 @@ export default class UIScene extends Phaser.Scene {
     /* ── 各プレイヤーの UI ── */
     for (let odr = 0; odr < 4; odr++) {
       const pos = odrBoxPos(odr)
-      const avt = boardLocalPoint(pos.avt)
-      const txt = boardLocalPoint(pos.txt)
-      const name = boardLocalPoint(pos.name)
-      const ttl = boardLocalPoint(pos.ttl)
-      const trk = boardLocalPoint(pos.trk)
+      const avt = playerHudPoint(pos.avt, odr)
+      const txt = playerHudPoint(pos.txt, odr)
+      const name = playerHudPoint(pos.name, odr)
+      const ttl = playerHudPoint(pos.ttl, odr)
+      const trk = playerHudPoint(pos.trk, odr)
 
       this.majakTitleSprites[odr] = this.add.image(ttl.x, ttl.y, this.resolveSkinTextureKey('mj_board'))
         .setOrigin(0, 0).setDepth(2).setVisible(false)
@@ -979,11 +970,11 @@ export default class UIScene extends Phaser.Scene {
     players.forEach((p, odr) => {
       const loc = this.odrToLoc(odr)
       const pos = odrBoxPos(loc)
-      const baseAvt = boardLocalPoint(pos.avt)
-      const txt = boardLocalPoint(pos.txt)
-      const name = boardLocalPoint(pos.name)
-      const ttl = boardLocalPoint(pos.ttl)
-      const trk = boardLocalPoint(pos.trk)
+      const baseAvt = playerHudPoint(pos.avt, loc)
+      const txt = playerHudPoint(pos.txt, loc)
+      const name = playerHudPoint(pos.name, loc)
+      const ttl = playerHudPoint(pos.ttl, loc)
+      const trk = playerHudPoint(pos.trk, loc)
       const mobileInfoVisible = this.isMobileHudInfoVisible(loc)
       const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(p)
       const avt = isMobileIngameLayout(this.layoutMode)
@@ -1052,7 +1043,7 @@ export default class UIScene extends Phaser.Scene {
       this.hostMark.setVisible(false)
       return
     }
-    const baseAvt = boardLocalPoint(odrBoxPos(loc).avt)
+    const baseAvt = playerHudPoint(odrBoxPos(loc).avt, loc)
     const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(this.players[hostOdr])
     const avt = isMobileIngameLayout(this.layoutMode)
       ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
@@ -1060,7 +1051,7 @@ export default class UIScene extends Phaser.Scene {
     const desktopHudBounds = this.layoutMode === 'responsiveDesktop' ? this.desktopHudBounds[loc] : undefined
     const point = desktopHudBounds
       ? { x: desktopHudBounds.left + 3, y: desktopHudBounds.top + 3 }
-      : isMobileIngameLayout(this.layoutMode) ? { x: avt.x + 24, y: avt.y + 58 } : boardLocalPoint(odrBoxPos(loc).hst)
+      : isMobileIngameLayout(this.layoutMode) ? { x: avt.x + 24, y: avt.y + 58 } : playerHudPoint(odrBoxPos(loc).hst, loc)
     this.hostMark.setPosition(point.x, point.y).setVisible(true)
   }
 

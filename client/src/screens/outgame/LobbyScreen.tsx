@@ -792,6 +792,7 @@ function RoomCell({
   const cellSize = (value: number) => isMobile ? `calc(${value}px * ${cellScale})` : value
   const orderedSeats = [...seats].sort((left, right) => left.pos - right.pos)
   const roomStatus = isEmpty ? '空室' : isPlayingRoom ? '対局中' : isFull ? '満席' : '待機中'
+  const roomTitleState = isEmpty ? 'is-empty' : isPlayingRoom ? 'is-playing' : isFull ? 'is-full' : 'is-waiting'
 
   const handleClick = () => {
     if (roomActionBlocked || !hasRoomAction) return
@@ -826,7 +827,7 @@ function RoomCell({
         <article className={`majak-lobby-room-card${isEmpty ? ' is-empty' : ''}${isPlayingRoom ? ' is-playing' : ''}${isFull ? ' is-full' : ''}`}>
           <header className="majak-lobby-room-card__head">
             <span className="majak-lobby-room-card__number">{String(slotNo).padStart(2, '0')}</span>
-            <strong className="majak-lobby-room-card__title">{room?.title || '空きルーム'}</strong>
+            <strong className={`majak-lobby-room-card__title ${roomTitleState}`}>{room?.title || '空きルーム'}</strong>
             {!isEmpty && room.isPrivate && <span className="majak-lobby-room-card__lock" aria-label="パスワードあり">鍵</span>}
             <span className="majak-lobby-room-card__capacity">{occupiedMemberCount}/{room?.memberMax ?? 4}</span>
           </header>
@@ -1115,8 +1116,8 @@ function MobileMemberListPanel({
             <span className="majak-mobile-lobby-member__identity">
               <span className="majak-mobile-lobby-member__name">{member.name}</span>
               <span className="majak-mobile-lobby-member__title">{member.slevel || '庶民'}</span>
+              <span className="majak-mobile-lobby-member__location">{member.location}</span>
             </span>
-            <span className="majak-mobile-lobby-member__location">{member.location}</span>
           </span>
         </button>
       ))}
@@ -3729,7 +3730,6 @@ export default function LobbyScreen() {
               <button type="button" className="majak-mobile-lobby-header-button" onClick={onRefreshRoomList}>更新</button>
               {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>}
               {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>}
-              {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowSerialCode(true)}>シリアルコード</button>}
               {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>}
               <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
               {showFreeChargeButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
@@ -3819,7 +3819,6 @@ export default function LobbyScreen() {
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onRefreshRoomList}>更新</button>
             {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowShop(true)}>ショップ</button>}
             {showMissionButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowMission(true)}>ミッション</button>}
-            {showMissionButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowSerialCode(true)}>シリアルコード</button>}
             {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>}
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCollection(true)}>コレクション</button>
             {showFreeChargeButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
@@ -4228,15 +4227,6 @@ export default function LobbyScreen() {
         x={934 - LOBBY_LEFT_NUDGE} y={665}
         onClick={onExit}
         title="終了"
-      />
-
-      <SpriteButton
-        src={`${IMG}/mj_btn_sirial.png`}
-        frameW={80} frameH={32}
-        x={934 - LOBBY_LEFT_NUDGE} y={591}
-        onClick={() => setShowSerialCode(true)}
-        title="シリアルコード"
-        hidden={!showMissionButton}
       />
 
       {/* ── 無料補充ボタン mj_btn_insurance2.png (138×29) at (X_BTN_CHARGE=866, Y_BTN_CHARGE=171) ── */}

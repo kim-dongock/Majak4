@@ -694,7 +694,7 @@ export default function RoomScreen() {
   const layoutMode = useOutgameLayoutMode()
   const isMobileIngame = layoutMode === 'mobileLandscape'
   const ingameLayoutMode = isMobileIngame ? 'mobileLandscape' : 'responsiveDesktop'
-  const usesLegacyIngameSidebar = ingameLayoutMode === 'desktop'
+  const usesLegacyIngameSidebar = false
 
   /** AP-04 §8: ナビゲーション state からサーバー URL とモードを取得
    *   mode='create' : ルーム作成モード → send('c8e', ...)
@@ -820,6 +820,7 @@ export default function RoomScreen() {
   const inlineGameEndedRef = useRef(false)
   const inlineGameLoadingVisibleRef = useRef(false)
   const gameLoadTimingRef = useRef({ active: false, startedAt: 0, lastAt: 0, step: 'server' as GameLoadStep, source: '' })
+  const readyClickedAtRef = useRef(0)
   const gameReconnectActiveRef = useRef(Boolean(locState.resumePlaying) || getDocumentNavigationType() === 'reload')
   const viewersRef = useRef<ViewerEntry[]>([])
   const messageSeqRef = useRef(0)
@@ -885,6 +886,13 @@ export default function RoomScreen() {
       finalStageDurationMs: Math.round(now - timing.lastAt),
       totalDurationMs: Math.round(now - timing.startedAt),
       source: timing.source,
+      completedAt: new Date().toISOString(),
+      ...details,
+    })
+    console.info('[GameStartTiming] loading overlay completed', {
+      roomId,
+      totalDurationMs: Math.round(now - timing.startedAt),
+      elapsedSinceReadyClickMs: readyClickedAtRef.current > 0 ? Math.round(now - readyClickedAtRef.current) : null,
       completedAt: new Date().toISOString(),
       ...details,
     })
@@ -1752,6 +1760,11 @@ export default function RoomScreen() {
         const v = data[`smmk2e${i}`]
         if (v != null) readyByPos[i] = Number(v) !== 0
       }
+      console.info('[GameStartTiming] ready state received', {
+        roomId,
+        readyByPos,
+        elapsedSinceReadyClickMs: readyClickedAtRef.current > 0 ? Math.round(performance.now() - readyClickedAtRef.current) : null,
+      })
       setPlayers(prev => prev.map(p =>
         p.pos in readyByPos ? { ...p, ready: readyByPos[p.pos] } : p,
       ))
@@ -1798,6 +1811,11 @@ export default function RoomScreen() {
 
     const onGameStart = (data: Record<string, unknown>) => {
       if (!mounted) return
+      console.info('[GameStartTiming] AutoStart received', {
+        roomId,
+        elapsedSinceReadyClickMs: readyClickedAtRef.current > 0 ? Math.round(performance.now() - readyClickedAtRef.current) : null,
+        receivedAt: new Date().toISOString(),
+      })
       logRejoinProbe('mjkc4e game start response', { result: data.k1e ?? data.result, data })
       const result = data.k1e ?? data.result
       if (result != null && !isOk(result)) {
@@ -2320,8 +2338,14 @@ export default function RoomScreen() {
     if (autoMatchingChannel) return
     if (trainingChannel && Boolean(me?.isHost) && !trainingReadyToStart) return
     if (!(trainingChannel && me?.isHost)) setIsReady(prev => !prev)
+    readyClickedAtRef.current = performance.now()
+    console.info('[GameStartTiming] ready button clicked', { roomId, clickedAt: new Date().toISOString() })
     // Cmd.PushOkButton = "smmc2e" (C→S 送信 / S→C 応答)
     await SignalR.send('smmc2e', { dummy: 0 })
+    console.info('[GameStartTiming] ready command sent', {
+      roomId,
+      elapsedSinceReadyClickMs: Math.round(performance.now() - readyClickedAtRef.current),
+    })
   }
 
   /** 招待 (ID_GAMEINVI 相当)
@@ -2736,8 +2760,8 @@ export default function RoomScreen() {
     ) : null
 
     const inlineGameStage = (
-      <div className="majak-inline-game-stage" style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: isMobileIngame || ingameLayoutMode === 'responsiveDesktop' ? 'transparent' : '#000' }}>
-        <div ref={inlineGameRef} style={{ position: 'absolute', left: 0, top: -31, width: GAME_WIDTH, height: GAME_HEIGHT }} />
+      <div className="majak-inline-game-stage" style={{ position: 'relative', width: ingameLayoutMode === 'responsiveDesktop' ? '100%' : ROOM_W, height: ingameLayoutMode === 'responsiveDesktop' ? '100%' : ROOM_H, overflow: 'hidden', background: isMobileIngame || ingameLayoutMode === 'responsiveDesktop' ? 'transparent' : '#000' }}>
+        <div ref={inlineGameRef} style={{ position: 'absolute', left: 0, top: ingameLayoutMode === 'responsiveDesktop' ? 0 : -31, width: ingameLayoutMode === 'responsiveDesktop' ? '100%' : GAME_WIDTH, height: ingameLayoutMode === 'responsiveDesktop' ? '100%' : GAME_HEIGHT }} />
 
         <div style={{ position: 'absolute', left: 0, top: 0, width: ROOM_W, height: ROOM_H, zIndex: 24, pointerEvents: 'none' }}>
           {activeEmoticons.map(item => <EmoticonAnimation key={item.id} item={item} now={emoticonNow} />)}
@@ -3172,12 +3196,6 @@ export default function RoomScreen() {
     return (
       <div className={`majak-responsive-ingame-shell${inlineGameLoading ? ' is-loading' : ''}`}>
         <div className="majak-responsive-ingame-playfield">
-          <img
-            className="majak-responsive-ingame-background"
-            src={customBoardSrc}
-            alt=""
-            onError={event => { event.currentTarget.src = `${IMG}/mj_board.png` }}
-          />
           <div className="majak-responsive-ingame-world">
             {inlineGameStage}
           </div>

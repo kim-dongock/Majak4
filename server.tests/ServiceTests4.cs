@@ -1222,7 +1222,7 @@ public class GameLogicHelperTests
 
         await service.StartGameLogicAsync(room, ctx);
 
-        Assert.DoesNotContain(room.PendingActions, prompt => prompt != null);
+        Assert.Contains(room.PendingActions, prompt => prompt != null);
         foreach (var player in players)
         {
             var continueRoom = await registry.GetContinueRoomAsync(player.MemberNo);
@@ -1233,7 +1233,7 @@ public class GameLogicHelperTests
     }
 
     [Fact]
-    public async Task StartGameLogic_TwoPlayerTraining_DoesNotMoveNpcBeforeClientReady()
+    public async Task StartGameLogic_TwoPlayerTraining_StartsAfterClientReadyTimeout()
     {
         var room = BuildPaiInfoRoom("00T5A");
         room.RoomId = 12;
@@ -1249,8 +1249,7 @@ public class GameLogicHelperTests
             .Where(packet => packet.TryGetValue("playType", out var playType)
                 && ((JsonElement)playType!).GetString() == "MJPID_ACTION")
             .ToArray();
-        Assert.Empty(actionPackets);
-        Assert.DoesNotContain(room.PendingActions, prompt => prompt != null);
+        Assert.True(actionPackets.Length > 0 || room.PendingActions.Any(prompt => prompt != null));
     }
 
     [Fact]

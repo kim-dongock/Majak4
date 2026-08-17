@@ -25,28 +25,46 @@ public sealed class PaifuFileService
         _retentionDays = Math.Clamp(configuration.GetValue("Paifu:RetentionDays", 90), 1, 365);
     }
 
-    public async Task StoreCompletedGameAsync(GameRoom room, IReadOnlyList<object> packets, IReadOnlyList<MajakPlayer> players, IReadOnlyDictionary<string, object?>? report)
+    public static PaifuArchiveWorkItem CreateCompletedGameWorkItem(
+        GameRoom room,
+        IReadOnlyList<object> packets,
+        IReadOnlyList<MajakPlayer> players,
+        IReadOnlyDictionary<string, object?>? report)
+        => new(
+            DateTimeOffset.UtcNow,
+            room.ChannelId,
+            room.RoomId,
+            room.RoomTitle,
+            room.RoomOption,
+            packets.Select(ToJsonElement).ToArray(),
+            players.Select(player => new PaifuArchiveParticipant(player.MemberNo, player.NickName, player.SLevel, player.Rating)).ToArray(),
+            ReadResult(report));
+
+    public Task StoreCompletedGameAsync(GameRoom room, IReadOnlyList<object> packets, IReadOnlyList<MajakPlayer> players, IReadOnlyDictionary<string, object?>? report)
+        => StoreCompletedGameAsync(CreateCompletedGameWorkItem(room, packets, players, report));
+
+    public async Task StoreCompletedGameAsync(PaifuArchiveWorkItem item, CancellationToken cancellationToken = default)
     {
-        if (!_objects.IsConfigured || packets.Count == 0 || players.Count == 0) return;
+        if (!_objects.IsConfigured || item.Packets.Count == 0 || item.Members.Count == 0) return;
         var payload = new PaifuPayload(
             Version: 1,
-            PlayedAt: DateTimeOffset.UtcNow,
-            ChannelId: room.ChannelId,
-            RoomId: room.RoomId,
-            RoomName: room.RoomTitle,
-            RoomOption: room.RoomOption,
-            Packets: packets.Select(ToJsonElement).ToArray(),
-            Members: players.Select(player => new PaifuMember(player.NickName, player.SLevel, player.Rating, "")).ToArray(),
-            Result: ReadResult(report));
+            PlayedAt: item.PlayedAt,
+            ChannelId: item.ChannelId,
+            RoomId: item.RoomId,
+            RoomName: item.RoomName,
+            RoomOption: item.RoomOption,
+            Packets: item.Packets,
+            Members: item.Members.Select(member => new PaifuMember(member.Name, member.Title, member.Rating, "")).ToArray(),
+            Result: item.Result);
         var plain = JsonSerializer.SerializeToUtf8Bytes(payload);
-        if (plain.Length > MaxPlaintextBytes || packets.Count > MaxPackets) return;
+        if (plain.Length > MaxPlaintextBytes || item.Packets.Count > MaxPackets) return;
         var compressed = Compress(plain);
         if (compressed.Length > MaxCompressedBytes) return;
 
-        var members = players.Where(player => ulong.TryParse(player.MemberNo, out _)).ToArray();
+        var members = item.Members.Where(member => ulong.TryParse(member.MemberNo, out _)).ToArray();
         if (members.Length == 0) return;
         var objectKey = _objects.CreateObjectKey(payload.PlayedAt);
-        await _objects.PutAsync(objectKey, compressed);
+        await _objects.PutAsync(objectKey, compressed, cancellationToken);
         try
         {
             await using var db = await _db.CreateAsync();
@@ -59,16 +77,16 @@ public sealed class PaifuFileService
                 RoomOption = room.RoomOption,
                 ResultText = payload.Result,
                 MembersJson = JsonSerializer.Serialize(payload.Members),
-                PacketCount = packets.Count,
+                PacketCount = item.Packets.Count,
                 S3ObjectKey = objectKey,
                 ExpiresAt = payload.PlayedAt.UtcDateTime.AddDays(_retentionDays),
                 CreatedAt = DateTime.UtcNow,
             };
             db.PaifuArchives.Add(archive);
             await db.SaveChangesAsync();
-            foreach (var player in members)
-                db.PaifuArchiveMembers.Add(new PaifuArchiveMemberLogEntity { PaifuArchiveId = archive.PaifuArchiveId, MemberNo = ulong.Parse(player.MemberNo) });
-            await db.SaveChangesAsync();
+            foreach (var member in members)
+                db.PaifuArchiveMembers.Add(new PaifuArchiveMemberLogEntity { PaifuArchiveId = archive.PaifuArchiveId, MemberNo = ulong.Parse(member.MemberNo) });
+            await db.SaveChangesAsync(cancellationToken);
         }
         catch
         {
@@ -163,6 +181,8 @@ public sealed class PaifuFileService
 
 public sealed record PaifuArchiveSummary(ulong ArchiveId, DateTime PlayedAt, string RoomName, string RoomOption, string Result, IReadOnlyList<PaifuMember> Members, int PacketCount);
 public sealed record PaifuMember(string Name, string Title, int Rating, string Result);
+public sealed record PaifuArchiveParticipant(string MemberNo, string Name, string Title, int Rating);
+public sealed record PaifuArchiveWorkItem(DateTimeOffset PlayedAt, string ChannelId, int RoomId, string RoomName, string RoomOption, IReadOnlyList<JsonElement> Packets, IReadOnlyList<PaifuArchiveParticipant> Members, string Result);
 public sealed record PaifuPayload(int Version, DateTimeOffset PlayedAt, string ChannelId, int RoomId, string RoomName, string RoomOption, IReadOnlyList<JsonElement> Packets, IReadOnlyList<PaifuMember> Members, string Result);
 public sealed record PaifuReplaySource(string Url, DateTime ExpiresAt);
 public enum PaifuMatchKind { All, Normal, Tournament }

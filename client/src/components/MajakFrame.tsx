@@ -103,7 +103,11 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
     || /\/channel\/[^/]+\/lobby$/.test(location.pathname)
     || /\/channel\/[^/]+\/lobby\/room\/[^/]+$/.test(location.pathname)
   const desktopFrameWidth = isResponsiveDesktopScreen ? 'min(1320px, calc(100vw - 48px))' : frameWidth
-  const desktopFrameHeight = isResponsiveDesktopScreen ? 'min(860px, calc(100dvh - 48px))' : frameHeight
+  const desktopFrameHeight = isResponsiveDesktopScreen
+    ? accBox === 'room'
+      ? 'min(860px, calc(100dvh - 16px))'
+      : 'min(860px, calc(100dvh - 48px))'
+    : frameHeight
   const routeState = (location.state ?? {}) as { customBgId?: number; customBoardType?: number }
   const fallbackSkin = useCustomSkinStore()
   const routeCustomBoardId = Number(routeState.customBgId ?? 0)

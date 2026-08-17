@@ -309,9 +309,10 @@ public class MajakGameHub : Hub
     public async Task NotifyGameClientReady(int roomId)
     {
         var log = _sp.GetService<ILogger<MajakGameHub>>();
-        log?.LogInformation("[GameReconnect] NotifyGameClientReady received. connectionId={ConnectionId} requestedRoomId={RequestedRoomId}",
+        log?.LogInformation("[GameStartTiming] NotifyGameClientReady received. connectionId={ConnectionId} requestedRoomId={RequestedRoomId} receivedAt={ReceivedAt}",
             Context.ConnectionId,
-            roomId);
+            roomId,
+            DateTimeOffset.UtcNow);
         var player = _session.GetByConn(Context.ConnectionId);
         if (player == null || player.RoomId != roomId)
         {
@@ -408,6 +409,9 @@ public class MajakGameHub : Hub
         }
 
         var gameLogic = _sp.GetRequiredService<GameLogicService>();
+        _sp.GetService<ILogger<MajakGameHub>>()?.LogInformation(
+            "[GameStartTiming] NotifyGamePresentationReady received. roomId={RoomId} presentationId={PresentationId} connectionId={ConnectionId} receivedAt={ReceivedAt}",
+            roomId, presentationId, Context.ConnectionId, DateTimeOffset.UtcNow);
         await gameLogic.MarkGamePresentationReadyAsync(roomId, Context.ConnectionId, presentationId);
     }
 

@@ -56,7 +56,7 @@ export default class PreloadScene extends Phaser.Scene {
     const customHaiId = Number(options.customHaiId ?? 0)
     this.preloadStartedAt = performance.now()
     emitGameLoadProgress('resources')
-    console.info('[GameAssets] load start', {
+    console.info('[GameStartTiming] resource load started', {
       phase: 'game-start',
       customBgId,
       customBoardType,
@@ -361,7 +361,7 @@ export default class PreloadScene extends Phaser.Scene {
 
   create() {
     const durationMs = Math.round(performance.now() - this.preloadStartedAt)
-    console.info('[GameAssets] load complete', {
+    console.info('[GameStartTiming] resource load completed', {
       phase: 'game-start',
       durationMs,
       completedAt: new Date().toISOString(),

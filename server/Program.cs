@@ -84,6 +84,7 @@ builder.Services.AddScoped<MissionService>();
 builder.Services.AddScoped<GameLogicService>();
 builder.Services.AddSingleton<PaifuObjectStore>();
 builder.Services.AddSingleton<PaifuFileService>();
+builder.Services.AddSingleton<PaifuArchiveUploadQueue>();
 
 // ─── Admin ────────────────────────────────────────────────────
 builder.Services.AddScoped<AdminRepository>();
@@ -104,6 +105,7 @@ builder.Services.AddHostedService<AutoMatchingBackgroundService>();
 builder.Services.AddHostedService<ServerStatusBackgroundService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<GradeRankBackgroundService>());
 builder.Services.AddHostedService<PaifuArchiveCleanupBackgroundService>();
+builder.Services.AddHostedService<PaifuArchiveUploadBackgroundService>();
 
 // ─── Channel Commands ─────────────────────────────────────────
 builder.Services.AddScoped<GetDetailRecCommand>();

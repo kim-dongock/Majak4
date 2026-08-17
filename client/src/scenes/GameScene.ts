@@ -1067,6 +1067,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   create() {
+    const sceneCreatedAt = performance.now()
+    this.registry.set('majak:gameStartSceneCreatedAt', sceneCreatedAt)
+    console.info('[GameStartTiming] GameScene create started', {
+      roomId: this.roomId,
+      createdAt: new Date().toISOString(),
+    })
     if (!this.isReplay) emitGameLoadProgress('scene')
     if (this.skipInitialRoomEnter) {
       console.info('[GameReconnect] GameScene create entered', {
@@ -1403,6 +1409,10 @@ export default class GameScene extends Phaser.Scene {
         this.emitGameSync(false, 'game-content-ready')
       }
       if (playType === 'MJPID_INIHAN') {
+        console.info('[GameStartTiming] MJPID_INIHAN received', {
+          roomId: this.roomId,
+          elapsedSinceSceneCreateMs: Math.round(performance.now() - Number(this.registry.get('majak:gameStartSceneCreatedAt') ?? performance.now())),
+        })
         this.chicha = Number(data.chicha ?? data.nChicha ?? this.chicha)
         this.applyHanchanOrder(data)
         const memberInfo = Array.isArray(data.memberInfo) ? data.memberInfo : []
@@ -1416,6 +1426,11 @@ export default class GameScene extends Phaser.Scene {
         return
       }
       if (isInitKyokuPacket) {
+        console.info('[GameStartTiming] MJPID_INIKYO received', {
+          roomId: this.roomId,
+          presentationId: data.presentationId,
+          elapsedSinceSceneCreateMs: Math.round(performance.now() - Number(this.registry.get('majak:gameStartSceneCreatedAt') ?? performance.now())),
+        })
         const isLiveRoundStart = !this.isReplayApplyingHistory
         if (!this.isReplay) window.dispatchEvent(new Event(GAME_KYOKU_STARTED_EVENT))
         this.clearLiveActionState('init kyoku')
@@ -1456,6 +1471,16 @@ export default class GameScene extends Phaser.Scene {
         const skillDelay = this.playLegacyLevel1Skills(seatRevealDelay)
         const gemDelay = this.playLegacyGemGame(skillDelay)
         const waremeStartDelay = skillDelay + gemDelay
+        console.info('[GameStartTiming] initial presentation scheduled', {
+          roomId: this.roomId,
+          presentationId: data.presentationId,
+          seatRevealDelayMs: seatRevealDelay,
+          skillDelayMs: skillDelay,
+          gemDelayMs: gemDelay,
+          waremeDelayMs: LEGACY_WAREME_PRESENTATION_DURATION_MS,
+          dealDelayMs: 1600,
+          estimatedTotalMs: waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS + 1600,
+        })
         this.emitToUiScene('stateUpdate', {
           players: this.players,
           kyoku: this.formatKyoku(kyokuCnt),
@@ -2150,10 +2175,14 @@ export default class GameScene extends Phaser.Scene {
       console.warn('[GameReconnect] NotifyGameClientReady skipped: invalid room id', { roomId: this.roomId })
       return
     }
-    if (this.skipInitialRoomEnter) console.info('[GameReconnect] NotifyGameClientReady invoke start', { roomId })
+    const startedAt = performance.now()
+    console.info('[GameStartTiming] NotifyGameClientReady invoke started', { roomId })
     void SignalR.invoke('NotifyGameClientReady', roomId)
       .then(() => {
-        if (this.skipInitialRoomEnter) console.info('[GameReconnect] NotifyGameClientReady invoke resolved', { roomId })
+        console.info('[GameStartTiming] NotifyGameClientReady invoke completed', {
+          roomId,
+          durationMs: Math.round(performance.now() - startedAt),
+        })
       })
       .catch(error => {
         console.warn('[GameReconnect] NotifyGameClientReady invoke failed', {
@@ -2166,7 +2195,20 @@ export default class GameScene extends Phaser.Scene {
   private notifyGamePresentationReady(presentationId: number) {
     const roomId = Number(this.roomId)
     if (!Number.isInteger(roomId) || roomId <= 0 || !Number.isSafeInteger(presentationId) || presentationId <= 0) return
+    const startedAt = performance.now()
+    console.info('[GameStartTiming] NotifyGamePresentationReady invoke started', {
+      roomId,
+      presentationId,
+      elapsedSinceSceneCreateMs: Math.round(startedAt - Number(this.registry.get('majak:gameStartSceneCreatedAt') ?? startedAt)),
+    })
     void SignalR.invoke('NotifyGamePresentationReady', roomId, presentationId)
+      .then(() => {
+        console.info('[GameStartTiming] NotifyGamePresentationReady invoke completed', {
+          roomId,
+          presentationId,
+          durationMs: Math.round(performance.now() - startedAt),
+        })
+      })
       .catch(error => {
         console.warn('[GameScene] NotifyGamePresentationReady invoke failed', {
           roomId,

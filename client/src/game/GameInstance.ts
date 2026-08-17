@@ -103,10 +103,14 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
     return gameInstance
   }
 
+  const resizeToParent = options.layoutMode === 'responsiveDesktop'
+  const initialWidth = resizeToParent ? Math.max(1, parent.clientWidth) : GAME_WIDTH
+  const initialHeight = resizeToParent ? Math.max(1, parent.clientHeight) : GAME_HEIGHT
+
   gameInstance = new Phaser.Game({
     type: Phaser.AUTO,
-    width: GAME_WIDTH,
-    height: GAME_HEIGHT,
+    width: initialWidth,
+    height: initialHeight,
     parent,
     backgroundColor: options.layoutMode === 'desktop' ? '#000000' : 'rgba(0,0,0,0)',
     transparent: options.layoutMode !== 'desktop',
@@ -121,7 +125,9 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
     },
     scene: [PreloadScene, GameScene, UIScene],
     scale: {
-      mode: Phaser.Scale.NONE,
+      mode: resizeToParent ? Phaser.Scale.RESIZE : Phaser.Scale.NONE,
+      width: initialWidth,
+      height: initialHeight,
     },
     callbacks: {
       postBoot: game => {
