@@ -73,6 +73,15 @@ public sealed class PaifuObjectStore
         });
     }
 
+    public async Task<byte[]> GetAsync(string objectKey, CancellationToken cancellationToken = default)
+    {
+        EnsureConfigured();
+        using var response = await _s3.GetObjectAsync(_bucket, objectKey, cancellationToken);
+        using var output = new MemoryStream();
+        await response.ResponseStream.CopyToAsync(output, cancellationToken);
+        return output.ToArray();
+    }
+
     public Task DeleteAsync(string objectKey, CancellationToken cancellationToken = default)
     {
         EnsureConfigured();

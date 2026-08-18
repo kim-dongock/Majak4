@@ -1175,8 +1175,10 @@ app.MapPost("/api/player/paifu/{archiveId:long}/replay", async (long archiveId, 
     var auth = RequireGameAuth(ctx, gameAuth);
     if (auth is null) return Results.Unauthorized();
     if (archiveId <= 0) return Results.NotFound();
-    var source = await paifuFiles.GetReplaySourceAsync(auth.MemberNo, (ulong)archiveId);
-    return source is null ? Results.NotFound() : Results.Ok(source);
+    var compressed = await paifuFiles.GetReplayObjectAsync(auth.MemberNo, (ulong)archiveId, ctx.RequestAborted);
+    if (compressed is null) return Results.NotFound();
+    ctx.Response.Headers.ContentEncoding = "br";
+    return Results.File(compressed, "application/json");
 });
 
 app.MapPost("/api/player/collection/equip", async (HttpContext ctx, CollectionEquipRequest? body, PlayerRepository playerRepo, TitleService titleService, PlayerSessionService sessions, GameAuthTokenService gameAuth) =>

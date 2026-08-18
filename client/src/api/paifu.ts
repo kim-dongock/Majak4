@@ -29,11 +29,6 @@ export interface PaifuArchiveFilter {
   matchKind?: 'normal' | 'tournament'
 }
 
-export interface PaifuReplaySource {
-  url: string
-  expiresAt: string
-}
-
 function queryString(filter: PaifuArchiveFilter): string {
   const params = new URLSearchParams()
   for (const [key, value] of Object.entries(filter)) {
@@ -57,8 +52,5 @@ export async function getPaifuReplayPayload(archiveId: number): Promise<unknown>
     headers: await refreshedGameAuthHeaders(),
   })
   if (!response.ok) throw new Error(`Paifu replay request failed: ${response.status}`)
-  const source = await response.json() as PaifuReplaySource
-  const objectResponse = await fetch(source.url)
-  if (!objectResponse.ok) throw new Error(`Paifu object request failed: ${objectResponse.status}`)
-  return objectResponse.json()
+  return response.json()
 }

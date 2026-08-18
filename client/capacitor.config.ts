@@ -21,6 +21,9 @@ const config: CapacitorConfig = {
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
     },
+    Keyboard: {
+      resizeOnFullScreen: true,
+    },
   },
 };
 

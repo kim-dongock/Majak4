@@ -119,10 +119,13 @@ public sealed class PaifuFileService
         return rows.Select(item => new PaifuArchiveSummary(item.PaifuArchiveId, item.PlayedAt, item.RoomName, item.RoomOption, item.ResultText, ReadMembers(item.MembersJson), item.PacketCount)).ToArray();
     }
 
-    public async Task<PaifuReplaySource?> GetReplaySourceAsync(string memberNo, ulong archiveId)
+    public async Task<byte[]?> GetReplayObjectAsync(string memberNo, ulong archiveId, CancellationToken cancellationToken = default)
     {
         var archive = await GetOwnedArchiveAsync(memberNo, archiveId);
-        return archive is null ? null : new PaifuReplaySource(_objects.CreateReplayUrl(archive.S3ObjectKey), archive.ExpiresAt);
+        if (archive is null) return null;
+        var compressed = await _objects.GetAsync(archive.S3ObjectKey, cancellationToken);
+        if (compressed.Length > MaxCompressedBytes) throw new InvalidDataException("Paifu payload exceeds the limit.");
+        return compressed;
     }
 
     public async Task RemoveExpiredAsync(CancellationToken cancellationToken)
@@ -184,7 +187,6 @@ public sealed record PaifuMember(string Name, string Title, int Rating, string R
 public sealed record PaifuArchiveParticipant(string MemberNo, string Name, string Title, int Rating);
 public sealed record PaifuArchiveWorkItem(DateTimeOffset PlayedAt, string ChannelId, int RoomId, string RoomName, string RoomOption, IReadOnlyList<JsonElement> Packets, IReadOnlyList<PaifuArchiveParticipant> Members, string Result);
 public sealed record PaifuPayload(int Version, DateTimeOffset PlayedAt, string ChannelId, int RoomId, string RoomName, string RoomOption, IReadOnlyList<JsonElement> Packets, IReadOnlyList<PaifuMember> Members, string Result);
-public sealed record PaifuReplaySource(string Url, DateTime ExpiresAt);
 public enum PaifuMatchKind { All, Normal, Tournament }
 public sealed record PaifuArchiveQuery(DateTime? PlayedFrom, DateTime? PlayedToExclusive, string? RoomName, string? MemberName, string? Result, PaifuMatchKind MatchKind, int Limit)
 {

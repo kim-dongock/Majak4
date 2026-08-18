@@ -110,6 +110,27 @@ function ButtonPressFeedback() {
   return null
 }
 
+function AndroidImeFocusAssist() {
+  useEffect(() => {
+    if (Capacitor.getPlatform() !== 'android') return
+
+    const onFocusIn = (event: FocusEvent) => {
+      const control = event.target
+      if (!(control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement)) return
+      if (control instanceof HTMLInputElement && ['button', 'checkbox', 'color', 'file', 'radio', 'range', 'reset', 'submit'].includes(control.type)) return
+
+      window.requestAnimationFrame(() => {
+        control.scrollIntoView({ block: 'center', inline: 'nearest' })
+      })
+    }
+
+    document.addEventListener('focusin', onFocusIn)
+    return () => document.removeEventListener('focusin', onFocusIn)
+  }, [])
+
+  return null
+}
+
 function SignalRRouteDisconnect() {
   const location = useLocation()
 
@@ -637,6 +658,7 @@ export default function App() {
         <MemoryRouter initialEntries={[initialRoute]}>
           <RouterStatePersistence />
           <ButtonPressFeedback />
+          <AndroidImeFocusAssist />
           <SignalRRouteDisconnect />
           <ForcedLogoutListener />
           <ContinueRoomBootstrap />

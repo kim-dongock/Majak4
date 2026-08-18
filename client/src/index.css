@@ -5943,7 +5943,7 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-tournament-regist__body {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
   display: grid;
   grid-template-columns: 1.08fr .92fr 1fr;
