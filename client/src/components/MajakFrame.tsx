@@ -94,6 +94,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
   const [cfg, setCfg]         = useState<MJConfig>(() => loadMajakConfig())
   const [isFullScreen, setIsFullScreen] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const isAnnouncementScreen = location.pathname === '/announcements'
   const frameWidth = accBox === 'room' ? 1024 : 1014
   const frameHeight = accBox === 'room' ? 735 : undefined
   const isResponsiveDesktopScreen = location.pathname === '/channel'
@@ -225,12 +226,16 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
             <div className="majak-mobile-frame__brand">麻雀4</div>
             <MobileUserSummary />
             <div className="majak-mobile-frame__tools">
-              {onGoHome && <button type="button" onClick={onGoHome}>ホーム</button>}
-              {onOpenAnnouncements && <button type="button" onClick={onOpenAnnouncements}>お知らせ</button>}
-              {!IS_NATIVE_APP && <button type="button" onClick={enterFullscreen} title="全画面表示">全画面</button>}
-              <button type="button" onClick={handleOpenSettings}>設定</button>
-              {showMobileExit && <button type="button" onClick={handleClose}>終了</button>}
-              {accBox && <button type="button" onClick={handleAccuse}>通報</button>}
+              {isAnnouncementScreen ? (
+                onGoHome && <button type="button" onClick={onGoHome}>閉じる</button>
+              ) : <>
+                {onGoHome && <button type="button" onClick={onGoHome}>閉じる</button>}
+                {onOpenAnnouncements && <button type="button" onClick={onOpenAnnouncements}>お知らせ</button>}
+                {!IS_NATIVE_APP && <button type="button" onClick={enterFullscreen} title="全画面表示">全画面</button>}
+                <button type="button" onClick={handleOpenSettings}>設定</button>
+                {showMobileExit && <button type="button" onClick={handleClose}>終了</button>}
+                {accBox && <button type="button" onClick={handleAccuse}>通報</button>}
+              </>}
             </div>
           </header>
         )}
@@ -265,14 +270,18 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
         <header className="majak-responsive-desktop-frame__bar">
           <strong className="majak-type-lg">麻雀4</strong>
           <div>
-            {onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>ホーム</button>}
-            {onOpenAnnouncements && <button type="button" className="majak-responsive-control-button" onClick={onOpenAnnouncements}>お知らせ</button>}
-            <button type="button" className="majak-responsive-control-button" onClick={handleOpenSettings}>設定</button>
-            {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleAccuse}>通報</button>}
-            {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleCapture}>キャプチャ</button>}
-            {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleBanish}>追放</button>}
-            {!IS_NATIVE_APP && <button type="button" className="majak-responsive-control-button" onClick={handleMaximize}>{isFullScreen ? '元に戻す' : '全画面'}</button>}
-            <button type="button" className="majak-responsive-control-button" onClick={handleClose}>終了</button>
+            {isAnnouncementScreen ? (
+              onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>閉じる</button>
+            ) : <>
+              {onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>閉じる</button>}
+              {onOpenAnnouncements && <button type="button" className="majak-responsive-control-button" onClick={onOpenAnnouncements}>お知らせ</button>}
+              <button type="button" className="majak-responsive-control-button" onClick={handleOpenSettings}>設定</button>
+              {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleAccuse}>通報</button>}
+              {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleCapture}>キャプチャ</button>}
+              {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleBanish}>追放</button>}
+              {!IS_NATIVE_APP && <button type="button" className="majak-responsive-control-button" onClick={handleMaximize}>{isFullScreen ? '元に戻す' : '全画面'}</button>}
+              <button type="button" className="majak-responsive-control-button" onClick={handleClose}>終了</button>
+            </>}
           </div>
         </header>
       ) : (

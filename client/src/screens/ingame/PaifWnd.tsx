@@ -16,73 +16,88 @@
  *   MJWindow2.cpp: PANELMODE_PAIF で各ボタン ShowWindow(SW_SHOW)
  * ─────────────────────────────────────────────────────────────────────
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { createGame, destroyGame } from '../../game/GameInstance'
-import { useDesktopScreenScale } from '../../hooks/useDesktopScreenScale'
-import * as SignalR from '../../api/signalr'
+import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
+import { getPaifuReplayPayload } from '../../api/paifu'
+import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
+import { getDefaultAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
 import PaifuSaveDlg from '../outgame/dialogs/PaifuSaveDlg'
 import { loadLastUsedPaifuFileName, saveLastUsedPaifuFileName } from '../../game/paifuRecording'
 
-const IMG = '/assets/images/game'
-const CMD_REPLAY_NAVI = 'repnavi'
-const PAIFU_KEND = 999
-const PAIFU_PANEL = { x: 102, y: 644, w: 580, h: 60 }
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
 const PAIFU_HAND_OPEN_EVENT = 'majak:paifu-hand-open'
 const PAIFU_GRAPH_EVENT = 'majak:paifu-graph'
+const PAIFU_REPLAY_PACKET_EVENT = 'majak:paifu-replay-packet'
+const PAIFU_REPLAY_READY_EVENT = 'majak:paifu-replay-ready'
+const REPLAY_PACKET_INTERVAL_MS = 350
+const ROOM_HEIGHT = 704
+const MOBILE_INGAME_FOCUS_W = 794
+const MOBILE_INGAME_OFFSET_Y = -180
 
-/** CMJBmpBtnEx 相当 — AP-06 §2 4フレームスプライトボタン */
-function PaifuSpriteButton({
-  src,
-  frameW,
-  frameH,
-  x,
-  y,
-  onClick,
-  title,
-  disabled,
-  active,
-}: {
-  src: string
-  frameW: number
-  frameH: number
-  x: number
-  y: number
-  onClick: () => void
-  title?: string
-  disabled?: boolean
-  active?: boolean
-}) {
-  const [frameIdx, setFrameIdx] = useState(0)
-  const displayFrame = disabled ? 1 : active ? 3 : frameIdx
+type ReplayPacket = {
+  cmd: 'playing' | 'smmc4e'
+  data: Record<string, unknown>
+}
 
-  return (
-    <button
-      title={title}
-      disabled={disabled}
-      onClick={onClick}
-      onMouseEnter={() => !disabled && setFrameIdx(2)}
-      onMouseLeave={() => !disabled && setFrameIdx(0)}
-      onMouseDown={() => !disabled && setFrameIdx(3)}
-      onMouseUp={() => !disabled && setFrameIdx(2)}
-      style={{
-        position: 'absolute',
-        left: x,
-        top: y,
-        width: frameW,
-        height: frameH,
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-displayFrame * frameW}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none',
-        padding: 0,
-        cursor: disabled ? 'default' : 'pointer',
-        outline: 'none',
-        imageRendering: 'pixelated',
-      }}
-    />
-  )
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function extractReplayPackets(value: unknown): ReplayPacket[] {
+  if (typeof value === 'string') {
+    try {
+      return extractReplayPackets(JSON.parse(value))
+    } catch {
+      return []
+    }
+  }
+  if (Array.isArray(value)) return value.flatMap(extractReplayPackets)
+  if (!isRecord(value)) return []
+
+  const nested = value.paifu ?? value.Paifu
+    ?? value.history ?? value.History
+    ?? value.packets ?? value.Packets
+    ?? value.events ?? value.Events
+    ?? value.playHistory ?? value.PlayHistory
+    ?? value.data ?? value.Data
+  if (nested !== undefined && nested !== value) {
+    const packets = extractReplayPackets(nested)
+    if (packets.length > 0) return packets
+  }
+
+  const payload = isRecord(value.payload) ? value.payload
+    : isRecord(value.Payload) ? value.Payload
+      : isRecord(value.message) ? value.message
+        : isRecord(value.Message) ? value.Message
+          : isRecord(value.body) ? value.body
+            : isRecord(value.Body) ? value.Body
+              : isRecord(value.data) ? value.data
+                : isRecord(value.Data) ? value.Data
+                  : value
+  const command = String(value.cmd ?? value.Cmd ?? value.command ?? value.Command ?? value.commandCode ?? value.CommandCode ?? value.service ?? value.Service ?? '')
+  if (command === 'smmc4e' || command === 'PaiInfoList') return [{ cmd: 'smmc4e', data: payload }]
+  if (command === 'playing' || command === 'GamePlay') return [{ cmd: 'playing', data: payload }]
+  if (Array.isArray(payload.pai) && (payload.openPos !== undefined || payload.bInit !== undefined || payload.init !== undefined)) return [{ cmd: 'smmc4e', data: payload }]
+  if (typeof payload.playType === 'string') return [{ cmd: 'playing', data: payload }]
+  return []
+}
+
+function readReplayMetadata(value: unknown) {
+  if (!isRecord(value)) return { roomName: '', playedAt: '', result: '', members: [] as Array<Record<string, unknown>> }
+  const members = value.members ?? value.Members
+  return {
+    roomName: String(value.roomName ?? value.RoomName ?? ''),
+    playedAt: String(value.playedAt ?? value.PlayedAt ?? ''),
+    result: String(value.result ?? value.Result ?? ''),
+    members: Array.isArray(members) ? members.filter(isRecord) : [],
+  }
+}
+
+function readReplayMembers(packets: ReplayPacket[]): Array<Record<string, unknown>> {
+  const gameStart = packets.find(packet => packet.cmd === 'playing' && packet.data.playType === 'MJPID_INIHAN')
+  const memberInfo = gameStart?.data.memberInfo
+  return Array.isArray(memberInfo) ? memberInfo.filter(isRecord) : []
 }
 
 /** 牌譜ソース */
@@ -95,126 +110,143 @@ export interface PaifuSource {
   comment?: string
 }
 
-interface ReplayNaviPayload {
-  /** MakePaifData()[1] = bJoin */
-  join: boolean
-  /** MakePaifData()[2] = bPaif */
-  paif: boolean
-  /** MakePaifData()[3] = bSkip */
-  skip: boolean
-  /** MakePaifData()[4] = nSkip */
-  nSkip: number
-  /** MakePaifData() の nav+5 以降。Web では JSON 化済み牌譜をそのまま中継する。 */
-  data?: unknown
-}
-
 export default function PaifWnd() {
-  const desktopScale = useDesktopScreenScale()
   const containerRef = useRef<HTMLDivElement>(null)
-  const lastSentReplayNaviRef = useRef<ReplayNaviPayload | null>(null)
+  const mobileShellRef = useRef<HTMLDivElement>(null)
   const navigate     = useNavigate()
   const location     = useLocation()
+  const layoutMode = useOutgameLayoutMode()
+  const isMobileIngame = layoutMode === 'mobileLandscape'
+  const ingameLayoutMode = isMobileIngame ? 'mobileLandscape' : 'responsiveDesktop'
   const navState = location.state as { paifu?: PaifuSource } | null
   const initialSource = navState?.paifu
+  const replayArchiveId = useMemo(() => {
+    const value = Number(new URLSearchParams(location.search).get('archiveId'))
+    return Number.isSafeInteger(value) && value > 0 ? value : undefined
+  }, [location.search])
 
   /** m_btnPaifuPlay / m_btnPaifuHide のチェック状態 */
   const [isPlaying, setIsPlaying] = useState(false)
-  const [handHidden, setHandHidden] = useState(false)
+  const [handHidden, setHandHidden] = useState(true)
+  const [isGraphVisible, setIsGraphVisible] = useState(false)
   const [showSaveDlg, setShowSaveDlg] = useState(false)
-  const [naviEnabled, setNaviEnabled] = useState(true)
-  const [fileActionsEnabled, setFileActionsEnabled] = useState(Boolean(initialSource?.data))
-  const [paifuStep, setPaifuStep] = useState(0)
-  const [paifuKPos, setPaifuKPos] = useState(0)
-  const [paifuKEnd, setPaifuKEnd] = useState(false)
-  const [paifuKCount, setPaifuKCount] = useState<number | null>(null)
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const [mobileViewOpen, setMobileViewOpen] = useState(false)
+  const [packetCursor, setPacketCursor] = useState(0)
+  const [replaySession, setReplaySession] = useState(0)
+  const [isReplayReady, setIsReplayReady] = useState(false)
+  const [mobileIngameScale, setMobileIngameScale] = useState(1)
+  const appliedPacketCursorRef = useRef(0)
+  const replaySeedCursorRef = useRef(0)
+  const autoStartedRef = useRef(false)
+  const nextReplayPacketAtRef = useRef(0)
 
   const [source, setSource] = useState<PaifuSource | undefined>(initialSource)
   const hasPaifu = Boolean(source?.data)
+  const replayPackets = useMemo(() => extractReplayPackets(source?.data), [source?.data])
+  const replayMetadata = useMemo(() => readReplayMetadata(source?.data), [source?.data])
+  const replayMembers = useMemo(() => readReplayMembers(replayPackets), [replayPackets])
+  const displayedMembers = replayMembers.length > 0 ? replayMembers : replayMetadata.members
+  const kyokuStarts = useMemo(
+    () => replayPackets.flatMap((packet, index) => packet.cmd === 'playing' && packet.data.playType === 'MJPID_INIKYO' ? [index] : []),
+    [replayPackets],
+  )
 
   useEffect(() => {
-    if (!initialSource?.data) navigate('/paifu', { replace: true })
-  }, [initialSource?.data, navigate])
+    if (initialSource?.data) {
+      setSource(initialSource)
+      return
+    }
+    if (!replayArchiveId) {
+      navigate('/paifu', { replace: true })
+      return
+    }
+    let cancelled = false
+    void getPaifuReplayPayload(replayArchiveId)
+      .then(data => {
+        if (!cancelled) setSource({ data, title: String(replayArchiveId) })
+      })
+      .catch(() => {
+        if (!cancelled) navigate('/paifu', { replace: true })
+      })
+    return () => { cancelled = true }
+  }, [initialSource, navigate, replayArchiveId])
 
   useEffect(() => {
     if (!containerRef.current) return
-    // PANELMODE_PAIF 相当: リプレイモードで Phaser を起動
-    createGame(containerRef.current, { mode: 'replay', paifu: source?.data })
-    return () => destroyGame()
-  }, [source?.data])
+    setIsReplayReady(false)
+    const handleReplayReady = () => setIsReplayReady(true)
+    window.addEventListener(PAIFU_REPLAY_READY_EVENT, handleReplayReady)
+    const seedCursor = replaySeedCursorRef.current
+    appliedPacketCursorRef.current = seedCursor
+    createGame(containerRef.current, {
+      mode: 'replay',
+      layoutMode: ingameLayoutMode,
+      players: replayMembers,
+      paifu: { packets: replayPackets.slice(0, seedCursor) },
+    })
+    return () => {
+      window.removeEventListener(PAIFU_REPLAY_READY_EVENT, handleReplayReady)
+      destroyGame()
+    }
+  }, [ingameLayoutMode, isMobileIngame, replayMembers, replayPackets, replaySession, source?.data])
 
   useEffect(() => {
-    const onReplayNavi = (data: Record<string, unknown>) => {
-      const lastSent = lastSentReplayNaviRef.current
-      if (lastSent &&
-          data.join === lastSent.join &&
-          data.paif === lastSent.paif &&
-          data.skip === lastSent.skip &&
-          data.nSkip === lastSent.nSkip) {
-        lastSentReplayNaviRef.current = null
-        setNaviEnabled(true)
-        setFileActionsEnabled(Boolean(source?.data))
-        return
-      }
-
-      const nSkip = Number(data.nSkip ?? 0)
-      const nKPos = Number(data.kPos ?? data.paifuKPos)
-      const nKCount = Number(data.kCount ?? data.paifuKCount)
-      const step = Boolean(data.step ?? true)
-      setPaifuStep(Number.isFinite(nSkip) ? nSkip : 0)
-      if (Number.isFinite(nKPos)) setPaifuKPos(Math.max(0, nKPos))
-      if (Number.isFinite(nKCount) && nKCount > 0) setPaifuKCount(nKCount)
-      setIsPlaying(!step)
-      setPaifuKEnd(typeof data.kEnd === 'boolean' ? data.kEnd : nSkip >= PAIFU_KEND)
-      setNaviEnabled(true)
-      setFileActionsEnabled(Boolean(source?.data))
+    if (!isMobileIngame) {
+      setMobileIngameScale(1)
+      return
     }
-    SignalR.on(CMD_REPLAY_NAVI, onReplayNavi)
-    return () => SignalR.off(CMD_REPLAY_NAVI, onReplayNavi)
-  }, [source?.data])
-
-  const sendReplayNavi = (payload: ReplayNaviPayload) => {
-    lastSentReplayNaviRef.current = payload
-    SignalR.send(CMD_REPLAY_NAVI, payload as unknown as Record<string, unknown>).catch(() => {
-      lastSentReplayNaviRef.current = null
-      setNaviEnabled(true)
-      setFileActionsEnabled(Boolean(source?.data))
-    })
-  }
-
-  /** CMJGameWnd::PaifuJump → CMJTblPaif::PaifuReplay → SendNavi */
-  const paifuJump = (nSkipParam: number, step: boolean, skip: boolean) => {
-    setNaviEnabled(false)
-    setFileActionsEnabled(false)
-
-    let nextKPos = paifuKPos
-    let nSkip = nSkipParam
-
-    if (nSkip < 0) {
-      nextKPos -= 1
-      nSkip = PAIFU_KEND
-    } else if (nSkip > paifuStep && paifuKEnd) {
-      nextKPos += 1
-      nSkip = step && nSkip === PAIFU_KEND ? 1 : 0
+    const update = () => {
+      const rect = mobileShellRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const nextScale = rect.width / MOBILE_INGAME_FOCUS_W
+      setMobileIngameScale(Number.isFinite(nextScale) && nextScale > 0 ? nextScale : 1)
     }
-    const finalKPos = Math.max(0, nextKPos)
+    update()
+    const observer = new ResizeObserver(update)
+    if (mobileShellRef.current) observer.observe(mobileShellRef.current)
+    window.addEventListener('resize', update)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [isMobileIngame])
 
-    setPaifuKPos(finalKPos)
-    setPaifuStep(nSkip)
-    setPaifuKEnd(nSkip >= PAIFU_KEND)
+  useEffect(() => {
+    if (!isReplayReady) return
+    const appliedCursor = appliedPacketCursorRef.current
+    if (packetCursor <= appliedCursor) return
+    for (let index = appliedCursor; index < packetCursor; index += 1) {
+      window.dispatchEvent(new CustomEvent(PAIFU_REPLAY_PACKET_EVENT, { detail: { packet: replayPackets[index] } }))
+    }
+    appliedPacketCursorRef.current = packetCursor
+  }, [isReplayReady, packetCursor, replayPackets])
 
-    sendReplayNavi({
-      join: finalKPos !== paifuKPos,
-      paif: finalKPos !== paifuKPos,
-      skip,
-      nSkip,
-      data: finalKPos !== paifuKPos ? source?.data : undefined,
-    })
-  }
+  useEffect(() => {
+    if (!isPlaying || !isReplayReady) {
+      nextReplayPacketAtRef.current = 0
+      return
+    }
+    if (packetCursor >= replayPackets.length) {
+      setIsPlaying(false)
+      return
+    }
+    const now = performance.now()
+    if (nextReplayPacketAtRef.current <= 0) nextReplayPacketAtRef.current = now + REPLAY_PACKET_INTERVAL_MS
+    if (now - nextReplayPacketAtRef.current > REPLAY_PACKET_INTERVAL_MS) nextReplayPacketAtRef.current = now
+    const delay = Math.max(0, nextReplayPacketAtRef.current - now)
+    const timer = window.setTimeout(() => {
+      nextReplayPacketAtRef.current += REPLAY_PACKET_INTERVAL_MS
+      setPacketCursor(cursor => Math.min(cursor + 1, replayPackets.length))
+    }, delay)
+    return () => window.clearTimeout(timer)
+  }, [isPlaying, isReplayReady, packetCursor, replayPackets.length])
 
-  /** OnPaifuLoad — サーバー保管庫へ戻り、再生する牌譜を選ぶ */
-  const handleLoad = () => {
-    navigate('/paifu')
-  }
+  useEffect(() => {
+    if (!isReplayReady || replayPackets.length === 0 || autoStartedRef.current) return
+    autoStartedRef.current = true
+    setIsPlaying(true)
+  }, [isReplayReady, replayPackets.length])
 
   /** OnPaifuSave — CPaifuSaveDlg を開いてブラウザダウンロード */
   const handleSave = () => {
@@ -238,12 +270,14 @@ export default function PaifWnd() {
     setShowSaveDlg(false)
   }
 
-  /** OnPaifuGrph — ShowPaifuWnd(true) 相当 */
+  /** OnPaifuGrph — グラフ表示の開閉 */
   const handleGraph = () => {
     if (!hasPaifu) return
-    window.dispatchEvent(new CustomEvent(PAIFU_GRAPH_EVENT, { detail: { visible: true } }))
-    sendReplayNavi({ join: false, paif: false, skip: true, nSkip: PAIFU_KEND })
-    sendReplayNavi({ join: false, paif: false, skip: true, nSkip: paifuStep })
+    setIsGraphVisible(visible => {
+      const nextVisible = !visible
+      window.dispatchEvent(new CustomEvent(PAIFU_GRAPH_EVENT, { detail: { visible: nextVisible } }))
+      return nextVisible
+    })
   }
 
   /** OnPaifuHide — 手牌表示 OPEN/HAND 切替 */
@@ -258,13 +292,27 @@ export default function PaifWnd() {
     window.dispatchEvent(new CustomEvent(PAIFU_ROTATE_EVENT, { detail: { delta } }))
   }
 
-  const handlePrev = () => paifuJump(paifuStep > 1 ? 1 : -1, true, true)
+  const jumpToPacket = (nextCursor: number) => {
+    const boundedCursor = Math.max(0, Math.min(replayPackets.length, nextCursor))
+    setIsPlaying(false)
+    replaySeedCursorRef.current = boundedCursor
+    setPacketCursor(boundedCursor)
+    setReplaySession(session => session + 1)
+  }
 
-  const handleBack = () => paifuJump(paifuStep - 1, true, true)
+  const handlePrev = () => {
+    const previous = [...kyokuStarts].reverse().find(index => index < Math.max(0, packetCursor - 1))
+    jumpToPacket(previous ?? 0)
+  }
 
-  const handleStep = () => paifuJump(paifuStep + 1, true, paifuStep === 0)
+  const handleBack = () => jumpToPacket(packetCursor - 1)
 
-  const handleNext = () => paifuJump(paifuStep === 0 ? 1 : PAIFU_KEND, true, true)
+  const handleStep = () => setPacketCursor(cursor => Math.min(replayPackets.length, cursor + 1))
+
+  const handleNext = () => {
+    const next = kyokuStarts.find(index => index > packetCursor)
+    jumpToPacket(next ?? replayPackets.length)
+  }
 
   /** CMJGameWnd::OnMouseWheel — wheel navigates replay, Shift jumps by kyoku. */
   const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
@@ -288,64 +336,150 @@ export default function PaifWnd() {
   const handlePlay = () => {
     if (isPlaying) {
       setIsPlaying(false)
-      setNaviEnabled(false)
-      setFileActionsEnabled(false)
-      sendReplayNavi({ join: false, paif: false, skip: true, nSkip: paifuStep })
       return
     }
+    if (packetCursor >= replayPackets.length) jumpToPacket(0)
     setIsPlaying(true)
-    paifuJump(PAIFU_KEND, false, false)
   }
 
-  /** 閉じる — OnClose() ShowWindow(SW_HIDE) 相当 */
-  const handleClose = () => navigate(-1)
+  /** 閉じる — 牌譜一覧へ戻る */
+  const handleClose = () => navigate('/paifu', { replace: true })
 
-  const canUseNavi = hasPaifu && naviEnabled
-  const canPrev = canUseNavi && (paifuStep > 1 || paifuKPos > 0)
-  const canBack = canUseNavi && (paifuStep > 0 || paifuKPos > 0)
-  const hasKnownLastKyo = paifuKCount !== null && paifuKPos >= paifuKCount - 1
-  const canNext = canUseNavi && (!paifuKEnd || !hasKnownLastKyo)
-  const playDisabled = !hasPaifu || (isPlaying ? !naviEnabled : !canNext)
+  const canUseNavi = hasPaifu && isReplayReady && replayPackets.length > 0
+  const canPrev = canUseNavi && packetCursor > 0
+  const canBack = canUseNavi && packetCursor > 0
+  const canNext = canUseNavi && packetCursor < replayPackets.length
+  const playDisabled = !hasPaifu || !isReplayReady || (!isPlaying && replayPackets.length === 0)
+  const replayProgress = replayPackets.length > 0 ? Math.min(100, packetCursor / replayPackets.length * 100) : 0
+
+  const replaySidebar = (
+    <aside className="majak-responsive-ingame-sidebar majak-responsive-paifu__sidebar">
+      <div className="majak-responsive-ingame-sidebar__status">
+        <div className="majak-responsive-paifu__progress" aria-label={`進行 ${packetCursor} / ${replayPackets.length}`}>
+          <div className="majak-responsive-paifu__progress-label"><span>進行</span><strong>{packetCursor} / {replayPackets.length}</strong></div>
+          <div className="majak-responsive-paifu__progress-track"><div style={{ width: `${replayProgress}%` }} /></div>
+        </div>
+        <strong>{replayMetadata.roomName || source?.title || '牌譜'}</strong>
+        {replayMetadata.playedAt && <div>{replayMetadata.playedAt.replace('T', ' ').slice(0, 16)}</div>}
+        {replayMetadata.result && <div>{replayMetadata.result}</div>}
+      </div>
+      <div className="majak-responsive-ingame-sidebar__chat majak-responsive-paifu__members">
+        <strong>対局者</strong>
+        {displayedMembers.map((member, index) => {
+          const avatarId = String(member.k7e ?? member.avatarUrl ?? member.AvatarUrl ?? member.avatarId ?? member.AvatarId ?? member.avatar ?? member.Avatar ?? '')
+          const sex = String(member.k11e ?? member.sex ?? member.Sex ?? '').toLowerCase()
+          const avatarSex = sex === 'f' || sex === 'female' ? 'female' : 'male'
+          const avatarFallback = getDefaultAvatarUrl(avatarSex)
+          const gamMoneyValue = member.gamMoney ?? member.gameMoney ?? member.GamMoney
+          const ratingValue = member.k31e ?? member.rating ?? member.Rating
+          const gamMoney = gamMoneyValue === undefined || gamMoneyValue === null || gamMoneyValue === '' ? undefined : Number(gamMoneyValue)
+          const rating = ratingValue === undefined || ratingValue === null || ratingValue === '' ? undefined : Number(ratingValue)
+          return (
+            <div key={`${String(member.name ?? member.Name ?? '')}-${index}`}>
+              <img src={avatarId ? getShortAvatarUrl(avatarId) : avatarFallback} alt="" draggable={false} onError={event => { event.currentTarget.src = avatarFallback }} />
+              <span>{String(member.mjkk34e ?? member.k8e ?? member.nickName ?? member.nickname ?? member.name ?? member.Name ?? '-')}</span>
+              <small>{String(member.k32e ?? member.slevel ?? member.title ?? member.Title ?? '')}</small>
+              <small className="majak-responsive-paifu__member-gp">GP {typeof gamMoney === 'number' && Number.isFinite(gamMoney) ? gamMoney.toLocaleString() : '-'}</small>
+              <em>{typeof rating === 'number' && Number.isFinite(rating) ? rating : '-'}</em>
+            </div>
+          )
+        })}
+      </div>
+      <div className="majak-responsive-ingame-sidebar__actions">
+        <div className="majak-responsive-paifu__control-group">
+          <button type="button" onClick={handlePrev} disabled={!canPrev}>前局</button>
+          <button type="button" onClick={handleBack} disabled={!canBack}>戻る</button>
+          <button type="button" onClick={handlePlay} disabled={playDisabled} className={isPlaying ? 'is-active' : undefined}>{isPlaying ? '停止' : '再生'}</button>
+          <button type="button" onClick={handleStep} disabled={!canNext}>次へ</button>
+          <button type="button" onClick={handleNext} disabled={!canNext}>次局</button>
+        </div>
+        <div className="majak-responsive-paifu__control-group majak-responsive-paifu__view-controls">
+          <button type="button" onClick={handleGraph} disabled={!hasPaifu} className={isGraphVisible ? 'is-active' : undefined}>{isGraphVisible ? 'グラフを閉じる' : 'グラフ'}</button>
+          <button type="button" onClick={() => handleRotate(3)}>回転</button>
+          <button type="button" onClick={handleHide} className={handHidden ? 'is-active' : undefined}>{handHidden ? '手牌表示' : '手牌非表示'}</button>
+          <button type="button" onClick={handleSave} disabled={!hasPaifu}>保存</button>
+          <button type="button" onClick={handleClose}>閉じる</button>
+        </div>
+      </div>
+    </aside>
+  )
+
+  const replayStage = (
+    <div className="majak-inline-game-stage" style={{ position: 'relative', width: isMobileIngame ? GAME_WIDTH : '100%', height: isMobileIngame ? ROOM_HEIGHT : '100%', overflow: 'hidden', background: 'transparent' }}>
+      <div ref={containerRef} style={{ position: 'absolute', left: 0, top: isMobileIngame ? -31 : 0, width: isMobileIngame ? GAME_WIDTH : '100%', height: isMobileIngame ? GAME_HEIGHT : '100%' }} />
+    </div>
+  )
+
+  const desktopReplay = (
+    <div className="majak-responsive-desktop-frame majak-responsive-paifu__frame">
+      <div className="majak-responsive-ingame-shell">
+        <div className="majak-responsive-ingame-playfield">
+          <div className="majak-responsive-ingame-world">
+            {replayStage}
+          </div>
+        </div>
+        {replaySidebar}
+      </div>
+    </div>
+  )
 
   return (
-    <div className="majak-ingame-viewport" style={{ background: '#000' }}>
-
-      {/* CMJGameWnd / AP-09 §5 インゲーム解像度: 1019×735 */}
-      <div style={{ position: 'relative', width: 1019, height: 735, flex: '0 0 auto', transform: desktopScale === 1 ? undefined : `scale(${desktopScale})`, transformOrigin: 'center center' }} onWheel={handleWheel}>
-        {/* ── Phaser コンテナ: CMJPaifWnd::OnPaint() m_Screen.Draw(&dc) 相当 ── */}
-        <div
-          ref={containerRef}
-          style={{ position: 'absolute', inset: 0, width: 1019, height: 735 }}
-        />
-
-        {/* PANELMODE_PAIF: MJWindow1.cpp Create / MajakDef.h X_REP*, Y_REP* */}
-        <img
-          src={`${IMG}/mj_PaifuBoard.png`}
-          alt=""
-          draggable={false}
-          style={{
-            position: 'absolute',
-            left: PAIFU_PANEL.x,
-            top: PAIFU_PANEL.y,
-            width: PAIFU_PANEL.w,
-            height: PAIFU_PANEL.h,
-            imageRendering: 'pixelated',
-            pointerEvents: 'none',
-          }}
-        />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuGrph.png`} frameW={111} frameH={40} x={118} y={647} onClick={handleGraph} title="牌譜ウィンドウ" disabled={!fileActionsEnabled} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuRot3.png`} frameW={46} frameH={31} x={202} y={647} onClick={() => handleRotate(3)} title="回転3" />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuRot1.png`} frameW={46} frameH={31} x={248} y={647} onClick={() => handleRotate(1)} title="回転1" />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuPrev.png`} frameW={54} frameH={40} x={305} y={649} onClick={handlePrev} title="局先頭/前局" disabled={!canPrev} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuBack.png`} frameW={54} frameH={40} x={341} y={649} onClick={handleBack} title="一手戻る" disabled={!canBack} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuPlay.png`} frameW={54} frameH={40} x={377} y={649} onClick={handlePlay} title="再生" disabled={playDisabled} active={isPlaying} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuStep.png`} frameW={54} frameH={40} x={413} y={649} onClick={handleStep} title="一手進む" disabled={!canNext} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuNext.png`} frameW={54} frameH={40} x={449} y={649} onClick={handleNext} title="局末尾/次局" disabled={!canNext} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuLoad.png`} frameW={138} frameH={28} x={496} y={647} onClick={handleLoad} title="牌譜ロード" disabled={!naviEnabled} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuSave.png`} frameW={138} frameH={28} x={496} y={673} onClick={handleSave} title="牌譜保存" disabled={!fileActionsEnabled} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuHide.png`} frameW={92} frameH={25} x={202} y={676} onClick={handleHide} title="手牌表示切替" active={handHidden} />
-        <PaifuSpriteButton src={`${IMG}/mj_btPaifuExit.png`} frameW={114} frameH={40} x={598} y={647} onClick={handleClose} title="閉じる" />
-      </div>
+    <main className="majak-responsive-paifu" onWheel={handleWheel}>
+      {isMobileIngame ? (
+        <div ref={mobileShellRef} className="majak-mobile-ingame-shell">
+          <div
+            className="majak-mobile-ingame-scale"
+            style={{
+              left: '50%',
+              width: MOBILE_INGAME_FOCUS_W,
+              height: ROOM_HEIGHT,
+              overflow: 'hidden',
+              transform: `translate(-50%, ${MOBILE_INGAME_OFFSET_Y}px) scale(${mobileIngameScale})`,
+              transformOrigin: 'top center',
+            }}
+          >
+            {replayStage}
+          </div>
+          <div className={`majak-mobile-ingame-tool-drawer majak-paifu-mobile-controls majak-paifu-mobile-controls--left${mobileNavOpen ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="majak-mobile-ingame-tool-toggle"
+              aria-label={mobileNavOpen ? '再生移動を閉じる' : '再生移動を開く'}
+              aria-expanded={mobileNavOpen}
+              onClick={() => setMobileNavOpen(open => !open)}
+            >
+              {mobileNavOpen ? '▲' : '▼'}
+            </button>
+            <div className="majak-mobile-ingame-action-bar">
+              <button type="button" onClick={handlePrev} disabled={!canPrev}>前局</button>
+              <button type="button" onClick={handleBack} disabled={!canBack}>戻る</button>
+              <button type="button" onClick={handlePlay} disabled={playDisabled}>{isPlaying ? '停止' : '再生'}</button>
+              <button type="button" onClick={handleStep} disabled={!canNext}>次へ</button>
+              <button type="button" onClick={handleNext} disabled={!canNext}>次局</button>
+            </div>
+          </div>
+          <div className={`majak-mobile-ingame-tool-drawer majak-paifu-mobile-controls majak-paifu-mobile-controls--right${mobileViewOpen ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="majak-mobile-ingame-tool-toggle"
+              aria-label={mobileViewOpen ? '表示操作を閉じる' : '表示操作を開く'}
+              aria-expanded={mobileViewOpen}
+              onClick={() => setMobileViewOpen(open => !open)}
+            >
+              {mobileViewOpen ? '▲' : '▼'}
+            </button>
+            <div className="majak-mobile-ingame-action-bar">
+              <button type="button" onClick={handleGraph} disabled={!hasPaifu} className={isGraphVisible ? 'is-active' : undefined}>{isGraphVisible ? 'グラフを閉じる' : 'グラフ'}</button>
+              <button type="button" onClick={() => handleRotate(3)}>回転</button>
+              <button type="button" onClick={handleHide} className={handHidden ? 'is-active' : undefined}>{handHidden ? '手牌表示' : '手牌非表示'}</button>
+              <button type="button" onClick={handleSave} disabled={!hasPaifu}>保存</button>
+              <button type="button" onClick={handleClose}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        desktopReplay
+      )}
 
       {showSaveDlg && (
         <PaifuSaveDlg
@@ -355,6 +489,6 @@ export default function PaifWnd() {
           onCancel={() => setShowSaveDlg(false)}
         />
       )}
-    </div>
+    </main>
   )
 }

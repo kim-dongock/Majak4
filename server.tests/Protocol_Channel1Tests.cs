@@ -385,6 +385,92 @@ public class CancelAutoMatchingCommandTests
     }
 }
 
+public class AutoMatchingLifecycleTests
+{
+    [Fact]
+    public void TryMatch_SeparatesChannelsAndHonorsPreMatchExclusions()
+    {
+        var session = new PlayerSessionService();
+        const string firstChannel = "MAJAK200Z6A001";
+        const string secondChannel = "MAJAK200Z7A001";
+
+        for (int index = 0; index < 4; index++)
+        {
+            session.EnqueueMatching(firstChannel, $"first-{index}");
+            session.EnqueueMatching(secondChannel, $"second-{index}");
+        }
+
+        Assert.Equal(
+            new[] { "first-0", "first-1", "first-2", "first-3" },
+            session.TryMatch(firstChannel, _ => 1500));
+        Assert.Equal(
+            new[] { "second-0", "second-1", "second-2", "second-3" },
+            session.TryMatch(secondChannel, _ => 1500));
+
+        var excludedSession = new PlayerSessionService();
+        var members = Enumerable.Range(0, 4)
+            .Select(index => new MajakPlayer { MemberNo = $"excluded-{index}" })
+            .ToArray();
+        foreach (var member in members)
+        {
+            member.PreMatchMemberNos = members
+                .Where(other => other.MemberNo != member.MemberNo)
+                .Select(other => other.MemberNo)
+                .ToArray();
+            excludedSession.Register(member);
+            excludedSession.EnqueueMatching(firstChannel, member.MemberNo);
+        }
+
+        Assert.Null(excludedSession.TryMatch(firstChannel, _ => 1500));
+    }
+
+    [Fact]
+    public void PendingMatch_RequiresAllFourEntriesAndExpiresIncompleteReservation()
+    {
+        var session = new PlayerSessionService();
+        var pending = new PendingAutoMatch
+        {
+            RoomId = 71,
+            ChannelId = "MAJAK200Z6A001",
+            ExpectedMembers = ["p0", "p1", "p2", "p3"],
+        };
+        session.RegisterPendingMatch(pending);
+
+        for (int index = 0; index < 3; index++)
+        {
+            var confirmation = session.ConfirmAutoEntry(pending.RoomId, $"p{index}");
+            Assert.False(confirmation.AllEntered);
+            Assert.Same(pending, confirmation.Match);
+        }
+
+        Assert.Same(pending, session.ExpirePendingMatch(pending.RoomId));
+        Assert.Null(session.GetPendingMatch(pending.RoomId));
+
+        session.RegisterPendingMatch(pending);
+        for (int index = 0; index < 3; index++)
+            Assert.False(session.ConfirmAutoEntry(pending.RoomId, $"p{index}").AllEntered);
+
+        var complete = session.ConfirmAutoEntry(pending.RoomId, "p3");
+        Assert.True(complete.AllEntered);
+        Assert.Same(pending, complete.Match);
+        Assert.Null(session.GetPendingMatch(pending.RoomId));
+    }
+
+    [Theory]
+    [InlineData("0ZG6A", "0100020000001")]
+    [InlineData("0ZG7A", "1100020000001")]
+    [InlineData("0Z86A", "0200020000000")]
+    [InlineData("0Z87A", "1200020000000")]
+    public void ResolveAutoRoomOption_UsesChannelGameType(string subId, string expectedRoomOption)
+    {
+        var method = typeof(AutoMatchingBackgroundService).GetMethod(
+            "ResolveAutoRoomOption",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        Assert.Equal(expectedRoomOption, method.Invoke(null, new object[] { subId }));
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // mjkc16e AvatarGearCommand テスト
 // ═══════════════════════════════════════════════════════════════════════════

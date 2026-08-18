@@ -35,18 +35,25 @@ import ResponsiveItemShopDlg from './dialogs/ResponsiveItemShopDlg'
 import RegistrationDlg from './dialogs/RegistrationDlg'
 import SerialCodeDlg from './dialogs/SerialCodeDlg'
 import StartPopupWnd from './dialogs/StartPopupWnd'
+import TournamentBracketPreviewDlg from './dialogs/TournamentBracketPreviewDlg'
 import TournamentRegistDlg from './dialogs/TournamentRegistDlg'
 import WelcomeDlg from './dialogs/WelcomeDlg'
+import GameSpritePreviewDlg from './dialogs/GameSpritePreviewDlg'
+import KyoRes from '../ingame/KyoRes'
+import HanRes from '../ingame/HanRes'
+import { FORCED_KYO_RESULT } from '../ingame/forcedKyoResult'
+import { FORCED_HAN_RESULT } from '../ingame/forcedHanResult'
 
 type PreviewId =
   | 'startNotice' | 'welcome' | 'roomCreate' | 'roomOptions' | 'settings'
   | 'ranking' | 'playerInfo' | 'inviteRequest' | 'accuse' | 'mission'
-  | 'missionGuide' | 'tournamentRegist'
+  | 'missionGuide' | 'tournamentRegist' | 'tournamentBrackets'
   | 'shop' | 'collection' | 'hanCoinReceipt' | 'exchangeReceipt' | 'customReceipt' | 'lotSlot' | 'lotResult'
   | 'levelup' | 'coin' | 'lead' | 'item' | 'ending' | 'askEnd'
   | 'buyHanCoinItem' | 'buyExchangeItem' | 'buyCustomItem' | 'circleOptions' | 'confirmItem'
   | 'customInventory' | 'debugLogin' | 'eventDialogs' | 'legacyItemShop' | 'registration'
   | 'shopTransaction' | 'paifuSave' | 'serialCode'
+  | 'gameSprites' | 'kyoResult' | 'hanResult'
 
 type PreviewEntry = {
   id: PreviewId
@@ -80,6 +87,7 @@ const PREVIEWS: PreviewEntry[] = [
   { id: 'lotSlot', title: 'LotSlotDlg', group: 'Shop', status: 'Complete', summary: 'Lottery slot start-state fixture.' },
   { id: 'lotResult', title: 'LotResultDlg', group: 'Shop', status: 'Complete', summary: 'Lottery result summary fixture.' },
   { id: 'tournamentRegist', title: 'TournamentRegistDlg', group: 'Tournaments', status: 'Complete', summary: 'Tournament registration form fixture.' },
+  { id: 'tournamentBrackets', title: 'Tournament Brackets', group: 'Tournaments', status: 'Complete', summary: 'Format-selectable 4, 8, 16, 32, and 64 player bracket preview.' },
   { id: 'ending', title: 'EndingPopupWnd', group: 'Startup and account notices', status: 'Complete', summary: 'Logout confirmation fixture.' },
   { id: 'askEnd', title: 'AskEndDlg', group: 'In-game confirmation', status: 'Complete', summary: '10-second continuation confirmation fixture.' },
   { id: 'buyHanCoinItem', title: 'BuyHanCoinItemDlg', group: 'Shop', status: 'Complete', summary: 'MP item purchase confirmation dialog.' },
@@ -95,6 +103,9 @@ const PREVIEWS: PreviewEntry[] = [
   { id: 'shopTransaction', title: 'ResponsiveShopTransactionDlg', group: 'Shop', status: 'Complete', summary: 'Responsive item purchase transaction dialog.' },
   { id: 'paifuSave', title: 'PaifuSaveDlg', group: 'Lobby and rooms', status: 'Complete', summary: 'Paifu save dialog.' },
   { id: 'serialCode', title: 'SerialCodeDlg', group: 'Startup and account notices', status: 'Complete', summary: 'Serial code entry dialog.' },
+  { id: 'gameSprites', title: 'GameSpriteEffects', group: 'In-game effects', status: 'Complete', summary: 'Actual Phaser PNG sequences with their gameplay trigger and execution source.' },
+  { id: 'kyoResult', title: 'KyoRes', group: 'In-game results', status: 'Complete', summary: 'The actual per-round result overlay with deterministic result data.' },
+  { id: 'hanResult', title: 'HanRes', group: 'In-game results', status: 'Complete', summary: 'The actual final match result overlay with deterministic player totals.' },
 ]
 
 const PREVIEW_ANNOUNCEMENT: GameAnnouncement = {
@@ -164,6 +175,8 @@ function renderPreview(id: PreviewId, onClose: () => void) {
       return <LotResultDlg itemName="龍珠くじ" lotteryCount={3} entries={[]} totalAmount={3000} nextLotteryCount={5} onBuyAgain={() => {}} onClose={onClose} />
     case 'tournamentRegist':
       return <TournamentRegistDlg onOK={onClose} onCancel={onClose} />
+    case 'tournamentBrackets':
+      return <TournamentBracketPreviewDlg selectable onClose={onClose} />
     case 'ending':
       return <EndingPopupWnd onOK={onClose} onCancel={onClose} />
     case 'askEnd':
@@ -194,6 +207,12 @@ function renderPreview(id: PreviewId, onClose: () => void) {
       return <PaifuSaveDlg defaultFileName="preview-paifu.txt" initialComment="プレビュー用の牌譜です。" onSave={() => onClose()} onCancel={onClose} />
     case 'serialCode':
       return <SerialCodeDlg onOK={() => {}} onClose={onClose} />
+    case 'gameSprites':
+      return <GameSpritePreviewDlg onClose={onClose} />
+    case 'kyoResult':
+      return <KyoRes data={FORCED_KYO_RESULT} myOdr={0} canContinue onClose={onClose} />
+    case 'hanResult':
+      return <HanRes players={FORCED_HAN_RESULT} hasTip onClose={onClose} />
     default:
       return null
   }

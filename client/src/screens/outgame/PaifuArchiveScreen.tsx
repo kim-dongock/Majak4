@@ -49,7 +49,7 @@ export default function PaifuArchiveScreen() {
     try {
       const data = await getPaifuReplayPayload(selected.archiveId)
       const paifu: PaifuSource = { data, title: selected.roomName || String(selected.archiveId) }
-      navigate('/paifu/replay', { state: { paifu } })
+      navigate(`/paifu/replay?archiveId=${selected.archiveId}`, { state: { paifu } })
     } finally {
       setIsStartingReplay(false)
     }
@@ -84,7 +84,7 @@ export default function PaifuArchiveScreen() {
           {!isLoading && archives.map(archive => (
             <button key={archive.archiveId} type="button" className={archive.archiveId === selectedId ? 'is-selected' : undefined} onClick={() => setSelectedId(archive.archiveId)}>
               <time>{formatPlayedAt(archive.playedAt)}</time><strong>{archive.roomName || 'ルーム'}</strong><span>{archive.result || '-'}</span>
-              <div className="majak-paifu-archive__members">{archive.members.map((member, index) => <span key={`${member.name}-${index}`}>{member.name || '-'} <small>{member.title || '-'}</small> {member.result || '-'}</span>)}</div>
+              <div className="majak-paifu-archive__members">{archive.members.map((member, index) => <span key={`${member.name}-${index}`}>{index > 0 && ' / '}{member.name || '-'}</span>)}</div>
             </button>
           ))}
         </div>

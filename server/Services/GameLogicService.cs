@@ -2339,20 +2339,7 @@ public class GameLogicService
                 gradePlayerMemberNos, gradeMemberNos, gradePointSums);
         }
 
-        if (room.IsTrainingChannel)
-        {
-            var trainingPlayers = BuildTrainingHistoryPlayers(report);
-            try
-            {
-                await _historyRepo.InsertTrainingHistAsync(report.ChannelId, report.RoomId,
-                    report.RoomOption, trainingPlayers.Length, trainingPlayers);
-            }
-            catch (Exception ex)
-            {
-                _log?.LogWarning(ex, "MySQL training history insert failed but game report continues. roomId={RoomId}", room.RoomId);
-            }
-        }
-        else
+        if (!room.IsTrainingChannel)
         {
             try
             {
@@ -2389,7 +2376,7 @@ public class GameLogicService
         await ctx.Clients.Group($"chanel_{room.ChannelId}")
             .SendAsync(Cmd.GameReport, resultPayload);
         room.LastGameReportPayload = resultPayload;
-        if (_paifuFiles != null)
+        if (!room.IsTrainingChannel && _paifuFiles != null)
         {
             try
             {
@@ -2742,19 +2729,6 @@ public class GameLogicService
 
         int titleNo = user.UpdateExtra ? 519 : 500 + user.GradeLevel;
         return string.Format(GameConst.RatingTitleFormat, titleNo);
-    }
-
-    private static (string MemberNo, int Point)[] BuildTrainingHistoryPlayers(GameReport report)
-    {
-        return report.Users
-            .Where(u => u != null && !string.IsNullOrEmpty(u!.MemberNo))
-            .OrderBy(u => u!.Ranking)
-            .Select(u =>
-            {
-                int point = u!.SetPoint + u.SetUma + u.SetTor + u.SetTip;
-                return (u.MemberNo, point);
-            })
-            .ToArray();
     }
 
     private static void AddResultRecordDelta(Models.Player.RatingRecord record, GameReport.UserResult user)
@@ -3811,6 +3785,9 @@ public class GameLogicService
             name = player.NickName,
             avatarId = player.AvatarId,
             sex = player.Sex,
+            rating = player.ActiveRecord.Rating,
+            slevel = player.SLevel,
+            gamMoney = player.GamMoney,
             playerPos,
             seatPos = playerPos,
             engineOrder = order,

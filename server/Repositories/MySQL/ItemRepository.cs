@@ -338,6 +338,10 @@ public class ItemRepository
             }
 
             int gemPrice = checked((int)product.Shop.HcPrice);
+            var cashWalletBefore = await db.PlayerWallets.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.MemberNo == memberNoValue);
+            if (cashWalletBefore is null || cashWalletBefore.CashCount < gemPrice)
+                return (-1101, "Majak Cash Not Enough");
             int spent = await TrySpendCashAsync(db, memberNoValue, gemPrice, now);
             if (spent == 0)
                 return (-1101, "Majak Cash Not Enough");
@@ -383,6 +387,13 @@ public class ItemRepository
 
             try
             {
+                await RequireLog().InsertCashTransactionAsync(
+                    memberNo,
+                    "CUSTOM_ITEM_PURCHASE",
+                    -gemPrice,
+                    cashWalletBefore.CashCount,
+                    cashWalletBefore.CashCount - gemPrice,
+                    "カスタムアイテム購入");
                 await RequireLog().InsertItemPurchaseHistAsync(
                     memberNo,
                     product.Master.CustomId.ToString(),
@@ -446,6 +457,10 @@ public class ItemRepository
                 return (-1102, "item info error-1");
 
             int gemPrice = checked((int)master.UnitMoney.Value);
+            var wallet = await db.PlayerWallets.AsNoTracking()
+                .SingleOrDefaultAsync(item => item.MemberNo == memberNoValue);
+            if (wallet is null || wallet.CashCount < gemPrice)
+                return (-1101, "Majak Cash Not Enough");
             int spent = await TrySpendCashAsync(db, memberNoValue, gemPrice, DateTime.Now);
             if (spent == 0)
                 return (-1101, "Majak Cash Not Enough");
@@ -493,6 +508,13 @@ public class ItemRepository
 
             try
             {
+                await RequireLog().InsertCashTransactionAsync(
+                    memberNo,
+                    "BILLING_ITEM_PURCHASE",
+                    -gemPrice,
+                    wallet.CashCount,
+                    wallet.CashCount - gemPrice,
+                    master.ItemName);
                 await RequireLog().InsertItemPurchaseHistAsync(
                     memberNo,
                     subCode,

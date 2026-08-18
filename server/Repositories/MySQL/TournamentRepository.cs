@@ -1,4 +1,5 @@
 using MajakServer.Models.Game;
+using MajakServer.Models.Player;
 using MajakServer.Repositories.MySQL;
 using MajakServer.Repositories.MySQL.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -117,35 +118,7 @@ public class TournamentRepository
         try
         {
             await using var db = await RequireGameDb().CreateAsync();
-            var session = new TournamentSessionEntity
-            {
-                JoinStartAt = plan.JoinStartDt,
-                MatchStartAt = plan.MatchStartDt,
-                PlayStartAt = plan.PlayStartDt,
-                PlayEndAt = plan.PlayEndDt,
-                ViewEndAt = plan.ViewEndDt,
-                NextStartAt = plan.NextStartDt,
-                NextCutAt = plan.NextCutDt,
-                PlaySchedule = plan.PlaySchedule,
-                PlayStatus = checked((byte)plan.PlayStatus),
-                PlayPhase = checked((byte)plan.PlayPhase),
-                PlayerCount = 0,
-                MaxPlayerCount = checked((ushort)plan.MaxPlayerNum),
-                MaxRoomCount = checked((ushort)plan.MaxRoomNum),
-                SessionName = plan.PlayName,
-                RoomOption = plan.RoomOption,
-                PrivateInfo = plan.Password,
-                MaxViewerCount = checked((ushort)plan.MaxViewer),
-                PlayCount = checked((byte)plan.PlayNum),
-                PlayTime = checked((byte)plan.PlayTime),
-                PlayMode = checked((byte)plan.PlayMode),
-                JoinMoney = plan.JoinMoney,
-                PrizeMoney1 = plan.GradeMoney[0],
-                PrizeMoney2 = plan.GradeMoney[1],
-                PrizeMoney3 = plan.GradeMoney[2],
-                PrizeMoney4 = plan.GradeMoney[3],
-                PlanMemberNo = ParseNullableMemberNo(plan.PlanMemberNo),
-            };
+            var session = CreatePlanEntity(plan);
             db.TournamentSessions.Add(session);
             await db.SaveChangesAsync();
             plan.SeqNo = checked((long)session.SessionId);
@@ -159,6 +132,84 @@ public class TournamentRepository
             return false;
         }
     }
+
+    /// <summary>
+    /// Creates a tournament plan and reserves the organizer's prize fund in one game-DB transaction.
+    /// The money history is written separately to the log DB after this state change commits.
+    /// </summary>
+    public virtual async Task<bool> InsertPlanAndDebitOrganizerAsync(
+        TournamentPlan plan, MajakPlayer organizer, long planMoney)
+    {
+        if (planMoney < 0) return false;
+
+        try
+        {
+            await using var strategyDb = await RequireGameDb().CreateAsync();
+            var strategy = strategyDb.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var db = await RequireGameDb().CreateAsync();
+                await using var tx = await db.Database.BeginTransactionAsync();
+                try
+                {
+                    var organizerId = ParseMemberNo(organizer.MemberNo);
+                    var wallet = await db.PlayerWallets.SingleOrDefaultAsync(item => item.MemberNo == organizerId);
+                    if (wallet is null || wallet.GameMoney < planMoney) return false;
+
+                    var session = CreatePlanEntity(plan);
+                    db.TournamentSessions.Add(session);
+                    wallet.GameMoney -= planMoney;
+                    wallet.UpdatedAt = DateTime.Now;
+                    await db.SaveChangesAsync();
+                    await tx.CommitAsync();
+
+                    plan.SeqNo = checked((long)session.SessionId);
+                    return true;
+                }
+                catch
+                {
+                    await tx.RollbackAsync();
+                    throw;
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            LogFailure(ex, nameof(InsertPlanAndDebitOrganizerAsync));
+            return false;
+        }
+    }
+
+    private static TournamentSessionEntity CreatePlanEntity(TournamentPlan plan)
+        => new()
+        {
+            JoinStartAt = plan.JoinStartDt,
+            MatchStartAt = plan.MatchStartDt,
+            PlayStartAt = plan.PlayStartDt,
+            PlayEndAt = plan.PlayEndDt,
+            ViewEndAt = plan.ViewEndDt,
+            NextStartAt = plan.NextStartDt,
+            NextCutAt = plan.NextCutDt,
+            PlaySchedule = plan.PlaySchedule,
+            PlayStatus = checked((byte)plan.PlayStatus),
+            PlayPhase = checked((byte)plan.PlayPhase),
+            PlayerCount = 0,
+            MaxPlayerCount = checked((ushort)plan.MaxPlayerNum),
+            MaxRoomCount = checked((ushort)plan.MaxRoomNum),
+            SessionName = plan.PlayName,
+            RoomOption = plan.RoomOption,
+            PrivateInfo = plan.Password,
+            MaxViewerCount = checked((ushort)plan.MaxViewer),
+            PlayCount = checked((byte)plan.PlayNum),
+            PlayTime = checked((byte)plan.PlayTime),
+            PlayMode = checked((byte)plan.PlayMode),
+            JoinMoney = plan.JoinMoney,
+            PrizeMoney1 = plan.GradeMoney[0],
+            PrizeMoney2 = plan.GradeMoney[1],
+            PrizeMoney3 = plan.GradeMoney[2],
+            PrizeMoney4 = plan.GradeMoney[3],
+            PlanMemberNo = ParseNullableMemberNo(plan.PlanMemberNo),
+        };
 
     // ───────────────────────────────────────────────────────── MERGE ──────
 

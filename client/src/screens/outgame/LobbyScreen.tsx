@@ -31,6 +31,7 @@ import ConfirmItemDlg, { normalizeRawMajItem, type RawMajItem } from './dialogs/
 import CustomDlg from './dialogs/CustomDlg'
 import MissionDlg from './dialogs/MissionDlg'
 import CollectionDlg from './dialogs/CollectionDlg'
+import CurrencyHistoryDlg from './dialogs/CurrencyHistoryDlg'
 import RankingDlg, { type RankingData } from './dialogs/RankingDlg'
 import TournamentRegistDlg, { type TournamentRegistPayload } from './dialogs/TournamentRegistDlg'
 import AccuseDlg from './dialogs/AccuseDlg'
@@ -1539,11 +1540,11 @@ function getTournamentDetailLines(tournament: TournamentEntry | null, memberName
     `日付：${tournament.playStartDt.slice(5, 10)}`,
     `開始時間：${tournament.playStartDt.slice(11, 16)}`,
     `終了予定時間：${tournament.playEndDt.slice(11, 16)}`,
-    `参加費 ：${tournament.joinMoney} MP`,
-    `賞金：1位 ${tournament.gradeMoney1} MP`,
-    `賞金：2位 ${tournament.gradeMoney2} MP`,
-    `賞金：3位 ${tournament.gradeMoney3} MP`,
-    `賞金：4位 ${tournament.gradeMoney4} MP`,
+    `参加費 ：${tournament.joinMoney} GP`,
+    `賞金：1位 ${tournament.gradeMoney1} GP`,
+    `賞金：2位 ${tournament.gradeMoney2} GP`,
+    `賞金：3位 ${tournament.gradeMoney3} GP`,
+    `賞金：4位 ${tournament.gradeMoney4} GP`,
     ' ',
     '【トーナメント内容】',
     `人数：${tournament.maxPlayerNum} 人トーナメント`,
@@ -1959,6 +1960,7 @@ export default function LobbyScreen() {
   const [showCfg,      setShowCfg]      = useState(false)
   const [showCustom,   setShowCustom]   = useState(false)
   const [showCollection, setShowCollection] = useState(false)
+  const [showCurrencyHistory, setShowCurrencyHistory] = useState(false)
   const [showShop,     setShowShop]     = useState(false)
   const [showConfirm,  setShowConfirm]  = useState(false)
   const [showMission,  setShowMission]  = useState(false)
@@ -3376,6 +3378,8 @@ export default function LobbyScreen() {
         />
       )}
 
+      {showCurrencyHistory && <CurrencyHistoryDlg onClose={() => setShowCurrencyHistory(false)} />}
+
       {/* CItemShopDlg: IDC_BTN_ITEMSHOP 押下時表示 */}
       {showShop && (
         <ItemShopDlg
@@ -3617,6 +3621,7 @@ export default function LobbyScreen() {
             <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>
             <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>
             <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
+            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
             <button
               type="button"
               className="majak-mobile-lobby-header-button"
@@ -3732,6 +3737,7 @@ export default function LobbyScreen() {
               {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>}
               {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>}
               <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
+              <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
               {showFreeChargeButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
               <button type="button" className="majak-mobile-lobby-header-button" onClick={onChangeLobby}>ロビー変更</button>
             </div>
@@ -3821,6 +3827,7 @@ export default function LobbyScreen() {
             {showMissionButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowMission(true)}>ミッション</button>}
             {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>}
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCollection(true)}>コレクション</button>
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
             {showFreeChargeButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onChangeLobby}>ロビー変更</button>
           </nav>
@@ -4073,6 +4080,7 @@ export default function LobbyScreen() {
       <div style={{ position: 'absolute', left: 864, top: 91, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>技</div>
       <div style={{ position: 'absolute', left: 912, top: 91, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{trickTitleName ? ` : ${trickTitleName}` : ' :'}</div>
       <button type="button" className="majak-lobby-collection-button" onClick={() => setShowCollection(true)}>コレクション</button>
+      <button type="button" className="majak-lobby-collection-button" style={{ top: 156 }} onClick={() => setShowCurrencyHistory(true)}>履歴</button>
 
       {/* ── アイコンボタン群 y=622 ── */}
 

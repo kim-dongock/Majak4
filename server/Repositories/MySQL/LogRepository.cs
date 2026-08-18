@@ -175,6 +175,115 @@ public class LogRepository
         await db.SaveChangesAsync();
     }
 
+    public virtual async Task<CurrencyHistoryPage> GetCurrencyHistoryAsync(
+        string memberNo,
+        string currency,
+        DateTime from,
+        DateTime to,
+        CurrencyHistoryCursor? cursor,
+        int limit)
+    {
+        ulong memberNoValue = MemberNoIds.Parse(memberNo);
+        await using var db = await RequireDb().CreateAsync();
+
+        var moneyQuery = db.MoneyTransactions.AsNoTracking()
+            .Where(entry => entry.MemberNo == memberNoValue && entry.OccurredAt >= from && entry.OccurredAt < to);
+        bool wantsDragonOrb = currency == "dragon_orb";
+        if (wantsDragonOrb)
+        {
+            moneyQuery = moneyQuery.Where(entry => entry.EventCode == GameConst.EvtCodeDragonGem
+                || entry.EventCode.StartsWith("DRAGON_ORB_")
+                || entry.EventTitle.Contains("龍珠"));
+        }
+        else if (currency == "gp")
+        {
+            moneyQuery = moneyQuery.Where(entry => entry.EventCode != GameConst.EvtCodeDragonGem
+                && !entry.EventCode.StartsWith("DRAGON_ORB_")
+                && !entry.EventTitle.Contains("龍珠"));
+        }
+        else if (currency == "mp")
+        {
+            moneyQuery = moneyQuery.Where(_ => false);
+        }
+
+        if (cursor is not null)
+        {
+            moneyQuery = cursor.Source == "money"
+                ? moneyQuery.Where(entry => entry.OccurredAt < cursor.OccurredAt
+                    || (entry.OccurredAt == cursor.OccurredAt && entry.MoneyTransactionId < cursor.Id))
+                : moneyQuery.Where(entry => entry.OccurredAt < cursor.OccurredAt);
+        }
+
+        var moneyRows = await moneyQuery
+            .OrderByDescending(entry => entry.OccurredAt)
+            .ThenByDescending(entry => entry.MoneyTransactionId)
+            .Take(limit + 1)
+            .Select(entry => new CurrencyHistoryEntry(
+                entry.OccurredAt, "money", entry.MoneyTransactionId,
+                wantsDragonOrb || (currency == "all" && (entry.EventCode == GameConst.EvtCodeDragonGem
+                    || entry.EventCode.StartsWith("DRAGON_ORB_")
+                    || entry.EventTitle.Contains("龍珠"))) ? "dragon_orb" : "gp", entry.EventTitle,
+                entry.Amount, entry.BalanceBefore, entry.BalanceAfter))
+            .ToListAsync();
+
+        var cashRows = new List<CurrencyHistoryEntry>();
+        if (currency is "all" or "mp")
+        {
+            var cashQuery = db.CashTransactions.AsNoTracking()
+                .Where(entry => entry.MemberNo == memberNoValue && entry.OccurredAt >= from && entry.OccurredAt < to);
+            if (cursor is not null)
+            {
+                cashQuery = cursor.Source == "cash"
+                    ? cashQuery.Where(entry => entry.OccurredAt < cursor.OccurredAt
+                        || (entry.OccurredAt == cursor.OccurredAt && entry.Id < cursor.Id))
+                    : cashQuery.Where(entry => entry.OccurredAt < cursor.OccurredAt
+                        || entry.OccurredAt == cursor.OccurredAt);
+            }
+
+            cashRows = await cashQuery
+                .OrderByDescending(entry => entry.OccurredAt)
+                .ThenByDescending(entry => entry.Id)
+                .Take(limit + 1)
+                .Select(entry => new CurrencyHistoryEntry(
+                    entry.OccurredAt, "cash", entry.Id, "mp",
+                    string.IsNullOrWhiteSpace(entry.Memo) ? entry.EventType : entry.Memo,
+                    entry.Amount, entry.BalanceBefore, entry.BalanceAfter))
+                .ToListAsync();
+        }
+
+        var merged = moneyRows.Concat(cashRows)
+            .OrderByDescending(entry => entry.OccurredAt)
+            .ThenBy(entry => entry.Source == "money" ? 0 : 1)
+            .ThenByDescending(entry => entry.Id)
+            .Take(limit + 1)
+            .ToList();
+        bool hasMore = merged.Count > limit;
+        if (hasMore) merged.RemoveAt(limit);
+        return new CurrencyHistoryPage(merged, hasMore);
+    }
+
+    public virtual async Task InsertCashTransactionAsync(
+        string memberNo,
+        string eventType,
+        int amount,
+        int balanceBefore,
+        int balanceAfter,
+        string? memo)
+    {
+        await using var db = await RequireDb().CreateAsync();
+        db.CashTransactions.Add(new CashTransactionLogEntity
+        {
+            MemberNo = MemberNoIds.Parse(memberNo),
+            EventType = eventType,
+            Amount = amount,
+            BalanceBefore = balanceBefore,
+            BalanceAfter = balanceAfter,
+            Memo = memo,
+            OccurredAt = DateTime.Now,
+        });
+        await db.SaveChangesAsync();
+    }
+
     public virtual async Task InsertYakuHistAsync(string memberNo, string gameId, int yaku)
     {
         await using var db = await RequireDb().CreateAsync();
@@ -247,3 +356,17 @@ public class LogRepository
     private LogDataContextFactory RequireDb()
         => _db ?? throw new InvalidOperationException("MySQL LogDataContextFactory is not configured.");
 }
+
+public sealed record CurrencyHistoryCursor(DateTime OccurredAt, string Source, ulong Id);
+
+public sealed record CurrencyHistoryEntry(
+    DateTime OccurredAt,
+    string Source,
+    ulong Id,
+    string Currency,
+    string Title,
+    long Amount,
+    long BalanceBefore,
+    long BalanceAfter);
+
+public sealed record CurrencyHistoryPage(IReadOnlyList<CurrencyHistoryEntry> Items, bool HasMore);

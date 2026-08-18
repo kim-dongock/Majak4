@@ -5,8 +5,8 @@
 import { useState } from 'react'
 import { showMessage } from '../../../utils/msgbox'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
+import TournamentBracketPreviewDlg, { TOURNAMENT_FORMATS } from './TournamentBracketPreviewDlg'
 
-const IMG = '/assets/images/game'
 const FONT = 'var(--majak-font-family-ui)'
 
 export interface TournamentRegistPayload {
@@ -145,6 +145,9 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
   const [password, setPassword] = useState('')
   const [okFrame, setOkFrame] = useState(0)
   const [cancelFrame, setCancelFrame] = useState(0)
+  const [showBracketPreview, setShowBracketPreview] = useState(false)
+  const selectedFormat = TOURNAMENT_FORMATS[matchFormat - 1]
+  const minimumPlayers = selectedFormat ? Math.floor(selectedFormat.maxPlayers / 2) + 1 : 0
 
   const submit = () => {
     const trimmedName = name.trim()
@@ -183,14 +186,7 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
       return
     }
 
-    const format = [
-      { maxPlayers: 4, playMode: 1 },
-      { maxPlayers: 16, playMode: 1 },
-      { maxPlayers: 64, playMode: 1 },
-      { maxPlayers: 8, playMode: 2 },
-      { maxPlayers: 16, playMode: 2 },
-      { maxPlayers: 32, playMode: 2 },
-    ][matchFormat - 1]
+    const format = selectedFormat
     const roomOption = `${hanTon - 1}${uma}${speedFast ? 1 : 0}${kuitan ? 0 : 1}0${red ? 2 : 1}${openHand ? 1 : 0}${viewerChat ? 1 : 0}00${wareme ? 1 : 0}0${agari}0${viewerChat ? 1 : 0}`
 
     onOK({
@@ -223,7 +219,19 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
               <label><span>東南/東風</span><select value={hanTon} onChange={event => setHanTon(Number(event.target.value))}><option value={0}>選択</option><option value={1}>東南戦</option><option value={2}>東風戦</option></select></label>
               <label><span>1試合の時間</span><select value={matchTime} onChange={event => setMatchTime(Number(event.target.value))}><option value={0}>選択</option><option value={1}>30分</option><option value={2}>40分</option><option value={3}>50分</option><option value={4}>60分</option></select></label>
               <label><span>試合数</span><select value={matchCount} onChange={event => setMatchCount(Number(event.target.value))}><option value={0}>選択</option><option value={1}>1半荘</option><option value={2}>2半荘</option></select></label>
-              <label><span>大会形式</span><select value={matchFormat} onChange={event => setMatchFormat(Number(event.target.value))}><option value={0}>選択</option><option value={1}>4人/1人勝抜</option><option value={2}>16人/1人勝抜</option><option value={3}>64人/1人勝抜</option><option value={4}>8人/2人勝抜</option><option value={5}>16人/2人勝抜</option><option value={6}>32人/2人勝抜</option></select></label>
+              <label><span>大会形式</span><select value={matchFormat} onChange={event => setMatchFormat(Number(event.target.value))}><option value={0}>選択</option>{TOURNAMENT_FORMATS.map((format, index) => <option key={format.label} value={index + 1}>{format.label}</option>)}</select></label>
+              <section className="majak-tournament-regist-conditions majak-mobile-tournament-regist__wide" aria-live="polite">
+                <div><strong>開催条件</strong><button type="button" onClick={() => setShowBracketPreview(true)} disabled={!selectedFormat}>対戦表を確認</button></div>
+                {selectedFormat ? (
+                  <ul>
+                    <li>開催最低人数：{minimumPlayers}人</li>
+                    <li>定員に満たない場合、残りの席はNPCが参加します。</li>
+                    <li>最低人数に満たない場合は中止となり、参加費を返却します。</li>
+                    <li>組み合わせは開始5分前にランダムで決定されます。</li>
+                    <li>賞金合計の110%は主催者のGPから登録時に預かり、中止時は返却します。</li>
+                  </ul>
+                ) : <p>大会形式を選択すると開催条件と対戦表を確認できます。</p>}
+              </section>
             </fieldset>
 
             <fieldset className="majak-mobile-dialog-section">
@@ -259,6 +267,9 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
             <button type="button" className="majak-standard-dialog__secondary" onClick={onCancel}>キャンセル</button>
           </footer>
         </form>
+        {showBracketPreview && selectedFormat && (
+          <TournamentBracketPreviewDlg format={selectedFormat} onClose={() => setShowBracketPreview(false)} />
+        )}
       </div>
     )
 

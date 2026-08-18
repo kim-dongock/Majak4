@@ -130,7 +130,11 @@ public class TournamentService
             !long.TryParse(mv[2], out long grade2)     ||
             !long.TryParse(mv[3], out long grade3)     ||
             !long.TryParse(mv[4], out long grade4)     ||
-            joinMoney < TournamentConst.JoinMoneyMin || joinMoney > TournamentConst.JoinMoneyMax)
+            joinMoney < TournamentConst.JoinMoneyMin || joinMoney > TournamentConst.JoinMoneyMax ||
+            grade1 < TournamentConst.GetMoneyMin || grade1 > TournamentConst.GetMoneyMax ||
+            grade2 < TournamentConst.GetMoneyMin || grade2 > TournamentConst.GetMoneyMax ||
+            grade3 < TournamentConst.GetMoneyMin || grade3 > TournamentConst.GetMoneyMax ||
+            grade4 < TournamentConst.GetMoneyMin || grade4 > TournamentConst.GetMoneyMax)
         {
             fails.Add(1002); return (false, fails);
         }
@@ -278,14 +282,10 @@ public class TournamentService
         long planMoney = TournamentTables.CalcPlanMoney(plan.GradeMoney);
         if (organizer.GamMoney < planMoney) return false;
 
-        organizer.GamMoney -= planMoney;
-        bool ok = await repo.InsertPlanAsync(plan);
-        if (!ok)
-        {
-            organizer.GamMoney += planMoney;
-            return false;
-        }
+        bool ok = await repo.InsertPlanAndDebitOrganizerAsync(plan, organizer, planMoney);
+        if (!ok) return false;
 
+        organizer.GamMoney -= planMoney;
         _plans[plan.SeqNo] = plan;
         _details[plan.SeqNo] = new();
         _useRoomNum += plan.MaxRoomNum;

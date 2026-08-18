@@ -16,6 +16,7 @@ public sealed class LogDataContext : DbContext
     public DbSet<TrainingPlayerResultLogEntity> TrainingPlayerResults => Set<TrainingPlayerResultLogEntity>();
     public DbSet<WeeklyRewardClaimLogEntity> WeeklyRewardClaims => Set<WeeklyRewardClaimLogEntity>();
     public DbSet<MoneyTransactionLogEntity> MoneyTransactions => Set<MoneyTransactionLogEntity>();
+    public DbSet<CashTransactionLogEntity> CashTransactions => Set<CashTransactionLogEntity>();
     public DbSet<WinningYakuLogEntity> WinningYakuLogs => Set<WinningYakuLogEntity>();
     public DbSet<ItemPurchaseLogEntity> ItemPurchases => Set<ItemPurchaseLogEntity>();
     public DbSet<PlayerLoginLogEntity> PlayerLoginLogs => Set<PlayerLoginLogEntity>();
@@ -130,6 +131,20 @@ public sealed class LogDataContext : DbContext
             entity.Property(x => x.BillingOrderNumber).HasColumnName("billing_order_number").HasMaxLength(20);
             entity.Property(x => x.UnitCount).HasColumnName("unit_count");
             entity.Property(x => x.RemoteAddress).HasColumnName("remote_address").HasMaxLength(45);
+        });
+
+        modelBuilder.Entity<CashTransactionLogEntity>(entity =>
+        {
+            entity.ToTable("cash_transaction_log");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(x => x.MemberNo).HasColumnName("member_no").HasColumnType("bigint unsigned");
+            entity.Property(x => x.EventType).HasColumnName("event_type").HasMaxLength(30);
+            entity.Property(x => x.Amount).HasColumnName("amount");
+            entity.Property(x => x.BalanceBefore).HasColumnName("balance_before");
+            entity.Property(x => x.BalanceAfter).HasColumnName("balance_after");
+            entity.Property(x => x.Memo).HasColumnName("memo").HasMaxLength(200);
+            entity.Property(x => x.OccurredAt).HasColumnName("occurred_at");
         });
 
         modelBuilder.Entity<WinningYakuLogEntity>(entity =>

@@ -96,6 +96,18 @@ public sealed class MoneyTransactionLogEntity
     public string RemoteAddress { get; set; } = string.Empty;
 }
 
+public sealed class CashTransactionLogEntity
+{
+    public ulong Id { get; set; }
+    public ulong MemberNo { get; set; }
+    public string EventType { get; set; } = string.Empty;
+    public int Amount { get; set; }
+    public int BalanceBefore { get; set; }
+    public int BalanceAfter { get; set; }
+    public string? Memo { get; set; }
+    public DateTime OccurredAt { get; set; }
+}
+
 public sealed class WinningYakuLogEntity
 {
     public ulong WinningYakuLogId { get; set; }

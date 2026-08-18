@@ -108,7 +108,7 @@ const MOBILE_HUD_TEXT_GAP = 2
 const MOBILE_HUD_INFO_TOP_OFFSET = 10
 const MOBILE_HUD_INFO_WIDTH = 46
 const MOBILE_HUD_INFO_ROW_HEIGHT = 17
-const MOBILE_HUD_NAME_WIDTH = 98
+const MOBILE_HUD_NAME_WIDTH = 49
 const MOBILE_HUD_NAME_GAP = 3
 const MOBILE_HUD_PANEL_PADDING_X = 2
 const MOBILE_HUD_PANEL_PADDING_Y = 6
@@ -119,6 +119,7 @@ const MOBILE_HUD_FULL_AVATAR_WIDTH = 60
 const MOBILE_HUD_FULL_AVATAR_HEIGHT = 90
 const HUD_NAME_MIN_FONT_SIZE = 8
 const DESKTOP_HUD_INFO_Y_SHIFT = -24
+const RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y = 48
 
 function cssPx(value: string): number {
   const match = value.match(/\d+/)
@@ -145,9 +146,12 @@ function playerHudPoint(point: HudPoint, loc: number): HudPoint {
   const base = boardLocalPoint(point)
   const centerOffset = responsiveDesktopCenterOffset(UI_LAYOUT_MODE)
   const seatOffset = responsiveDesktopSeatOffset(UI_LAYOUT_MODE, loc)
+  const edgeOffsetY = UI_LAYOUT_MODE === 'responsiveDesktop'
+    ? (loc === 0 || loc === 1 ? RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y : -RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y)
+    : 0
   return {
     x: base.x + seatOffset.x - centerOffset.x,
-    y: base.y + seatOffset.y - centerOffset.y,
+    y: base.y + seatOffset.y - centerOffset.y + edgeOffsetY,
   }
 }
 
@@ -768,6 +772,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private isMobileHudInfoVisible(loc: number) {
+    if (this.layoutMode === 'mobileLandscape') return false
     return this.isMobileAvatarExpanded(loc)
   }
 
@@ -776,10 +781,8 @@ export default class UIScene extends Phaser.Scene {
     return this.activeTurnOdr !== null && this.odrToLoc(this.activeTurnOdr) === loc
   }
 
-  private mobileAvatarSize(infoVisible: boolean) {
-    return infoVisible
-      ? { width: MOBILE_HUD_FULL_AVATAR_WIDTH, height: MOBILE_HUD_FULL_AVATAR_HEIGHT }
-      : { width: MOBILE_HUD_ICON_WIDTH, height: MOBILE_HUD_ICON_HEIGHT }
+  private mobileAvatarSize(_infoVisible: boolean) {
+    return { width: MOBILE_HUD_ICON_WIDTH, height: MOBILE_HUD_ICON_HEIGHT }
   }
 
   private desktopAvatarSize(_player: PlayerHudState) {
@@ -802,7 +805,7 @@ export default class UIScene extends Phaser.Scene {
     const insetBottom = 14
     const isRight = loc === 1 || loc === 2
     const isBottom = loc === 0 || loc === 1
-    const nameReserve = size.height > MOBILE_HUD_ICON_HEIGHT ? HUD_METRICS.nameHeight + MOBILE_HUD_NAME_GAP : 0
+    const nameReserve = HUD_METRICS.nameHeight + MOBILE_HUD_NAME_GAP
     return {
       x: isRight ? bounds.right - size.width - insetX : bounds.left + insetX,
       y: isBottom ? bounds.bottom - size.height - insetBottom - nameReserve : bounds.top + insetTop,
@@ -889,6 +892,7 @@ export default class UIScene extends Phaser.Scene {
 
   private updateMobileHudPanel(loc: number, avt: HudPoint, avatarSize: { width: number; height: number }, nameX: number, nameY: number, nameWidth: number, textLeft: number, textY: number, textWidth: number, infoRows: number, infoRowHeight: number) {
     const panel = this.mobileHudPanels[loc]
+    const turnStrip = this.desktopTurnStrips[loc]
     if (!panel) return
     if (!isMobileIngameLayout(this.layoutMode)) {
       panel.setVisible(false)
@@ -897,12 +901,29 @@ export default class UIScene extends Phaser.Scene {
     const style = this.mobileHudPanelStyle()
     if (!this.isMobileHudInfoVisible(loc)) {
       const padding = MOBILE_HUD_COMPACT_AVATAR_PADDING
+      const left = Math.min(avt.x, nameX) - padding
+      const right = Math.max(avt.x + avatarSize.width, nameX + nameWidth) + padding
+      const bottom = Math.max(avt.y + avatarSize.height, nameY + HUD_METRICS.nameHeight) + padding
       panel
-        .setPosition(avt.x - padding, avt.y - padding)
-        .setSize(avatarSize.width + padding * 2, avatarSize.height + padding * 2)
+        .setPosition(left, avt.y - padding)
+        .setSize(right - left, bottom - avt.y + padding)
         .setFillStyle(style.fill, style.fillAlpha)
         .setStrokeStyle(1, style.stroke, style.strokeAlpha)
         .setVisible(true)
+      if (turnStrip) {
+        const active = this.activeTurnOdr !== null && this.odrToLoc(this.activeTurnOdr) === loc
+        if (turnStrip.getData('turnActive') !== active) {
+          turnStrip.setData('turnActive', active)
+          this.tweens.killTweensOf(turnStrip)
+          turnStrip.setAlpha(1).setVisible(active)
+          if (active) this.tweens.add({ targets: turnStrip, alpha: 0.25, duration: 650, ease: 'Sine.InOut', yoyo: true, repeat: -1 })
+        }
+        turnStrip
+          .setPosition(left, avt.y - padding)
+          .setTexture(this.desktopTurnStripTextureKey())
+          .setDisplaySize(right - left, 6)
+          .setVisible(active)
+      }
       return
     }
     const left = Math.min(avt.x, nameX, textLeft) - MOBILE_HUD_PANEL_PADDING_X
@@ -976,12 +997,13 @@ export default class UIScene extends Phaser.Scene {
       const ttl = playerHudPoint(pos.ttl, loc)
       const trk = playerHudPoint(pos.trk, loc)
       const mobileInfoVisible = this.isMobileHudInfoVisible(loc)
+      const nameVisible = isMobileIngameLayout(this.layoutMode) || mobileInfoVisible
       const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(p)
       const avt = isMobileIngameLayout(this.layoutMode)
         ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
         : this.desktopAvatarPoint(baseAvt)
       const mobileTextLeft = loc === 1 || loc === 2 ? avt.x - MOBILE_HUD_INFO_WIDTH - MOBILE_HUD_TEXT_GAP : avt.x + avatarSize.width + MOBILE_HUD_TEXT_GAP
-      const mobileNameX = loc === 1 || loc === 2 ? avt.x + avatarSize.width - MOBILE_HUD_NAME_WIDTH : avt.x
+      const mobileNameX = avt.x + (avatarSize.width - MOBILE_HUD_NAME_WIDTH) / 2
       const mobileNameY = avt.y + avatarSize.height + MOBILE_HUD_NAME_GAP
       const textY = isMobileIngameLayout(this.layoutMode) ? avt.y + MOBILE_HUD_INFO_TOP_OFFSET : txt.y + DESKTOP_HUD_INFO_Y_SHIFT
       const textBounds = isMobileIngameLayout(this.layoutMode) ? { left: mobileTextLeft, width: MOBILE_HUD_INFO_WIDTH } : avatarTextBounds(loc)
@@ -999,7 +1021,7 @@ export default class UIScene extends Phaser.Scene {
         ? { x: desktopPanelName.x, width: desktopPanelName.width, fontSize: this.fitNameText(loc, desktopPanelName.x, displayName).fontSize }
         : this.fitNameText(loc, isMobileIngameLayout(this.layoutMode) ? mobileNameX : name.x, displayName)
       const nameY = desktopPanelName?.y ?? (isMobileIngameLayout(this.layoutMode) ? mobileNameY : name.y)
-      this.nameTexts[loc].setColor(isComputer ? '#ff6060' : '#ffffff').setFontSize(nameLayout.fontSize).setPosition(nameLayout.x, nameY).setFixedSize(nameLayout.width, HUD_METRICS.nameHeight).setAlign(nameAlign).setText(displayName).setVisible(mobileInfoVisible)
+      this.nameTexts[loc].setColor(isComputer ? '#ff6060' : '#ffffff').setFontSize(nameLayout.fontSize).setPosition(nameLayout.x, nameY).setFixedSize(nameLayout.width, HUD_METRICS.nameHeight).setAlign(nameAlign).setText(displayName).setVisible(nameVisible)
       this.levelTexts[loc].setPosition(textBounds.left, textY).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(levelText).setVisible(mobileInfoVisible && !compactInfo)
       this.scoreTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? 0 : infoRowHeight)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatPointText(p)).setVisible(mobileInfoVisible)
       this.rankTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight : infoRowHeight * 2)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatRankText(players, odr)).setVisible(mobileInfoVisible)

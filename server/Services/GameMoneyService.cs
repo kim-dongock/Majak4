@@ -236,6 +236,12 @@ public class GameMoneyService
         _ratingService.UpdatePlayerLevel(player);
         await _playerRepo.UpdateCommonRatAsync(player);
 
+        await RecordMoneyHistoryAsync(player, eventCode, eventMoney, beforeMoney);
+    }
+
+    /// <summary>Records a money event after an operation that already committed the game-DB balance.</summary>
+    public async Task RecordMoneyHistoryAsync(MajakPlayer player, string eventCode, long eventMoney, long beforeMoney)
+    {
         if (_historyRepo != null && !string.IsNullOrEmpty(eventCode) && eventMoney != 0)
         {
             try

@@ -65,6 +65,17 @@ const DANI_OPTION_PRESETS: Partial<MJOption>[] = [
 const KOURYU_FIELD_IDS = ['0082B', '0086B', '0085F', '0075B', '00T5A', '00000']
 const DANI_FIELD_IDS   = ['0ZG6A', '0ZG6B', '0ZG6C', '0ZG6D', '0ZG7A', '0ZG7B', '0ZG7C', '0ZG7D']
 
+interface LobbyItem {
+  title: string
+  match?: '東風戦' | '半荘戦'
+  description: string
+  count: string
+  tableFee: string
+  rate: string
+  dragonBall: string
+  onClick: () => void | Promise<void>
+}
+
 /** ====================================================================
  * CMJSelLobbyWnd 本体
  * ==================================================================== */
@@ -134,23 +145,23 @@ export default function LobbySelectScreen() {
 
   if (!isKouryu && !isDani) return null
 
-  const lobbyItems = isDani
+  const lobbyItems: LobbyItem[] = isDani
     ? [
-        { title: '通常卓', match: '東風戦', description: INFO_DANI[0], count: countDani[0], onClick: () => toDaniLobby(0) },
-        { title: '段位卓', match: '東風戦', description: INFO_DANI[1], count: countDani[1], onClick: () => toDaniLobby(1) },
-        { title: '高段位卓', match: '東風戦', description: INFO_DANI[2], count: countDani[2], onClick: () => toDaniLobby(2) },
-        { title: '十段位卓', match: '東風戦', description: INFO_DANI[3], count: countDani[3], onClick: () => toDaniLobby(3) },
-        { title: '通常卓', match: '半荘戦', description: INFO_DANI[0], count: countDani[4], onClick: () => toDaniLobby(4) },
-        { title: '段位卓', match: '半荘戦', description: INFO_DANI[1], count: countDani[5], onClick: () => toDaniLobby(5) },
-        { title: '高段位卓', match: '半荘戦', description: INFO_DANI[2], count: countDani[6], onClick: () => toDaniLobby(6) },
-        { title: '十段位卓', match: '半荘戦', description: INFO_DANI[3], count: countDani[7], onClick: () => toDaniLobby(7) },
+        { title: '通常卓', match: '東風戦', description: INFO_DANI[0], count: countDani[0], tableFee: '500 GP', rate: '20', dragonBall: '1位 1 / 2位 0', onClick: () => toDaniLobby(0) },
+        { title: '段位卓', match: '東風戦', description: INFO_DANI[1], count: countDani[1], tableFee: '500 GP', rate: '20', dragonBall: '1位 2 / 2位 0', onClick: () => toDaniLobby(1) },
+        { title: '高段位卓', match: '東風戦', description: INFO_DANI[2], count: countDani[2], tableFee: '500 GP', rate: '20', dragonBall: '1位 3 / 2位 1', onClick: () => toDaniLobby(2) },
+        { title: '十段位卓', match: '東風戦', description: INFO_DANI[3], count: countDani[3], tableFee: '500 GP', rate: '20', dragonBall: '1位 4 / 2位 2', onClick: () => toDaniLobby(3) },
+        { title: '通常卓', match: '半荘戦', description: INFO_DANI[0], count: countDani[4], tableFee: '500 GP', rate: '20', dragonBall: '1位 1 / 2位 0', onClick: () => toDaniLobby(4) },
+        { title: '段位卓', match: '半荘戦', description: INFO_DANI[1], count: countDani[5], tableFee: '500 GP', rate: '20', dragonBall: '1位 2 / 2位 0', onClick: () => toDaniLobby(5) },
+        { title: '高段位卓', match: '半荘戦', description: INFO_DANI[2], count: countDani[6], tableFee: '500 GP', rate: '20', dragonBall: '1位 3 / 2位 1', onClick: () => toDaniLobby(6) },
+        { title: '十段位卓', match: '半荘戦', description: INFO_DANI[3], count: countDani[7], tableFee: '500 GP', rate: '20', dragonBall: '1位 4 / 2位 2', onClick: () => toDaniLobby(7) },
       ]
     : [
-        { title: channelTitle('0082B', '基本卓（安い部屋）'), description: INFO_KOURYU[0], count: countKouryu[0], onClick: () => toKouryuLobby(0) },
-        { title: channelTitle('0086B', '基本卓'), description: INFO_KOURYU[0], count: countKouryu[1], onClick: () => toKouryuLobby(1) },
-        { title: channelTitle('0085F', 'ハイ卓'), description: INFO_KOURYU[1], count: countKouryu[2], onClick: () => toKouryuLobby(2) },
-        { title: channelTitle('0075B', '基本卓（掛けあり）'), description: INFO_KOURYU[0], count: countKouryu[3], onClick: () => toKouryuLobby(3) },
-        { title: channelTitle('00T5A', '練習卓'), description: INFO_KOURYU[2], count: countKouryu[4], onClick: () => toKouryuLobby(4) },
+        { title: channelTitle('0082B', '基本卓（安い部屋）'), description: INFO_KOURYU[0], count: countKouryu[0], tableFee: '500 GP', rate: '20', dragonBall: '1位 0 / 2位 0', onClick: () => toKouryuLobby(0) },
+        { title: channelTitle('0086B', '基本卓'), description: INFO_KOURYU[0], count: countKouryu[1], tableFee: '500 GP', rate: '20', dragonBall: '1位 0 / 2位 0', onClick: () => toKouryuLobby(1) },
+        { title: channelTitle('0085F', 'ハイ卓'), description: INFO_KOURYU[1], count: countKouryu[2], tableFee: '3,000 GP', rate: '100', dragonBall: '1位 5 / 2位 2', onClick: () => toKouryuLobby(2) },
+        { title: channelTitle('0075B', '基本卓（掛けあり）'), description: INFO_KOURYU[0], count: countKouryu[3], tableFee: '500 GP', rate: '20', dragonBall: '1位 0 / 2位 0', onClick: () => toKouryuLobby(3) },
+        { title: channelTitle('00T5A', '練習卓'), description: INFO_KOURYU[2], count: countKouryu[4], tableFee: '0 GP', rate: '0', dragonBall: 'なし', onClick: () => toKouryuLobby(4) },
       ]
   const visibleLobbyItems = isDani
     ? lobbyItems.filter(item => item.match === selectedDaniMatch)
@@ -182,13 +193,20 @@ export default function LobbySelectScreen() {
         </div>
       )}
       <main className={`majak-desktop-lobby-select__list${isDani ? ' is-dani' : ''}`} aria-label={`${isDani ? '段位戦' : '交流戦'}ロビー一覧`}>
+        <div className="majak-desktop-lobby-select__comparison-header" aria-hidden="true">
+          <span>ロビー</span><span>接続</span><span>場代</span><span>レート</span><span>龍珠</span>
+        </div>
         {visibleLobbyItems.map(item => (
           <div key={`${item.title}-${item.match ?? ''}`} className="majak-desktop-lobby-select__entry">
             <button type="button" className="majak-responsive-control-button majak-responsive-menu-button majak-desktop-lobby-select__card" onClick={item.onClick}>
               <span className="majak-desktop-lobby-select__card-title majak-type-xl">{item.title}</span>
             </button>
-            <p className="majak-desktop-lobby-select__card-description">{item.description}</p>
-            <output className="majak-desktop-lobby-select__card-count majak-type-xl" aria-label={`${item.title} 接続人数`}>{item.count}</output>
+            <dl className="majak-desktop-lobby-select__stats" aria-label={`${item.title} 条件`}>
+              <div><dt>接続</dt><dd>{item.count}</dd></div>
+              <div><dt>場代</dt><dd>{item.tableFee}</dd></div>
+              <div><dt>レート</dt><dd>{item.rate}</dd></div>
+              <div><dt>龍珠</dt><dd>{item.dragonBall}</dd></div>
+            </dl>
           </div>
         ))}
       </main>

@@ -116,6 +116,8 @@ public class MissionService
 
         // 4. 報酬付与 (REWARDTYPE: 1=マネー, 2=ジェム)
         string rewardName;
+        long moneyBefore = player.GamMoney;
+        int gemBefore = player.GemCount;
         switch (mastInfo.RewardType)
         {
             case 1: // MSN_RT_COIN
@@ -139,6 +141,18 @@ public class MissionService
         try
         {
             await _logRepo.InsertWeeklyRewardHistAsync(player.MemberNo, rewardId, receiveStatus: 1);
+            if (mastInfo.RewardType == 1)
+            {
+                await _logRepo.InsertGameMoneyHistAsync(
+                    player.MemberNo, "GP_WEEKLY_REWARD", mastInfo.RewardCnt,
+                    moneyBefore, player.GamMoney, player.IpAddress, "週間報酬");
+            }
+            else
+            {
+                await _logRepo.InsertGameMoneyHistAsync(
+                    player.MemberNo, "DRAGON_ORB_WEEKLY_REWARD", mastInfo.RewardCnt,
+                    gemBefore, player.GemCount, player.IpAddress, "週間報酬（龍珠）");
+            }
         }
         catch
         {
@@ -203,6 +217,8 @@ public class MissionService
             mast.EvtCode, mast.EvtNo, player.MemberNo, serialCode);
         if (exists) return SerialCodeResult.Received;
 
+        long moneyBefore = player.GamMoney;
+        int gemBefore = player.GemCount;
         if (!await AddPlayerResourceAsync(player, mast))
             return SerialCodeResult.OtherError;
 
@@ -214,6 +230,7 @@ public class MissionService
         }
 
         await _playerRepo.UpdateCommonRatSerialResourceAsync(player);
+        await WriteSerialCurrencyHistoryAsync(player, mast, moneyBefore, gemBefore);
         return SerialCodeResult.Ok;
     }
 
@@ -223,6 +240,8 @@ public class MissionService
         if (coupon == null) return SerialCodeResult.NoCoupon;
         if (!string.IsNullOrEmpty(coupon.MemberNo)) return SerialCodeResult.UsedCoupon;
 
+        long moneyBefore = player.GamMoney;
+        int gemBefore = player.GemCount;
         if (!await AddPlayerResourceAsync(player, mast))
             return SerialCodeResult.OtherError;
 
@@ -234,6 +253,7 @@ public class MissionService
         }
 
         await _playerRepo.UpdateCommonRatSerialResourceAsync(player);
+        await WriteSerialCurrencyHistoryAsync(player, mast, moneyBefore, gemBefore);
         return SerialCodeResult.Ok;
     }
 
@@ -270,6 +290,22 @@ public class MissionService
                 break;
         }
     }
+
+    private Task WriteSerialCurrencyHistoryAsync(
+        MajakPlayer player,
+        SerialMastInfo mast,
+        long moneyBefore,
+        int gemBefore)
+        => mast.MissionNo switch
+        {
+            1 => _logRepo.InsertGameMoneyHistAsync(
+                player.MemberNo, "GP_SERIAL_BONUS", mast.GiftValue,
+                moneyBefore, player.GamMoney, player.IpAddress, "シリアルボーナス"),
+            2 => _logRepo.InsertGameMoneyHistAsync(
+                player.MemberNo, "DRAGON_ORB_SERIAL_BONUS", mast.GiftValue,
+                gemBefore, player.GemCount, player.IpAddress, "シリアルボーナス（龍珠）"),
+            _ => Task.CompletedTask,
+        };
 }
 
 public enum SerialCodeResult

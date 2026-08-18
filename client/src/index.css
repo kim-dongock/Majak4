@@ -1183,6 +1183,43 @@ button.majak-press-feedback {
 .majak-type-xl { font-size: var(--majak-text-xl) !important; line-height: var(--majak-leading-tight) !important; }
 .majak-type-display { font-size: var(--majak-text-display) !important; line-height: var(--majak-leading-tight) !important; }
 
+@media (max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse) {
+  :root {
+    --majak-popup-close-font-size: var(--majak-text-sm);
+    --majak-popup-command-font-size: var(--majak-text-sm);
+    --majak-popup-tab-font-size: var(--majak-text-xs);
+    --majak-popup-font-title: var(--majak-text-lg);
+    --majak-popup-font-emphasis: var(--majak-text-sm);
+    --majak-popup-font-body: var(--majak-text-xs);
+    --majak-dialog-caption-font-size: 11px;
+    --majak-dialog-label-font-size: var(--majak-text-xs);
+    --majak-dialog-body-font-size: var(--majak-text-sm);
+    --majak-dialog-heading-font-size: var(--majak-text-md);
+    --majak-dialog-title-font-size: var(--majak-text-lg);
+    --majak-dialog-compact-font-size: 11px;
+    --majak-dialog-compact-title-font-size: var(--majak-text-sm);
+    --majak-menu-description-size: var(--majak-text-sm);
+  }
+
+  .majak-popup-panel :is(button, select, input, textarea, label),
+  .responsive-shop :is(button, select, input, textarea, label),
+  .shop-transaction :is(button, select, input, textarea, label),
+  .mission-dialog :is(button, select, input, textarea, label),
+  .mission-reward-guide :is(button, select, input, textarea, label),
+  .custom-inventory :is(button, select, input, textarea, label),
+  .responsive-owned-items :is(button, select, input, textarea, label),
+  .majak-ranking-dialog :is(button, select, input, textarea, label),
+  .majak-collection-dialog :is(button, select, input, textarea, label),
+  .majak-invite-request :is(button, select, input, textarea, label),
+  .majak-lottery-result-panel :is(button, select, input, textarea, label),
+  .majak-lottery-game-panel :is(button, select, input, textarea, label),
+  .majak-tournament-bracket-preview :is(button, select, input, textarea, label),
+  .majak-mobile-tournament-regist :is(button, select, input, textarea, label),
+  .registration-panel :is(button, select, input, textarea, label) {
+    font-size: var(--majak-popup-font-body) !important;
+  }
+}
+
 .majak-popup-preview {
   height: 100dvh;
   min-height: 100dvh;
@@ -1308,6 +1345,101 @@ button.majak-press-feedback {
   .majak-popup-preview { height: auto; grid-template-columns: 1fr; overflow: auto; }
   .majak-popup-preview__sidebar { overflow: visible; border-right: 0; border-bottom: 1px solid rgba(216, 230, 211, .3); }
   .majak-popup-preview__content { width: auto; margin: 20px; }
+}
+
+.majak-game-effect-preview {
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 3000;
+  width: min(900px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  transform: translate(-50%, -50%);
+  border: 2px solid #2f8b4d;
+  color: #eef9e8;
+  background: #092c20;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .58);
+}
+
+.majak-game-effect-preview > header {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(207, 235, 198, .35);
+  background: #11532f;
+}
+
+.majak-game-effect-preview > header small { color: #c6d8bd; }
+.majak-game-effect-preview > header h2 { margin: 2px 0 0; font-size: var(--majak-text-lg); }
+.majak-game-effect-preview > header button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d8e9ce;
+  color: #fff;
+  background: #173f26;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.majak-game-effect-preview__body {
+  min-height: 520px;
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+}
+
+.majak-game-effect-preview__body > nav {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  padding: 12px;
+  border-right: 1px solid rgba(207, 235, 198, .25);
+  background: #0d3c2a;
+}
+
+.majak-game-effect-preview__body > nav button,
+.majak-game-effect-preview__controls button {
+  min-height: 34px;
+  border: 1px solid rgba(207, 235, 198, .38);
+  color: #eef9e8;
+  background: #164f30;
+  cursor: pointer;
+}
+
+.majak-game-effect-preview__body > nav button.is-selected { border-color: #e1c55f; background: #277342; }
+.majak-game-effect-preview__body > section { min-width: 0; padding: 16px; }
+.majak-game-effect-preview__stage {
+  height: 340px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(207, 235, 198, .28);
+  background-color: #0b432c;
+  background-image: linear-gradient(45deg, rgba(255,255,255,.035) 25%, transparent 25%, transparent 75%, rgba(255,255,255,.035) 75%);
+  background-size: 24px 24px;
+}
+
+.majak-game-effect-preview__stage img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.majak-game-effect-preview__controls { display: flex; align-items: center; gap: 7px; margin-top: 10px; }
+.majak-game-effect-preview__controls button { min-width: 64px; padding: 0 10px; }
+.majak-game-effect-preview__controls strong { margin-left: auto; font-variant-numeric: tabular-nums; }
+.majak-game-effect-preview dl { display: grid; gap: 6px; margin: 14px 0 0; }
+.majak-game-effect-preview dl > div { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 8px; }
+.majak-game-effect-preview dt { color: #b9cfb5; }
+.majak-game-effect-preview dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: #e1c55f; }
+
+@media (max-width: 720px) {
+  .majak-game-effect-preview__body { grid-template-columns: 1fr; }
+  .majak-game-effect-preview__body > nav { grid-template-columns: repeat(2, minmax(0, 1fr)); border-right: 0; border-bottom: 1px solid rgba(207, 235, 198, .25); }
+  .majak-game-effect-preview__stage { height: 260px; }
 }
 
 /* Shared popup surface for dialogs that retain their own layout structure. */
@@ -1521,7 +1653,7 @@ body {
   --majak-menu-ink: #08271d;
   min-height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: clamp(12px, 2dvh, 24px);
   padding: clamp(14px, 3dvh, 34px) clamp(28px, 4vw, 56px);
   box-sizing: border-box;
@@ -1624,14 +1756,12 @@ body {
     grid-template-columns: 118px minmax(56px, .7fr) 42px minmax(76px, 1fr);
     grid-template-areas: 'played-at room result members';
     column-gap: 4px;
-    white-space: nowrap;
   }
+  .majak-paifu-archive__list-header { white-space: nowrap; }
   .majak-paifu-archive__list button {
-    grid-template-columns: 142px minmax(0, 1fr);
-    grid-template-areas:
-      'played-at result'
-      'room room'
-      'members members';
+    grid-template-columns: 118px minmax(56px, .7fr) 42px minmax(76px, 1fr);
+    grid-template-areas: 'played-at room result members';
+    column-gap: 4px;
   }
   .majak-paifu-archive__list-header > time,
   .majak-paifu-archive__list button > time { grid-area: played-at; }
@@ -1808,8 +1938,18 @@ body {
 
 .majak-responsive-ingame-sidebar__actions {
   display: grid;
+  gap: 12px;
+}
+
+.majak-responsive-paifu__control-group {
+  display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px;
+}
+
+.majak-responsive-paifu__view-controls {
+  padding-top: 12px;
+  border-top: 2px solid rgba(31, 75, 45, .42);
 }
 
 .majak-responsive-ingame-sidebar__actions button.is-active {
@@ -1911,6 +2051,7 @@ body {
   --majak-channel-menu-column-gap: clamp(22px, 3vw, 40px);
   --majak-channel-menu-column-width: calc((var(--majak-channel-menu-width) - var(--majak-channel-menu-column-gap)) / 2);
   width: 100%;
+  align-self: center;
   display: grid;
   grid-template-columns: repeat(2, var(--majak-channel-menu-column-width));
   align-items: start;
@@ -1940,7 +2081,7 @@ body {
   min-height: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
   column-gap: 8px;
   row-gap: 4px;
   padding: 10px 12px 12px;
@@ -1954,10 +2095,12 @@ body {
 .majak-desktop-channel-group .majak-desktop-channel-group__user-summary::before {
   grid-column: 1;
   grid-row: 1;
+  display: flex;
+  align-items: center;
   align-self: center;
   content: 'プレイヤー情報';
   color: #d4ae68;
-  font-size: var(--majak-text-2xs);
+  font-size: var(--majak-text-xs);
   font-weight: var(--majak-weight-title);
   line-height: var(--majak-leading-tight);
   letter-spacing: .08em;
@@ -1966,6 +2109,8 @@ body {
 .majak-desktop-channel-group .majak-mobile-user-summary__name {
   grid-column: 2;
   grid-row: 1;
+  display: flex;
+  align-items: center;
   align-self: center;
   color: #fff1bd;
   max-width: none;
@@ -1999,7 +2144,8 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
+    justify-content: center;
+    gap: 0;
   padding: 4px 5px 5px;
   overflow: hidden;
   border: 1px solid #76503a;
@@ -2045,8 +2191,8 @@ body {
 }
 
 .majak-responsive-desktop-frame .majak-desktop-channel-group__menu {
-  align-self: start;
-  margin-top: clamp(28px, 4dvh, 52px);
+  align-self: center;
+  margin-top: 0;
 }
 
 .majak-desktop-channel-group__menu-entry {
@@ -2105,7 +2251,7 @@ body {
 .majak-desktop-lobby-select {
   min-height: 100%;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 2fr) auto;
   gap: clamp(14px, 2.4dvh, 26px);
   padding: clamp(18px, 3dvh, 36px) clamp(28px, 4vw, 56px);
   box-sizing: border-box;
@@ -2118,7 +2264,7 @@ body {
 }
 
 .majak-desktop-lobby-select:has(.majak-desktop-lobby-select__rule-tabs) {
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, 2fr) auto;
 }
 
 .majak-responsive-desktop-frame > .majak-desktop-lobby-select {
@@ -2127,10 +2273,16 @@ body {
 }
 
 .majak-desktop-lobby-select__header {
+  --majak-channel-menu-width: clamp(620px, 72vw, 920px);
+  --majak-channel-menu-column-gap: clamp(22px, 3vw, 40px);
+  --majak-channel-menu-column-width: calc((var(--majak-channel-menu-width) - var(--majak-channel-menu-column-gap)) / 2);
+  width: 100%;
+  align-self: center;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  grid-template-columns: repeat(2, var(--majak-channel-menu-column-width));
   align-items: start;
-  gap: clamp(24px, 5vw, 72px);
+  justify-content: space-evenly;
+  column-gap: 0;
 }
 
 .majak-desktop-lobby-select__header p {
@@ -2148,12 +2300,16 @@ body {
 }
 
 .majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary {
-  justify-self: end;
-  width: min(100%, 440px);
-  min-height: 142px;
+  min-width: 0;
+  justify-self: stretch;
+  width: 100%;
+  aspect-ratio: 430 / 148;
+  min-height: 0;
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 7px;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
+  column-gap: 8px;
+  row-gap: 4px;
   padding: 10px 12px 12px;
   box-sizing: border-box;
   color: #fff3db;
@@ -2164,6 +2320,11 @@ body {
 }
 
 .majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary::before {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  align-self: center;
   content: 'プレイヤー情報';
   color: #d4ae68;
   font-size: var(--majak-text-xs);
@@ -2173,26 +2334,45 @@ body {
 }
 
 .majak-desktop-lobby-select .majak-mobile-user-summary__name {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  align-items: center;
+  align-self: center;
   color: #fff1bd;
   max-width: none;
+  font-size: var(--majak-text-xs);
   font-weight: var(--majak-weight-title);
-  padding-bottom: 7px;
-  border-bottom: 1px solid rgba(224, 185, 110, .52);
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.majak-desktop-lobby-select .majak-mobile-user-summary__name-value {
+  font-size: var(--majak-text-sm) !important;
 }
 
 .majak-desktop-lobby-select .majak-mobile-user-summary__fields {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
+  padding-top: 3px;
+  box-sizing: border-box;
+  border-top: 1px solid rgba(224, 185, 110, .52);
 }
 
 .majak-desktop-lobby-select .majak-mobile-user-summary__fields > span {
   min-width: 0;
-  min-height: 52px;
+  min-height: 0;
+  height: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: 2px;
+  justify-content: center;
+  gap: 0;
   padding: 4px 5px 5px;
   overflow: hidden;
   border: 1px solid #76503a;
@@ -2207,6 +2387,7 @@ body {
   display: block;
   color: #875a31;
   background: transparent;
+  font-size: var(--majak-text-2xs) !important;
   font-weight: var(--majak-weight-strong);
   text-align: left;
 }
@@ -2217,32 +2398,55 @@ body {
   padding: 0;
   overflow: hidden;
   color: #332217;
+  font-size: var(--majak-text-xs) !important;
   font-weight: var(--majak-weight-title);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .majak-desktop-lobby-select__list {
-  --majak-lobby-list-width: clamp(620px, 72vw, 920px);
-  --majak-lobby-list-column-gap: clamp(18px, 2.5vw, 30px);
-  --majak-lobby-list-column-width: calc((var(--majak-lobby-list-width) - var(--majak-lobby-list-column-gap)) / 2);
+  --majak-lobby-comparison-columns: minmax(240px, 2fr) repeat(4, minmax(0, .875fr));
+  --majak-lobby-button-title-size: var(--majak-text-xl);
+  --majak-lobby-description-size: var(--majak-menu-description-size);
   width: 100%;
-  align-self: start;
-  margin-top: clamp(16px, 3dvh, 30px);
+  max-width: 1120px;
+  align-self: center;
+  margin-top: 0;
   display: grid;
-  grid-template-columns: repeat(2, var(--majak-lobby-list-column-width));
-  justify-content: space-evenly;
-  column-gap: 0;
-  row-gap: clamp(22px, 3.5dvh, 34px);
+  grid-template-columns: minmax(0, 1fr);
+  justify-self: center;
+  row-gap: 10px;
+}
+
+.majak-desktop-lobby-select__comparison-header {
+  display: grid;
+  grid-template-columns: var(--majak-lobby-comparison-columns);
+  gap: 8px;
+  color: #9c896d;
+  font-size: var(--majak-text-xs);
+  font-weight: var(--majak-weight-title);
+}
+
+.majak-desktop-lobby-select__comparison-header span {
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-desktop-lobby-select__comparison-header span:nth-child(2) {
+  color: #e4c775;
 }
 
 .majak-desktop-lobby-select__list.is-dani {
-  align-self: stretch;
+  align-self: center;
   min-height: 0;
   margin-top: 0;
   padding: 0 4px 12px;
   box-sizing: border-box;
-  row-gap: clamp(18px, 3dvh, 28px);
+  row-gap: 10px;
 }
 
 .majak-desktop-lobby-select__rule-tabs {
@@ -2296,32 +2500,24 @@ body {
 }
 
 .majak-desktop-lobby-select__entry {
-  --majak-lobby-card-height: 64px;
-  position: relative;
   min-width: 0;
   display: grid;
-  grid-template-rows: auto auto;
-  align-content: start;
-  gap: 4px;
+  grid-template-columns: var(--majak-lobby-comparison-columns);
+  align-items: stretch;
+  gap: 8px;
 }
 
 .majak-desktop-lobby-select__card {
   min-width: 0;
-  min-height: var(--majak-lobby-card-height);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-rows: auto;
   align-items: center;
-  gap: 4px 12px;
-  padding: 15px 84px 15px 18px;
-  padding-left: 28px;
+  padding: 10px 18px;
   font-weight: 400;
-  text-align: left;
+  text-align: center;
 }
 
 .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
-  min-height: var(--majak-lobby-card-height);
-  padding: 9px 14px;
+  padding: 10px 18px;
 }
 
 .majak-desktop-lobby-select__card:hover,
@@ -2333,6 +2529,7 @@ body {
   min-width: 0;
   overflow: hidden;
   color: #ffdf70;
+  font-size: var(--majak-lobby-button-title-size) !important;
   font-weight: 400;
   text-shadow: 0 2px 0 rgba(0, 0, 0, .34);
   text-overflow: ellipsis;
@@ -2345,39 +2542,56 @@ body {
   font-weight: var(--majak-weight-strong);
 }
 
-.majak-desktop-lobby-select__card-description {
+.majak-desktop-lobby-select__stats {
   min-width: 0;
-  min-height: calc(var(--majak-menu-description-size) * var(--majak-leading-body) * 2);
   margin: 0;
-  padding: 0 8px;
-  display: -webkit-box;
-  overflow: hidden;
-  color: #fff0d5;
-  font-size: var(--majak-menu-description-size) !important;
-  font-weight: var(--majak-weight-strong);
-  line-height: var(--majak-leading-body) !important;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  display: contents;
 }
 
-.majak-desktop-lobby-select__card-count {
-  position: absolute;
-  right: 10px;
-  top: calc(var(--majak-lobby-card-height) / 2);
-  z-index: 1;
-  min-width: 48px;
-  padding: 3px 9px;
-  color: #fff8d7;
-  background: #293319;
-  border: 1px solid #f0ca70;
-  border-radius: 3px;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, .35);
-  font-size: var(--majak-text-lg);
-  font-weight: var(--majak-weight-regular);
-  line-height: var(--majak-leading-tight);
-  text-align: right;
-  transform: translateY(-50%);
+.majak-desktop-lobby-select__stats > div {
+  min-width: 0;
+  min-height: calc(var(--majak-text-sm) * var(--majak-leading-tight));
+  display: grid;
+  align-content: center;
+  padding: 7px 10px;
+  box-sizing: border-box;
+  color: #b8aa91;
+  background: rgba(44, 31, 24, .56);
+  border: 1px solid rgba(184, 163, 122, .42);
+  border-radius: 4px;
+  text-align: center;
+}
+
+.majak-desktop-lobby-select__stats dt,
+.majak-desktop-lobby-select__stats dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-desktop-lobby-select__stats dt {
+  display: none;
+}
+
+.majak-desktop-lobby-select__stats dd {
+  color: #b8aa91;
+  font-size: var(--majak-lobby-description-size);
+  font-weight: var(--majak-weight-strong);
+  line-height: var(--majak-leading-body);
+}
+
+.majak-desktop-lobby-select__stats > div:first-child {
+  color: #fff1b8;
+  background: rgba(91, 65, 33, .66);
+  border-color: rgba(241, 197, 93, .78);
+}
+
+.majak-desktop-lobby-select__stats > div:first-child dd {
+  color: #fff1b8;
+  font-size: var(--majak-lobby-description-size);
+  font-weight: var(--majak-weight-title);
 }
 
 .majak-desktop-lobby-select__footer {
@@ -2396,15 +2610,21 @@ body {
 }
 
 .majak-responsive-desktop-frame .majak-desktop-lobby-select__list.is-dani {
-  margin-top: clamp(28px, 4dvh, 40px);
+  margin-top: 0;
 }
 
 .majak-responsive-desktop-frame .majak-desktop-lobby-select__rule-tab {
-  min-height: 64px;
+  min-height: 38px;
 }
 
 .majak-responsive-desktop-frame .majak-desktop-lobby-select__rule-tabs {
-  margin-top: clamp(12px, 2dvh, 20px);
+  margin-top: 0;
+}
+
+@media (min-width: 901px) {
+  .majak-desktop-lobby-select__card {
+    min-height: 72px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -2439,6 +2659,11 @@ body {
   .majak-desktop-lobby-select__list.is-dani {
     width: 100%;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .majak-desktop-lobby-select__card,
+  .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
+    min-height: 0;
   }
 }
 
@@ -2477,8 +2702,12 @@ body {
   }
 
   .majak-desktop-channel-group .majak-mobile-user-summary__name {
-    padding-bottom: 2px;
+    padding-bottom: 0;
     font-size: var(--majak-text-xs);
+  }
+
+  .majak-mobile-frame .majak-desktop-channel-group__user-summary::before {
+    font-size: var(--majak-text-2xs);
   }
 
   .majak-desktop-lobby-select .majak-mobile-user-summary__name {
@@ -2556,22 +2785,26 @@ body {
   }
 
   .majak-desktop-lobby-select__header {
-    grid-template-columns: minmax(0, 1fr) minmax(220px, .72fr);
-    gap: 14px;
+    width: min(88%, 700px);
+    justify-self: center;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: clamp(24px, 7vw, 60px);
   }
 
   .majak-desktop-lobby-select__list,
   .majak-desktop-lobby-select__list.is-dani {
+    --majak-lobby-comparison-columns: minmax(190px, 1.75fr) minmax(0, .65fr) minmax(0, .55fr) minmax(0, .55fr) minmax(0, 1.1fr);
     width: min(88%, 700px);
     justify-self: center;
     margin-top: 0;
-    column-gap: clamp(24px, 7vw, 60px);
-    row-gap: 30px;
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+    row-gap: 10px;
   }
 
   .majak-desktop-lobby-select__card {
-    min-height: var(--majak-lobby-card-height);
-    padding: 9px 12px 9px 20px;
+    min-height: 0;
+    padding: 8px 12px;
     border: 2px solid #f0ca70;
     border-radius: 6px;
     background: #9a592e;
@@ -2579,8 +2812,33 @@ body {
   }
 
   .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
-    min-height: var(--majak-lobby-card-height);
-    padding: 8px 10px;
+    min-height: 0;
+    padding: 8px 12px;
+  }
+
+  .majak-desktop-lobby-select__entry {
+    --majak-lobby-comparison-columns: minmax(190px, 1.75fr) minmax(0, .65fr) minmax(0, .55fr) minmax(0, .55fr) minmax(0, 1.1fr);
+    gap: 5px;
+  }
+
+  .majak-desktop-lobby-select__comparison-header {
+    gap: 5px;
+  }
+
+  .majak-desktop-lobby-select__comparison-header span {
+    padding: 0 4px;
+  }
+
+  .majak-desktop-lobby-select__stats > div {
+    padding: 5px 4px;
+  }
+
+  .majak-desktop-lobby-select__stats dt {
+    font-size: var(--majak-text-2xs);
+  }
+
+  .majak-desktop-lobby-select__stats dd {
+    font-size: var(--majak-text-md);
   }
 
   .majak-desktop-lobby-select__card-description {
@@ -2896,6 +3154,19 @@ body:has(.majak-game-screen) {
   min-height: 100dvh;
 }
 
+@media (max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse) {
+  #root {
+    --majak-dialog-caption-font-size: 11px;
+    --majak-dialog-label-font-size: var(--majak-text-xs);
+    --majak-dialog-body-font-size: var(--majak-text-sm);
+    --majak-dialog-heading-font-size: var(--majak-text-md);
+    --majak-dialog-title-font-size: var(--majak-text-lg);
+    --majak-dialog-compact-font-size: 11px;
+    --majak-dialog-compact-title-font-size: var(--majak-text-sm);
+    --majak-menu-description-size: var(--majak-text-sm);
+  }
+}
+
 .majak-ingame-viewport {
   width: 100vw;
   height: 100vh;
@@ -2905,6 +3176,65 @@ body:has(.majak-game-screen) {
   justify-content: center;
   overflow: hidden;
 }
+
+.majak-responsive-paifu {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-color: var(--majak-screen-surface-color);
+  background-image: var(--majak-screen-surface-image);
+  background-position: var(--majak-screen-surface-position);
+  background-size: var(--majak-screen-surface-size);
+  background-repeat: var(--majak-screen-surface-repeat);
+}
+
+.majak-responsive-paifu__frame {
+  position: relative;
+  width: min(1320px, calc(100vw - 48px));
+  height: min(860px, calc(100dvh - 16px));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border: 2px solid #0b552a;
+  background: #2c9827;
+  box-shadow: inset 0 0 0 2px #063618, 0 0 0 1px rgba(84, 168, 91, .48);
+}
+
+.majak-responsive-paifu__sidebar { grid-template-rows: auto minmax(180px, 1fr) auto; }
+.majak-responsive-paifu__progress { display: grid; gap: 5px; margin-bottom: 8px; }
+.majak-responsive-paifu__progress-label { display: flex; min-height: 16px; align-items: center; justify-content: space-between; gap: 8px; color: #000000; font-size: 12px; font-weight: 700; line-height: 16px; }
+.majak-responsive-paifu__progress-label strong { color: #000000; font-variant-numeric: tabular-nums; }
+.majak-responsive-paifu__progress-track { height: 7px; overflow: hidden; border: 1px solid #6ca268; border-radius: 2px; background: #0a3517; }
+.majak-responsive-paifu__progress-track > div { height: 100%; min-width: 0; background: #8bd46d; transition: width 180ms linear; }
+.majak-mobile-ingame-tool-drawer.majak-paifu-mobile-controls {
+  top: max(124px, calc(env(safe-area-inset-top) + 124px));
+}
+.majak-mobile-ingame-tool-drawer.majak-paifu-mobile-controls--left {
+  right: auto;
+  left: max(10px, calc(env(safe-area-inset-left) + 10px));
+  align-items: flex-start;
+}
+.majak-mobile-ingame-tool-drawer.majak-paifu-mobile-controls--right {
+  right: max(10px, calc(env(safe-area-inset-right) + 10px));
+  left: auto;
+}
+.majak-responsive-paifu__members strong { display: block; margin-bottom: 8px; }
+.majak-responsive-paifu__members > div {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  padding: 7px 2px;
+  border-bottom: 1px solid rgba(31, 75, 45, .2);
+}
+.majak-responsive-paifu__members img { grid-row: 1 / span 3; width: 32px; height: 40px; align-self: center; object-fit: cover; border: 1px solid #496552; box-sizing: border-box; }
+.majak-responsive-paifu__members span { grid-column: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.majak-responsive-paifu__members small { grid-column: 2; color: #496552; }
+.majak-responsive-paifu__members .majak-responsive-paifu__member-gp { color: #173f21; font-variant-numeric: tabular-nums; }
+.majak-responsive-paifu__members em { grid-column: 3; grid-row: 1 / span 3; align-self: center; font-style: normal; }
 
 .majak-mobile-frame {
   width: 100vw;
@@ -3015,6 +3345,9 @@ body:has(.majak-game-screen) {
 
 .majak-mobile-frame .majak-desktop-lobby-select__header {
   min-height: 0;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
   align-items: center;
 }
 
@@ -3023,15 +3356,17 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-frame .majak-desktop-lobby-select__footer {
-  position: absolute;
-  top: 8px;
-  right: 12px;
+  position: static;
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+  justify-self: end;
   z-index: 3;
 }
 
 .majak-mobile-frame .majak-desktop-lobby-select__footer .majak-responsive-control-button {
   min-width: 88px;
-  min-height: 34px;
+  min-height: 38px;
   padding: 0 14px;
 }
 
@@ -3162,6 +3497,10 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-frame__content:has(.majak-mobile-lobby-screen) {
+  overflow: hidden;
+}
+
+.majak-mobile-frame__content:has(.majak-desktop-lobby-select) {
   overflow: hidden;
 }
 
@@ -5378,6 +5717,28 @@ body:has(.majak-game-screen) {
   background: #ffffff;
 }
 
+@media (max-width: 700px) {
+  .majak-mobile-tournament-layout,
+  .majak-mobile-tournament-match-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: auto;
+  }
+
+  .majak-mobile-tournament-detail {
+    min-height: 220px;
+  }
+
+  .majak-mobile-tournament-members {
+    min-height: 180px;
+    max-height: 36dvh;
+  }
+
+  .majak-mobile-tournament-bracket {
+    min-height: 240px;
+  }
+}
+
 .majak-mobile-tournament-members {
   min-width: 0;
   min-height: 0;
@@ -5552,6 +5913,185 @@ body:has(.majak-game-screen) {
 
 .majak-mobile-tournament-regist__wide {
   grid-column: 1 / -1;
+}
+
+.majak-tournament-regist-conditions {
+  padding: 8px;
+  border: 1px solid #b9cbbb;
+  border-radius: 3px;
+  background: #f1f7e9;
+  color: #244137;
+  font-size: var(--majak-popup-font-body);
+  line-height: var(--majak-popup-leading-body);
+  box-sizing: border-box;
+}
+
+.majak-tournament-regist-conditions > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.majak-tournament-regist-conditions strong {
+  font-size: var(--majak-popup-font-emphasis);
+}
+
+.majak-tournament-regist-conditions button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid #557864;
+  border-radius: 3px;
+  color: #f8f6e9;
+  background: #1b5a4b;
+  font-size: var(--majak-popup-font-body);
+  font-weight: 800;
+}
+
+.majak-tournament-regist-conditions button:disabled {
+  opacity: .45;
+}
+
+.majak-tournament-regist-conditions ul {
+  display: grid;
+  gap: 3px;
+  margin: 7px 0 0;
+  padding-left: 16px;
+}
+
+.majak-tournament-regist-conditions p {
+  margin: 7px 0 0;
+}
+
+.majak-tournament-bracket-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 440;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(12, 29, 24, .7);
+  box-sizing: border-box;
+}
+
+.majak-tournament-bracket-preview {
+  width: min(680px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #557864;
+  border-radius: 6px;
+  color: #244137;
+  background: #f6f8f1;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, .44);
+  box-sizing: border-box;
+}
+
+.majak-tournament-bracket-preview > header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  color: #f8f6e9;
+  background: #1b5a4b;
+}
+
+.majak-tournament-bracket-preview h2,
+.majak-tournament-bracket-preview p {
+  margin: 0;
+}
+
+.majak-tournament-bracket-preview h2 {
+  font-size: var(--majak-popup-font-title);
+}
+
+.majak-tournament-bracket-preview p {
+  margin-top: 2px;
+  font-size: var(--majak-popup-font-body);
+}
+
+.majak-tournament-bracket-preview__format {
+  min-height: 28px;
+  margin-top: 4px;
+  padding: 2px 6px;
+  border: 1px solid #d4e5ca;
+  border-radius: 3px;
+  color: #173d32;
+  background: #f8f6e9;
+  font-size: var(--majak-popup-font-body);
+}
+
+.majak-tournament-bracket-preview > header button {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d4e5ca;
+  border-radius: 3px;
+  color: #f8f6e9;
+  background: transparent;
+  font-size: var(--majak-popup-font-title);
+  line-height: 1;
+}
+
+.majak-tournament-bracket-preview__image {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 10px;
+  overflow: auto;
+  background: #ffffff;
+  text-align: center;
+}
+
+.majak-tournament-bracket-preview__canvas {
+  position: relative;
+  width: min(633px, 100%);
+  margin: 0 auto;
+}
+
+.majak-tournament-bracket-preview__canvas img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+.majak-tournament-bracket-preview__player {
+  position: absolute;
+  height: 15px;
+  overflow: hidden;
+  color: #ffffff;
+  font-family: var(--majak-font-family-ui);
+  font-size: clamp(7px, 1.9vw, 12px);
+  line-height: 15px;
+  pointer-events: none;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-shadow: 1px 1px 0 #000000;
+  white-space: nowrap;
+}
+
+.majak-tournament-bracket-preview > footer {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: center;
+  padding: 8px 10px;
+  border-top: 1px solid #c4d4c0;
+  background: #edf3e9;
+}
+
+.majak-tournament-bracket-preview > footer button {
+  min-width: 120px;
+  min-height: 34px;
+  border: 1px solid #557864;
+  border-radius: 3px;
+  color: #f8f6e9;
+  background: #1b5a4b;
+  font-size: var(--majak-popup-font-emphasis);
+  font-weight: 800;
 }
 
 .majak-mobile-tournament-regist input:not([type='checkbox']),
@@ -6765,7 +7305,7 @@ body:has(.majak-game-screen) {
   }
 
   .majak-mobile-frame .majak-desktop-channel-group .majak-mobile-user-summary__name {
-    padding-bottom: 1px;
+    padding-bottom: 0;
   }
 
   .majak-mobile-frame .majak-desktop-channel-group .majak-mobile-user-summary__fields > span {
@@ -6796,19 +7336,24 @@ body:has(.majak-game-screen) {
 
   .majak-mobile-frame__content > .majak-desktop-lobby-select {
     --majak-type-scale: .7;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 4px;
-    padding: 5px 12px;
+    padding: 13px 12px 5px;
+  }
+
+  .majak-mobile-frame__content > .majak-desktop-lobby-select:has(.majak-desktop-lobby-select__rule-tabs) {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
   }
 
   .majak-mobile-frame .majak-desktop-lobby-select__rule-tabs {
     width: min(100%, 400px);
-    margin-top: 10px;
+    margin-top: 4px;
     padding: 3px;
     transform: none;
   }
 
   .majak-mobile-frame .majak-desktop-lobby-select__rule-tab {
-    min-height: 32px;
+    min-height: 26px;
     padding: 0 12px;
   }
 
@@ -6823,22 +7368,34 @@ body:has(.majak-game-screen) {
 
   .majak-mobile-frame .majak-desktop-lobby-select__list,
   .majak-mobile-frame .majak-desktop-lobby-select__list.is-dani {
-    margin-top: 16px;
-    row-gap: 12px;
+    --majak-lobby-button-title-size: var(--majak-text-lg);
+    --majak-lobby-description-size: var(--majak-text-xs);
+    align-self: start;
+    min-height: 0;
+    margin-top: 8px;
+    row-gap: 5px;
   }
 
   .majak-mobile-frame .majak-desktop-lobby-select__card,
   .majak-mobile-frame .majak-desktop-lobby-select__list.is-dani .majak-desktop-lobby-select__card {
-    min-height: var(--majak-lobby-card-height);
-    padding: 6px 62px 6px 18px;
+    gap: 0;
+    height: 40px;
+    min-height: 40px;
+    padding: 6px 12px;
+    text-align: center;
   }
 
   .majak-mobile-frame .majak-desktop-lobby-select__card-title {
-    font-size: var(--majak-text-lg) !important;
+    font-size: var(--majak-lobby-button-title-size) !important;
+  }
+
+  .majak-mobile-frame .majak-desktop-lobby-select__stats dd,
+  .majak-mobile-frame .majak-desktop-lobby-select__stats > div:first-child dd {
+    font-size: var(--majak-lobby-description-size);
   }
 
   .majak-mobile-frame .majak-desktop-lobby-select__entry {
-    --majak-lobby-card-height: 44px;
+    --majak-lobby-card-height: 40px;
   }
 
   .majak-mobile-frame .majak-desktop-lobby-select__card-description {

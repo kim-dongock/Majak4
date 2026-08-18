@@ -188,6 +188,41 @@ public class TournamentMatchingTests
         Assert.NotNull(svc.GetDetails(1));
     }
 
+    [Fact]
+    public async Task PreMatchingAsync_ThreePlayers_FillsTheBracketWithOneNpc()
+    {
+        var plan = new TournamentPlan
+        {
+            SeqNo = 3,
+            PlayStatus = TournamentPlanStatus.Join,
+            MatchStartDt = DateTime.Now.AddMinutes(-1),
+            MaxPlayerNum = 4,
+            MaxRoomNum = 1,
+            PlayMode = TournamentPlayMode.OneWin,
+            PlayNum = TournamentPlayNum.OnePlay,
+            PlayTime = 5,
+            PlayPhase = TournamentConst.PhaseFull,
+            GradeMoney = new long[4],
+        };
+        _repoMock.Setup(r => r.SelectJoinListAsync(plan.SeqNo))
+            .ReturnsAsync(new List<TournamentJoin>
+            {
+                new() { MemberNo = "u1" },
+                new() { MemberNo = "u2" },
+                new() { MemberNo = "u3" },
+            });
+        SetupRepoBulk();
+        var svc = BuildWithPlan(plan);
+
+        await svc.PreMatchingAsync();
+
+        var detail = Assert.Single(svc.GetDetails(plan.SeqNo)!.Values);
+        Assert.Equal(TournamentPlanStatus.Wait, plan.PlayStatus);
+        Assert.Equal(3, detail.PlayerMemberNo.Count(memberNo => !string.IsNullOrEmpty(memberNo)));
+        Assert.Equal(1, detail.PlayerMemberNo.Count(string.IsNullOrEmpty));
+        Assert.All(new[] { "u1", "u2", "u3" }, memberNo => Assert.Contains(memberNo, detail.PlayerMemberNo));
+    }
+
     // ─── GoMatchingAsync ─────────────────────────────────────────────────
 
     // シナリオ4: NextStartDt 未到達 → PLAY に遷移しない
@@ -299,7 +334,7 @@ public class TournamentMatchingTests
         Assert.Equal(Cmd.MajAutoMatching, _hubSent[0].method);
         var packet = CommandTestHelper.ToDict(_hubSent[0].packet);
         Assert.Equal(GKey.ValueSuccess, ((JsonElement)packet[GKey.Result]!).GetString());
-        Assert.Equal("u1", ((JsonElement)packet[GKey.Pix]!).GetString());
+        Assert.Equal(session.GetByMember("u1")!.Pix, ((JsonElement)packet[GKey.Pix]!).GetString());
         Assert.Equal(channelId, ((JsonElement)packet[GKey.ChannelId]!).GetString());
         Assert.Equal(12, ((JsonElement)packet[GKey.RoomId]!).GetInt32());
         Assert.Equal("1200000010000", ((JsonElement)packet[GKey.RoomOption]!).GetString());
@@ -385,6 +420,31 @@ public class TournamentMatchingTests
         Assert.Equal($"{p2.Pix}\t1\t70\t50\t20\t", payload[$"{Key.TournamentTotalReport}0"]);
         Assert.Equal($"{p3.Pix}\t1\t60\t30\t30\t", payload[$"{Key.TournamentTotalReport}1"]);
         Assert.NotEqual(p2.MemberNo, p2.Pix);
+    }
+
+    [Fact]
+    public void SetTournamentResultRank_TwoPlayFinal_UsesTotalThenBestRound()
+    {
+        var plan = new TournamentPlan
+        {
+            PlayNum = TournamentPlayNum.TwoPlay,
+            PlayPhase = TournamentConst.PhaseFull,
+        };
+        var detail = new TournamentDetail
+        {
+            PlayerMemberNo = new[] { "u1", "u2", "u3", "u4" },
+            JoinMemberNo = new[] { "01", "02", "03", "04" },
+            PointTmp = new[] { 150, 150, 120, 100 },
+            Point = new[] { 280, 310, 240, 200 },
+        };
+        var method = typeof(TournamentService).GetMethod(
+            "SetTournamentResultRank",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        method.Invoke(null, new object[] { plan, detail });
+
+        Assert.Equal(new[] { "02", "01", "03", "04" }, detail.GradeMemberNo);
+        Assert.Equal(new[] { "u2", "u1", "u3", "u4" }, detail.GradePlayerMemberNo);
     }
 
     // ─── PostMatchingAsync ────────────────────────────────────────────────
@@ -1176,7 +1236,7 @@ public class MajakPlayerModelTests
 // ═══════════════════════════════════════════════════════════════════════════
 public class GameLogicHelperTests
 {
-    private static GameLogicService BuildService(PlayerSessionService? session = null, PlayerRepository? playerRepo = null, HistoryRepository? historyRepo = null, LogRepository? logRepo = null, RoomRegistryService? roomRegistry = null, bool testEnvironment = false, string? trainingAiLevel = null, int gamePresentationReadyTimeoutMs = 0)
+    private static GameLogicService BuildService(PlayerSessionService? session = null, PlayerRepository? playerRepo = null, HistoryRepository? historyRepo = null, LogRepository? logRepo = null, RoomRegistryService? roomRegistry = null, bool testEnvironment = false, string? trainingAiLevel = null, int gamePresentationReadyTimeoutMs = 0, ILogger<GameLogicService>? logger = null)
     {
         session ??= new PlayerSessionService();
         var histMock = new Mock<HistoryRepository>(MockBehavior.Loose);
@@ -1184,7 +1244,7 @@ public class GameLogicHelperTests
         var playerMock = new Mock<PlayerRepository>(MockBehavior.Loose);
         var titleMock = new Mock<TitleService>(MockBehavior.Loose, (PlayerRepository)null!, TestMasterCacheFactory.Create());
         var moneyMock = new Mock<GameMoneyService>(MockBehavior.Loose,
-            (PlayerRepository)null!, (RatingService)null!, (HistoryRepository?)null);
+            (PlayerRepository)null!, (RatingService)null!, (HistoryRepository?)null, (IGameEconomyPolicyService?)null);
         return new GameLogicService(session, historyRepo ?? histMock.Object, logRepo ?? logMock.Object,
             new RatingService(), playerRepo ?? playerMock.Object, moneyMock.Object, titleMock.Object, null!, null!,
             new Microsoft.Extensions.Configuration.ConfigurationBuilder()
@@ -1195,7 +1255,510 @@ public class GameLogicHelperTests
                     ["GameSettings:GameClientReadyTimeoutMs"] = "0",
                     ["GameSettings:GamePresentationReadyTimeoutMs"] = gamePresentationReadyTimeoutMs.ToString(),
                 })
-                .Build(), roomRegistry: roomRegistry);
+                .Build(), log: logger, roomRegistry: roomRegistry);
+    }
+
+    [Fact]
+    public async Task RandomlyDealtTrainingGames_CompleteThroughGameLogicService()
+    {
+        const int gameCount = 3;
+        const int maxActionsPerGame = 10_000;
+        var random = new Random();
+
+        for (int gameNumber = 0; gameNumber < gameCount; gameNumber++)
+        {
+            var room = BuildPaiInfoRoom("00T5A");
+            room.RoomId = 1_000 + gameNumber;
+            room.State = GameRoomState.Playing;
+            for (int order = 0; order < GameConst.PlayerMaxCount; order++)
+            {
+                int playerPos = room.Engine.HanchanInfo.Player[order];
+                room.SeatToEngineOrder[playerPos] = order;
+                room.Seats[playerPos]!.EngineOrder = order;
+            }
+
+            var service = BuildService(testEnvironment: true);
+            var (initialContext, _) = CommandTestHelper.MakeContext(room.Seats[0]!);
+            var sendValidActions = typeof(GameLogicService)
+                .GetMethod("SendValidActionsToPlayersAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            await (Task)sendValidActions.Invoke(service, new object[] { room, initialContext })!;
+
+            int actionCount = 0;
+            while (room.State == GameRoomState.Playing)
+            {
+                Assert.True(actionCount++ < maxActionsPerGame,
+                    $"Game {gameNumber} did not finish within {maxActionsPerGame} actions.");
+                int order = Array.FindIndex(room.PendingActions, prompt => prompt != null);
+                Assert.InRange(order, 0, GameConst.PlayerMaxCount - 1);
+
+                var prompt = room.PendingActions[order]!;
+                var validActions = room.Engine.GetValidActions(order);
+                MajakServer.Engine.Act action;
+                int[] bipaiIndices;
+                switch (room.Engine.Player[order].Mode)
+                {
+                    case PlayerMode.Turn:
+                        Assert.NotEmpty(validActions.TapCandidates);
+                        action = MajakServer.Engine.Act.Tap;
+                        bipaiIndices = [validActions.TapCandidates[random.Next(validActions.TapCandidates.Count)]];
+                        break;
+                    case PlayerMode.Furo:
+                    case PlayerMode.Chan:
+                    case PlayerMode.Kyo:
+                    case PlayerMode.Aga:
+                        Assert.True(validActions.CanPass);
+                        action = MajakServer.Engine.Act.Pas;
+                        bipaiIndices = Array.Empty<int>();
+                        break;
+                    default:
+                        throw new Xunit.Sdk.XunitException($"Unexpected player mode: {room.Engine.Player[order].Mode}");
+                }
+
+                int playerPos = room.Engine.HanchanInfo.Player[order];
+                string? abortReason = null;
+                var (context, _) = CommandTestHelper.MakeContext(room.Seats[playerPos]!, new Dictionary<string, object?>
+                {
+                    ["seatOrder"] = order,
+                    ["action"] = (int)action,
+                    ["bipaiIndex"] = bipaiIndices,
+                    ["actionSeq"] = prompt.ActionSeq,
+                }, reason => abortReason = reason);
+
+                await service.GamePlayProcessAsync(room, context);
+                Assert.Null(abortReason);
+            }
+
+            Assert.Equal(GameRoomState.Waiting, room.State);
+            Assert.Equal(GameStatus.NotPlaying, room.Engine.GameStatus);
+        }
+    }
+
+    [Theory]
+    [InlineData("0086B", "020000001000000", false)]
+    [InlineData("0082B", "120000001000000", true)]
+    public async Task StandardExchangeLobby_RandomGameCompletesAndPersistsResults(
+        string subId,
+        string roomOption,
+        bool expectedHanchan)
+    {
+        await RandomFourPlayerGameCompletesAndPersistsResults(
+            subId, roomOption, expectedHanchan, expectedGradeChannel: false,
+            initialGrade: 0, playerMoney: 100_000);
+    }
+
+    private async Task RandomFourPlayerGameCompletesAndPersistsResults(
+        string subId,
+        string roomOption,
+        bool expectedHanchan,
+        bool expectedGradeChannel,
+        int initialGrade,
+        long playerMoney,
+        bool expectedKuitan = true)
+    {
+        const int maxActions = 10_000;
+        var random = new Random();
+        var room = BuildPaiInfoRoom(subId);
+        room.RoomId = expectedHanchan ? 1_201 : 1_200;
+        room.RoomOption = roomOption;
+        room.UnitMoney = 20;
+        room.State = GameRoomState.Playing;
+        var buildRuleInfo = typeof(GameLogicService)
+            .GetMethod("BuildRuleInfo", BindingFlags.NonPublic | BindingFlags.Static)!;
+        room.Engine.InitHanchan((Engine.RuleInfo)buildRuleInfo.Invoke(null, new object[] { room })!);
+        for (int order = 0; order < GameConst.PlayerMaxCount; order++)
+        {
+            int playerPos = room.Engine.HanchanInfo.Player[order];
+            room.SeatToEngineOrder[playerPos] = order;
+            room.Seats[playerPos]!.EngineOrder = order;
+        }
+
+        var session = new PlayerSessionService();
+        foreach (var player in room.Seats.Where(seat => seat != null).Select(seat => seat!))
+        {
+            player.GamMoney = playerMoney;
+            player.GradeRecord.Grade = initialGrade;
+            session.Register(player);
+        }
+        var history = new Mock<HistoryRepository>(MockBehavior.Loose);
+        history.Setup(repository => repository.InsertGameHistAsync(It.IsAny<GameReport>())).ReturnsAsync(1L);
+        var repository = new Mock<PlayerRepository>(MockBehavior.Loose);
+        repository.Setup(repo => repo.UpdateResultCommonRatAsync(
+                It.IsAny<MajakPlayer>(), It.IsAny<bool>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>()))
+            .Returns(Task.CompletedTask);
+        repository.Setup(repo => repo.UpdateHiClassRatAsync(It.IsAny<MajakPlayer>(), It.IsAny<int>(), It.IsAny<long>()))
+            .Returns(Task.CompletedTask);
+        repository.Setup(repo => repo.UpdateGradeRatAsync(It.IsAny<MajakPlayer>()))
+            .Returns(Task.CompletedTask);
+        var errors = new List<Exception>();
+        var logger = new Mock<ILogger<GameLogicService>>();
+        logger.Setup(log => log.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+            .Callback(new InvocationAction(invocation => errors.Add((Exception)invocation.Arguments[3]!)));
+        var service = BuildService(session, repository.Object, history.Object, testEnvironment: true, logger: logger.Object);
+        var (initialContext, _) = CommandTestHelper.MakeContext(room.Seats[0]!);
+        var sendValidActions = typeof(GameLogicService)
+            .GetMethod("SendValidActionsToPlayersAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        await (Task)sendValidActions.Invoke(service, new object[] { room, initialContext })!;
+
+        int actionCount = 0;
+        while (room.State == GameRoomState.Playing)
+        {
+            Assert.True(actionCount++ < maxActions,
+                $"{subId} did not finish within {maxActions} actions.");
+            int order = Array.FindIndex(room.PendingActions, prompt => prompt != null);
+            Assert.InRange(order, 0, GameConst.PlayerMaxCount - 1);
+
+            var prompt = room.PendingActions[order]!;
+            var validActions = room.Engine.GetValidActions(order);
+            MajakServer.Engine.Act action;
+            int[] bipaiIndices;
+            switch (room.Engine.Player[order].Mode)
+            {
+                case PlayerMode.Turn:
+                    Assert.NotEmpty(validActions.TapCandidates);
+                    action = MajakServer.Engine.Act.Tap;
+                    bipaiIndices = [validActions.TapCandidates[random.Next(validActions.TapCandidates.Count)]];
+                    break;
+                case PlayerMode.Furo:
+                case PlayerMode.Chan:
+                case PlayerMode.Kyo:
+                case PlayerMode.Aga:
+                    Assert.True(validActions.CanPass);
+                    action = MajakServer.Engine.Act.Pas;
+                    bipaiIndices = Array.Empty<int>();
+                    break;
+                default:
+                    throw new Xunit.Sdk.XunitException($"Unexpected player mode: {room.Engine.Player[order].Mode}");
+            }
+
+            int playerPos = room.Engine.HanchanInfo.Player[order];
+            string? abortReason = null;
+            var (context, _) = CommandTestHelper.MakeContext(room.Seats[playerPos]!, new Dictionary<string, object?>
+            {
+                ["seatOrder"] = order,
+                ["action"] = (int)action,
+                ["bipaiIndex"] = bipaiIndices,
+                ["actionSeq"] = prompt.ActionSeq,
+            }, reason => abortReason = reason);
+            await service.GamePlayProcessAsync(room, context);
+            Assert.Null(abortReason);
+        }
+
+        Assert.Equal(expectedHanchan, room.Engine.Rule.Hanchan);
+        Assert.Equal(expectedKuitan, room.Engine.Rule.Kuitan);
+        Assert.Equal(GameRoomState.Waiting, room.State);
+        Assert.Equal(GameStatus.NotPlaying, room.Engine.GameStatus);
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors.Select(error => error.ToString())));
+        Assert.Equal(1, Convert.ToInt32(room.LastGameReportPayload!["result"]));
+        history.Verify(repository => repository.InsertGameHistAsync(It.IsAny<GameReport>()), Times.Once);
+        history.Verify(repository => repository.InsertTrainingHistAsync(
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(),
+            It.IsAny<(string MemberNo, int Point)[]>()), Times.Never);
+        repository.Verify(repo => repo.UpdateResultCommonRatAsync(
+            It.IsAny<MajakPlayer>(), It.IsAny<bool>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>()), Times.Exactly(4));
+        repository.Verify(repo => repo.UpdateGradeRatAsync(It.IsAny<MajakPlayer>()),
+            expectedGradeChannel ? Times.Exactly(4) : Times.Never());
+    }
+
+    [Theory]
+    [InlineData("0ZG6A", 0, 500)]
+    [InlineData("0ZG6B", 10, 5_000)]
+    [InlineData("0ZG6C", 13, 10_000)]
+    [InlineData("0ZG6D", 16, 30_000)]
+    public async Task RankedEastLobby_RandomGameCompletesAndUpdatesGradeResults(
+        string subId,
+        int gradeLevel,
+        long minimumGp)
+    {
+        var ratingService = new RatingService();
+        Assert.True(ratingService.CheckEnterGradeMode(gradeLevel, minimumGp, subId));
+
+        await RandomFourPlayerGameCompletesAndPersistsResults(
+            subId, "000000000000000", expectedHanchan: false,
+            expectedGradeChannel: true, initialGrade: gradeLevel, playerMoney: minimumGp);
+    }
+
+    [Theory]
+    [InlineData("0ZG7A", 0, 499, false)]
+    [InlineData("0ZG7A", 0, 500, true)]
+    [InlineData("0ZG7A", 13, 500, false)]
+    [InlineData("0ZG7B", 9, 5_000, false)]
+    [InlineData("0ZG7B", 10, 4_999, false)]
+    [InlineData("0ZG7B", 10, 5_000, true)]
+    [InlineData("0ZG7C", 12, 10_000, false)]
+    [InlineData("0ZG7C", 13, 9_999, false)]
+    [InlineData("0ZG7C", 13, 10_000, true)]
+    [InlineData("0ZG7D", 15, 30_000, false)]
+    [InlineData("0ZG7D", 16, 29_999, false)]
+    [InlineData("0ZG7D", 16, 30_000, true)]
+    public void RankedHanchanLobby_EntryBoundaries_AreEnforced(
+        string subId,
+        int gradeLevel,
+        long gp,
+        bool expected)
+    {
+        Assert.Equal(expected, new RatingService().CheckEnterGradeMode(gradeLevel, gp, subId));
+    }
+
+    [Theory]
+    [InlineData("0ZG7A", 0, 500)]
+    [InlineData("0ZG7B", 10, 5_000)]
+    [InlineData("0ZG7C", 13, 10_000)]
+    [InlineData("0ZG7D", 16, 30_000)]
+    public async Task RankedHanchanLobby_RandomGameCompletesAndUpdatesGradeResults(
+        string subId,
+        int gradeLevel,
+        long minimumGp)
+    {
+        var ratingService = new RatingService();
+        Assert.True(ratingService.CheckEnterGradeMode(gradeLevel, minimumGp, subId));
+
+        await RandomFourPlayerGameCompletesAndPersistsResults(
+            subId, "000000000000000", expectedHanchan: true,
+            expectedGradeChannel: true, initialGrade: gradeLevel, playerMoney: minimumGp);
+    }
+
+    [Theory]
+    [InlineData("020111001000000", false, false, 1, true, false, false, 0, 2)]
+    [InlineData("120012001011200", true, true, 2, true, true, true, 2, 2)]
+    [InlineData("130100001000100", true, false, 0, false, false, false, 1, 3)]
+    public async Task CustomExchangeRoom_RandomGameHonorsConfiguredRules(
+        string roomOption,
+        bool expectedHanchan,
+        bool expectedKuitan,
+        int expectedAkaDora,
+        bool expectedYakitori,
+        bool expectedWareme,
+        bool expectedTip,
+        int expectedRon,
+        int expectedUma)
+    {
+        var room = new GameRoom { SubId = "0090A", RoomOption = roomOption };
+        var rule = InvokeBuildRuleInfo(room);
+
+        Assert.Equal(expectedHanchan, rule.Hanchan);
+        Assert.Equal(expectedKuitan, rule.Kuitan);
+        Assert.Equal(expectedAkaDora, rule.AkaDora);
+        Assert.Equal(expectedYakitori, rule.Yakitori);
+        Assert.Equal(expectedWareme, rule.Wareme);
+        Assert.Equal(expectedTip, rule.Tip);
+        Assert.Equal(expectedRon, rule.Ron);
+        Assert.Equal(expectedUma, rule.Uma);
+
+        await RandomFourPlayerGameCompletesAndPersistsResults(
+            room.SubId, roomOption, expectedHanchan,
+            expectedGradeChannel: false, initialGrade: 0, playerMoney: 100_000,
+            expectedKuitan: expectedKuitan);
+    }
+
+    [Fact]
+    public async Task HighStakeExchangeLobby_RandomGameUsesHundredGpSettlementAndHiClassResults()
+    {
+        const int maxActions = 10_000;
+        var random = new Random();
+        var room = BuildPaiInfoRoom("0085F");
+        room.RoomId = 1_300;
+        room.RoomOption = "120000001000000";
+        room.UnitMoney = 100;
+        room.State = GameRoomState.Playing;
+        var buildRuleInfo = typeof(GameLogicService)
+            .GetMethod("BuildRuleInfo", BindingFlags.NonPublic | BindingFlags.Static)!;
+        room.Engine.InitHanchan((Engine.RuleInfo)buildRuleInfo.Invoke(null, new object[] { room })!);
+        for (int order = 0; order < GameConst.PlayerMaxCount; order++)
+        {
+            int playerPos = room.Engine.HanchanInfo.Player[order];
+            room.SeatToEngineOrder[playerPos] = order;
+            room.Seats[playerPos]!.EngineOrder = order;
+        }
+
+        var session = new PlayerSessionService();
+        foreach (var player in room.Seats.Where(seat => seat != null).Select(seat => seat!))
+        {
+            player.GamMoney = 1_000_000;
+            player.ActiveRecord = player.HiClassRecord;
+            session.Register(player);
+        }
+
+        var history = new Mock<HistoryRepository>(MockBehavior.Loose);
+        history.Setup(repository => repository.InsertGameHistAsync(It.IsAny<GameReport>())).ReturnsAsync(1L);
+        var repository = new Mock<PlayerRepository>(MockBehavior.Loose);
+        repository.Setup(repo => repo.UpdateResultCommonRatAsync(
+                It.IsAny<MajakPlayer>(), It.IsAny<bool>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>()))
+            .Returns(Task.CompletedTask);
+        repository.Setup(repo => repo.UpdateHiClassRatAsync(It.IsAny<MajakPlayer>(), It.IsAny<int>(), It.IsAny<long>()))
+            .Returns(Task.CompletedTask);
+        var service = BuildService(session, repository.Object, history.Object, testEnvironment: true);
+        var (initialContext, _) = CommandTestHelper.MakeContext(room.Seats[0]!);
+        var sendValidActions = typeof(GameLogicService)
+            .GetMethod("SendValidActionsToPlayersAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        await (Task)sendValidActions.Invoke(service, new object[] { room, initialContext })!;
+
+        int actionCount = 0;
+        while (room.State == GameRoomState.Playing)
+        {
+            Assert.True(actionCount++ < maxActions,
+                $"0085F did not finish within {maxActions} actions.");
+            int order = Array.FindIndex(room.PendingActions, prompt => prompt != null);
+            Assert.InRange(order, 0, GameConst.PlayerMaxCount - 1);
+
+            var prompt = room.PendingActions[order]!;
+            var validActions = room.Engine.GetValidActions(order);
+            MajakServer.Engine.Act action;
+            int[] bipaiIndices;
+            switch (room.Engine.Player[order].Mode)
+            {
+                case PlayerMode.Turn:
+                    Assert.NotEmpty(validActions.TapCandidates);
+                    action = MajakServer.Engine.Act.Tap;
+                    bipaiIndices = [validActions.TapCandidates[random.Next(validActions.TapCandidates.Count)]];
+                    break;
+                case PlayerMode.Furo:
+                case PlayerMode.Chan:
+                case PlayerMode.Kyo:
+                case PlayerMode.Aga:
+                    Assert.True(validActions.CanPass);
+                    action = MajakServer.Engine.Act.Pas;
+                    bipaiIndices = Array.Empty<int>();
+                    break;
+                default:
+                    throw new Xunit.Sdk.XunitException($"Unexpected player mode: {room.Engine.Player[order].Mode}");
+            }
+
+            int playerPos = room.Engine.HanchanInfo.Player[order];
+            string? abortReason = null;
+            var (context, _) = CommandTestHelper.MakeContext(room.Seats[playerPos]!, new Dictionary<string, object?>
+            {
+                ["seatOrder"] = order,
+                ["action"] = (int)action,
+                ["bipaiIndex"] = bipaiIndices,
+                ["actionSeq"] = prompt.ActionSeq,
+            }, reason => abortReason = reason);
+            await service.GamePlayProcessAsync(room, context);
+            Assert.Null(abortReason);
+        }
+
+        Assert.Equal(GameRoomState.Waiting, room.State);
+        Assert.Equal(GameStatus.NotPlaying, room.Engine.GameStatus);
+        Assert.Equal(1, Convert.ToInt32(room.LastGameReportPayload!["result"]));
+        history.Verify(repository => repository.InsertGameHistAsync(It.IsAny<GameReport>()), Times.Once);
+        repository.Verify(repo => repo.UpdateResultCommonRatAsync(
+            It.IsAny<MajakPlayer>(), It.IsAny<bool>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<int>(), It.IsAny<int>()), Times.Exactly(4));
+        repository.Verify(repo => repo.UpdateHiClassRatAsync(
+            It.IsAny<MajakPlayer>(), It.IsAny<int>(), It.Is<long>(moneyChange => moneyChange % 100 == 0)), Times.Exactly(4));
+    }
+
+    [Fact]
+    public async Task WaremeExchangeLobby_UsesWaremeRuleAndCompletesRandomGame()
+    {
+        const string waremeRoomOption = "120000001010000";
+        var room = new GameRoom { SubId = "0075B", RoomOption = waremeRoomOption };
+        var buildRuleInfo = typeof(GameLogicService)
+            .GetMethod("BuildRuleInfo", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var rule = (Engine.RuleInfo)buildRuleInfo.Invoke(null, new object[] { room })!;
+
+        Assert.True(rule.Hanchan);
+        Assert.True(rule.Kuitan);
+        Assert.True(rule.Wareme);
+
+        await StandardExchangeLobby_RandomGameCompletesAndPersistsResults(
+            room.SubId,
+            waremeRoomOption,
+            expectedHanchan: true);
+    }
+
+    [Fact]
+    public async Task RandomlyDealtSoloTrainingGame_CompletesWithNpcProxyActions()
+    {
+        const int maxActions = 10_000;
+        var random = new Random();
+        var room = BuildPaiInfoRoom("00T5A");
+        room.RoomId = 1_100;
+        room.State = GameRoomState.Playing;
+        room.Seats[1] = null;
+        room.Seats[2] = null;
+        room.Seats[3] = null;
+        for (int order = 0; order < GameConst.PlayerMaxCount; order++)
+        {
+            int playerPos = room.Engine.HanchanInfo.Player[order];
+            room.SeatToEngineOrder[playerPos] = order;
+            if (room.Seats[playerPos] != null)
+                room.Seats[playerPos]!.EngineOrder = order;
+        }
+
+        var history = new Mock<HistoryRepository>(MockBehavior.Loose);
+        var service = BuildService(historyRepo: history.Object, testEnvironment: true);
+        var (rootContext, _) = CommandTestHelper.MakeContext(room.Seats[0]!);
+        var sendValidActions = typeof(GameLogicService)
+            .GetMethod("SendValidActionsToPlayersAsync", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        await (Task)sendValidActions.Invoke(service, new object[] { room, rootContext })!;
+
+        int actionCount = 0;
+        int npcActionCount = 0;
+        int humanActionCount = 0;
+        while (room.State == GameRoomState.Playing)
+        {
+            Assert.True(actionCount++ < maxActions,
+                $"Solo training game did not finish within {maxActions} actions.");
+            int order = Array.FindIndex(room.Engine.Player, player => player.Mode != PlayerMode.None);
+            Assert.InRange(order, 0, GameConst.PlayerMaxCount - 1);
+
+            int playerPos = room.Engine.HanchanInfo.Player[order];
+            if (room.Seats[playerPos] == null)
+            {
+                Assert.True(await service.ProxyPlayAsync(room, rootContext, order, useTrainingAi: true));
+                npcActionCount++;
+                continue;
+            }
+
+            var prompt = room.PendingActions[order];
+            Assert.NotNull(prompt);
+            var validActions = room.Engine.GetValidActions(order);
+            MajakServer.Engine.Act action;
+            int[] bipaiIndices;
+            switch (room.Engine.Player[order].Mode)
+            {
+                case PlayerMode.Turn:
+                    Assert.NotEmpty(validActions.TapCandidates);
+                    action = MajakServer.Engine.Act.Tap;
+                    bipaiIndices = [validActions.TapCandidates[random.Next(validActions.TapCandidates.Count)]];
+                    break;
+                case PlayerMode.Furo:
+                case PlayerMode.Chan:
+                case PlayerMode.Kyo:
+                case PlayerMode.Aga:
+                    Assert.True(validActions.CanPass);
+                    action = MajakServer.Engine.Act.Pas;
+                    bipaiIndices = Array.Empty<int>();
+                    break;
+                default:
+                    throw new Xunit.Sdk.XunitException($"Unexpected player mode: {room.Engine.Player[order].Mode}");
+            }
+
+            string? abortReason = null;
+            var (context, _) = CommandTestHelper.MakeContext(room.Seats[playerPos]!, new Dictionary<string, object?>
+            {
+                ["seatOrder"] = order,
+                ["action"] = (int)action,
+                ["bipaiIndex"] = bipaiIndices,
+                ["actionSeq"] = prompt!.ActionSeq,
+            }, reason => abortReason = reason);
+            await service.GamePlayProcessAsync(room, context);
+            Assert.Null(abortReason);
+            humanActionCount++;
+        }
+
+        Assert.True(npcActionCount > 0);
+        Assert.True(humanActionCount > 0);
+        Assert.Equal(GameRoomState.Waiting, room.State);
+        Assert.Equal(GameStatus.NotPlaying, room.Engine.GameStatus);
+        history.Verify(repository => repository.InsertGameHistAsync(It.IsAny<GameReport>()), Times.Never);
+        history.Verify(repository => repository.InsertTrainingHistAsync(
+            It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(),
+            It.IsAny<(string MemberNo, int Point)[]>()), Times.Never);
     }
 
     [Fact]
@@ -1360,7 +1923,7 @@ public class GameLogicHelperTests
         Assert.Empty(sent.Where(packet => packet.method == Cmd.GamePlay)
             .Select(packet => CommandTestHelper.ToDict(packet.packet))
             .Where(packet => ((JsonElement)packet["playType"]!).GetString() == "MJPID_ACTION"));
-        await WaitUntilAsync(() => room.PendingActions.Skip(1).Any(prompt => prompt != null));
+        await WaitUntilAsync(() => room.PendingActions.Skip(1).Any(prompt => prompt != null), timeoutMs: 7_000);
 
         var actionPackets = sent
             .Where(packet => packet.method == Cmd.GamePlay)
@@ -2763,7 +3326,7 @@ public class GameLogicHelperTests
     }
 
     [Fact]
-    public async Task GameReportProcess_TrainingRoom_WritesMySqlTrainingHistOnce()
+    public async Task GameReportProcess_TrainingRoom_DoesNotWriteAnyGameHistory()
     {
         var room = BuildPaiInfoRoom("00T5A");
         room.RoomId = 89;
@@ -2772,14 +3335,12 @@ public class GameLogicHelperTests
 
         var history = new Mock<HistoryRepository>(MockBehavior.Loose);
         var log = new Mock<LogRepository>(MockBehavior.Loose, (MySqlDbContext)null!);
-        history.Setup(r => r.InsertTrainingHistAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<(string MemberNo, int Point)[]>()))
-            .Returns(Task.CompletedTask);
         var (ctx, _) = CommandTestHelper.MakeContext(room.Seats[0]!);
 
         await BuildService(historyRepo: history.Object, logRepo: log.Object).GameReportProcessAsync(room, ctx);
 
-        history.Verify(r => r.InsertTrainingHistAsync(room.ChannelId, room.RoomId, It.IsAny<string>(), 4, It.IsAny<(string MemberNo, int Point)[]>()), Times.Once);
         history.Verify(r => r.InsertGameHistAsync(It.IsAny<GameReport>()), Times.Never);
+        history.Verify(r => r.InsertTrainingHistAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<(string MemberNo, int Point)[]>()), Times.Never);
         log.Verify(r => r.InsertTrainingHistAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<(string MemberNo, int Point)[]>()), Times.Never);
         log.Verify(r => r.InsertGameHistAsync(It.IsAny<GameReport>()), Times.Never);
     }

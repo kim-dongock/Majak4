@@ -71,10 +71,10 @@ public sealed class PaifuFileService
             var archive = new PaifuArchiveLogEntity
             {
                 PlayedAt = payload.PlayedAt.UtcDateTime,
-                ChannelId = room.ChannelId,
-                RoomId = checked((uint)room.RoomId),
-                RoomName = room.RoomTitle,
-                RoomOption = room.RoomOption,
+                ChannelId = payload.ChannelId,
+                RoomId = checked((uint)payload.RoomId),
+                RoomName = payload.RoomName,
+                RoomOption = payload.RoomOption,
                 ResultText = payload.Result,
                 MembersJson = JsonSerializer.Serialize(payload.Members),
                 PacketCount = item.Packets.Count,

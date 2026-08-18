@@ -93,6 +93,8 @@ import {
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
 const PAIFU_HAND_OPEN_EVENT = 'majak:paifu-hand-open'
 const PAIFU_GRAPH_EVENT = 'majak:paifu-graph'
+const PAIFU_REPLAY_PACKET_EVENT = 'majak:paifu-replay-packet'
+const PAIFU_REPLAY_READY_EVENT = 'majak:paifu-replay-ready'
 const DEBUG_GAME = import.meta.env.VITE_DEBUG_GAME === '1'
 const ASK_END_SET_EVENT = 'majak:ask-end-set'
 const KYO_RESULT_ACTION_EVENT = 'majak:kyo-result-action'
@@ -946,12 +948,13 @@ export default class GameScene extends Phaser.Scene {
   private isReplayApplyingHistory = false
   private skipInitialRoomEnter = false
   private requestInitialGameResync = false
-  private replayHandOpen = true
+  private replayHandOpen = false
   private signalRHandlers: Array<{ cmd: string; handler: SignalR.MessageHandler }> = []
   private acceptingSignalR = false
   private replayRotateHandler?: EventListener
   private replayHandOpenHandler?: EventListener
   private replayGraphHandler?: EventListener
+  private replayPacketHandler?: EventListener
   private autoControlHandler?: EventListener
   private autoPassHoldHandler?: EventListener
   private assistConfigHandler?: EventListener
@@ -983,7 +986,7 @@ export default class GameScene extends Phaser.Scene {
   private handTileScale(odr: number, loc: 0 | 1 | 2 | 3): number {
     if (this.layoutMode !== 'mobileLandscape') return 1
     void odr
-    const baseScale = loc === 0 && !this.isReplay ? MOBILE_SELF_HAND_TILE_SCALE : MOBILE_OTHER_HAND_TILE_SCALE
+    const baseScale = loc === 0 ? MOBILE_SELF_HAND_TILE_SCALE : MOBILE_OTHER_HAND_TILE_SCALE
     return baseScale * mobileContentScale()
   }
 
@@ -1051,7 +1054,7 @@ export default class GameScene extends Phaser.Scene {
       nSelPasKey: this.inputConfig.nSelPasKey,
     })
     if (Array.isArray(data.players)) {
-      data.players.forEach(player => this.mergePlayerInfo(player))
+      data.players.forEach((player, odr) => this.mergePlayerInfoAtOdr(odr, player))
     }
     this.paifuGraphRound.roomOption = data.roomOption ?? this.paifuGraphRound.roomOption
     if (!this.isReplay) {
@@ -1084,11 +1087,11 @@ export default class GameScene extends Phaser.Scene {
     this.createBoardMask()
 
     /* ── ボード背景 mj_board.png (789×704) at (5,31) ── */
-    this.boardBackground = this.add.image(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, this.resolveSkinTextureKey('mj_board')).setDepth(-100)
-    if (isMobileIngameLayout(this.layoutMode)) {
-      this.clipToBoard(this.boardBackground.setScale(MOBILE_BOARD_BACKGROUND_SCALE))
-    } else if (this.layoutMode === 'responsiveDesktop') {
-      this.boardBackground.setVisible(false)
+    if (this.layoutMode !== 'responsiveDesktop') {
+      this.boardBackground = this.add.image(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, this.resolveSkinTextureKey('mj_board')).setDepth(-100)
+      if (isMobileIngameLayout(this.layoutMode)) {
+        this.clipToBoard(this.boardBackground.setScale(MOBILE_BOARD_BACKGROUND_SCALE))
+      }
     }
     if (this.textures.exists('mj_taku_dragon_skin')) {
       this.dragonOverlayBg = this.clipToBoard(this.add.image(BOARD_X + DRAGON_OVERLAY.x, BOARD_Y + DRAGON_OVERLAY.y, 'mj_taku_dragon_skin')
@@ -1110,7 +1113,7 @@ export default class GameScene extends Phaser.Scene {
     if (!this.isReplay) {
       const panelKey = this.isViewer ? 'mj_watchBoard' : 'mj_uiBoard'
       const panelOffset = this.layoutMode === 'responsiveDesktop'
-        ? responsiveDesktopSeatOffset(this.layoutMode, 0)
+        ? responsiveDesktopCenterOffset(this.layoutMode)
         : mobileCenterHudOffset(this.layoutMode)
       this.actionPanelSprite = this.clipToBoard(this.add.image(BOARD_X + X_PANEL + panelOffset.x + W_PANEL / 2, BOARD_Y + Y_PANEL + panelOffset.y + H_PANEL / 2, this.resolveSkinTextureKey(panelKey))
         .setDisplaySize(W_PANEL, H_PANEL)
@@ -1139,6 +1142,7 @@ export default class GameScene extends Phaser.Scene {
     this.setupPaifuRecordingEvents()
     this.setupKeyboardEvents()
     this.setupContextMenuEvents()
+    if (this.isReplay) window.dispatchEvent(new Event(PAIFU_REPLAY_READY_EVENT))
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.onScenePointerDown, this)
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.teardownSceneResources())
     this.events.once(Phaser.Scenes.Events.DESTROY, () => this.teardownSceneResources())
@@ -1148,6 +1152,7 @@ export default class GameScene extends Phaser.Scene {
     this.acceptingSignalR = false
     this.clearAllDiscardFlights()
     this.teardownSignalR()
+    this.teardownReplayPacketEvents()
     this.teardownReplayControlEvents()
     this.teardownAutoControlEvents()
     this.teardownAssistConfigEvents()
@@ -1219,7 +1224,7 @@ export default class GameScene extends Phaser.Scene {
     this.centerInfoBg.setPosition(centerX, centerY)
     if (this.actionPanelSprite) {
       const actionOffset = this.layoutMode === 'responsiveDesktop'
-        ? responsiveDesktopSeatOffset(this.layoutMode, 0)
+        ? responsiveDesktopCenterOffset(this.layoutMode)
         : offset
       this.actionPanelSprite.setPosition(
         BOARD_X + X_PANEL + actionOffset.x + W_PANEL / 2,
@@ -1394,6 +1399,10 @@ export default class GameScene extends Phaser.Scene {
       const action = Number(data.action ?? -1)
       const actionSeatOrder = Number(data.seatOrder ?? data.order ?? -1)
       const actionBipaiIndex = Array.isArray(data.bipaiIndex) ? data.bipaiIndex.map(Number) : []
+      const replayTurnActions = new Set([Act.Chi, Act.Pon, Act.Kan, Act.Tap, Act.Ank, Act.Cha, Act.Ric, Act.Tao, Act.Tsu, Act.Hua])
+      if (this.isReplay && playType === 'MJPID_ACTION' && replayTurnActions.has(action) && actionSeatOrder >= 0 && actionSeatOrder < this.players.length) {
+        this.emitToUiScene('turnChange', { odr: actionSeatOrder, viewOdr: this.myOdr })
+      }
       if (playType === 'MJPID_ACTION' && (action === Act.Tap || action === Act.Ric)) {
         this.logDiscardProbe('recv discard ACTION before PaiInfo pop', {
           action,
@@ -1495,7 +1504,7 @@ export default class GameScene extends Phaser.Scene {
           viewOdr: this.myOdr,
           roundStart: true,
           roundPresentationDelayMs: waremeStartDelay,
-          preserveTurnMark: this.isReplayApplyingHistory,
+          preserveTurnMark: this.isReplayApplyingHistory && !this.isReplay,
         })
         if (shouldAnimateRoundStart) {
           this.playRoundStartSounds(data, waremeStartDelay)
@@ -1504,10 +1513,12 @@ export default class GameScene extends Phaser.Scene {
         }
         this.animateInitialDeal(oyaOrder, waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS, () => {
           if (!this.shouldSuppressLivePlayback()) this.playRoundBgm(data, kyokuCnt)
-          this.emitToUiScene('turnChange', {
-            odr: Number.isFinite(oyaOrder) ? oyaOrder : 0,
-            viewOdr: this.myOdr,
-          })
+          if (!this.isReplay) {
+            this.emitToUiScene('turnChange', {
+              odr: Number.isFinite(oyaOrder) ? oyaOrder : 0,
+              viewOdr: this.myOdr,
+            })
+          }
           if (isLiveRoundStart) this.notifyGamePresentationReady(Number(data.presentationId ?? 0))
         })
         if (!this.viewerHistorySyncPending) this.emitGameSync(false, 'initial-kyoku-ready')
@@ -1849,7 +1860,10 @@ export default class GameScene extends Phaser.Scene {
     }
     this.onSignalR('history', handleHistory)
 
-    if (this.isReplay) this.applyReplayPaifuData(handlePaiInfo, handleGamePlay)
+    if (this.isReplay) {
+      this.applyReplayPaifuData(handlePaiInfo, handleGamePlay)
+      this.setupReplayPacketEvents(handlePaiInfo, handleGamePlay)
+    }
 
   }
 
@@ -1993,6 +2007,32 @@ export default class GameScene extends Phaser.Scene {
     })
   }
 
+  private setupReplayPacketEvents(handlePaiInfo: SignalR.MessageHandler, handleGamePlay: SignalR.MessageHandler) {
+    this.teardownReplayPacketEvents()
+    this.replayPacketHandler = (event: Event) => {
+      const packet = (event as CustomEvent<{ packet?: { cmd?: unknown; data?: unknown } }>).detail?.packet
+      if (!packet || !isRecord(packet.data) || !this.canHandleSignalR()) return
+      if (packet.cmd !== 'smmc4e' && packet.cmd !== 'playing') return
+
+      this.isReplayApplyingHistory = true
+      try {
+        if (packet.cmd === 'smmc4e') handlePaiInfo(packet.data)
+        else handleGamePlay(packet.data)
+      } finally {
+        this.isReplayApplyingHistory = false
+      }
+      this.redrawAllReplayPai()
+      this.emitToUiScene('stateUpdate', { players: this.players, viewOdr: this.myOdr })
+    }
+    window.addEventListener(PAIFU_REPLAY_PACKET_EVENT, this.replayPacketHandler)
+  }
+
+  private teardownReplayPacketEvents() {
+    if (!this.replayPacketHandler) return
+    window.removeEventListener(PAIFU_REPLAY_PACKET_EVENT, this.replayPacketHandler)
+    this.replayPacketHandler = undefined
+  }
+
   private shouldSuppressLivePlayback() {
     return this.isReplayApplyingHistory
   }
@@ -2033,14 +2073,27 @@ export default class GameScene extends Phaser.Scene {
     if (Array.isArray(value)) return value.flatMap(item => this.extractReplayPackets(item))
     if (!isRecord(value)) return []
 
-    const nested = value.paifu ?? value.history ?? value.packets ?? value.events ?? value.playHistory ?? value.data
+    const nested = value.paifu ?? value.Paifu
+      ?? value.history ?? value.History
+      ?? value.packets ?? value.Packets
+      ?? value.events ?? value.Events
+      ?? value.playHistory ?? value.PlayHistory
+      ?? value.data ?? value.Data
     if (nested !== undefined && nested !== value) {
       const nestedPackets = this.extractReplayPackets(nested)
       if (nestedPackets.length > 0) return nestedPackets
     }
 
-    const payload = isRecord(value.payload) ? value.payload : isRecord(value.message) ? value.message : isRecord(value.body) ? value.body : value
-    const rawCmd = String(value.cmd ?? value.command ?? value.commandCode ?? value.service ?? '')
+    const payload = isRecord(value.payload) ? value.payload
+      : isRecord(value.Payload) ? value.Payload
+        : isRecord(value.message) ? value.message
+          : isRecord(value.Message) ? value.Message
+            : isRecord(value.body) ? value.body
+              : isRecord(value.Body) ? value.Body
+                : isRecord(value.data) ? value.data
+                  : isRecord(value.Data) ? value.Data
+                    : value
+    const rawCmd = String(value.cmd ?? value.Cmd ?? value.command ?? value.Command ?? value.commandCode ?? value.CommandCode ?? value.service ?? value.Service ?? '')
     if (rawCmd === 'smmc4e' || rawCmd === 'PaiInfoList') return [{ cmd: 'smmc4e', data: payload }]
     if (rawCmd === 'playing' || rawCmd === 'GamePlay') return [{ cmd: 'playing', data: payload }]
     if (Array.isArray(payload.pai) && (payload.openPos !== undefined || payload.bInit !== undefined || payload.init !== undefined)) return [{ cmd: 'smmc4e', data: payload }]
@@ -2837,6 +2890,7 @@ export default class GameScene extends Phaser.Scene {
     const tiles = this.players[odr].hand
     const loc = odrToLoc(odr, this.myOdr)
     const isMe  = !this.isViewer && loc === 0 && !this.isReplay
+    const isBottomHand = !this.isViewer && loc === 0
 
     if (this.shouldUseMobileOpponentHandSummary(odr, loc)) {
       this.redrawMobileOpponentHandSummary(odr, loc, tiles.length)
@@ -2854,7 +2908,7 @@ export default class GameScene extends Phaser.Scene {
 
     tiles.forEach((tile, idx) => {
       const isDrawTile = idx === tiles.length - 1 && tiles.length % 3 === 2
-      const useOpenOrDownLayout = this.isViewer || (this.isReplay && this.replayHandOpen)
+      const useOpenOrDownLayout = this.isViewer || (this.isReplay && this.replayHandOpen && (!isMobileIngameLayout(this.layoutMode) || loc !== 0))
       const handScale = this.handTileScale(odr, loc)
       const position = isMobileIngameLayout(this.layoutMode)
         ? mobileOuterHandPos(loc, idx, tiles.length, isDrawTile, handScale) ?? handPos(loc, idx, isDrawTile, useOpenOrDownLayout)
@@ -2862,28 +2916,30 @@ export default class GameScene extends Phaser.Scene {
       const { x, y } = position
       const texture = this.resolveSkinTexture(handTexture(loc))
       const concealedTexture = this.resolveSkinTexture(concealedHandTexture(loc))
-      const depth = isMe && this.layoutMode === 'mobileLandscape'
+      const depth = loc === 0 && this.layoutMode === 'mobileLandscape'
         ? MOBILE_SELF_HAND_DEPTH + idx * 0.0001
         : handDepth(y, idx)
       let spr: Phaser.GameObjects.Image
 
-      if (isMe) {
+      if (isBottomHand) {
         /* 自分の手牌: 表向き + インタラクティブ */
         const frame = paiToFrame(tile.code)
         spr = this.add.image(x, y, texture.key, frame)
           .setOrigin(0, 0)
           .setScale(handScale)
           .setDepth(depth)
-          .setInteractive({ useHandCursor: true })
-          .on('pointerdown', (pointer: Phaser.Input.Pointer) => this.onTilePointerDown(idx, pointer))
-          .on('pointerup', (pointer: Phaser.Input.Pointer) => this.onTilePointerUp(idx, pointer))
-          .on('pointerover', (pointer: Phaser.Input.Pointer) => this.onTilePointerOver(idx, pointer))
-          .on('pointerout', (pointer: Phaser.Input.Pointer) => this.onTilePointerOut(idx, pointer))
+        if (isMe) {
+          spr.setInteractive({ useHandCursor: true })
+            .on('pointerdown', (pointer: Phaser.Input.Pointer) => this.onTilePointerDown(idx, pointer))
+            .on('pointerup', (pointer: Phaser.Input.Pointer) => this.onTilePointerUp(idx, pointer))
+            .on('pointerover', (pointer: Phaser.Input.Pointer) => this.onTilePointerOver(idx, pointer))
+            .on('pointerout', (pointer: Phaser.Input.Pointer) => this.onTilePointerOut(idx, pointer))
+        }
         this.clipToBoard(spr)
-        if (isDrawTile) {
+        if (isMe && isDrawTile) {
           this.drawnTileCursor = this.createLegacyReceivedTileCursor(spr)
         }
-        if (tile.isSelected) {
+        if (isMe && tile.isSelected) {
           this.selectedCursor = this.layoutMode === 'mobileLandscape'
             ? this.createLegacyHoverCursor(spr)
             : this.createTileSelectionFrame(spr)
@@ -4649,10 +4705,8 @@ export default class GameScene extends Phaser.Scene {
 
   private updateActionButtonPositions(visibleActs: Set<string>) {
     if (this.layoutMode !== 'mobileLandscape') {
-      const centerOffset = responsiveDesktopCenterOffset(this.layoutMode)
-      const seatOffset = responsiveDesktopSeatOffset(this.layoutMode, 0)
       const offset = this.layoutMode === 'responsiveDesktop'
-        ? { x: seatOffset.x - centerOffset.x, y: seatOffset.y - centerOffset.y }
+        ? { x: 0, y: 0 }
         : mobileCenterHudOffset(this.layoutMode)
       for (const def of this.ACT_BTNS) {
         const btn = this.actionButtonSprites.get(def.act)

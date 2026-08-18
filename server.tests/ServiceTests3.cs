@@ -175,6 +175,19 @@ public class TournamentServiceLogicTests
         Assert.Contains(1002, fails);
     }
 
+    [Fact]
+    public void ValidateRegist_PrizeOutsideAllowedRange_Returns1002()
+    {
+        var svc = BuildEmpty();
+        var (ok, fails) = svc.ValidateRegist(
+            "TestTournament", "4|1|1|5", "0|100001|0|0|0",
+            DateTime.Now.AddHours(3).ToString("yyyy/MM/dd HH:mm:ss"),
+            "", 4, "", "host01", isAdmin: true, out _);
+
+        Assert.False(ok);
+        Assert.Contains(1002, fails);
+    }
+
     // シナリオ3: 名前が短すぎる → failCode=1003
     // 原典: IsTournamentName → E_TRNMT_REG_NAME_SIZE
     [Fact]
@@ -474,16 +487,15 @@ public class TournamentServiceLogicTests
     [Fact]
     public async Task RegisterAsync_Success_PlanCached()
     {
-        _repoMock.Setup(r => r.InsertPlanAsync(It.IsAny<TournamentPlan>()))
-            .ReturnsAsync(true);
-        _repoMock.Setup(r => r.UpdatePlayerNumAsync(It.IsAny<long>(), It.IsAny<int>()))
+        _repoMock.Setup(r => r.InsertPlanAndDebitOrganizerAsync(
+                It.IsAny<TournamentPlan>(), It.IsAny<MajakPlayer>(), It.IsAny<long>()))
             .ReturnsAsync(true);
 
         var svc  = BuildEmpty();
         var plan = new TournamentPlan
         {
             SeqNo      = 100,
-            GradeMoney = new long[] { 0, 0, 0, 0 }, // planMoney=0
+            GradeMoney = new long[] { 1000, 500, 200, 0 }, // planMoney=1870
             MaxRoomNum = 1,
         };
         var organizer = new MajakPlayer { MemberNo = "host01", GamMoney = 10000 };
@@ -492,6 +504,45 @@ public class TournamentServiceLogicTests
 
         Assert.True(ok);
         Assert.NotNull(svc.GetPlan(100));
+        Assert.Equal(8130, organizer.GamMoney);
+        _repoMock.Verify(r => r.InsertPlanAndDebitOrganizerAsync(plan, organizer, 1870), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelPlanAsync_RefundsJoinFeesAndOrganizerPrizeFund()
+    {
+        var plan = new TournamentPlan
+        {
+            SeqNo = 101,
+            PlayStatus = TournamentPlanStatus.Join,
+            MatchStartDt = DateTime.Now.AddMinutes(10),
+            PlanMemberNo = "host01",
+            JoinMoney = 100,
+            GradeMoney = new long[] { 1000, 500, 200, 0 },
+        };
+        _repoMock.Setup(r => r.SelectJoinListAsync(plan.SeqNo))
+            .ReturnsAsync(new List<TournamentJoin>
+            {
+                new() { MemberNo = "u1" },
+                new() { MemberNo = "u2" },
+            });
+        _repoMock.Setup(r => r.BulkUpdateJoinStatusAsync(
+                It.IsAny<IEnumerable<string>>(), TournamentJoinStatus.Exit))
+            .ReturnsAsync(true);
+        _repoMock.Setup(r => r.InsertUserPresentsAsync(It.IsAny<IEnumerable<UserPresentRecord>>()))
+            .ReturnsAsync(true);
+        _repoMock.Setup(r => r.UpdatePlanStatusAsync(plan)).ReturnsAsync(true);
+        var svc = BuildWithPlan(plan);
+
+        var result = await svc.CancelPlanAsync(plan.SeqNo, "host01");
+
+        Assert.True(result.Ok);
+        Assert.Equal(TournamentPlanStatus.Reject, plan.PlayStatus);
+        _repoMock.Verify(r => r.InsertUserPresentsAsync(It.Is<IEnumerable<UserPresentRecord>>(rows =>
+            rows.Count() == 3
+            && rows.Any(row => row.MemberNo == "u1" && row.PresentNum == 100 && row.PresentKbn == TournamentPresentKind.RejectJoin)
+            && rows.Any(row => row.MemberNo == "u2" && row.PresentNum == 100 && row.PresentKbn == TournamentPresentKind.RejectJoin)
+            && rows.Any(row => row.MemberNo == "host01" && row.PresentNum == 1870 && row.PresentKbn == TournamentPresentKind.RejectPlan))), Times.Once);
     }
 }
 

@@ -317,6 +317,29 @@ static string IssueGameAccessToken(GameAuthTokenService gameAuth, string memberN
 static GameAuthPrincipal? RequireGameAuth(HttpContext ctx, GameAuthTokenService gameAuth)
     => gameAuth.Validate(ctx.Request.Headers.Authorization.FirstOrDefault());
 
+static string EncodeCurrencyHistoryCursor(CurrencyHistoryCursor cursor)
+    => Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+        $"{cursor.OccurredAt.Ticks}|{cursor.Source}|{cursor.Id}"));
+
+static bool TryDecodeCurrencyHistoryCursor(string? value, out CurrencyHistoryCursor? cursor)
+{
+    cursor = null;
+    if (string.IsNullOrWhiteSpace(value)) return true;
+    try
+    {
+        var values = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(value)).Split('|');
+        if (values.Length != 3 || !long.TryParse(values[0], out long ticks)
+            || !ulong.TryParse(values[2], out ulong id)
+            || values[1] is not ("money" or "cash")) return false;
+        cursor = new CurrencyHistoryCursor(new DateTime(ticks), values[1], id);
+        return true;
+    }
+    catch (FormatException)
+    {
+        return false;
+    }
+}
+
 // ─── 管理サイト API (/api/admin/*) ───────────────────────────────────────
 // 認証: POST /api/admin/auth/google のみ無認証。他は Bearer JWT が必須。
 // JWT 検証は RequireAdminAuth() ローカル関数で行う。
@@ -1052,6 +1075,47 @@ app.MapGet("/api/player/profile", async (HttpContext ctx, string? memberNo, Play
         gemCount   = player.GemCount,
         cashCount  = player.CashCount,
     });
+});
+
+app.MapGet("/api/player/currency-history", async (
+    HttpContext ctx,
+    LogRepository logRepo,
+    GameAuthTokenService gameAuth,
+    string? currency,
+    DateOnly? from,
+    DateOnly? to,
+    string? cursor,
+    int limit = 30) =>
+{
+    var auth = RequireGameAuth(ctx, gameAuth);
+    if (auth is null) return Results.Unauthorized();
+
+    string selectedCurrency = currency?.ToLowerInvariant() ?? "all";
+    if (selectedCurrency is not ("all" or "gp" or "mp" or "dragon_orb"))
+        return Results.BadRequest(new { error = "INVALID_CURRENCY" });
+    if (!TryDecodeCurrencyHistoryCursor(cursor, out var decodedCursor))
+        return Results.BadRequest(new { error = "INVALID_CURSOR" });
+
+    var today = DateOnly.FromDateTime(DateTime.Today);
+    var startDate = from ?? today.AddDays(-6);
+    var endDate = to ?? today;
+    if (startDate > endDate || endDate.DayNumber - startDate.DayNumber > 366)
+        return Results.BadRequest(new { error = "INVALID_DATE_RANGE" });
+
+    var page = await logRepo.GetCurrencyHistoryAsync(
+        auth.MemberNo,
+        selectedCurrency,
+        startDate.ToDateTime(TimeOnly.MinValue),
+        endDate.AddDays(1).ToDateTime(TimeOnly.MinValue),
+        decodedCursor,
+        Math.Clamp(limit, 1, 100));
+    var nextCursor = page.HasMore && page.Items.Count > 0
+        ? EncodeCurrencyHistoryCursor(new CurrencyHistoryCursor(
+            page.Items[^1].OccurredAt,
+            page.Items[^1].Source,
+            page.Items[^1].Id))
+        : null;
+    return Results.Ok(new { items = page.Items, nextCursor, hasMore = page.HasMore });
 });
 
 app.MapGet("/api/player/collection", async (HttpContext ctx, PlayerRepository playerRepo, TitleService titleService, PlayerSessionService sessions, GameAuthTokenService gameAuth) =>

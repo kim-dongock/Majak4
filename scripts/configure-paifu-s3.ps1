@@ -44,8 +44,9 @@ $cors = @{
 $lifecyclePath = Join-Path $env:TEMP "majak4-paifu-lifecycle.json"
 $corsPath = Join-Path $env:TEMP "majak4-paifu-cors.json"
 try {
-    Set-Content -Path $lifecyclePath -Value $lifecycle -Encoding utf8
-    Set-Content -Path $corsPath -Value $cors -Encoding utf8
+    $utf8WithoutBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::WriteAllText($lifecyclePath, $lifecycle, $utf8WithoutBom)
+    [System.IO.File]::WriteAllText($corsPath, $cors, $utf8WithoutBom)
     & aws s3api put-bucket-lifecycle-configuration --bucket $Bucket --lifecycle-configuration "file://$lifecyclePath"
     & aws s3api put-bucket-cors --bucket $Bucket --cors-configuration "file://$corsPath"
 }

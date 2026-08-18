@@ -991,6 +991,74 @@ public class GameLogicModeKyoTests
     }
 }
 
+public class GameLogicRandomSimulationTests
+{
+    private static RuleInfo DefaultRule() => new()
+    {
+        Hanchan = true, Kuitan = true, Contest = 0, AkaDora = 1, Uma = 0,
+    };
+
+    [Fact]
+    public void RandomlyDealtGames_PlayFromInitialHandToGameEnd()
+    {
+        const int gameCount = 12;
+        const int maxActionsPerGame = 10_000;
+        var random = new Random();
+
+        for (int gameNumber = 0; gameNumber < gameCount; gameNumber++)
+        {
+            var logic = new MajakGameLogic();
+            logic.InitHanchan(DefaultRule());
+            int actionCount = 0;
+
+            while (logic.GameStatus != GameStatus.NotPlaying || actionCount == 0)
+            {
+                Assert.True(actionCount++ < maxActionsPerGame,
+                    $"Game {gameNumber} did not finish within {maxActionsPerGame} actions.");
+
+                bool processedAction = false;
+                for (int order = 0; order < MajakConst.PlayerMaxCount; order++)
+                {
+                    var player = logic.Player[order];
+                    if (player.Mode == PlayerMode.None) continue;
+
+                    var validActions = logic.GetValidActions(order);
+                    Act action;
+                    int[] bipaiIndices;
+                    switch (player.Mode)
+                    {
+                        case PlayerMode.Turn:
+                            Assert.NotEmpty(validActions.TapCandidates);
+                            action = Act.Tap;
+                            bipaiIndices = [validActions.TapCandidates[random.Next(validActions.TapCandidates.Count)]];
+                            break;
+                        case PlayerMode.Furo:
+                        case PlayerMode.Chan:
+                        case PlayerMode.Kyo:
+                        case PlayerMode.Aga:
+                            Assert.True(validActions.CanPass);
+                            action = Act.Pas;
+                            bipaiIndices = Array.Empty<int>();
+                            break;
+                        default:
+                            throw new Xunit.Sdk.XunitException($"Unexpected player mode: {player.Mode}");
+                    }
+
+                    Assert.Equal(ActionResult.Ok,
+                        logic.ProcessAction(order, action, bipaiIndices, bipaiIndices.Length));
+                    processedAction = true;
+                    break;
+                }
+
+                Assert.True(processedAction, "The game has active status but no player has a pending action.");
+            }
+
+            Assert.Equal(GameStatus.NotPlaying, logic.GameStatus);
+            Assert.NotEqual(GameEnd.None, logic.GameEnd);
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MajakGameLogic ProcessModeAga テスト
 // 原典: MODE_AGA — RON/PAS による終了判断

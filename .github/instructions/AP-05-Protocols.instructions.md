@@ -147,6 +147,14 @@ description: "麻雀4のSignalR・RESTプロトコル、レガシー互換キー
 - 麻雀称号と技はそれぞれ最大1つを装着でき、変更時はDBと接続中の `MajakPlayer` を同時に更新する。
 - `mjkc19e` は対局中の新規獲得通知専用であり、コレクションの参照・装着変更には使用しない。
 
+#### 通貨の獲得・使用履歴 REST API
+
+- `GET /api/player/currency-history` はゲームJWTの本人について、GP・MP・龍珠の獲得・使用履歴を時刻降順で返す。
+- `currency` は `all` / `gp` / `mp` / `dragon_orb`、`from` と `to` は日付（両端を含む）とする。省略時は当日を含む直近7日間を対象にする。
+- `cursor` はサーバーが返す不透明値だけを次の要求へ渡す。ページ番号や会員番号は受け取らない。
+- 応答は `{ items, nextCursor, hasMore }`。クライアントは画面下端の到達時だけ、`hasMore=true` の間に `nextCursor` を使って追加取得する。
+- 各履歴行は内部 `member_no` を含めず、`occurredAt`、`currency`、`title`、`amount`、`balanceBefore`、`balanceAfter` を返す。
+
 #### ロビーメンバー一覧 (`c7e`)
 
 - 構造化 `members[]` は `sex` / `k11e`、`age` / `k10e`、`nlevel` / `k33e` を含める。

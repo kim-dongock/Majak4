@@ -572,7 +572,7 @@ public class TournamentRegistCommand : ICommand
             {
                 ok = await _tournament.RegisterAsync(plan, player);
                 if (!ok) failCodes.Add(9999);
-                else     await _money.SaveMoneyAsync(player, GameConst.EvtCodeTournamentPlan, -planMoney, preMoney);
+                else     await _money.RecordMoneyHistoryAsync(player, GameConst.EvtCodeTournamentPlan, -planMoney, preMoney);
             }
         }
 
