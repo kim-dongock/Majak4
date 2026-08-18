@@ -22,7 +22,7 @@ public class MainActivity extends BridgeActivity {
 	}
 
 	private void hideSystemBars() {
-		WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
+		WindowCompat.setDecorFitsSystemWindows(getWindow(), true);
 		WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
 		controller.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
 		controller.hide(WindowInsetsCompat.Type.systemBars());

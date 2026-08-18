@@ -51,7 +51,6 @@ export default function GetReqGameDialog({
   roomPwd,
   avatarId,
   roomName = '',
-  roomOption = '',
   inviteMessage = '一緒に対戦しませんか？',
   inviterSex,
   inviterRating = 0,

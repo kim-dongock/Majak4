@@ -65,16 +65,13 @@ export default function PaifuArchiveScreen() {
     <main className="majak-paifu-archive majak-screen-surface">
       <header className="majak-paifu-archive__header">
         <div><p>牌譜再生</p><h1>牌譜一覧</h1></div>
-        <div className="majak-paifu-archive__header-actions">
-          <button type="button" className="majak-responsive-control-button" onClick={() => void startReplay()} disabled={!selected || isStartingReplay}>{isStartingReplay ? '準備中...' : '再生'}</button>
-          <button type="button" className="majak-responsive-control-button" onClick={() => navigate('/channel')}>戻る</button>
-        </div>
       </header>
       <section className="majak-paifu-archive__filters" aria-label="牌譜検索">
         <label>種別<select value={filter.matchKind ?? ''} onChange={event => updateFilter('matchKind', event.target.value as PaifuArchiveFilter['matchKind'])}><option value="">すべて</option><option value="normal">通常</option><option value="tournament">大会</option></select></label>
         <label>対局者<input value={filter.member ?? ''} onChange={event => updateFilter('member', event.target.value)} /></label>
         <label className="majak-paifu-archive__date-range">期間<span><input type="date" value={filter.from ?? ''} onChange={event => updateFilter('from', event.target.value)} /><input type="date" value={filter.to ?? ''} onChange={event => updateFilter('to', event.target.value)} /></span></label>
         <button type="button" className="majak-responsive-control-button" onClick={applyFilter} disabled={isLoading}>検索</button>
+        <button type="button" className="majak-responsive-control-button" onClick={() => void startReplay()} disabled={!selected || isStartingReplay}>{isStartingReplay ? '準備中...' : '再生'}</button>
       </section>
       <section className="majak-paifu-archive__content">
         <div className="majak-paifu-archive__list" aria-live="polite">

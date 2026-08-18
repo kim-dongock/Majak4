@@ -56,14 +56,6 @@ import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 import { GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig } from '../../../game/assistConfig'
 import { GAME_PAIFU_RECORDING_CONFIG_EVENT } from '../../../game/paifuRecording'
 
-// DU→px 変換 (9pt "MS UI Gothic" @96dpi: baseX=6px → 6/4=1.5, baseY=13px → 13/8=1.625)
-const SX = (du: number) => Math.round(du * 1.5)
-const SY = (du: number) => Math.round(du * 1.625)
-
-const FONT = 'var(--majak-font-family-ui)'
-const DLG_BG = '#d4d0c8'   // Windows classic dialog gray
-const TITLE_BG = '#f0f0f0'
-
 export interface MJConfig {
   bChkBGM: boolean   // IDC_CHKBGM
   bChkSND: boolean   // IDC_CHKSND
@@ -142,75 +134,6 @@ interface Props {
   onCancel: () => void
   /** OnModify 相当 — BGM/SE/Vol 変更時の即時反映 (任意) */
   onModify?: (cfg: MJConfig) => void
-}
-
-// GROUPBOX → <fieldset><legend>
-function GB({ x, y, w, h, label }: { x: number; y: number; w: number; h: number; label: string }) {
-  return (
-    <fieldset style={{
-      position: 'absolute', left: x, top: y, width: w, height: h,
-      border: '1px solid #767676', margin: 0, padding: 0, minWidth: 0,
-      pointerEvents: 'none',
-    }}>
-      <legend style={{ fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', color: '#000', padding: '0 3px', marginLeft: 4 }}>
-        {label}
-      </legend>
-    </fieldset>
-  )
-}
-
-// BS_AUTOCHECKBOX → <label><input type="checkbox">
-function Chk({ x, y, label, checked, disabled, onChange }: {
-  x: number; y: number; label: string
-  checked: boolean; disabled?: boolean; onChange: (v: boolean) => void
-}) {
-  return (
-    <label style={{
-      position: 'absolute', left: x, top: y,
-      display: 'flex', alignItems: 'center', gap: 4,
-      fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000',
-      cursor: disabled ? 'default' : 'pointer',
-      opacity: disabled ? 0.5 : 1,
-      userSelect: 'none', whiteSpace: 'nowrap',
-    }}>
-      <input type="checkbox" checked={checked} disabled={disabled}
-        onChange={e => onChange(e.target.checked)}
-        style={{ margin: 0 }} />
-      {label}
-    </label>
-  )
-}
-
-// BS_AUTORADIOBUTTON → <label><input type="radio">
-function Rad({ x, y, name, val, label, checked, onChange }: {
-  x: number; y: number; name: string; val: number; label: string
-  checked: boolean; onChange: (v: number) => void
-}) {
-  return (
-    <label style={{
-      position: 'absolute', left: x, top: y,
-      display: 'flex', alignItems: 'center', gap: 4,
-      fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000',
-      cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap',
-    }}>
-      <input type="radio" name={name} value={val} checked={checked}
-        onChange={() => onChange(val)} style={{ margin: 0 }} />
-      {label}
-    </label>
-  )
-}
-
-// LTEXT → <div>
-function LTxt({ x, y, w, text }: { x: number; y: number; w: number; text: string }) {
-  return (
-    <div style={{
-      position: 'absolute', left: x, top: y, width: w,
-      fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000',
-      lineHeight: 'var(--majak-popup-leading-body)', whiteSpace: 'pre-wrap',
-    }}>
-      {text}
-    </div>
-  )
 }
 
 export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {

@@ -45,9 +45,7 @@
  *     s_rcPage CRect(190,250,290,270)  "{curPage}/{maxPage}"
  * ────────────────────────────────────────────────────────────────────────
  */
-import { useRef, useEffect, useState } from 'react'
-
-const IMG_LOT = '/assets/images/game/lot'
+import { useState } from 'react'
 
 /** 抽選1件の結果 */
 export interface LotEntry {
@@ -68,41 +66,6 @@ interface Props {
 const DATA_PER_PAGE = 10  // DATA_OF_EVERY_1PAGE
 
 /** ====================================================================
- * CMJBmpButton 相当 — AP-06 §2 4フレームスプライトボタン
- * ==================================================================== */
-function SpriteButton({
-  src, frameW, frameH, x, y, onClick, disabled = false, title,
-}: {
-  src: string; frameW: number; frameH: number
-  x: number; y: number; onClick: () => void
-  disabled?: boolean; title?: string
-}) {
-  const [fi, setFi] = useState(disabled ? 1 : 0)
-  useEffect(() => { setFi(disabled ? 1 : 0) }, [disabled])
-  return (
-    <button
-      title={title}
-      disabled={disabled}
-      onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => !disabled && setFi(2)}
-      onMouseLeave={() => setFi(disabled ? 1 : 0)}
-      onMouseDown={() => !disabled && setFi(3)}
-      onMouseUp={() => !disabled && setFi(2)}
-      style={{
-        position: 'absolute', left: x, top: y,
-        width: frameW, height: frameH,
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-fi * frameW}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none', padding: 0,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        outline: 'none', imageRendering: 'pixelated',
-      }}
-    />
-  )
-}
-
-/** ====================================================================
  * CMJLotResultDlg 本体
  * ==================================================================== */
 export default function LotResultDlg({
@@ -111,32 +74,6 @@ export default function LotResultDlg({
 }: Props) {
   const [curPage, setCurPage] = useState(1)
   const maxPage = Math.max(1, Math.ceil(lotteryCount / DATA_PER_PAGE))
-
-  /* ドラッグ移動 (OnNcHitTest: pt.y < 40 → HTCAPTION) */
-  const [pos, setPos]   = useState({ x: 0, y: 0 })
-  const dragging        = useRef(false)
-  const dragOffset      = useRef({ dx: 0, dy: 0 })
-
-  const onDragStart = (e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    if (e.clientY - rect.top >= 40) return
-    dragging.current   = true
-    dragOffset.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
-    e.preventDefault()
-  }
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!dragging.current) return
-      setPos({ x: e.clientX - dragOffset.current.dx, y: e.clientY - dragOffset.current.dy })
-    }
-    const onUp = () => { dragging.current = false }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
-    }
-  }, [])
 
   /* 再購入メッセージ (m_strBuyAgain 相当) */
   const buyAgainMsg = nextLotteryCount !== lotteryCount
@@ -171,7 +108,7 @@ export default function LotResultDlg({
               回数データ:  CRect(46, 94+16*i, 96, 107+16*i)
               金額データ:  CRect(130, 94+16*i, 272, 107+16*i)
             ================================================================ */}
-        {pageEntries.map((e, i) => (
+        {pageEntries.map(e => (
           <div key={e.seq} className="majak-lottery-result-panel__entry">
             {/* 回数 CNTDATA_CORNER_POS_X=46, Y=94+16*i, WIDTH=50, HEIGHT=13 */}
             <div>

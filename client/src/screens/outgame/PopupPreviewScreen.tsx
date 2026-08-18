@@ -109,11 +109,14 @@ const PREVIEWS: PreviewEntry[] = [
 ]
 
 const PREVIEW_ANNOUNCEMENT: GameAnnouncement = {
-  id: 1,
+  announcementId: 1,
   title: 'メンテナンスのお知らせ',
   body: '8月20日 10:00から12:00までメンテナンスを実施します。\nご理解とご協力をお願いいたします。',
+  isPublished: true,
   publishedAt: '2026-08-14T00:00:00Z',
   isStartup: true,
+  createdAt: '2026-08-14T00:00:00Z',
+  updatedAt: '2026-08-14T00:00:00Z',
 }
 
 const PREVIEW_RANKING: RankingData = {

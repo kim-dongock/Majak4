@@ -614,6 +614,16 @@ function AnnouncementRoute() {
   return <MajakFrame onGoHome={() => navigate('/channel')}><AnnouncementListScreen /></MajakFrame>
 }
 
+function LobbySelectRoute() {
+  const navigate = useNavigate()
+  return <MajakFrame onGoHome={() => navigate('/channel')}><LobbySelectScreen /></MajakFrame>
+}
+
+function PaifuArchiveRoute() {
+  const navigate = useNavigate()
+  return <MajakFrame onGoHome={() => navigate('/channel')}><PaifuArchiveScreen /></MajakFrame>
+}
+
 export default function App() {
   const initialRoute = readStoredRouterState()
 
@@ -635,15 +645,15 @@ export default function App() {
             <Route path="/" element={<Navigate to="/channel" replace />} />
             <Route path="/channel" element={<ChannelGroupRoute />} />
             <Route path="/announcements" element={<AnnouncementRoute />} />
-            <Route path="/channel/select/:group" element={<MajakFrame><LobbySelectScreen /></MajakFrame>} />
-            <Route path="/channel/:channelId" element={<MajakFrame><LobbySelectScreen /></MajakFrame>} />
+            <Route path="/channel/select/:group" element={<LobbySelectRoute />} />
+            <Route path="/channel/:channelId" element={<LobbySelectRoute />} />
             <Route path="/channel/:channelId/lobby" element={<MajakFrame accBox="channel"><LobbyScreen /></MajakFrame>} />
             <Route path="/channel/:channelId/lobby/room/:roomId" element={<MajakFrame accBox="room"><RoomScreen /></MajakFrame>} />
             <Route path="/channel/:channelId/lobby/:lobbyId/room/:roomId" element={<MajakFrame accBox="room"><RoomScreen /></MajakFrame>} />
             {/* インゲーム (Phaser) — タイトルバーなし */}
             <Route path="/game/:roomId" element={<GameScreen />} />
             {/* 牌譜保管庫 → 選択後にリプレイを起動 */}
-            <Route path="/paifu" element={<MajakFrame><PaifuArchiveScreen /></MajakFrame>} />
+            <Route path="/paifu" element={<PaifuArchiveRoute />} />
             <Route path="/paifu/replay" element={<PaifWnd />} />
             <Route path="/paifu/:roomId" element={<PaifWnd />} />
           </Routes>

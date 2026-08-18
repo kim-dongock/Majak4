@@ -1938,6 +1938,10 @@ export default function LobbyScreen() {
   const displayNameForPix = (pix: string) => memberNameByPix.get(pix) || pix
   const [chatLog, setChatLog] = useState<ChatMsg[]>([])
   const [chatText, setChatText] = useState('')
+  const [mobileLobbyViewportHeight, setMobileLobbyViewportHeight] = useState(() =>
+    typeof window === 'undefined' ? 0 : (window.visualViewport?.height ?? window.innerHeight),
+  )
+  const [mobileActionGroup, setMobileActionGroup] = useState<'items' | 'other' | null>(null)
   const [notice, setNotice] = useState<NoticeDisplay | null>(null)
   const [selectedMember, setSelectedMember] = useState<string | null>(null)
   const [memberFilter, setMemberFilter] = useState<MemberFilterValue>(DEFAULT_MEMBER_FILTER)
@@ -2020,6 +2024,15 @@ export default function LobbyScreen() {
     window.sessionStorage.removeItem(SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY)
     setShowWelcome(true)
   }, [])
+
+  useEffect(() => {
+    if (layoutMode === 'desktop') return
+    const visualViewport = window.visualViewport
+    const update = () => setMobileLobbyViewportHeight(visualViewport?.height ?? window.innerHeight)
+    update()
+    visualViewport?.addEventListener('resize', update)
+    return () => visualViewport?.removeEventListener('resize', update)
+  }, [layoutMode])
 
   useEffect(() => {
     if (!oneToOneChat || layoutMode === 'desktop') return
@@ -3715,7 +3728,7 @@ export default function LobbyScreen() {
   if (layoutMode !== 'desktop' || useResponsiveDesktopLayout) {
     const mobileTitle = channelName
     return (
-      <div className={`majak-mobile-screen majak-mobile-lobby-screen${useResponsiveDesktopLayout ? ' majak-responsive-desktop-lobby' : ''}`}>
+      <div className={`majak-mobile-screen majak-mobile-lobby-screen${useResponsiveDesktopLayout ? ' majak-responsive-desktop-lobby' : ''}`} style={layoutMode === 'desktop' ? undefined : { height: mobileLobbyViewportHeight }}>
         <section className={`majak-mobile-lobby-toolbar${useResponsiveDesktopLayout ? ' majak-mobile-lobby-toolbar--with-user' : ''}`}>
           <div>
             <h1>{mobileTitle}</h1>
@@ -3731,15 +3744,27 @@ export default function LobbyScreen() {
             />
           )}
           {!useResponsiveDesktopLayout && (
-            <div className="majak-mobile-lobby-actions">
-              <button type="button" className="majak-mobile-lobby-header-button" onClick={onRefreshRoomList}>更新</button>
-              {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>}
-              {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>}
-              {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>}
-              <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
-              <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
-              {showFreeChargeButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
-              <button type="button" className="majak-mobile-lobby-header-button" onClick={onChangeLobby}>ロビー変更</button>
+            <div className="majak-mobile-lobby-action-groups">
+              <div className="majak-mobile-lobby-actions">
+                <button type="button" className="majak-mobile-lobby-header-button" onClick={() => void onRefreshRoomList()}>更新</button>
+                <button type="button" className="majak-mobile-lobby-header-button" onClick={() => void onChangeLobby()}>ロビー変更</button>
+                <button type="button" className="majak-mobile-lobby-header-button" aria-expanded={mobileActionGroup === 'items'} onClick={() => setMobileActionGroup(current => current === 'items' ? null : 'items')}>アイテム</button>
+                {(showMissionButton || showFreeChargeButton) && <button type="button" className="majak-mobile-lobby-header-button" aria-expanded={mobileActionGroup === 'other'} onClick={() => setMobileActionGroup(current => current === 'other' ? null : 'other')}>その他</button>}
+              </div>
+              {mobileActionGroup && (
+                <div className="majak-mobile-lobby-action-panel">
+                  {mobileActionGroup === 'items' && <>
+                    {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowShop(true) }}>ショップ</button>}
+                    {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCustom(true) }}>所持品</button>}
+                    <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCollection(true) }}>コレクション</button>
+                    <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCurrencyHistory(true) }}>通貨履歴</button>
+                  </>}
+                  {mobileActionGroup === 'other' && <>
+                    {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowMission(true) }}>ミッション</button>}
+                    {showFreeChargeButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); void onFreeGpReplenish() }}>無料GP補充</button>}
+                  </>}
+                </div>
+              )}
             </div>
           )}
         </section>

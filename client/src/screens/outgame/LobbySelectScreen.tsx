@@ -187,7 +187,7 @@ export default function LobbySelectScreen() {
               className={`majak-responsive-control-button majak-desktop-lobby-select__rule-tab${selectedDaniMatch === match ? ' is-active' : ''}`}
               onClick={() => setSelectedDaniMatch(match)}
             >
-              <span className="majak-type-lg">{match}</span>
+              <span className="majak-type-xl">{match}</span>
             </button>
           ))}
         </div>

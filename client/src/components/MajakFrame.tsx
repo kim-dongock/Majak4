@@ -19,7 +19,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import CfgDlg, { loadMajakConfig, saveMajakConfig, type MJConfig } from '../screens/outgame/dialogs/CfgDlg'
 import { configureMajakSound } from '../utils/majakSound'
 import { useCustomSkinStore } from '../store/customSkinStore'
@@ -89,12 +89,24 @@ interface MajakFrameProps {
 
 export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHome, accBox, children }: MajakFrameProps) {
   const location = useLocation()
+  const navigate = useNavigate()
   /** CMJCfgDlg 内部管理 — onOpenSettings 未指定時に使用 */
   const [showCfg, setShowCfg] = useState(false)
   const [cfg, setCfg]         = useState<MJConfig>(() => loadMajakConfig())
   const [isFullScreen, setIsFullScreen] = useState(false)
   const [showExitConfirm, setShowExitConfirm] = useState(false)
   const isAnnouncementScreen = location.pathname === '/announcements'
+  const isLobbySelectScreen = location.pathname.startsWith('/channel/select/')
+    || /^\/channel\/[^/]+$/.test(location.pathname)
+  const isPaifuArchiveScreen = location.pathname === '/paifu'
+  const screenTitle = isAnnouncementScreen
+    ? 'お知らせ'
+    : isLobbySelectScreen
+      ? 'ロビー選択'
+      : isPaifuArchiveScreen
+        ? '牌譜検索'
+        : '麻雀4'
+  const frameBack = onGoHome ?? (isLobbySelectScreen || isPaifuArchiveScreen ? () => navigate('/channel') : undefined)
   const frameWidth = accBox === 'room' ? 1024 : 1014
   const frameHeight = accBox === 'room' ? 735 : undefined
   const isResponsiveDesktopScreen = location.pathname === '/channel'
@@ -197,6 +209,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
   if (layoutMode !== 'desktop') {
     const isLobbyScreen = /\/channel\/[^/]+\/lobby$/.test(location.pathname)
     const showMobileHeader = accBox !== 'room' && !isLobbyScreen
+    const usesScreenHeader = isAnnouncementScreen || isLobbySelectScreen || isPaifuArchiveScreen
     const showMobileExit = location.pathname === '/channel'
       || location.pathname.startsWith('/channel/select/')
       || isLobbyScreen
@@ -223,11 +236,11 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
       <div className={`majak-mobile-frame${accBox === 'room' ? ' majak-mobile-frame--room' : ''}`} style={{ position: 'relative' }}>
         {showMobileHeader && (
           <header className="majak-mobile-frame__bar">
-            <div className="majak-mobile-frame__brand">麻雀4</div>
+            <div className="majak-mobile-frame__brand">{screenTitle}</div>
             <MobileUserSummary />
             <div className="majak-mobile-frame__tools">
-              {isAnnouncementScreen ? (
-                onGoHome && <button type="button" onClick={onGoHome}>閉じる</button>
+              {usesScreenHeader ? (
+                frameBack && <button type="button" onClick={frameBack}>{isAnnouncementScreen ? '閉じる' : '戻る'}</button>
               ) : <>
                 {onGoHome && <button type="button" onClick={onGoHome}>閉じる</button>}
                 {onOpenAnnouncements && <button type="button" onClick={onOpenAnnouncements}>お知らせ</button>}
@@ -268,10 +281,12 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
 
       {isResponsiveDesktopScreen ? (
         <header className="majak-responsive-desktop-frame__bar">
-          <strong className="majak-type-lg">麻雀4</strong>
+          <strong className="majak-type-lg">{screenTitle}</strong>
           <div>
             {isAnnouncementScreen ? (
               onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>閉じる</button>
+            ) : isLobbySelectScreen || isPaifuArchiveScreen ? (
+              frameBack && <button type="button" className="majak-responsive-control-button" onClick={frameBack}>戻る</button>
             ) : <>
               {onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>閉じる</button>}
               {onOpenAnnouncements && <button type="button" className="majak-responsive-control-button" onClick={onOpenAnnouncements}>お知らせ</button>}

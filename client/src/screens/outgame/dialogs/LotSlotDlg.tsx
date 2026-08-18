@@ -45,8 +45,6 @@ const IMG     = '/assets/images/game'
 const IMG_LOT = `${IMG}/lot`
 
 /** REEL 定数 (レガシーより) */
-const REEL_CORNER_POS_X  = 137
-const REEL_CORNER_POS_Y  = 61
 const REEL_HEIGHT         = 78
 const REEL_SCALE          = 1.25
 const REEL_WIDTH          = 25
@@ -114,52 +112,6 @@ function createLotValues(totalAmount: number, count: number): number[] {
 }
 
 /** ====================================================================
- * CMJBmpButton 相当 — AP-06 §2 4フレームスプライトボタン
- * ==================================================================== */
-function SpriteButton({
-  src, frameW, frameH, x, y, onClick, disabled = false, title,
-}: {
-  src: string; frameW: number; frameH: number
-  x: number; y: number; onClick: () => void
-  disabled?: boolean; title?: string
-}) {
-  const [fi, setFi] = useState(disabled ? 1 : 0)
-  const buttonRef = useRef<HTMLButtonElement>(null)
-  useEffect(() => { setFi(disabled ? 1 : 0) }, [disabled])
-  useEffect(() => {
-    const button = buttonRef.current
-    if (!button) return
-    button.style.setProperty('width', `${frameW}px`, 'important')
-    button.style.setProperty('height', `${frameH}px`, 'important')
-    button.style.setProperty('background-image', `url(${src})`, 'important')
-    button.style.setProperty('background-position', `${-fi * frameW}px 0`, 'important')
-    button.style.setProperty('background-repeat', 'no-repeat', 'important')
-  }, [fi, frameH, frameW, src])
-  return (
-    <button
-      ref={buttonRef}
-      title={title}
-      disabled={disabled}
-      onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => !disabled && setFi(2)}
-      onMouseLeave={() => setFi(disabled ? 1 : 0)}
-      onMouseDown={() => !disabled && setFi(3)}
-      onMouseUp={() => !disabled && setFi(2)}
-      style={{
-        position: 'absolute', left: x, top: y,
-        width: frameW, height: frameH,
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-fi * frameW}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none', padding: 0,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        outline: 'none', imageRendering: 'pixelated',
-      }}
-    />
-  )
-}
-
-/** ====================================================================
  * 数字リール (TIMER_LOT_SLOT_ROTATION 相当)
  * lot_slot_num.png: 250×78, 10フレーム 25×78 (数字 0〜9)
  * ==================================================================== */
@@ -194,7 +146,7 @@ function NumberReel({ digit, spinFrame }: { digit: number; spinFrame: number }) 
 type Phase = 'idle' | 'spinning' | 'stopped' | 'done'
 
 export default function LotSlotDlg({
-  itemName, lotteryCount, totalAmount = 0, lotValues, nextLotteryCount, imageUrl, onResult, onClose: _onClose,
+  itemName, lotteryCount, totalAmount = 0, lotValues, nextLotteryCount, onResult, onClose: _onClose,
 }: Props) {
   const valuesRef = useRef<number[]>(lotValues?.slice(0, lotteryCount) ?? createLotValues(totalAmount, lotteryCount))
   const reelCount = Math.max(

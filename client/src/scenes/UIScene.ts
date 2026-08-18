@@ -99,7 +99,6 @@ const IMG = '/assets/images/game'
 const BOARD_X = 5
 const BOARD_Y = 31
 const CUSTOM_DEFAULT_ID_COSTUME = 100011
-const CUSTOM_DEFAULT_ID_HAI = 100003
 const AVAILABLE_COSTUME_IDS = new Set([9, 10, 11])
 const HUD_TEXT_RESOLUTION = typeof window === 'undefined'
   ? 1
@@ -115,8 +114,6 @@ const MOBILE_HUD_PANEL_PADDING_Y = 6
 const MOBILE_HUD_COMPACT_AVATAR_PADDING = 3
 const MOBILE_HUD_ICON_WIDTH = 44
 const MOBILE_HUD_ICON_HEIGHT = 66
-const MOBILE_HUD_FULL_AVATAR_WIDTH = 60
-const MOBILE_HUD_FULL_AVATAR_HEIGHT = 90
 const HUD_NAME_MIN_FONT_SIZE = 8
 const DESKTOP_HUD_INFO_Y_SHIFT = -24
 const RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y = 48
@@ -417,7 +414,6 @@ export default class UIScene extends Phaser.Scene {
   private isViewer = false
   private customBgId = 0
   private customBoardType = 0
-  private customHaiId = 0
   private chicha = 0
   private oyaOrder = 0
   private kyokuCnt = 0
@@ -436,7 +432,6 @@ export default class UIScene extends Phaser.Scene {
     this.isViewer = Boolean(data.isViewer)
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
-    this.customHaiId = Number(data.customHaiId ?? 0)
     applyUiLayout(this.layoutMode)
   }
 
@@ -865,7 +860,7 @@ export default class UIScene extends Phaser.Scene {
     const panelKey = this.desktopHudPanelTextureKey()
     const stripKey = this.desktopTurnStripTextureKey()
     if (!this.textures.exists(panelKey)) {
-      const panel = this.make.graphics({ x: 0, y: 0, add: false })
+      const panel = this.make.graphics({ x: 0, y: 0 })
       panel.fillStyle(style.fill, 0.94)
       panel.fillRoundedRect(0, 0, 128, 128, 4)
       panel.fillStyle(style.stroke, 0.18)
@@ -878,7 +873,7 @@ export default class UIScene extends Phaser.Scene {
       panel.destroy()
     }
     if (!this.textures.exists(stripKey)) {
-      const strip = this.make.graphics({ x: 0, y: 0, add: false })
+      const strip = this.make.graphics({ x: 0, y: 0 })
       strip.fillStyle(style.activeStroke, 0.9)
       strip.fillRoundedRect(0, 0, 128, 18, 3)
       strip.lineStyle(1, style.stroke, 1)
@@ -948,7 +943,6 @@ export default class UIScene extends Phaser.Scene {
       this.desktopHudBounds[loc] = undefined
       return null
     }
-    const style = this.mobileHudPanelStyle()
     const paddingX = avatarSize.width * 0.12
     const paddingY = HUD_METRICS.nameHeight / 2
     const contentLeft = Math.min(avt.x, textLeft)

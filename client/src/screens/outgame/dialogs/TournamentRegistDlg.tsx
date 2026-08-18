@@ -4,10 +4,7 @@
  */
 import { useState } from 'react'
 import { showMessage } from '../../../utils/msgbox'
-import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 import TournamentBracketPreviewDlg, { TOURNAMENT_FORMATS } from './TournamentBracketPreviewDlg'
-
-const FONT = 'var(--majak-font-family-ui)'
 
 export interface TournamentRegistPayload {
   roomOption: string
@@ -23,24 +20,6 @@ export interface TournamentRegistPayload {
 interface Props {
   onOK: (payload: TournamentRegistPayload) => void
   onCancel: () => void
-}
-
-function frameButtonStyle(src: string, frameW: number, frameH: number, frame: number, left: number, top: number): React.CSSProperties {
-  return {
-    position: 'absolute',
-    left,
-    top,
-    width: frameW,
-    height: frameH,
-    backgroundImage: `url(${src})`,
-    backgroundPosition: `${-frame * frameW}px 0`,
-    backgroundRepeat: 'no-repeat',
-    backgroundColor: 'transparent',
-    border: 'none',
-    padding: 0,
-    cursor: 'pointer',
-    imageRendering: 'pixelated',
-  }
 }
 
 function pad2(value: number) {
@@ -63,64 +42,7 @@ function legacyNameByteLength(value: string) {
     length + (/^[\x00-\x7f\uff61-\uff9f]$/.test(character) ? 1 : 2), 0)
 }
 
-function inputStyle(left: number, top: number, width: number): React.CSSProperties {
-  return {
-    position: 'absolute',
-    left,
-    top,
-    width,
-    height: 22,
-    boxSizing: 'border-box',
-    fontFamily: FONT,
-    fontSize: 'var(--majak-popup-font-emphasis)',
-    color: '#000',
-    background: '#fff',
-    border: '1px solid #6f8f68',
-    padding: '1px 4px',
-    outline: 'none',
-  }
-}
-
-function selectStyle(left: number, top: number, width: number): React.CSSProperties {
-  return {
-    ...inputStyle(left, top, width),
-    padding: '0 2px',
-  }
-}
-
-function labelStyle(left: number, top: number, width = 120): React.CSSProperties {
-  return {
-    position: 'absolute',
-    left,
-    top,
-    width,
-    height: 18,
-    fontFamily: FONT,
-    fontSize: 'var(--majak-popup-font-emphasis)',
-    lineHeight: '18px',
-    color: '#1a401a',
-    whiteSpace: 'nowrap',
-  }
-}
-
-function checkStyle(left: number, top: number, width = 110): React.CSSProperties {
-  return {
-    position: 'absolute',
-    left,
-    top,
-    width,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    fontFamily: FONT,
-    fontSize: 'var(--majak-popup-font-emphasis)',
-    color: '#1a401a',
-    whiteSpace: 'nowrap',
-  }
-}
-
 export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
-  const layoutMode = useOutgameLayoutMode()
   const [name, setName] = useState('')
   const [dateTime, setDateTime] = useState(defaultStartDateTime)
   const [hanTon, setHanTon] = useState(0)
@@ -143,8 +65,6 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
   const [viewerChat, setViewerChat] = useState(true)
   const [usePassword, setUsePassword] = useState(false)
   const [password, setPassword] = useState('')
-  const [okFrame, setOkFrame] = useState(0)
-  const [cancelFrame, setCancelFrame] = useState(0)
   const [showBracketPreview, setShowBracketPreview] = useState(false)
   const selectedFormat = TOURNAMENT_FORMATS[matchFormat - 1]
   const minimumPlayers = selectedFormat ? Math.floor(selectedFormat.maxPlayers / 2) + 1 : 0

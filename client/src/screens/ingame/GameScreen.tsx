@@ -1845,7 +1845,7 @@ export default function GameScreen() {
     setShowTournamentTotalResult(false)
 
     if (shouldShowLevelUp && me) {
-      setLevelUp({ level: me.nlevel, lentMoney: me.lentMoney ?? 0 })
+      setLevelUp({ level: me.nlevel ?? 0, lentMoney: me.lentMoney ?? 0 })
       return
     }
 
