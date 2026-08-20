@@ -49,6 +49,8 @@ const KEY_TOURNAMENT_TOTAL_REPORT = 'mjkk97e'
 const KEY_GEM_GAME = 'mjkk56e'
 const ASK_END_SET_EVENT = 'majak:ask-end-set'
 const KYO_RESULT_ACTION_EVENT = 'majak:kyo-result-action'
+const KYO_RESULT_PROGRESS_EVENT = 'majak:kyo-result-progress'
+const KYO_RESULT_CONFIRMED_EVENT = 'majak:kyo-result-confirmed'
 const GAME_STATUS_EVENT = 'majak:game-status'
 const GAME_SYNC_EVENT = 'majak:game-sync'
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
@@ -766,6 +768,8 @@ export default function GameScreen() {
   const [askEndSet, setAskEndSet] = useState<{ roomId: string; seatOrder: number; actionSeq?: number; localDeadlineAt?: number } | null>(null)
   /** CMJKyoRes 継続アクション送信用状態 */
   const [kyoResultAction, setKyoResultAction] = useState<{ roomId: string; seatOrder: number; timeLimit: number; actionSeq?: number; localDeadlineAt?: number } | null>(null)
+  const [kyoResultSubmitted, setKyoResultSubmitted] = useState(false)
+  const [kyoResultProgress, setKyoResultProgress] = useState<Record<number, { durationMs: number; localDeadlineAt: number; submitted: boolean }>>({})
   const [tournamentTotalResult, setTournamentTotalResult] = useState<TournamentTotalResultItem[] | null>(null)
   const [showTournamentTotalResult, setShowTournamentTotalResult] = useState(false)
   const [viewers, setViewers] = useState<ViewerEntry[]>(gameState?.viewers ?? [])
@@ -1091,7 +1095,7 @@ export default function GameScreen() {
       customHaiId,
       gemGame: asNumber(gameState?.gemGame ?? navState?.gemGame, 0),
       skipInitialRoomEnter: Boolean(gameState?.skipInitialRoomEnter || gameState?.players?.length),
-      requestInitialGameResync: Boolean(gameState?.skipInitialRoomEnter || gameState?.players?.length),
+      requestInitialGameResync: Boolean(gameState?.skipInitialRoomEnter),
     })
     return () => destroyGame()
   }, [customBgId, customHaiId, initialMyOdr, roomId, signalReady])
@@ -1389,6 +1393,8 @@ export default function GameScreen() {
         setKyoResData(null)
         setAskEndSet(null)
         setKyoResultAction(null)
+        setKyoResultSubmitted(false)
+        setKyoResultProgress({})
         setActiveEmoticons([])
         setTournamentTotalResult(null)
         setShowTournamentTotalResult(false)
@@ -1397,6 +1403,10 @@ export default function GameScreen() {
       if (data.playType === 'MJPID_INIKYO') {
         if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
         kyoResultTimerRef.current = null
+        setKyoResData(null)
+        setKyoResultAction(null)
+        setKyoResultSubmitted(false)
+        setKyoResultProgress({})
         const oyaOdr = asNumber(data.oyaOrder ?? data.oyaOdr ?? data.dealerOdr, -1)
         const oya = playersRef.current.find(player => player.pos === oyaOdr)
         putStatus(oya ? `親：${oya.name || oya.playerId}` : `親：${oyaOdr}`)
@@ -1412,6 +1422,8 @@ export default function GameScreen() {
       if (data.playType !== 'MJPID_ENDKYO') return
       if (!Array.isArray(data.players)) return
       const kyoResultData = data as unknown as KyoResData
+      setKyoResultSubmitted(false)
+      setKyoResultProgress({})
       kyoEndStatusLines(kyoResultData).forEach(line => putStatus(line))
       if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
       const showKyoResult = () => {
@@ -1607,7 +1619,44 @@ export default function GameScreen() {
       })
     }
     window.addEventListener(KYO_RESULT_ACTION_EVENT, onKyoResultAction)
-    return () => window.removeEventListener(KYO_RESULT_ACTION_EVENT, onKyoResultAction)
+    const onKyoResultProgress = (event: Event) => {
+      const detail = (event as CustomEvent<{ seatOrder?: number; durationMs?: number; localDeadlineAt?: number }>).detail ?? {}
+      const seatOrder = Number(detail.seatOrder)
+      const durationMs = Math.max(0, Number(detail.durationMs ?? 0))
+      const localDeadlineAt = Number(detail.localDeadlineAt ?? 0)
+      if (!Number.isInteger(seatOrder) || seatOrder < 0 || !Number.isFinite(localDeadlineAt) || localDeadlineAt <= 0) return
+      setKyoResultProgress(current => {
+        const previous = current[seatOrder]
+        return {
+          ...current,
+          [seatOrder]: {
+            durationMs: previous?.durationMs || durationMs,
+            localDeadlineAt: previous ? Math.min(previous.localDeadlineAt, localDeadlineAt) : localDeadlineAt,
+            submitted: previous?.submitted ?? false,
+          },
+        }
+      })
+    }
+    const onKyoResultConfirmed = (event: Event) => {
+      const seatOrder = Number((event as CustomEvent<{ seatOrder?: number }>).detail?.seatOrder)
+      if (!Number.isInteger(seatOrder) || seatOrder < 0) return
+      setKyoResultProgress(current => {
+        const progress = current[seatOrder]
+        return {
+          ...current,
+          [seatOrder]: progress
+            ? { ...progress, submitted: true }
+            : { durationMs: 0, localDeadlineAt: 0, submitted: true },
+        }
+      })
+    }
+    window.addEventListener(KYO_RESULT_PROGRESS_EVENT, onKyoResultProgress)
+    window.addEventListener(KYO_RESULT_CONFIRMED_EVENT, onKyoResultConfirmed)
+    return () => {
+      window.removeEventListener(KYO_RESULT_ACTION_EVENT, onKyoResultAction)
+      window.removeEventListener(KYO_RESULT_PROGRESS_EVENT, onKyoResultProgress)
+      window.removeEventListener(KYO_RESULT_CONFIRMED_EVENT, onKyoResultConfirmed)
+    }
   }, [gameState?.myOdr, roomId])
 
   useEffect(() => {
@@ -1635,10 +1684,14 @@ export default function GameScreen() {
 
   const sendKyoResultAction = async () => {
     const request = kyoResultAction
-    setKyoResData(null)
     setKyoResultAction(null)
     if (!request) return
     if (request.localDeadlineAt !== undefined && performance.now() >= request.localDeadlineAt) return
+    setKyoResultSubmitted(true)
+    setKyoResultProgress(current => {
+      const progress = current[request.seatOrder]
+      return progress ? { ...current, [request.seatOrder]: { ...progress, submitted: true } } : current
+    })
     await SignalR.send(CMD_GAME_PLAY, {
       playType: 'MJPID_ACTION',
       roomId: request.roomId,
@@ -2076,6 +2129,8 @@ export default function GameScreen() {
           data={displayedKyoResData}
           myOdr={effectiveMyOdr ?? 0}
           canContinue={FORCE_KYO_RESULT_FOR_TEST || Boolean(kyoResultAction)}
+          waitingForOtherPlayers={kyoResultSubmitted}
+          playerProgress={kyoResultProgress}
           onClose={() => { if (!FORCE_KYO_RESULT_FOR_TEST) void sendKyoResultAction() }}
         />
       )}

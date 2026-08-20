@@ -27,12 +27,11 @@
 import Phaser from 'phaser'
 import { GAME_OPTIONS_REGISTRY_KEY, getGameOptions } from '../game/GameInstance'
 import { emitGameLoadProgress } from '../game/gameLoadProgress'
-import { getLegacyFullUiSkinId } from '../utils/legacySkinPalette'
+import { getLegacyBoardSkinId, getLegacyFullUiSkinId, getLegacyHaiSkinId } from '../utils/legacySkinPalette'
 
 const IMG  = '/assets/images/game'
-const CUSTOM_BOARD_DEFAULT = 100000
 const CUSTOM_BOARD_TENGOKU = 100002
-const CUSTOM_HAI_DEFAULT = 100003
+const DEFAULT_BOARD_SKIN_ID = 5
 
 function customSkinSuffix(id: number): string {
   return String(id).padStart(2, '0')
@@ -63,13 +62,15 @@ export default class PreloadScene extends Phaser.Scene {
       customHaiId,
       startedAt: new Date().toISOString(),
     })
-    const customBgSuffix = customSkinSuffix(customBgId)
-    const customHaiSuffix = customSkinSuffix(customHaiId)
     const fullUiSkinId = getLegacyFullUiSkinId(customBgId, customBoardType)
     const fullUiSkinSuffix = customSkinSuffix(fullUiSkinId ?? 0)
-    const hasCustomBg = customBgId > 0 && customBgId !== CUSTOM_BOARD_DEFAULT
+    const boardSkinId = getLegacyBoardSkinId(customBgId, customBoardType)
+    const boardSkinSuffix = customSkinSuffix(boardSkinId)
+    const hasCustomBg = boardSkinId !== DEFAULT_BOARD_SKIN_ID
     const hasFullCustomBg = fullUiSkinId != null
-    const customBgBase = hasCustomBg ? customSkinBase(customBgId) : ''
+    const customBgBase = hasCustomBg ? customSkinBase(boardSkinId) : ''
+    const haiSkinId = getLegacyHaiSkinId(customHaiId)
+    const haiSkinSuffix = customSkinSuffix(haiSkinId ?? 0)
     const fullUiSkinBase = hasFullCustomBg ? customSkinBase(fullUiSkinId) : ''
     const loadBgSkinImage = (key: string) => {
       if (hasFullCustomBg) this.load.image(`${key}_skin`, `${fullUiSkinBase}/${key}_${fullUiSkinSuffix}.png`)
@@ -79,12 +80,12 @@ export default class PreloadScene extends Phaser.Scene {
     }
 
     /* ── ゲームボード / サイドバー ── */
-    this.load.image('mj_board',  `${IMG}/mj_board.png`)
+    this.load.image('mj_board', `${customSkinBase(DEFAULT_BOARD_SKIN_ID)}/mj_board_${customSkinSuffix(DEFAULT_BOARD_SKIN_ID)}.png`)
     this.load.image('mj_sideBg', `${IMG}/mj_sideBg.png`)
     this.load.image('mj_h_bg',   `${IMG}/mj_h_bg.png`)
     if (hasCustomBg) {
-      this.load.image('mj_board_skin', `${customBgBase}/mj_board_${customBgSuffix}.png`)
-      this.load.image('mj_h_bg_skin', `${customBgBase}/mj_h_bg_${customBgSuffix}.png`)
+      this.load.image('mj_board_skin', `${customBgBase}/mj_board_${boardSkinSuffix}.png`)
+      this.load.image('mj_h_bg_skin', `${customBgBase}/mj_h_bg_${boardSkinSuffix}.png`)
     }
     loadBgSkinImage('mj_sideBg')
     if (fullUiSkinId === CUSTOM_BOARD_TENGOKU) {
@@ -94,9 +95,9 @@ export default class PreloadScene extends Phaser.Scene {
     /* ── 手牌 (縦立て, omote_0) 37 frames × 37×63 ── */
     this.load.spritesheet('hai_omote', `${IMG}/mj_hai_omote_0.png`,
       { frameWidth: 37, frameHeight: 63 })
-    if (customHaiId > 0 && customHaiId !== CUSTOM_HAI_DEFAULT) {
-      const base = customSkinBase(customHaiId)
-      this.load.spritesheet('hai_omote_skin', `${base}/mj_hai_omote_0_${customHaiSuffix}.png`,
+    if (haiSkinId != null) {
+      const base = customSkinBase(haiSkinId)
+      this.load.spritesheet('hai_omote_skin', `${base}/mj_hai_omote_0_${haiSkinSuffix}.png`,
         { frameWidth: 37, frameHeight: 63 })
     }
 
@@ -107,21 +108,21 @@ export default class PreloadScene extends Phaser.Scene {
       { frameWidth: 31, frameHeight: 55 })
     this.load.spritesheet('hai_open_3', `${IMG}/mj_hai_omote_3.png`,
       { frameWidth: 45, frameHeight: 43 })
-    if (customHaiId > 0 && customHaiId !== CUSTOM_HAI_DEFAULT) {
-      const base = customSkinBase(customHaiId)
-      this.load.spritesheet('hai_open_1_skin', `${base}/mj_hai_omote_1_${customHaiSuffix}.png`,
+    if (haiSkinId != null) {
+      const base = customSkinBase(haiSkinId)
+      this.load.spritesheet('hai_open_1_skin', `${base}/mj_hai_omote_1_${haiSkinSuffix}.png`,
         { frameWidth: 45, frameHeight: 43 })
-      this.load.spritesheet('hai_open_2_skin', `${base}/mj_hai_omote_2_${customHaiSuffix}.png`,
+      this.load.spritesheet('hai_open_2_skin', `${base}/mj_hai_omote_2_${haiSkinSuffix}.png`,
         { frameWidth: 31, frameHeight: 55 })
-      this.load.spritesheet('hai_open_3_skin', `${base}/mj_hai_omote_3_${customHaiSuffix}.png`,
+      this.load.spritesheet('hai_open_3_skin', `${base}/mj_hai_omote_3_${haiSkinSuffix}.png`,
         { frameWidth: 45, frameHeight: 43 })
     }
 
     /* ── 捨て牌 (sutehai_0) 37 frames × 31×55 ── */
     this.load.spritesheet('hai_sute', `${IMG}/mj_hai_sutehai_0.png`,
       { frameWidth: 31, frameHeight: 55 })
-    if (customHaiId > 0 && customHaiId !== CUSTOM_HAI_DEFAULT) {
-      this.load.spritesheet('hai_sute_skin', `${customSkinBase(customHaiId)}/mj_hai_sutehai_0_${customHaiSuffix}.png`,
+    if (haiSkinId != null) {
+      this.load.spritesheet('hai_sute_skin', `${customSkinBase(haiSkinId)}/mj_hai_sutehai_0_${haiSkinSuffix}.png`,
         { frameWidth: 31, frameHeight: 55 })
     }
 
@@ -129,11 +130,11 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.image('hai_ura_0', `${IMG}/mj_hai_ura_0.png`)
     this.load.image('hai_ura_1', `${IMG}/mj_hai_ura_1.png`)
     this.load.image('hai_ura_2', `${IMG}/mj_hai_ura_2.png`)
-    if (customHaiId > 0 && customHaiId !== CUSTOM_HAI_DEFAULT) {
-      const base = customSkinBase(customHaiId)
-      this.load.image('hai_ura_0_skin', `${base}/mj_hai_ura_0_${customHaiSuffix}.png`)
-      this.load.image('hai_ura_1_skin', `${base}/mj_hai_ura_1_${customHaiSuffix}.png`)
-      this.load.image('hai_ura_2_skin', `${base}/mj_hai_ura_2_${customHaiSuffix}.png`)
+    if (haiSkinId != null) {
+      const base = customSkinBase(haiSkinId)
+      this.load.image('hai_ura_0_skin', `${base}/mj_hai_ura_0_${haiSkinSuffix}.png`)
+      this.load.image('hai_ura_1_skin', `${base}/mj_hai_ura_1_${haiSkinSuffix}.png`)
+      this.load.image('hai_ura_2_skin', `${base}/mj_hai_ura_2_${haiSkinSuffix}.png`)
     }
 
     /* ── 方向別の立ち牌 (CMJObjPai::m_bmpHand) ── */
@@ -142,20 +143,20 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.image('hai_tachi_1', `${IMG}/mj_hai_tachi_1.png`)
     this.load.image('hai_tachi_2', `${IMG}/mj_hai_tachi_2.png`)
     this.load.image('hai_tachi_3', `${IMG}/mj_hai_tachi_3.png`)
-    if (customHaiId > 0 && customHaiId !== CUSTOM_HAI_DEFAULT) {
-      const base = customSkinBase(customHaiId)
-      this.load.spritesheet('hai_tachi_0_skin', `${base}/mj_hai_tachi_0_${customHaiSuffix}.png`,
+    if (haiSkinId != null) {
+      const base = customSkinBase(haiSkinId)
+      this.load.spritesheet('hai_tachi_0_skin', `${base}/mj_hai_tachi_0_${haiSkinSuffix}.png`,
         { frameWidth: 37, frameHeight: 63 })
-      this.load.image('hai_tachi_1_skin', `${base}/mj_hai_tachi_1_${customHaiSuffix}.png`)
-      this.load.image('hai_tachi_2_skin', `${base}/mj_hai_tachi_2_${customHaiSuffix}.png`)
-      this.load.image('hai_tachi_3_skin', `${base}/mj_hai_tachi_3_${customHaiSuffix}.png`)
+      this.load.image('hai_tachi_1_skin', `${base}/mj_hai_tachi_1_${haiSkinSuffix}.png`)
+      this.load.image('hai_tachi_2_skin', `${base}/mj_hai_tachi_2_${haiSkinSuffix}.png`)
+      this.load.image('hai_tachi_3_skin', `${base}/mj_hai_tachi_3_${haiSkinSuffix}.png`)
     }
 
     /* ── ドラ表示牌 (dora) 37 frames × 31×55 — レガシー m_bmpHand[0] ── */
     this.load.spritesheet('hai_dora', `${IMG}/mj_hai_dora.png`,
       { frameWidth: 31, frameHeight: 55 })
-    if (customHaiId > 0 && customHaiId !== CUSTOM_HAI_DEFAULT) {
-      this.load.spritesheet('hai_dora_skin', `${customSkinBase(customHaiId)}/mj_hai_dora_${customHaiSuffix}.png`,
+    if (haiSkinId != null) {
+      this.load.spritesheet('hai_dora_skin', `${customSkinBase(haiSkinId)}/mj_hai_dora_${haiSkinSuffix}.png`,
         { frameWidth: 31, frameHeight: 55 })
     }
 

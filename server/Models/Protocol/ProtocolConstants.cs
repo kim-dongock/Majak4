@@ -8,6 +8,7 @@ public static class Cmd
 {
     public const string EnterChannel        = "c1e";
     public const string ForcedLogout        = "forcedLogout";
+    public const string ConnectionClosing   = "connection:closing";
 
     // ─── チャンネルコマンド (mjkc*e) ───
     public const string GetDetailRec         = "mjkc1e";

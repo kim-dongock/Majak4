@@ -251,7 +251,9 @@ export async function connect(hubUrl = '/hubs/majak'): Promise<void> {
     .withUrl(hubUrl, {
       accessTokenFactory: getHubAccessToken,
     })
-    .withAutomaticReconnect()
+    .withAutomaticReconnect({
+      nextRetryDelayInMilliseconds: () => 3_000,
+    })
     .configureLogging(LogLevel.Warning)
     .build()
 

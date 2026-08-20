@@ -47,14 +47,14 @@ public class GamePlayCommandTests
             (RoomRegistryService)null!);
     }
 
-    // シナリオ1: ゲーム非進行中 → invalid command 相当で CloseSocket
+    // シナリオ1: 終局後に遅延したアクション → 接続を維持して無視
     [Fact]
-    public async Task Execute_NotPlaying_AbortsConnection()
+    public async Task Execute_FinishedGameWithDelayedAction_IgnoresPacket()
     {
         var player = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1" };
         _session.Register(player);
         var room = _session.CreateRoom("ch1", player, "", 1, 0, 0, false);
-        room.State = GameRoomState.Waiting; // 待機中
+        room.State = GameRoomState.Finished;
         string? abortReason = null;
 
         var cmd = new GamePlayCommand(_session, _gameLogicMock.Object);
@@ -63,7 +63,7 @@ public class GamePlayCommandTests
         await cmd.ExecuteAsync(ctx);
 
         Assert.Empty(sent);
-        Assert.Contains("invalid status", abortReason);
+        Assert.Null(abortReason);
         _gameLogicMock.Verify(g => g.GamePlayProcessAsync(It.IsAny<GameRoom>(), It.IsAny<CommandContext>()), Times.Never);
     }
 

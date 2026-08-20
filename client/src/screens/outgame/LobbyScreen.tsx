@@ -1068,18 +1068,25 @@ function MobileMemberListPanel({
   onFilterChange,
   onSelectMember,
   onViewProfile,
+  onStartOneToOne,
 }: {
   members: MemberEntry[]
   selectedMember: string | null
   filter: MemberFilterValue
   isDani: boolean
   onFilterChange: (filter: MemberFilterValue) => void
-  onSelectMember: (pix: string) => void
+  onSelectMember: (pix: string | null) => void
   onViewProfile: (pix: string) => void
+  onStartOneToOne: (pix: string) => void
 }) {
   const lastTapRef = useRef<{ pix: string; at: number }>({ pix: '', at: 0 })
 
   const handleMemberTap = (pix: string) => {
+    if (selectedMember === pix) {
+      onSelectMember(null)
+      lastTapRef.current = { pix: '', at: 0 }
+      return
+    }
     onSelectMember(pix)
 
     const now = Date.now()
@@ -1100,27 +1107,36 @@ function MobileMemberListPanel({
         <MemberFilterControls filter={filter} isDani={isDani} onChange={onFilterChange} />
       </details>
       {members.map(member => (
-        <button
-          key={member.pix}
-          type="button"
-          className={`majak-mobile-lobby-member${selectedMember === member.pix ? ' is-selected' : ''}`}
-          onClick={() => handleMemberTap(member.pix)}
-          onDoubleClick={() => onViewProfile(member.pix)}
-        >
-          <img
-            src={member.avatarId ? getShortAvatarUrl(member.avatarId) : getDefaultAvatarUrl(member.sex)}
-            alt=""
-            draggable={false}
-            onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatarUrl(member.sex) }}
-          />
-          <span>
-            <span className="majak-mobile-lobby-member__identity">
-              <span className="majak-mobile-lobby-member__name">{member.name}</span>
-              <span className="majak-mobile-lobby-member__title">{member.slevel || '庶民'}</span>
-              <span className="majak-mobile-lobby-member__location">{member.location}</span>
-            </span>
-          </span>
-        </button>
+        <div key={member.pix} className={`majak-mobile-lobby-member${selectedMember === member.pix ? ' is-selected' : ''}`}>
+          <div className="majak-mobile-lobby-member__row">
+            <button
+              type="button"
+              className="majak-mobile-lobby-member__select"
+              onClick={() => handleMemberTap(member.pix)}
+              onDoubleClick={() => onViewProfile(member.pix)}
+            >
+              <img
+                src={member.avatarId ? getShortAvatarUrl(member.avatarId) : getDefaultAvatarUrl(member.sex)}
+                alt=""
+                draggable={false}
+                onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatarUrl(member.sex) }}
+              />
+              <span>
+                <span className="majak-mobile-lobby-member__identity">
+                  <span className="majak-mobile-lobby-member__name">{member.name}</span>
+                  <span className="majak-mobile-lobby-member__title">{member.slevel || '庶民'}</span>
+                  <span className="majak-mobile-lobby-member__location">{member.location}</span>
+                </span>
+              </span>
+            </button>
+            {selectedMember === member.pix && (
+              <div className="majak-mobile-lobby-member__actions">
+                <button type="button" onClick={() => onStartOneToOne(member.pix)}>1:1チャット</button>
+                <button type="button" onClick={() => onViewProfile(member.pix)}>プロフィール</button>
+              </div>
+            )}
+          </div>
+        </div>
       ))}
     </aside>
   )
@@ -1135,6 +1151,7 @@ function MemberListPanel({
   onFilterChange,
   onSelectMember,
   onViewProfile,
+  onStartOneToOne,
 }: {
   members: MemberEntry[]
   totalMemberCount: number
@@ -1142,8 +1159,9 @@ function MemberListPanel({
   isDani: boolean
   filter: MemberFilterValue
   onFilterChange: (filter: MemberFilterValue) => void
-  onSelectMember: (pix: string) => void
+  onSelectMember: (pix: string | null) => void
   onViewProfile: (pix: string) => void
+  onStartOneToOne: (pix: string) => void
 }) {
   const [showFilter, setShowFilter] = useState(false)
   const filterActive = isMemberFilterActive(filter)
@@ -1257,7 +1275,7 @@ function MemberListPanel({
           left: 1,
           top: 61,
           width: 334,
-          height: 341,
+          height: 377,
           overflowY: 'auto',
           overflowX: 'hidden',
           background: '#fff',
@@ -1269,12 +1287,13 @@ function MemberListPanel({
         {members.map((member, index) => (
           <div
             key={`${member.pix}-${index}`}
-            onClick={() => onSelectMember(member.pix)}
+            onClick={() => onSelectMember(selectedMember === member.pix ? null : member.pix)}
             onDoubleClick={() => onViewProfile(member.pix)}
             style={{
               display: 'flex',
+              flexWrap: 'wrap',
               alignItems: 'center',
-              height: 36,
+              minHeight: 36,
               cursor: 'pointer',
               fontFamily: 'var(--majak-font-family-ui)',
               fontSize: 'calc(11px * var(--majak-type-scale))',
@@ -1304,6 +1323,12 @@ function MemberListPanel({
             </span>
             <span style={{ width: levelColumnWidth, overflow: 'hidden', whiteSpace: 'nowrap' }}>{isDani ? member.slevel : (member.slevel || '庶民')}</span>
             <span style={{ width: locationColumnWidth }}>{member.location}</span>
+            {selectedMember === member.pix && (
+              <span style={{ display: 'flex', flexBasis: '100%', justifyContent: 'flex-end', gap: 3, padding: '2px 3px 3px' }} onClick={event => event.stopPropagation()}>
+                <button type="button" onClick={() => onStartOneToOne(member.pix)} style={{ height: 23, border: '1px solid #b8b8b8', background: '#f6f6f6', color: '#12251a', fontFamily: 'inherit', fontSize: '10px', whiteSpace: 'nowrap' }}>1:1チャット</button>
+                <button type="button" onClick={() => onViewProfile(member.pix)} style={{ height: 23, border: '1px solid #b8b8b8', background: '#f6f6f6', color: '#12251a', fontFamily: 'inherit', fontSize: '10px', whiteSpace: 'nowrap' }}>プロフィール</button>
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -2842,15 +2867,25 @@ export default function LobbyScreen() {
           pix: player?.pix ?? '',
           error,
         })
-        showError('サーバーとの接続が切断されました')
-        navigate(channelId ? `/channel/${channelId}` : '/channel', { replace: true })
+        showError('サーバーとの接続が切断されました。再接続中です。')
       }
       SignalR.onConnectionLost(onConnectionLost)
+      const onReconnected = () => {
+        if (!mounted || !channelId) return
+        connectionLostHandled = false
+        const enterPayload = buildEnterChannelPayload(channelId, useAuthStore.getState().player)
+        console.info('[LobbyScreen] SignalR reconnected; re-entering channel', { channelId, pix: enterPayload.pix })
+        void SignalR.send('c1e', enterPayload).catch(error => {
+          console.error('[LobbyScreen] channel re-entry after SignalR reconnect failed', { channelId, error })
+        })
+      }
+      SignalR.onReconnected(onReconnected)
       const onBrowserOffline = () => onConnectionLost()
       window.addEventListener('offline', onBrowserOffline)
 
       const cleanupSignalR = () => {
         SignalR.offConnectionLost(onConnectionLost)
+        SignalR.offReconnected(onReconnected)
         window.removeEventListener('offline', onBrowserOffline)
         SignalR.off('c1e',               onChannelEntered)
         SignalR.off('mjkc26e',           onTournamentList)
@@ -3663,6 +3698,7 @@ export default function LobbyScreen() {
                 onFilterChange={setMemberFilter}
                 onSelectMember={setSelectedMember}
                 onViewProfile={openMemberProfile}
+                onStartOneToOne={startOneToOneChat}
               />
             </aside>
           </div>
@@ -3749,7 +3785,7 @@ export default function LobbyScreen() {
                 <button type="button" className="majak-mobile-lobby-header-button" onClick={() => void onRefreshRoomList()}>更新</button>
                 <button type="button" className="majak-mobile-lobby-header-button" onClick={() => void onChangeLobby()}>ロビー変更</button>
                 <button type="button" className="majak-mobile-lobby-header-button" aria-expanded={mobileActionGroup === 'items'} onClick={() => setMobileActionGroup(current => current === 'items' ? null : 'items')}>アイテム</button>
-                {(showMissionButton || showFreeChargeButton) && <button type="button" className="majak-mobile-lobby-header-button" aria-expanded={mobileActionGroup === 'other'} onClick={() => setMobileActionGroup(current => current === 'other' ? null : 'other')}>その他</button>}
+                {(showRankingButton || showMissionButton || showFreeChargeButton) && <button type="button" className="majak-mobile-lobby-header-button" aria-expanded={mobileActionGroup === 'other'} onClick={() => setMobileActionGroup(current => current === 'other' ? null : 'other')}>その他</button>}
               </div>
               {mobileActionGroup && (
                 <div className="majak-mobile-lobby-action-panel">
@@ -3760,6 +3796,7 @@ export default function LobbyScreen() {
                     <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCurrencyHistory(true) }}>通貨履歴</button>
                   </>}
                   {mobileActionGroup === 'other' && <>
+                    {showRankingButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); void openRanking() }}>ランキング</button>}
                     {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowMission(true) }}>ミッション</button>}
                     {showFreeChargeButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); void onFreeGpReplenish() }}>無料GP補充</button>}
                   </>}
@@ -3799,11 +3836,6 @@ export default function LobbyScreen() {
                   )}
                 </>
               )}
-              <div className="majak-mobile-lobby-command-grid">
-                <MobileLobbyCommandButton onClick={openRanking} hidden={!showRankingButton}>ランキング</MobileLobbyCommandButton>
-                <MobileLobbyCommandButton onClick={onReqOneToOne} disabled={!selectedMember}>1:1チャット</MobileLobbyCommandButton>
-                <MobileLobbyCommandButton onClick={onViewProfile} disabled={!selectedMember}>プロフィール</MobileLobbyCommandButton>
-              </div>
               <div className="majak-mobile-lobby-command-checks">
                 <label><input type="checkbox" checked={rejectInvite} disabled={autoMatchingChannel} onChange={event => setRejectInvite(event.currentTarget.checked)} />招待拒否</label>
                 <label><input type="checkbox" checked={rejectChat} onChange={event => setRejectChat(event.currentTarget.checked)} />チャット拒否</label>
@@ -3817,6 +3849,7 @@ export default function LobbyScreen() {
               onFilterChange={setMemberFilter}
               onSelectMember={setSelectedMember}
               onViewProfile={openMemberProfile}
+              onStartOneToOne={startOneToOneChat}
             />
           </aside>
         </div>
@@ -3848,6 +3881,7 @@ export default function LobbyScreen() {
         {useResponsiveDesktopLayout && (
           <nav className="majak-responsive-lobby-actions" aria-label="ロビー操作">
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onRefreshRoomList}>更新</button>
+            {showRankingButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={openRanking}>ランキング</button>}
             {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowShop(true)}>ショップ</button>}
             {showMissionButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowMission(true)}>ミッション</button>}
             {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>}
@@ -3878,7 +3912,7 @@ export default function LobbyScreen() {
         tournamentPage === 'match' ? (
         <>
           <TournamentMatchPanel tournament={selectedTournament} details={tournamentDetails} memberNameByPix={memberNameByPix} onWatch={onTournamentWatch} />
-          <MemberListPanel members={displayMembers} totalMemberCount={allDisplayMembers.length} selectedMember={selectedMember} isDani={daniChannel} filter={memberFilter} onFilterChange={setMemberFilter} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
+          <MemberListPanel members={displayMembers} totalMemberCount={allDisplayMembers.length} selectedMember={selectedMember} isDani={daniChannel} filter={memberFilter} onFilterChange={setMemberFilter} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} onStartOneToOne={startOneToOneChat} />
         </>
         ) : (
         <>
@@ -3897,7 +3931,7 @@ export default function LobbyScreen() {
           <RoomListPanel rooms={rooms} members={members} slotCount={roomSlotCount} channelId={channelId} onEnter={onEnterRoom} onCreateRoom={onCreateRoom} directRoomActionDisabled={autoMatchingChannel} />
 
           {/* ── メンバーリスト (CHgMemberListWnd) MoveWindow(678,212,336×403) ── */}
-          <MemberListPanel members={displayMembers} totalMemberCount={allDisplayMembers.length} selectedMember={selectedMember} isDani={daniChannel} filter={memberFilter} onFilterChange={setMemberFilter} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} />
+          <MemberListPanel members={displayMembers} totalMemberCount={allDisplayMembers.length} selectedMember={selectedMember} isDani={daniChannel} filter={memberFilter} onFilterChange={setMemberFilter} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} onStartOneToOne={startOneToOneChat} />
         </>
       )}
 
@@ -4203,26 +4237,6 @@ export default function LobbyScreen() {
       />
 
       {/* ── アイコンボタン群 y=696 ── */}
-
-      {/* mj_btn_profile.png (82×26) IDC_MEMBERLIST_MEMBERINFO at (678, Y_BTN_ICON_OFF_9=696) */}
-      <SpriteButton
-        src={`${IMG}/mj_btn_profile.png`}
-        frameW={82} frameH={26}
-        x={678 - LOBBY_LEFT_NUDGE} y={665}
-        onClick={onViewProfile}
-        title="プロフィール"
-        hidden={tournamentChannel && tournamentPage !== 'match'}
-      />
-
-      {/* mj_btn_1on1.png (82×26) IDC_MEMBERLIST_REQONETOONE at (X_BTN_ICON_OFF_1=764, 696) */}
-      <SpriteButton
-        src={`${IMG}/mj_btn_1on1.png`}
-        frameW={82} frameH={26}
-        x={764 - LOBBY_LEFT_NUDGE} y={665}
-        onClick={onReqOneToOne}
-        title="1対1チャット"
-        hidden={tournamentChannel && tournamentPage !== 'match'}
-      />
 
       {/* 招待拒否 CMJChkBtn::DrawItem 再現
            check.png: 56×14 (4フレーム, 14×14/frame)

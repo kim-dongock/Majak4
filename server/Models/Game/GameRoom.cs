@@ -197,6 +197,7 @@ public class GameRoom
 
     // 局開始演出完了待ち (MJPID_INIKYO → 最初の MJPID_ACTIONS の間)
     public object GamePresentationReadyLock { get; } = new();
+    public HashSet<string> GamePresentationExpectedConnectionIds { get; } = new();
     public HashSet<string> GamePresentationReadyConnectionIds { get; } = new();
     public TaskCompletionSource<bool>? GamePresentationReadyTcs { get; set; }
     public long GamePresentationId { get; set; }

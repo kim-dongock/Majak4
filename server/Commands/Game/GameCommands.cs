@@ -47,6 +47,13 @@ public class GamePlayCommand : ICommand
         }
 
 
+        if (room.Engine.GameStatus == Engine.GameStatus.NotPlaying &&
+            room.State == GameRoomState.Finished &&
+            !player.IsViewer)
+        {
+            return;
+        }
+
         if (room.Engine.GameStatus == Engine.GameStatus.NotPlaying ||
             player.IsViewer)
         {

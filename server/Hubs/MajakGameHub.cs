@@ -110,6 +110,9 @@ public class MajakGameHub : Hub
                 }
                 if (!string.IsNullOrEmpty(player.ChannelId))
                 {
+                    if (IsAutoMatchingChannel(player.ChannelId))
+                        _session.DequeueMatching(player.ChannelId, player.MemberNo);
+
                     await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"chanel_{player.ChannelId}");
                     await Clients.Group($"chanel_{player.ChannelId}")
                         .SendAsync(Cmd.DeleteMember, new
@@ -128,6 +131,12 @@ public class MajakGameHub : Hub
             await _lobbySessions.ReleaseAsync(Context.ConnectionId);
             await base.OnDisconnectedAsync(exception);
         }
+    }
+
+    private static bool IsAutoMatchingChannel(string channelId)
+    {
+        string subId = channelId.Length >= 11 ? channelId.Substring(6, 5) : channelId;
+        return subId.Length > 1 && subId[1] == 'Z';
     }
 
     /// <summary>
@@ -347,13 +356,7 @@ public class MajakGameHub : Hub
         log?.LogInformation("[GameReconnect] NotifyGameClientReady waiting for engine lock. connectionId={ConnectionId} roomId={RoomId}",
             Context.ConnectionId,
             roomId);
-        if (!await room.EngineLock.WaitAsync(TimeSpan.FromSeconds(5)))
-        {
-            log?.LogWarning("[GameReconnect] NotifyGameClientReady skipped: engine lock acquisition failed. connectionId={ConnectionId} roomId={RoomId}",
-                Context.ConnectionId,
-                roomId);
-            return;
-        }
+        await room.EngineLock.WaitAsync();
         try
         {
             log?.LogInformation("[GameReconnect] NotifyGameClientReady acquired engine lock. connectionId={ConnectionId} roomId={RoomId}",
@@ -368,7 +371,7 @@ public class MajakGameHub : Hub
                 Groups = Groups,
                 Payload = new Dictionary<string, object?>(),
             };
-            await gameLogic.SendGameResyncAsync(room, ctx, player, includePrompt: false);
+            await gameLogic.SendGameResyncAsync(room, ctx, player);
             log?.LogInformation("[GameReconnect] NotifyGameClientReady snapshot send completed. connectionId={ConnectionId} roomId={RoomId} allReady={AllReady}",
                 Context.ConnectionId,
                 roomId,
@@ -619,13 +622,7 @@ public class MajakGameHub : Hub
         log?.LogInformation("[GameReconnect] RequestGameResync waiting for engine lock. connectionId={ConnectionId} roomId={RoomId}",
             Context.ConnectionId,
             roomId);
-        if (!await room.EngineLock.WaitAsync(TimeSpan.FromSeconds(5)))
-        {
-            log?.LogWarning("[GameReconnect] RequestGameResync skipped: engine lock acquisition failed. connectionId={ConnectionId} roomId={RoomId}",
-                Context.ConnectionId,
-                roomId);
-            return;
-        }
+        await room.EngineLock.WaitAsync();
         try
         {
             log?.LogInformation("[GameReconnect] RequestGameResync acquired engine lock. connectionId={ConnectionId} roomId={RoomId}",
@@ -757,7 +754,26 @@ public class MajakGameHub : Hub
             code,
             reason,
             Context.GetHttpContext()?.Connection.RemoteIpAddress?.ToString() ?? "");
-        Context.Abort();
+        _ = NotifyConnectionClosingAndAbortAsync(code, reason);
+    }
+
+    private async Task NotifyConnectionClosingAndAbortAsync(string code, string reason)
+    {
+        try
+        {
+            string message = code == Cmd.GamePlay && reason.Contains("invalid status", StringComparison.Ordinal)
+                ? "対局終了後の遅延入力を受信しました。"
+                : "サーバーが不正な要求を検出しました。";
+            await Clients.Caller.SendAsync(Cmd.ConnectionClosing, new { code, message });
+        }
+        catch
+        {
+            // The close notification is best-effort; the connection must still be terminated.
+        }
+        finally
+        {
+            Context.Abort();
+        }
     }
 
     private ICommand? ResolveCommand(string code) => code switch

@@ -72,6 +72,8 @@ interface Props {
   data: KyoResData
   myOdr?: number
   canContinue?: boolean
+  waitingForOtherPlayers?: boolean
+  playerProgress?: Record<number, { durationMs: number; localDeadlineAt: number; submitted: boolean }>
   onClose: () => void
 }
 
@@ -415,6 +417,6 @@ export function LegacyKyoRes({ data, myOdr = 0, canContinue = true, onClose }: P
   )
 }
 
-export default function KyoRes({ data, canContinue = true, onClose }: Props) {
-  return <ResponsiveKyoResult data={data} canContinue={canContinue} onClose={onClose} />
+export default function KyoRes({ data, myOdr, canContinue = true, waitingForOtherPlayers = false, playerProgress, onClose }: Props) {
+  return <ResponsiveKyoResult data={data} myOdr={myOdr} canContinue={canContinue} waitingForOtherPlayers={waitingForOtherPlayers} playerProgress={playerProgress} onClose={onClose} />
 }

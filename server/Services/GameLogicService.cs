@@ -239,12 +239,12 @@ public class GameLogicService
         {
             if (presentationId != room.GamePresentationId) return Task.FromResult(false);
             PruneGamePresentationReadyLocked(room);
-            room.GamePresentationReadyConnectionIds.Add(connectionId);
-            var expected = GetExpectedGameClientConnectionIds(room);
+            var expected = room.GamePresentationExpectedConnectionIds;
+            if (expected.Contains(connectionId)) room.GamePresentationReadyConnectionIds.Add(connectionId);
             room.GamePresentationReadyConnectionIds.RemoveWhere(id => !expected.Contains(id));
             readyCount = room.GamePresentationReadyConnectionIds.Count;
             expectedCount = expected.Count;
-            isAllReady = expectedCount > 0 && expected.All(room.GamePresentationReadyConnectionIds.Contains);
+            isAllReady = expectedCount == 0 || expected.All(room.GamePresentationReadyConnectionIds.Contains);
             if (isAllReady) room.GamePresentationReadyTcs?.TrySetResult(true);
         }
 
@@ -371,11 +371,20 @@ public class GameLogicService
 
     private static long PrepareGamePresentationReadyGate(GameRoom room)
     {
+        HashSet<string> expectedConnectionIds;
+        lock (room.GameClientReadyLock)
+        {
+            PruneGameClientReadyLocked(room);
+            expectedConnectionIds = room.GameClientReadyConnectionIds.ToHashSet();
+        }
         lock (room.GamePresentationReadyLock)
         {
             room.GamePresentationId++;
+            room.GamePresentationExpectedConnectionIds.Clear();
+            room.GamePresentationExpectedConnectionIds.UnionWith(expectedConnectionIds);
             room.GamePresentationReadyConnectionIds.Clear();
             room.GamePresentationReadyTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (expectedConnectionIds.Count == 0) room.GamePresentationReadyTcs.TrySetResult(true);
             return room.GamePresentationId;
         }
     }
@@ -388,7 +397,8 @@ public class GameLogicService
         lock (room.GamePresentationReadyLock)
         {
             if (presentationId != room.GamePresentationId) return;
-            expectedCount = GetExpectedGameClientConnectionIds(room).Count;
+            PruneGamePresentationReadyLocked(room);
+            expectedCount = room.GamePresentationExpectedConnectionIds.Count;
             if (expectedCount == 0) return;
             readyTask = room.GamePresentationReadyTcs?.Task ?? Task.CompletedTask;
         }
@@ -415,8 +425,9 @@ public class GameLogicService
         {
             PruneGamePresentationReadyLocked(room);
             readyCount = room.GamePresentationReadyConnectionIds.Count;
-            expectedCount = GetExpectedGameClientConnectionIds(room).Count;
-            missingPlayers = DescribeMissingReadyPlayers(room, room.GamePresentationReadyConnectionIds);
+            expectedCount = room.GamePresentationExpectedConnectionIds.Count;
+            missingPlayers = string.Join(',', room.GamePresentationExpectedConnectionIds
+                .Except(room.GamePresentationReadyConnectionIds));
             room.GamePresentationReadyTcs?.TrySetResult(false);
         }
         _log?.LogWarning("[GameStartTiming] game presentation ready timed out; continuing round. roomId={RoomId} presentationId={PresentationId} ready={ReadyCount}/{ExpectedCount} waitMs={WaitMs} missingPlayers={MissingPlayers}",
@@ -425,8 +436,11 @@ public class GameLogicService
 
     private static void PruneGamePresentationReadyLocked(GameRoom room)
     {
-        var expected = GetExpectedGameClientConnectionIds(room).ToHashSet();
-        room.GamePresentationReadyConnectionIds.RemoveWhere(connectionId => !expected.Contains(connectionId));
+        var activeConnectionIds = GetExpectedGameClientConnectionIds(room).ToHashSet();
+        room.GamePresentationExpectedConnectionIds.RemoveWhere(connectionId => !activeConnectionIds.Contains(connectionId));
+        room.GamePresentationReadyConnectionIds.RemoveWhere(connectionId => !room.GamePresentationExpectedConnectionIds.Contains(connectionId));
+        if (room.GamePresentationExpectedConnectionIds.Count == 0)
+            room.GamePresentationReadyTcs?.TrySetResult(true);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -483,12 +497,18 @@ public class GameLogicService
         long actionSeq = ctx.GetLong("actionSeq");
         if (!ValidatePendingAction(room, order, actionSeq, act, indices))
         {
-            _log?.LogWarning("GamePlayProcess ignored stale action. roomId={RoomId} memberNo={MemberNo} order={Order} act={Act} actionSeq={ActionSeq}",
+            var currentPrompt = room.PendingActions[order];
+            _log?.LogWarning("[KyoConfirmation] action ignored. roomId={RoomId} memberNo={MemberNo} order={Order} act={Act} actionSeq={ActionSeq} engineMode={EngineMode} promptMode={PromptMode} promptActionSeq={PromptActionSeq} promptDeadline={PromptDeadline:o} remainingKyoOrders={RemainingKyoOrders}",
                 room.RoomId,
                 player.MemberNo,
                 order,
                 act,
-                actionSeq);
+                actionSeq,
+                room.Engine.Player[order].Mode,
+                currentPrompt?.PlayerMode,
+                currentPrompt?.ActionSeq,
+                currentPrompt?.DeadlineAt,
+                string.Join(',', Enumerable.Range(0, GameConst.PlayerMaxCount).Where(index => room.Engine.Player[index].Mode == Engine.PlayerMode.Kyo)));
             return;
         }
         _log?.LogDebug("GamePlayProcess before engine. roomId={RoomId} order={Order} engineMode={EngineMode} act={Act} indices={Indices}",
@@ -497,6 +517,17 @@ public class GameLogicService
             room.Engine.Player[order].Mode,
             act,
             string.Join(',', indices));
+        bool isKyoConfirmation = room.PendingActions[order]?.PlayerMode == Engine.PlayerMode.Kyo;
+        if (isKyoConfirmation)
+        {
+            _log?.LogInformation("[KyoConfirmation] received. roomId={RoomId} memberNo={MemberNo} order={Order} actionSeq={ActionSeq} deadline={Deadline:o} pendingKyoOrders={PendingKyoOrders}",
+                room.RoomId,
+                player.MemberNo,
+                order,
+                actionSeq,
+                room.PendingActions[order]?.DeadlineAt,
+                string.Join(',', Enumerable.Range(0, GameConst.PlayerMaxCount).Where(index => room.Engine.Player[index].Mode == Engine.PlayerMode.Kyo)));
+        }
         var result  = room.Engine.ProcessAction(order, act, indices, indices.Length);
         _log?.LogDebug("GamePlayProcess engine result. roomId={RoomId} order={Order} act={Act} result={Result} gameStatus={GameStatus}",
             room.RoomId,
@@ -513,12 +544,28 @@ public class GameLogicService
             return;
         }
 
+        if (isKyoConfirmation)
+        {
+            var remainingKyoOrders = Enumerable.Range(0, GameConst.PlayerMaxCount)
+                .Where(index => room.Engine.Player[index].Mode == Engine.PlayerMode.Kyo)
+                .ToArray();
+            _log?.LogInformation("[KyoConfirmation] accepted. roomId={RoomId} memberNo={MemberNo} order={Order} remainingKyoOrders={RemainingKyoOrders} gameStatus={GameStatus} nextKyoku={NextKyoku}",
+                room.RoomId,
+                player.MemberNo,
+                order,
+                string.Join(',', remainingKyoOrders),
+                room.Engine.GameStatus,
+                room.Engine.HanchanInfo.CurKyoku);
+            if (remainingKyoOrders.Length == 0)
+                _log?.LogInformation("[KyoConfirmation] all players confirmed; advancing immediately. roomId={RoomId} gameStatus={GameStatus} nextKyoku={NextKyoku}", room.RoomId, room.Engine.GameStatus, room.Engine.HanchanInfo.CurKyoku);
+        }
+
         ConsumePromptTimeBank(room, room.PendingActions[order], DateTimeOffset.UtcNow);
         room.PendingActions[order] = null;
 
         long auditSeq = LogAuthoritativeDiscardAudit(room, order, act, actionSeq, "player");
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
-        var actionInfo = BuildActionInfo(room, order, action, indices, actionSeq, auditSeq);
+        var actionInfo = BuildActionInfo(room, order, action, indices, actionSeq, auditSeq, isKyoConfirmation: isKyoConfirmation);
         await ctx.Clients.Group($"room_{room.RoomId}")
             .SendAsync(Cmd.GamePlay, actionInfo);
         _log?.LogDebug("GamePlayProcess broadcast action. roomId={RoomId} order={Order} action={Action} leftCount={LeftCount}", room.RoomId, order, action, room.Engine.GetBipaiCount());
@@ -540,6 +587,8 @@ public class GameLogicService
             case Engine.GameStatus.Playing:
                 break;
             case Engine.GameStatus.NewKyoku:
+                if (isKyoConfirmation)
+                    _log?.LogInformation("[KyoConfirmation] sending next kyoku. roomId={RoomId} kyoku={Kyoku}", room.RoomId, room.Engine.HanchanInfo.CurKyoku);
                 _log?.LogInformation("GamePlayProcess entering OnInitKyoku. roomId={RoomId}", room.RoomId);
                 await OnInitKyokuAsync(room, ctx);
                 break;
@@ -807,7 +856,7 @@ public class GameLogicService
         return auditSeq;
     }
 
-    private static object BuildActionInfo(GameRoom room, int seatOrder, int action, int[] bipaiIndex, long actionSeq = 0, long auditSeq = 0)
+    private static object BuildActionInfo(GameRoom room, int seatOrder, int action, int[] bipaiIndex, long actionSeq = 0, long auditSeq = 0, bool autoConfirmed = false, bool isKyoConfirmation = false)
     {
         return new
         {
@@ -817,6 +866,8 @@ public class GameLogicService
             bipaiIndex,
             actionSeq,
             auditSeq,
+            autoConfirmed,
+            isKyoConfirmation,
             leftCount = room.Engine.GetBipaiCount(),
         };
     }
@@ -904,6 +955,19 @@ public class GameLogicService
                     playerPos,
                     player.MemberNo,
                     player.ConnectionId);
+                continue;
+            }
+
+            var currentPrompt = room.PendingActions[order];
+            if (room.Engine.Player[order].Mode == Engine.PlayerMode.Kyo
+                && currentPrompt?.PlayerMode == Engine.PlayerMode.Kyo
+                && currentPrompt.DeadlineAt > DateTimeOffset.UtcNow)
+            {
+                _log?.LogInformation("[KyoConfirmation] retaining outstanding prompt. roomId={RoomId} order={Order} actionSeq={ActionSeq} deadline={Deadline:o}",
+                    room.RoomId,
+                    order,
+                    currentPrompt.ActionSeq,
+                    currentPrompt.DeadlineAt);
                 continue;
             }
 
@@ -1033,7 +1097,18 @@ public class GameLogicService
             prompt.ActionSeq,
             reason);
 
-        if (room.Engine.Player[order].Mode == Engine.PlayerMode.Turn)
+        if (playerMode == Engine.PlayerMode.Kyo)
+        {
+            _log?.LogInformation("[KyoConfirmation] prompt issued. roomId={RoomId} order={Order} actionSeq={ActionSeq} deadline={Deadline:o} timeLimitMs={TimeLimitMs} targetConnections={TargetConnections}",
+                room.RoomId,
+                order,
+                prompt.ActionSeq,
+                prompt.DeadlineAt,
+                timeLimitMs,
+                string.Join(',', targetConnectionIds));
+        }
+
+        if (room.Engine.Player[order].Mode is Engine.PlayerMode.Turn or Engine.PlayerMode.Kyo)
         {
             await ctx.Clients.GroupExcept($"room_{room.RoomId}", targetConnectionIds)
                 .SendAsync(Cmd.GamePlay, new
@@ -1429,8 +1504,11 @@ public class GameLogicService
                 if (!TryBuildTimeoutAction(room, order, out var timeoutAct, out var bipaiIdx)) return;
                 if (!IsActionCurrentlyAllowed(actions, timeoutAct, bipaiIdx)) return;
 
-                _log?.LogDebug("Action timeout default executing. roomId={RoomId} order={Order} mode={Mode} actionSeq={ActionSeq} delayMs={DelayMs}",
-                    room.RoomId, order, prompt.PlayerMode, prompt.ActionSeq, delayMs);
+                if (prompt.PlayerMode == Engine.PlayerMode.Kyo)
+                    _log?.LogInformation("[KyoConfirmation] timeout auto-confirming. roomId={RoomId} order={Order} actionSeq={ActionSeq} deadline={Deadline:o}", room.RoomId, order, prompt.ActionSeq, prompt.DeadlineAt);
+                else
+                    _log?.LogDebug("Action timeout default executing. roomId={RoomId} order={Order} mode={Mode} actionSeq={ActionSeq} delayMs={DelayMs}",
+                        room.RoomId, order, prompt.PlayerMode, prompt.ActionSeq, delayMs);
 
                 var result = room.Engine.ProcessAction(order, timeoutAct, bipaiIdx, bipaiIdx.Length);
                 if (result != Engine.ActionResult.Ok) return;
@@ -1439,7 +1517,7 @@ public class GameLogicService
 
                 long auditSeq = LogAuthoritativeDiscardAudit(room, order, timeoutAct, prompt.ActionSeq, "timeout");
                 var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
-                var actionInfo = BuildActionInfo(room, order, (int)timeoutAct, bipaiIdx, prompt.ActionSeq, auditSeq);
+                var actionInfo = BuildActionInfo(room, order, (int)timeoutAct, bipaiIdx, prompt.ActionSeq, auditSeq, autoConfirmed: prompt.PlayerMode == Engine.PlayerMode.Kyo, isKyoConfirmation: prompt.PlayerMode == Engine.PlayerMode.Kyo);
                 await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.GamePlay, actionInfo);
                 if (historyPaiInfo != null)
                 {
@@ -1573,10 +1651,10 @@ public class GameLogicService
     {
         return speedNo switch
         {
-            0 => (22000, 20000, 2000, 2000, 100, 8000),
-            1 => (27500, 25000, 2500, 2000, 500, 10000),
-            2 => (33000, 30000, 3000, 2500, 1000, 15000),
-            _ => (49500, 45000, 4500, 3500, 1200, 20000),
+            0 => (22000, 20000, 2000, 2000, 100, 60000),
+            1 => (27500, 25000, 2500, 2000, 500, 60000),
+            2 => (33000, 30000, 3000, 2500, 1000, 60000),
+            _ => (49500, 45000, 4500, 3500, 1200, 60000),
         };
     }
 
@@ -2812,8 +2890,12 @@ public class GameLogicService
     {
         for (int i = 0; i < GameConst.PlayerMaxCount; i++)
         {
-            if (room.Seats[i]?.IsOutPlayer == true)
-                room.Seats[i] = null;
+            var player = room.Seats[i];
+            if (player == null) continue;
+
+            player.RoomId = null;
+            player.IsViewer = false;
+            room.Seats[i] = null;
         }
     }
 

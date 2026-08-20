@@ -15,7 +15,7 @@ import MajakFrame from './components/MajakFrame'
 import MessageBoxHost from './components/MessageBoxHost'
 import GameReconnectLoading from './components/GameReconnectLoading'
 import RegistrationDlg from './screens/outgame/dialogs/RegistrationDlg'
-import { authApiUrl, googleLogin, refreshLogin, saveRegisteredPlayerCache, type MajakPlayer } from './api/auth'
+import { authApiUrl, clearLocalLogout, googleLogin, refreshLogin, saveRegisteredPlayerCache, type MajakPlayer } from './api/auth'
 import { getPlayerContinueRoom } from './api/channel'
 import * as SignalR from './api/signalr'
 import { useAuthStore } from './store/authStore'
@@ -308,8 +308,14 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       return true
     }
 
+    if (marker === 'login') {
+      clearLocalLogout()
+      return false
+    }
+
     if (marker !== 'register') return false
 
+    clearLocalLogout()
     // The API retains the verified Google token in an HttpOnly cookie until registration completes.
     setIdToken('')
     setRegistrationRequest({

@@ -5,7 +5,7 @@ export const GAME_LOAD_STEPS = [
   { id: 'channel', label: 'チャンネル情報を確認中' },
   { id: 'room', label: 'ルームに再入室中' },
   { id: 'resources', label: 'リソースダウンロード中' },
-  { id: 'scene', label: 'ゲーム画面を初期化中' },
+  { id: 'scene', label: '対局開始を待っています' },
   { id: 'tiles', label: '牌情報を復元中' },
   { id: 'history', label: '対局履歴を復元中' },
   { id: 'sync', label: '対局状態を同期中' },

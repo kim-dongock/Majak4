@@ -116,7 +116,7 @@ const MOBILE_HUD_ICON_WIDTH = 44
 const MOBILE_HUD_ICON_HEIGHT = 66
 const HUD_NAME_MIN_FONT_SIZE = 8
 const DESKTOP_HUD_INFO_Y_SHIFT = -24
-const RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y = 48
+const RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y = 24
 
 function cssPx(value: string): number {
   const match = value.match(/\d+/)

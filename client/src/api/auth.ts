@@ -67,7 +67,7 @@ function markLocalLogout(): void {
   }
 }
 
-function clearLocalLogout(): void {
+export function clearLocalLogout(): void {
   try {
     window.localStorage.removeItem(LOCAL_LOGOUT_STORAGE_KEY)
   } catch {

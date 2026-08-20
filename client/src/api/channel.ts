@@ -6,7 +6,7 @@
  *   alpha       : "http://alpha-game.majak2.jp"
  *   production  : "https://game.majak2.jp"
  */
-import { gameAuthHeaders } from './authHeaders'
+import { gameAuthHeaders, refreshedGameAuthHeaders } from './authHeaders'
 
 // Vite がビルド時に VITE_API_BASE_URL を文字列リテラルに置換する。
 // 開発時は Vite dev server プロキシを使うため空文字でよい。
@@ -24,9 +24,10 @@ async function apiPost(path: string, body: unknown): Promise<void> {
 }
 
 async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: gameAuthHeaders(),
-  })
+  const request = (headers: HeadersInit) => fetch(`${API_BASE}${path}`, { headers })
+  let res = await request(await refreshedGameAuthHeaders())
+  if (res.status === 401)
+    res = await request(await refreshedGameAuthHeaders(undefined, true))
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
   return res.json() as Promise<T>
 }

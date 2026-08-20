@@ -328,7 +328,7 @@
 }
 
 @media (max-width: 700px), (max-height: 560px) {
-  .registration-panel { border-radius: 0; }
+  .registration-panel { display: block !important; overflow-y: auto !important; border-radius: 0; }
   .registration-panel--profile { padding-top: 4px; }
   .registration-steps { gap: 7px; margin-bottom: 6px; }
   .registration-step { gap: 4px; font-size: var(--majak-popup-font-body); }

@@ -30,15 +30,26 @@ public sealed class PaifuFileService
         IReadOnlyList<object> packets,
         IReadOnlyList<MajakPlayer> players,
         IReadOnlyDictionary<string, object?>? report)
-        => new(
+    {
+        var resultsByPix = ReadMemberResults(report);
+        var members = players
+            .Select(player => new PaifuArchiveParticipant(
+                player.MemberNo,
+                player.NickName,
+                player.SLevel,
+                player.Rating,
+                resultsByPix.GetValueOrDefault(player.Pix, "")))
+            .ToArray();
+        return new(
             DateTimeOffset.UtcNow,
             room.ChannelId,
             room.RoomId,
-            room.RoomTitle,
+            BuildGameType(room),
             room.RoomOption,
             packets.Select(ToJsonElement).ToArray(),
-            players.Select(player => new PaifuArchiveParticipant(player.MemberNo, player.NickName, player.SLevel, player.Rating)).ToArray(),
-            ReadResult(report));
+            members,
+            string.Join(" / ", members.Where(member => !string.IsNullOrEmpty(member.Result)).Select(member => $"{member.Name} {member.Result}")));
+    }
 
     public Task StoreCompletedGameAsync(GameRoom room, IReadOnlyList<object> packets, IReadOnlyList<MajakPlayer> players, IReadOnlyDictionary<string, object?>? report)
         => StoreCompletedGameAsync(CreateCompletedGameWorkItem(room, packets, players, report));
@@ -54,7 +65,7 @@ public sealed class PaifuFileService
             RoomName: item.RoomName,
             RoomOption: item.RoomOption,
             Packets: item.Packets,
-            Members: item.Members.Select(member => new PaifuMember(member.Name, member.Title, member.Rating, "")).ToArray(),
+            Members: item.Members.Select(member => new PaifuMember(member.Name, member.Title, member.Rating, member.Result)).ToArray(),
             Result: item.Result);
         var plain = JsonSerializer.SerializeToUtf8Bytes(payload);
         if (plain.Length > MaxPlaintextBytes || item.Packets.Count > MaxPackets) return;
@@ -159,8 +170,34 @@ public sealed class PaifuFileService
         return output.ToArray();
     }
 
-    private static string ReadResult(IReadOnlyDictionary<string, object?>? report)
-        => report is not null && report.TryGetValue("result", out var value) ? Convert.ToString(value) ?? "" : "";
+    private static IReadOnlyDictionary<string, string> ReadMemberResults(IReadOnlyDictionary<string, object?>? report)
+    {
+        var results = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (report is null || !report.TryGetValue("users", out var users) || users is null) return results;
+
+        var entries = JsonSerializer.SerializeToElement(users);
+        if (entries.ValueKind != JsonValueKind.Array) return results;
+        foreach (var entry in entries.EnumerateArray())
+        {
+            if (!entry.TryGetProperty("pix", out var pixValue) || !entry.TryGetProperty("ranking", out var rankingValue)) continue;
+            var pix = pixValue.GetString();
+            if (string.IsNullOrEmpty(pix) || !rankingValue.TryGetInt32(out var ranking) || ranking is < 1 or > 4) continue;
+            results[pix] = $"{ranking}位";
+        }
+        return results;
+    }
+
+    private static string BuildGameType(GameRoom room)
+    {
+        var mode = room.IsGradeChannel ? "段位戦"
+            : room.IsTournamentChannel ? "大会"
+            : room.IsCupChannel ? "カップ戦"
+            : room.IsCompeteChannel ? "競技戦"
+            : room.IsTrainingChannel ? "練習戦"
+            : room.IsAutoMatchChannel ? "自動対戦"
+            : "交流戦";
+        return $"{mode}・{(room.Engine.Rule.Hanchan ? "半荘戦" : "東風戦")}";
+    }
 
     private static JsonElement ToJsonElement(object value)
         => JsonSerializer.SerializeToElement(value);
@@ -184,7 +221,7 @@ public sealed class PaifuFileService
 
 public sealed record PaifuArchiveSummary(ulong ArchiveId, DateTime PlayedAt, string RoomName, string RoomOption, string Result, IReadOnlyList<PaifuMember> Members, int PacketCount);
 public sealed record PaifuMember(string Name, string Title, int Rating, string Result);
-public sealed record PaifuArchiveParticipant(string MemberNo, string Name, string Title, int Rating);
+public sealed record PaifuArchiveParticipant(string MemberNo, string Name, string Title, int Rating, string Result);
 public sealed record PaifuArchiveWorkItem(DateTimeOffset PlayedAt, string ChannelId, int RoomId, string RoomName, string RoomOption, IReadOnlyList<JsonElement> Packets, IReadOnlyList<PaifuArchiveParticipant> Members, string Result);
 public sealed record PaifuPayload(int Version, DateTimeOffset PlayedAt, string ChannelId, int RoomId, string RoomName, string RoomOption, IReadOnlyList<JsonElement> Packets, IReadOnlyList<PaifuMember> Members, string Result);
 public enum PaifuMatchKind { All, Normal, Tournament }

@@ -52,7 +52,7 @@ import {
 import { GAME_LOAD_PROGRESS_EVENT, GAME_LOAD_STEPS, type GameLoadStep } from '../../game/gameLoadProgress'
 import { finalizePaifuRecording } from '../../game/paifuRecording'
 import { getLegacyKyoResultDelayMs } from '../../game/legacyAnimations'
-import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyFullUiSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
+import { applyTengokuTextColor, getLegacyBoardImageUrl, getLegacyBoardSoundSkinId, getLegacyFullUiSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 
 const IMG = '/assets/images/game'
@@ -70,6 +70,8 @@ const GAME_STATUS_EVENT = 'majak:game-status'
 const GAME_FOCUS_CHAT_EVENT = 'majak:game-focus-chat'
 const GAME_SYNC_EVENT = 'majak:game-sync'
 const KYO_RESULT_ACTION_EVENT = 'majak:kyo-result-action'
+const KYO_RESULT_PROGRESS_EVENT = 'majak:kyo-result-progress'
+const KYO_RESULT_CONFIRMED_EVENT = 'majak:kyo-result-confirmed'
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
 const PAIFU_HAND_OPEN_EVENT = 'majak:paifu-hand-open'
 const DEBUG_GAME = import.meta.env.VITE_DEBUG_GAME === '1'
@@ -749,7 +751,6 @@ export default function RoomScreen() {
   const customBoardId = routeCustomBoardId > 0 ? routeCustomBoardId : fallbackSkin.bgId
   const customHaiId = routeCustomHaiId > 0 ? routeCustomHaiId : fallbackSkin.haiId
   const customBoardType = routeCustomBoardType > 0 ? routeCustomBoardType : fallbackSkin.bgType
-  const customBoardSuffix = String(customBoardId).padStart(2, '0')
   const fullUiSkinId = getLegacyFullUiSkinId(customBoardId, customBoardType)
   const fullUiSkinSuffix = String(fullUiSkinId ?? customBoardId).padStart(2, '0')
   const hasFullCustomBoardSkin = fullUiSkinId != null
@@ -760,9 +761,7 @@ export default function RoomScreen() {
     ? `${IMG}/skin/${fullUiSkinId}/${skinKey}_${fullUiSkinSuffix}.png`
     : `${IMG}/${baseKey}.png`
   const bgSkinFallbackSrc = (_skinKey: string, baseKey = _skinKey) => hasFullCustomBoardSkin ? `${IMG}/${baseKey}.png` : undefined
-  const customBoardSrc = customBoardId > 0 && customBoardId !== CUSTOM_BOARD_DEFAULT
-    ? `${IMG}/skin/${customBoardId}/mj_board_${customBoardSuffix}.png`
-    : `${IMG}/mj_board.png`
+  const customBoardSrc = getLegacyBoardImageUrl(customBoardId, customBoardType)
   const promptSrc = {
     waitEntry: bgSkinSrc('mj_promptWaitEntry'),
     pushReady: bgSkinSrc('mj_promptPushReady'),
@@ -787,6 +786,8 @@ export default function RoomScreen() {
     actionSeq?: number
     localDeadlineAt?: number
   } | null>(null)
+  const [kyoResultSubmitted, setKyoResultSubmitted] = useState(false)
+  const [kyoResultProgress, setKyoResultProgress] = useState<Record<number, { durationMs: number; localDeadlineAt: number; submitted: boolean }>>({})
   const [roomActionPending, setRoomActionPending] = useState(true)
   const [autoControl, setAutoControl] = useState<AutoControlState>({ prox: false, autoTap: false, autoPass: false, autoHora: false })
   const autoControlRef = useRef(autoControl)
@@ -1637,10 +1638,15 @@ export default function RoomScreen() {
         kyoResultTimerRef.current = null
         setKyoResData(null)
         setKyoResultAction(null)
+        setKyoResultSubmitted(false)
+        setKyoResultProgress({})
         return
       }
       if (data.playType !== 'MJPID_ENDKYO' || !Array.isArray(data.players)) return
       if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
+      setKyoResultAction(null)
+      setKyoResultSubmitted(false)
+      setKyoResultProgress({})
       const showKyoResult = () => {
         if (!mounted) return
         kyoResultTimerRef.current = null
@@ -1977,10 +1983,16 @@ export default function RoomScreen() {
      * CHgGameWnd::OnSocketClose がエラーを返した場合は ForceExit() する。
      */
     let connectionLostHandled = false
+    let connectionCloseMessage = ''
+    const onConnectionClosing = (data: Record<string, unknown>) => {
+      connectionCloseMessage = String(data.message ?? 'サーバーにより接続が終了されました。')
+    }
+    SignalR.on('connection:closing', onConnectionClosing)
     const onConnectionLost = (error?: Error) => {
       if (!mounted || connectionLostHandled) return
       connectionLostHandled = true
       logRejoinProbe('SignalR connection lost', { errorMessage: error?.message ?? String(error ?? '') })
+      showError(connectionCloseMessage || 'ルームサーバーとの接続が終了しました。')
       if (gameReconnectActiveRef.current || inlineGameActiveRef.current) {
         console.warn('[RoomScreen] SignalR connection lost during inline game; waiting for game resync/reconnect', {
           channelId,
@@ -1996,7 +2008,6 @@ export default function RoomScreen() {
         pix: useAuthStore.getState().player?.pix ?? '',
         error,
       })
-      showError('ルームサーバーとの接続が異常終了しました。')
       navigate(channelId ? `/channel/${channelId}` : '/channel', { replace: true })
     }
     SignalR.onConnectionLost(onConnectionLost)
@@ -2217,6 +2228,7 @@ export default function RoomScreen() {
       }
       SignalR.offConnectionLost(onConnectionLost)
       SignalR.offReconnected(onReconnected)
+      SignalR.off('connection:closing', onConnectionClosing)
       window.removeEventListener('offline', onBrowserOffline)
       SignalR.off('c14e',             onRoomEnter)
       SignalR.off('c55e',             onReserveChance)
@@ -2479,14 +2491,55 @@ export default function RoomScreen() {
       })
     }
     window.addEventListener(KYO_RESULT_ACTION_EVENT, onKyoResultAction)
-    return () => window.removeEventListener(KYO_RESULT_ACTION_EVENT, onKyoResultAction)
+    const onKyoResultProgress = (event: Event) => {
+      const detail = (event as CustomEvent<{ seatOrder?: number; durationMs?: number; localDeadlineAt?: number }>).detail ?? {}
+      const seatOrder = Number(detail.seatOrder)
+      const durationMs = Math.max(0, Number(detail.durationMs ?? 0))
+      const localDeadlineAt = Number(detail.localDeadlineAt ?? 0)
+      if (!Number.isInteger(seatOrder) || seatOrder < 0 || !Number.isFinite(localDeadlineAt) || localDeadlineAt <= 0) return
+      setKyoResultProgress(current => {
+        const previous = current[seatOrder]
+        return {
+          ...current,
+          [seatOrder]: {
+            durationMs: previous?.durationMs || durationMs,
+            localDeadlineAt: previous ? Math.min(previous.localDeadlineAt, localDeadlineAt) : localDeadlineAt,
+            submitted: previous?.submitted ?? false,
+          },
+        }
+      })
+    }
+    const onKyoResultConfirmed = (event: Event) => {
+      const seatOrder = Number((event as CustomEvent<{ seatOrder?: number }>).detail?.seatOrder)
+      if (!Number.isInteger(seatOrder) || seatOrder < 0) return
+      setKyoResultProgress(current => {
+        const progress = current[seatOrder]
+        return {
+          ...current,
+          [seatOrder]: progress
+            ? { ...progress, submitted: true }
+            : { durationMs: 0, localDeadlineAt: 0, submitted: true },
+        }
+      })
+    }
+    window.addEventListener(KYO_RESULT_PROGRESS_EVENT, onKyoResultProgress)
+    window.addEventListener(KYO_RESULT_CONFIRMED_EVENT, onKyoResultConfirmed)
+    return () => {
+      window.removeEventListener(KYO_RESULT_ACTION_EVENT, onKyoResultAction)
+      window.removeEventListener(KYO_RESULT_PROGRESS_EVENT, onKyoResultProgress)
+      window.removeEventListener(KYO_RESULT_CONFIRMED_EVENT, onKyoResultConfirmed)
+    }
   }, [isViewerUser, me?.pos, roomId])
   const sendKyoResultAction = async () => {
     const request = kyoResultAction
-    setKyoResData(null)
     setKyoResultAction(null)
     if (!request) return
     if (request.localDeadlineAt !== undefined && performance.now() >= request.localDeadlineAt) return
+    setKyoResultSubmitted(true)
+    setKyoResultProgress(current => {
+      const progress = current[request.seatOrder]
+      return progress ? { ...current, [request.seatOrder]: { ...progress, submitted: true } } : current
+    })
     await SignalR.send(CMD_GAME_PLAY, {
       playType: 'MJPID_ACTION',
       roomId: request.roomId,
@@ -2755,6 +2808,8 @@ export default function RoomScreen() {
         data={displayedKyoResData}
         myOdr={displayedKyoResData.players.find(player => player.pix === myPix)?.seatPos ?? 0}
         canContinue={FORCE_KYO_RESULT_FOR_TEST || Boolean(kyoResultAction)}
+        waitingForOtherPlayers={kyoResultSubmitted}
+        playerProgress={kyoResultProgress}
         onClose={() => { if (!FORCE_KYO_RESULT_FOR_TEST) void sendKyoResultAction() }}
       />
     ) : null
@@ -3263,7 +3318,7 @@ export default function RoomScreen() {
         src={customBoardSrc}
         alt=""
         draggable={false}
-        onError={event => { event.currentTarget.src = `${IMG}/mj_board.png` }}
+                        onError={event => { event.currentTarget.src = getLegacyBoardImageUrl(undefined) }}
         style={{ position: 'absolute', left: BOARD_X, top: BOARD_Y, width: 789, height: 704 }}
       />
 

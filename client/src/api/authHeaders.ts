@@ -29,10 +29,10 @@ function isAccessTokenExpiringSoon(token: string): boolean {
   }
 }
 
-/** Returns Authorization headers after refreshing a missing or expiring game JWT. */
-export async function refreshedGameAuthHeaders(extra?: HeadersInit): Promise<HeadersInit> {
+/** Returns Authorization headers after refreshing a missing, expiring, or rejected game JWT. */
+export async function refreshedGameAuthHeaders(extra?: HeadersInit, forceRefresh = false): Promise<HeadersInit> {
   let token = getGameAccessToken()
-  if (token && !isAccessTokenExpiringSoon(token)) return { ...extra, Authorization: `Bearer ${token}` }
+  if (!forceRefresh && token && !isAccessTokenExpiringSoon(token)) return { ...extra, Authorization: `Bearer ${token}` }
 
   const refreshedPlayer = await refreshLogin()
   if (refreshedPlayer?.accessToken) {

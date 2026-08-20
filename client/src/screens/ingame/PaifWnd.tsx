@@ -20,6 +20,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
 import { getPaifuReplayPayload } from '../../api/paifu'
+import GameReconnectLoading from '../../components/GameReconnectLoading'
+import { GAME_LOAD_PROGRESS_EVENT, type GameLoadStep } from '../../game/gameLoadProgress'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 import { getDefaultAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
 import PaifuSaveDlg from '../outgame/dialogs/PaifuSaveDlg'
@@ -42,6 +44,25 @@ type ReplayPacket = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function formatPlayedAtJst(value: string): string {
+  const normalized = value.trim()
+  const utcValue = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized) ? normalized : `${normalized}Z`
+  const date = new Date(utcValue)
+  if (Number.isNaN(date.getTime())) return value.replace('T', ' ').slice(0, 16)
+
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${values.year}/${values.month}/${values.day} ${values.hour}:${values.minute}`
 }
 
 function extractReplayPackets(value: unknown): ReplayPacket[] {
@@ -135,11 +156,14 @@ export default function PaifWnd() {
   const [packetCursor, setPacketCursor] = useState(0)
   const [replaySession, setReplaySession] = useState(0)
   const [isReplayReady, setIsReplayReady] = useState(false)
+  const [isArchiveLoading, setIsArchiveLoading] = useState(!initialSource?.data)
+  const [replayLoadStep, setReplayLoadStep] = useState<GameLoadStep>(initialSource?.data ? 'resources' : 'server')
   const [mobileIngameScale, setMobileIngameScale] = useState(1)
   const appliedPacketCursorRef = useRef(0)
   const replaySeedCursorRef = useRef(0)
-  const autoStartedRef = useRef(false)
   const nextReplayPacketAtRef = useRef(0)
+  const playAfterReplayReadyRef = useRef(false)
+  const autoPlayOnReplayReadyRef = useRef(true)
 
   const [source, setSource] = useState<PaifuSource | undefined>(initialSource)
   const hasPaifu = Boolean(source?.data)
@@ -155,6 +179,8 @@ export default function PaifWnd() {
   useEffect(() => {
     if (initialSource?.data) {
       setSource(initialSource)
+      setIsArchiveLoading(false)
+      setReplayLoadStep('resources')
       return
     }
     if (!replayArchiveId) {
@@ -164,7 +190,11 @@ export default function PaifWnd() {
     let cancelled = false
     void getPaifuReplayPayload(replayArchiveId)
       .then(data => {
-        if (!cancelled) setSource({ data, title: String(replayArchiveId) })
+        if (!cancelled) {
+          setSource({ data, title: String(replayArchiveId) })
+          setIsArchiveLoading(false)
+          setReplayLoadStep('resources')
+        }
       })
       .catch(() => {
         if (!cancelled) navigate('/paifu', { replace: true })
@@ -173,10 +203,24 @@ export default function PaifWnd() {
   }, [initialSource, navigate, replayArchiveId])
 
   useEffect(() => {
-    if (!containerRef.current) return
+    if (!containerRef.current || !source?.data) return
     setIsReplayReady(false)
-    const handleReplayReady = () => setIsReplayReady(true)
+    setReplayLoadStep('scene')
+    const handleReplayReady = () => {
+      setReplayLoadStep('ready')
+      setIsReplayReady(true)
+      if (playAfterReplayReadyRef.current || autoPlayOnReplayReadyRef.current) {
+        playAfterReplayReadyRef.current = false
+        autoPlayOnReplayReadyRef.current = false
+        setIsPlaying(true)
+      }
+    }
+    const handleLoadProgress = (event: Event) => {
+      const step = (event as CustomEvent<{ step?: GameLoadStep }>).detail?.step
+      if (step) setReplayLoadStep(step)
+    }
     window.addEventListener(PAIFU_REPLAY_READY_EVENT, handleReplayReady)
+    window.addEventListener(GAME_LOAD_PROGRESS_EVENT, handleLoadProgress)
     const seedCursor = replaySeedCursorRef.current
     appliedPacketCursorRef.current = seedCursor
     createGame(containerRef.current, {
@@ -187,6 +231,7 @@ export default function PaifWnd() {
     })
     return () => {
       window.removeEventListener(PAIFU_REPLAY_READY_EVENT, handleReplayReady)
+      window.removeEventListener(GAME_LOAD_PROGRESS_EVENT, handleLoadProgress)
       destroyGame()
     }
   }, [ingameLayoutMode, isMobileIngame, replayMembers, replayPackets, replaySession, source?.data])
@@ -242,12 +287,6 @@ export default function PaifWnd() {
     return () => window.clearTimeout(timer)
   }, [isPlaying, isReplayReady, packetCursor, replayPackets.length])
 
-  useEffect(() => {
-    if (!isReplayReady || replayPackets.length === 0 || autoStartedRef.current) return
-    autoStartedRef.current = true
-    setIsPlaying(true)
-  }, [isReplayReady, replayPackets.length])
-
   /** OnPaifuSave — CPaifuSaveDlg を開いてブラウザダウンロード */
   const handleSave = () => {
     if (!hasPaifu) return
@@ -294,6 +333,8 @@ export default function PaifWnd() {
 
   const jumpToPacket = (nextCursor: number) => {
     const boundedCursor = Math.max(0, Math.min(replayPackets.length, nextCursor))
+    playAfterReplayReadyRef.current = false
+    autoPlayOnReplayReadyRef.current = false
     setIsPlaying(false)
     replaySeedCursorRef.current = boundedCursor
     setPacketCursor(boundedCursor)
@@ -307,7 +348,10 @@ export default function PaifWnd() {
 
   const handleBack = () => jumpToPacket(packetCursor - 1)
 
-  const handleStep = () => setPacketCursor(cursor => Math.min(replayPackets.length, cursor + 1))
+  const handleStep = () => {
+    setIsPlaying(false)
+    setPacketCursor(cursor => Math.min(replayPackets.length, cursor + 1))
+  }
 
   const handleNext = () => {
     const next = kyokuStarts.find(index => index > packetCursor)
@@ -338,7 +382,11 @@ export default function PaifWnd() {
       setIsPlaying(false)
       return
     }
-    if (packetCursor >= replayPackets.length) jumpToPacket(0)
+    if (packetCursor >= replayPackets.length) {
+      jumpToPacket(0)
+      playAfterReplayReadyRef.current = true
+      return
+    }
     setIsPlaying(true)
   }
 
@@ -360,7 +408,7 @@ export default function PaifWnd() {
           <div className="majak-responsive-paifu__progress-track"><div style={{ width: `${replayProgress}%` }} /></div>
         </div>
         <strong>{replayMetadata.roomName || source?.title || '牌譜'}</strong>
-        {replayMetadata.playedAt && <div>{replayMetadata.playedAt.replace('T', ' ').slice(0, 16)}</div>}
+        {replayMetadata.playedAt && <div>{formatPlayedAtJst(replayMetadata.playedAt)}</div>}
         {replayMetadata.result && <div>{replayMetadata.result}</div>}
       </div>
       <div className="majak-responsive-ingame-sidebar__chat majak-responsive-paifu__members">
@@ -380,7 +428,7 @@ export default function PaifWnd() {
               <span>{String(member.mjkk34e ?? member.k8e ?? member.nickName ?? member.nickname ?? member.name ?? member.Name ?? '-')}</span>
               <small>{String(member.k32e ?? member.slevel ?? member.title ?? member.Title ?? '')}</small>
               <small className="majak-responsive-paifu__member-gp">GP {typeof gamMoney === 'number' && Number.isFinite(gamMoney) ? gamMoney.toLocaleString() : '-'}</small>
-              <em>{typeof rating === 'number' && Number.isFinite(rating) ? rating : '-'}</em>
+              <em>R {typeof rating === 'number' && Number.isFinite(rating) ? rating : '-'}</em>
             </div>
           )
         })}
@@ -489,6 +537,12 @@ export default function PaifWnd() {
           onCancel={() => setShowSaveDlg(false)}
         />
       )}
+      <GameReconnectLoading
+        visible={isArchiveLoading || !isReplayReady}
+        currentStep={isArchiveLoading ? 'server' : replayLoadStep}
+        complete={false}
+        fixed
+      />
     </main>
   )
 }

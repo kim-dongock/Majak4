@@ -1236,7 +1236,7 @@ public class MajakPlayerModelTests
 // ═══════════════════════════════════════════════════════════════════════════
 public class GameLogicHelperTests
 {
-    private static GameLogicService BuildService(PlayerSessionService? session = null, PlayerRepository? playerRepo = null, HistoryRepository? historyRepo = null, LogRepository? logRepo = null, RoomRegistryService? roomRegistry = null, bool testEnvironment = false, string? trainingAiLevel = null, int gamePresentationReadyTimeoutMs = 0, ILogger<GameLogicService>? logger = null)
+    private static GameLogicService BuildService(PlayerSessionService? session = null, PlayerRepository? playerRepo = null, HistoryRepository? historyRepo = null, LogRepository? logRepo = null, RoomRegistryService? roomRegistry = null, bool testEnvironment = false, string? trainingAiLevel = null, int gamePresentationReadyTimeoutMs = 0, ILogger<GameLogicService>? logger = null, int gameClientReadyTimeoutMs = 0)
     {
         session ??= new PlayerSessionService();
         var histMock = new Mock<HistoryRepository>(MockBehavior.Loose);
@@ -1252,7 +1252,7 @@ public class GameLogicHelperTests
                 {
                     ["GameSettings:TestEnvironment"] = testEnvironment.ToString(),
                     ["GameSettings:TrainingAiLevel"] = trainingAiLevel,
-                    ["GameSettings:GameClientReadyTimeoutMs"] = "0",
+                    ["GameSettings:GameClientReadyTimeoutMs"] = gameClientReadyTimeoutMs.ToString(),
                     ["GameSettings:GamePresentationReadyTimeoutMs"] = gamePresentationReadyTimeoutMs.ToString(),
                 })
                 .Build(), log: logger, roomRegistry: roomRegistry);
@@ -1889,6 +1889,135 @@ public class GameLogicHelperTests
     }
 
     [Fact]
+    public async Task StartGameLogic_AllFourPlayersReady_DoesNotWaitForStartupTimeouts()
+    {
+        var session = new PlayerSessionService();
+        var players = Enumerable.Range(0, GameConst.PlayerMaxCount)
+            .Select(seat => new MajakPlayer
+            {
+                MemberNo = $"ready-{seat}",
+                NickName = $"Ready {seat}",
+                ConnectionId = $"ready-connection-{seat}",
+                ChannelId = "ch-ready",
+            })
+            .ToArray();
+        foreach (var player in players) session.Register(player);
+        var room = session.CreateRoom("ch-ready", players[0], "120000001000000", 1, 0, 0, false, roomId: 15);
+        for (int seat = 1; seat < players.Length; seat++)
+            Assert.True(session.JoinRoom(room.RoomId, players[seat]));
+
+        GameLogicService service = null!;
+        var proxy = new Mock<IClientProxy>();
+        proxy.Setup(client => client.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default))
+            .Returns(async (string method, object?[] args, CancellationToken _) =>
+            {
+                if (method == Cmd.AutoStart)
+                {
+                    foreach (var player in players)
+                        await service.MarkGameClientReadyAsync(room.RoomId, player.ConnectionId);
+                }
+                else if (method == Cmd.GamePlay)
+                {
+                    var packet = CommandTestHelper.ToDict(args[0]!);
+                    if (packet.TryGetValue("playType", out var playType)
+                        && ((JsonElement)playType!).GetString() == "MJPID_INIKYO")
+                    {
+                        long presentationId = ((JsonElement)packet["presentationId"]!).GetInt64();
+                        foreach (var player in players)
+                            await service.MarkGamePresentationReadyAsync(room.RoomId, player.ConnectionId, presentationId);
+                    }
+                }
+            });
+        var singleProxy = new Mock<ISingleClientProxy>();
+        singleProxy.Setup(client => client.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default))
+            .Returns(Task.CompletedTask);
+        var clients = new Mock<IHubCallerClients>();
+        clients.Setup(value => value.Group(It.IsAny<string>())).Returns(proxy.Object);
+        clients.Setup(value => value.Client(It.IsAny<string>())).Returns(singleProxy.Object);
+        clients.Setup(value => value.Clients(It.IsAny<IReadOnlyList<string>>())).Returns(proxy.Object);
+        clients.Setup(value => value.GroupExcept(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>())).Returns(proxy.Object);
+
+        service = BuildService(
+            session,
+            gameClientReadyTimeoutMs: 30_000,
+            gamePresentationReadyTimeoutMs: 30_000);
+        var context = new CommandContext { Player = players[0], Clients = clients.Object };
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+
+        await service.StartGameLogicAsync(room, context);
+
+        Assert.True(timer.Elapsed < TimeSpan.FromSeconds(1),
+            $"All-ready startup unexpectedly waited {timer.ElapsedMilliseconds} ms.");
+        Assert.Contains(room.PendingActions, action => action != null);
+    }
+
+    [Fact]
+    public async Task StartGameLogic_LateClientsDoNotDelayReadyPlayersPresentation()
+    {
+        var session = new PlayerSessionService();
+        var players = Enumerable.Range(0, GameConst.PlayerMaxCount)
+            .Select(seat => new MajakPlayer
+            {
+                MemberNo = $"late-{seat}",
+                NickName = $"Late {seat}",
+                ConnectionId = $"late-connection-{seat}",
+                ChannelId = "ch-late",
+            })
+            .ToArray();
+        foreach (var player in players) session.Register(player);
+        var room = session.CreateRoom("ch-late", players[0], "120000001000000", 1, 0, 0, false, roomId: 16);
+        for (int seat = 1; seat < players.Length; seat++)
+            Assert.True(session.JoinRoom(room.RoomId, players[seat]));
+
+        GameLogicService service = null!;
+        var proxy = new Mock<IClientProxy>();
+        proxy.Setup(client => client.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default))
+            .Returns(async (string method, object?[] args, CancellationToken _) =>
+            {
+                if (method == Cmd.AutoStart)
+                {
+                    await service.MarkGameClientReadyAsync(room.RoomId, players[0].ConnectionId);
+                    await service.MarkGameClientReadyAsync(room.RoomId, players[1].ConnectionId);
+                }
+                else if (method == Cmd.GamePlay)
+                {
+                    var packet = CommandTestHelper.ToDict(args[0]!);
+                    if (packet.TryGetValue("playType", out var playType)
+                        && ((JsonElement)playType!).GetString() == "MJPID_INIKYO")
+                    {
+                        long presentationId = ((JsonElement)packet["presentationId"]!).GetInt64();
+                        await service.MarkGamePresentationReadyAsync(room.RoomId, players[0].ConnectionId, presentationId);
+                        await service.MarkGamePresentationReadyAsync(room.RoomId, players[1].ConnectionId, presentationId);
+                    }
+                }
+            });
+        var singleProxy = new Mock<ISingleClientProxy>();
+        singleProxy.Setup(client => client.SendCoreAsync(It.IsAny<string>(), It.IsAny<object?[]>(), default))
+            .Returns(Task.CompletedTask);
+        var clients = new Mock<IHubCallerClients>();
+        clients.Setup(value => value.Group(It.IsAny<string>())).Returns(proxy.Object);
+        clients.Setup(value => value.Client(It.IsAny<string>())).Returns(singleProxy.Object);
+        clients.Setup(value => value.Clients(It.IsAny<IReadOnlyList<string>>())).Returns(proxy.Object);
+        clients.Setup(value => value.GroupExcept(It.IsAny<string>(), It.IsAny<IReadOnlyList<string>>())).Returns(proxy.Object);
+
+        service = BuildService(
+            session,
+            gameClientReadyTimeoutMs: 0,
+            gamePresentationReadyTimeoutMs: 30_000);
+        var context = new CommandContext { Player = players[0], Clients = clients.Object };
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+
+        await service.StartGameLogicAsync(room, context);
+
+        Assert.True(timer.Elapsed < TimeSpan.FromSeconds(1),
+            $"Ready players were delayed by late clients for {timer.ElapsedMilliseconds} ms.");
+        Assert.Equal(
+            new[] { players[0].ConnectionId, players[1].ConnectionId },
+            room.GamePresentationExpectedConnectionIds.OrderBy(connectionId => connectionId));
+        Assert.Contains(room.PendingActions, action => action != null);
+    }
+
+    [Fact]
     public async Task ProxyEmptySeats_TrainingEmptyDealer_AutoDiscardsAndAdvancesTurn()
     {
         var room = BuildPaiInfoRoom("00T5A");
@@ -2134,6 +2263,32 @@ public class GameLogicHelperTests
         Assert.Null(room.PendingActions[order]);
         Assert.DoesNotContain(sent, packet => packet.method == Cmd.GamePlay
             && ((JsonElement)CommandTestHelper.ToDict(packet.packet)["playType"]!).GetString() == "MJPID_ACTIONS");
+    }
+
+    [Fact]
+    public async Task SendGameResync_LatePlayerWhoseTurnItIs_ReceivesUsableActionPrompt()
+    {
+        var room = BuildPaiInfoRoom("00N5A");
+        room.RoomId = 17;
+        room.State = GameRoomState.Playing;
+        int order = Array.FindIndex(room.Engine.Player, enginePlayer => enginePlayer.Mode == PlayerMode.Turn);
+        Assert.InRange(order, 0, GameConst.PlayerMaxCount - 1);
+        int playerPos = room.Engine.HanchanInfo.Player[order];
+        var player = room.Seats[playerPos]!;
+        player.EngineOrder = order;
+        room.PlayHistory.Add(new { playType = "MJPID_INIHAN" });
+        room.PlayHistory.Add(new { playType = "MJPID_INIKYO" });
+        var (ctx, sent) = CommandTestHelper.MakeContext(player);
+
+        await BuildService().SendGameResyncAsync(room, ctx, player);
+
+        var packet = CommandTestHelper.ToDict(sent.Last(sentPacket => sentPacket.method == Cmd.GamePlay).packet);
+        Assert.Equal("MJPID_ACTIONS", ((JsonElement)packet["playType"]!).GetString());
+        Assert.Equal(order, ((JsonElement)packet["seatOrder"]!).GetInt32());
+        Assert.Equal("Turn", ((JsonElement)packet["playerMode"]!).GetString());
+        Assert.True(((JsonElement)packet["actionSeq"]!).GetInt64() > 0);
+        Assert.NotEmpty(((JsonElement)packet["tapCandidates"]!).EnumerateArray());
+        Assert.NotNull(room.PendingActions[order]);
     }
 
     // ─── CalcGemGame ─────────────────────────────────────────────────────
@@ -3130,10 +3285,11 @@ public class GameLogicHelperTests
         Assert.Empty(room.PlayHistory);
     }
 
-    // シナリオ: GameReportProcess はレガシーの Report/ClearOutPlayerList/LimitCnt reset に合わせてルーム状態を戻す
+    // シナリオ: GameReportProcess はレガシーの Report/ClearOutPlayerList/LimitCnt reset に合わせて
+    // 全プレイヤーを終了済みルームから解放し、次のオートマッチングへ参加可能にする。
     // 原典: GameReportProcess → Report() → GameReport() → ClearOutPlayerList() → LimitCnt=maxPlayer → SendChannelChangeRoomInfo
     [Fact]
-    public async Task GameReportProcess_ResetsRoomAndClearsOutPlayersAfterReport()
+    public async Task GameReportProcess_ResetsRoomAndReleasesAllPlayersAfterReport()
     {
         var room = BuildPaiInfoRoom("00N5A");
         room.RoomId = 86;
@@ -3143,6 +3299,7 @@ public class GameLogicHelperTests
         room.OkButtonStates[0] = true;
         room.OkButtonStates[1] = true;
         for (int seat = 0; seat < 4; seat++) room.SeatToEngineOrder[seat] = seat;
+        var completedPlayers = room.Seats.Where(player => player != null).Select(player => player!).ToArray();
         room.Seats[1]!.IsOutPlayer = true;
         var (ctx, sent) = CommandTestHelper.MakeContext(room.Seats[0]!);
 
@@ -3155,8 +3312,8 @@ public class GameLogicHelperTests
         Assert.True(reportIndex >= 0, $"Expected game report. order={sentOrder}");
         Assert.True(roomStateIndex >= 0, $"Expected room state. order={sentOrder}");
         Assert.True(reportIndex < roomStateIndex, $"Expected game report before room state. order={sentOrder}");
-        Assert.NotNull(room.Seats[0]);
-        Assert.Null(room.Seats[1]);
+        Assert.All(room.Seats, Assert.Null);
+        Assert.All(completedPlayers, player => Assert.Null(player.RoomId));
         Assert.Equal(GameRoomState.Waiting, room.State);
         Assert.Equal(GameConst.PlayerMaxCount, room.LimitCnt);
         Assert.Empty(room.PlayHistory);

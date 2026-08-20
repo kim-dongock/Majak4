@@ -608,35 +608,48 @@ public class PlayerSessionService
             if (q.Count < 4) return null;
 
             var now = DateTime.UtcNow;
-            foreach (var baseEntry in q.OrderBy(x => x.EnqueuedAt).ToList())
+            var orderedEntries = q.OrderBy(x => x.EnqueuedAt).ToList();
+            var matched = FindMatchingEntries(orderedEntries, getRating, now, honorPreMatchExclusions: true)
+                ?? FindMatchingEntries(orderedEntries, getRating, now, honorPreMatchExclusions: false);
+
+            if (matched == null) return null;
+
+            foreach (var entry in matched)
+                q.Remove(entry);
+            return matched.Select(x => x.MemberNo).ToArray();
+        }
+    }
+
+    private List<WaitingMatchPlayer>? FindMatchingEntries(
+        IReadOnlyList<WaitingMatchPlayer> entries,
+        Func<string, int?> getRating,
+        DateTime now,
+        bool honorPreMatchExclusions)
+    {
+        foreach (var baseEntry in entries)
+        {
+            int? baseRating = getRating(baseEntry.MemberNo);
+            if (baseRating == null) continue;
+
+            int deltaRating = 50 + Math.Max(0, (int)(now - baseEntry.EnqueuedAt).TotalSeconds) * 10;
+            var matched = new List<WaitingMatchPlayer> { baseEntry };
+            foreach (var candidate in entries)
             {
-                int? baseRating = getRating(baseEntry.MemberNo);
-                if (baseRating == null) continue;
+                if (candidate.MemberNo == baseEntry.MemberNo) continue;
+                int? candidateRating = getRating(candidate.MemberNo);
+                if (candidateRating == null) continue;
+                if (candidateRating < baseRating.Value - deltaRating || candidateRating > baseRating.Value + deltaRating)
+                    continue;
+                if (honorPreMatchExclusions && !CheckKeepList(matched, candidate.MemberNo)) continue;
 
-                int deltaRating = 50 + Math.Max(0, (int)(now - baseEntry.EnqueuedAt).TotalSeconds) * 10;
-                var matched = new List<WaitingMatchPlayer> { baseEntry };
-                foreach (var candidate in q)
-                {
-                    if (candidate.MemberNo == baseEntry.MemberNo) continue;
-                    int? candidateRating = getRating(candidate.MemberNo);
-                    if (candidateRating == null) continue;
-                    if (candidateRating < baseRating.Value - deltaRating || candidateRating > baseRating.Value + deltaRating)
-                        continue;
-                    if (!CheckKeepList(matched, candidate.MemberNo)) continue;
-
-                    matched.Add(candidate);
-                    if (matched.Count >= 4) break;
-                }
-
-                if (matched.Count < 4) continue;
-
-                foreach (var entry in matched)
-                    q.Remove(entry);
-                return matched.Select(x => x.MemberNo).ToArray();
+                matched.Add(candidate);
+                if (matched.Count >= 4) break;
             }
 
-            return null;
+            if (matched.Count >= 4) return matched;
         }
+
+        return null;
     }
 
     private bool CheckKeepList(IEnumerable<WaitingMatchPlayer> matched, string candidateMemberNo)

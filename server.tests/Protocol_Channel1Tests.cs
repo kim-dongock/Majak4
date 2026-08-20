@@ -388,7 +388,7 @@ public class CancelAutoMatchingCommandTests
 public class AutoMatchingLifecycleTests
 {
     [Fact]
-    public void TryMatch_SeparatesChannelsAndHonorsPreMatchExclusions()
+    public void TryMatch_SeparatesChannelsAndFallsBackWhenPreMatchExclusionsBlockAllCandidates()
     {
         var session = new PlayerSessionService();
         const string firstChannel = "MAJAK200Z6A001";
@@ -421,7 +421,9 @@ public class AutoMatchingLifecycleTests
             excludedSession.EnqueueMatching(firstChannel, member.MemberNo);
         }
 
-        Assert.Null(excludedSession.TryMatch(firstChannel, _ => 1500));
+        Assert.Equal(
+            new[] { "excluded-0", "excluded-1", "excluded-2", "excluded-3" },
+            excludedSession.TryMatch(firstChannel, _ => 1500));
     }
 
     [Fact]

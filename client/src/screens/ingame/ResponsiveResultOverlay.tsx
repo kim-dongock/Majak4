@@ -5,7 +5,10 @@ import type { KyoPlayer, KyoResData, KyoYaku } from './KyoRes'
 
 type KyoProps = {
   data: KyoResData
+  myOdr?: number
   canContinue: boolean
+  waitingForOtherPlayers?: boolean
+  playerProgress?: Record<number, { durationMs: number; localDeadlineAt: number; submitted: boolean }>
   onClose: () => void
 }
 
@@ -138,7 +141,7 @@ function HandSettlementCells({ player, delay }: { player: KyoPlayer; delay: numb
   )
 }
 
-export function ResponsiveKyoResult({ data, canContinue, onClose }: KyoProps) {
+export function ResponsiveKyoResult({ data, myOdr, canContinue, waitingForOtherPlayers = false, playerProgress = {}, onClose }: KyoProps) {
   const winners = data.players
     .map((player, index) => ({ player, index }))
     .filter(({ player }) => player.isHora)
@@ -147,10 +150,19 @@ export function ResponsiveKyoResult({ data, canContinue, onClose }: KyoProps) {
   const yaku = yakuList(data, selectedIndex)
   const totals = data.totalsByPlayer?.[selectedIndex]
   const isHora = data.pinType === 0 || data.pinType === 1
+  const [now, setNow] = useState(() => performance.now())
+  const localProgress = myOdr == null ? undefined : playerProgress[myOdr]
+  const hasPendingLocalPlayer = Boolean(localProgress && !localProgress.submitted)
 
   useEffect(() => {
     setSelectedIndex(winners[0]?.index ?? 0)
   }, [data, winners.length])
+
+  useEffect(() => {
+    if (!hasPendingLocalPlayer) return
+    const timer = window.setInterval(() => setNow(performance.now()), 200)
+    return () => window.clearInterval(timer)
+  }, [hasPendingLocalPlayer])
 
   const advance = () => {
     const winnerPosition = winners.findIndex(item => item.index === selectedIndex)
@@ -230,9 +242,35 @@ export function ResponsiveKyoResult({ data, canContinue, onClose }: KyoProps) {
           )}
         </div>
 
+        {data.players.length > 0 && (
+          <section className="majak-kyo-confirmation-progress" aria-label="プレイヤーの確認状況">
+            {data.players.map((player, index) => {
+              const progress = playerProgress[player.seatPos ?? index]
+              const confirmed = Boolean(progress?.submitted)
+              const isLocalPlayer = player.seatPos === myOdr
+              const remainingMs = confirmed ? 0 : Math.max(0, (progress?.localDeadlineAt ?? now) - now)
+              const percent = progress && progress.durationMs > 0
+                ? Math.round(Math.min(1, remainingMs / progress.durationMs) * 100)
+                : 0
+              return (
+              <div key={`${player.pix}-${player.seatPos}`} className={`majak-kyo-confirmation-progress__player${confirmed ? ' is-confirmed' : ''}${isLocalPlayer && progress && !confirmed ? ' is-timed' : ''}`}>
+                <span>{player.name || player.pix}</span>
+                {confirmed
+                  ? <strong>確認済み</strong>
+                  : isLocalPlayer && progress
+                    ? <><div role="progressbar" aria-label={`${player.name || player.pix}の確認時間`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><i style={{ width: `${percent}%` }} /></div><strong>{Math.ceil(remainingMs / 1000)}秒</strong></>
+                    : <strong>確認待ち</strong>}
+              </div>
+              )
+            })}
+          </section>
+        )}
+
         <footer className="majak-result-actions">
-          <span>本場 {data.renCnt ?? 0} / 供託 {data.ribCnt ?? 0}{(totals?.tipBal ?? data.tipBal) ? ` / チップ ${totals?.tipBal ?? data.tipBal}` : ''}</span>
-          <button type="button" onClick={advance} disabled={!canContinue}>{winners.length > 1 && selectedIndex !== winners[winners.length - 1]?.index ? '次の和了者' : '続ける'}</button>
+          <span>{waitingForOtherPlayers
+            ? '他のプレイヤーの確認を待っています'
+            : `本場 ${data.renCnt ?? 0} / 供託 ${data.ribCnt ?? 0}${(totals?.tipBal ?? data.tipBal) ? ` / チップ ${totals?.tipBal ?? data.tipBal}` : ''}`}</span>
+          <button type="button" onClick={advance} disabled={!canContinue || waitingForOtherPlayers}>{waitingForOtherPlayers ? '確認済み' : winners.length > 1 && selectedIndex !== winners[winners.length - 1]?.index ? '次の和了者' : '続ける'}</button>
         </footer>
       </section>
     </div>

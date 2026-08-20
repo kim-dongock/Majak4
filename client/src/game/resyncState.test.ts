@@ -48,11 +48,15 @@ describe('canCompleteGameResync', () => {
 })
 
 describe('shouldRequestInitialGameResync', () => {
-  it('does not resync a fresh mjkc4e game even when the room page was reloaded', () => {
+  it('does not resync a fresh mjkc4e game that receives the normal start broadcast', () => {
     expect(shouldRequestInitialGameResync(true, true)).toBe(false)
   })
 
-  it('keeps resync enabled for an existing game restored without fresh auto-start', () => {
+  it('resyncs an existing game restored without a fresh auto-start', () => {
     expect(shouldRequestInitialGameResync(true, false)).toBe(true)
+  })
+
+  it('does not request a snapshot for a normal initial entry', () => {
+    expect(shouldRequestInitialGameResync(false, true)).toBe(false)
   })
 })

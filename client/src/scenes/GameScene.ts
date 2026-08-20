@@ -98,6 +98,8 @@ const PAIFU_REPLAY_READY_EVENT = 'majak:paifu-replay-ready'
 const DEBUG_GAME = import.meta.env.VITE_DEBUG_GAME === '1'
 const ASK_END_SET_EVENT = 'majak:ask-end-set'
 const KYO_RESULT_ACTION_EVENT = 'majak:kyo-result-action'
+const KYO_RESULT_PROGRESS_EVENT = 'majak:kyo-result-progress'
+const KYO_RESULT_CONFIRMED_EVENT = 'majak:kyo-result-confirmed'
 const GAME_FOCUS_CHAT_EVENT = 'majak:game-focus-chat'
 const GAME_STATUS_EVENT = 'majak:game-status'
 const GAME_SYNC_EVENT = 'majak:game-sync'
@@ -153,7 +155,6 @@ const MOBILE_SELF_HAND_BOTTOM_INSET = 12
 const MOBILE_SELF_HAND_FIXED_COUNT = 14
 const MOBILE_OTHER_HAND_FIXED_COUNT = 14
 const MOBILE_SELF_HAND_DEPTH = 900
-const MOBILE_BOARD_BACKGROUND_SCALE = 1.6
 const LEGACY_GEM_EFFECT_SIZE = { width: 345, height: 353 }
 const LEGACY_YAKUMAN_FINISH_SIZE = { width: 563, height: 435 }
 const MATCH_START_SEAT_REVEAL_DURATION_MS = 3100
@@ -908,6 +909,7 @@ export default class GameScene extends Phaser.Scene {
   private deferInitialDeadWallRedraw = false
   private pendingAction: { seatOrder: number; action: number; actionSeq?: number } | null = null
   private currentActionPrompt: ActionPromptState | null = null
+  private readonly kyoResultPendingOrders = new Set<number>()
   private timeBankExtensionInFlight = false
   private kyokuTimeFullMs = 0
   private keyboardActionIndex = -1
@@ -1087,11 +1089,8 @@ export default class GameScene extends Phaser.Scene {
     this.createBoardMask()
 
     /* ── ボード背景 mj_board.png (789×704) at (5,31) ── */
-    if (this.layoutMode !== 'responsiveDesktop') {
+    if (this.layoutMode === 'desktop') {
       this.boardBackground = this.add.image(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, this.resolveSkinTextureKey('mj_board')).setDepth(-100)
-      if (isMobileIngameLayout(this.layoutMode)) {
-        this.clipToBoard(this.boardBackground.setScale(MOBILE_BOARD_BACKGROUND_SCALE))
-      }
     }
     if (this.textures.exists('mj_taku_dragon_skin')) {
       this.dragonOverlayBg = this.clipToBoard(this.add.image(BOARD_X + DRAGON_OVERLAY.x, BOARD_Y + DRAGON_OVERLAY.y, 'mj_taku_dragon_skin')
@@ -1134,8 +1133,10 @@ export default class GameScene extends Phaser.Scene {
         handlerCount: this.signalRHandlers.length,
       })
     }
-    this.notifyGameClientReady()
-    this.requestInitialRoomState()
+    if (!this.isReplay) {
+      this.notifyGameClientReady()
+      this.requestInitialRoomState()
+    }
     this.setupReplayControlEvents()
     this.setupAutoControlEvents()
     this.setupAssistConfigEvents()
@@ -1399,6 +1400,15 @@ export default class GameScene extends Phaser.Scene {
       const action = Number(data.action ?? -1)
       const actionSeatOrder = Number(data.seatOrder ?? data.order ?? -1)
       const actionBipaiIndex = Array.isArray(data.bipaiIndex) ? data.bipaiIndex.map(Number) : []
+      const isKyoConfirmation = Boolean(data.isKyoConfirmation) || this.kyoResultPendingOrders.has(actionSeatOrder)
+      if (playType === 'MJPID_ACTION' && action === Act.Pas && isKyoConfirmation) {
+        this.kyoResultPendingOrders.delete(actionSeatOrder)
+        if (!Boolean(data.autoConfirmed)) {
+          window.dispatchEvent(new CustomEvent(KYO_RESULT_CONFIRMED_EVENT, {
+            detail: { seatOrder: actionSeatOrder },
+          }))
+        }
+      }
       const replayTurnActions = new Set([Act.Chi, Act.Pon, Act.Kan, Act.Tap, Act.Ank, Act.Cha, Act.Ric, Act.Tao, Act.Tsu, Act.Hua])
       if (this.isReplay && playType === 'MJPID_ACTION' && replayTurnActions.has(action) && actionSeatOrder >= 0 && actionSeatOrder < this.players.length) {
         this.emitToUiScene('turnChange', { odr: actionSeatOrder, viewOdr: this.myOdr })
@@ -1418,6 +1428,7 @@ export default class GameScene extends Phaser.Scene {
         this.emitGameSync(false, 'game-content-ready')
       }
       if (playType === 'MJPID_INIHAN') {
+        this.kyoResultPendingOrders.clear()
         console.info('[GameStartTiming] MJPID_INIHAN received', {
           roomId: this.roomId,
           elapsedSinceSceneCreateMs: Math.round(performance.now() - Number(this.registry.get('majak:gameStartSceneCreatedAt') ?? performance.now())),
@@ -1435,6 +1446,7 @@ export default class GameScene extends Phaser.Scene {
         return
       }
       if (isInitKyokuPacket) {
+        this.kyoResultPendingOrders.clear()
         console.info('[GameStartTiming] MJPID_INIKYO received', {
           roomId: this.roomId,
           presentationId: data.presentationId,
@@ -1587,6 +1599,16 @@ export default class GameScene extends Phaser.Scene {
         const keepTimeMs = Math.max(0, Number(data.keepTimeMs ?? 0))
         const timeBankMs = Math.max(0, Number(data.timeBankMs ?? 0))
         const timeBankEnabled = Boolean(data.timeBankEnabled)
+        if (playerMode === 'Kyo' && hasActionSeatOrder) {
+          this.kyoResultPendingOrders.add(seatOrder)
+          window.dispatchEvent(new CustomEvent(KYO_RESULT_PROGRESS_EVENT, {
+            detail: {
+              seatOrder,
+              durationMs: remainingMs,
+              localDeadlineAt: performance.now() + remainingMs,
+            },
+          }))
+        }
         const isRepeatedCurrentPrompt = isForLocalPlayer
           && this.currentActionPrompt !== null
           && Number.isFinite(actionSeq)

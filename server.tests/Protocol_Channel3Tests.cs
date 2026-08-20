@@ -690,6 +690,21 @@ public class ExitChannelCommandTests
         Assert.Null(session.TryMatch(channelId, _ => 1500));
     }
 
+    [Fact]
+    public void DisconnectingAutoMatchingPlayer_RemovesWaitingPlayer()
+    {
+        const string channelId = "MAJAK20ZG6A001";
+        var session = new PlayerSessionService();
+        var player = new MajakPlayer { ConnectionId = "c1", MemberNo = "user01", ChannelId = channelId };
+        session.Register(player);
+        for (int i = 1; i <= 4; i++)
+            session.EnqueueMatching(channelId, $"user0{i}");
+
+        session.DequeueMatching(player.ChannelId, player.MemberNo);
+
+        Assert.Null(session.TryMatch(channelId, _ => 1500));
+    }
+
     // シナリオ2: ルーム在室で退場 → DeleteMember + channel:member_left + ExitChannel
     [Fact]
     public async Task Execute_InRoom_SendsDeleteMemberAndExit()

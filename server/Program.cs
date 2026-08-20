@@ -1341,7 +1341,7 @@ app.MapPost("/auth/google-login-redirect", async Task<IResult> (
         await InsertLoginLogOnceAsync(ctx, logRepo, account.MemberNo, 0);
     }
     ClearPendingGoogleIdTokenCookie(ctx);
-    return Results.Redirect($"{clientAppUrl}/");
+    return Results.Redirect($"{clientAppUrl}/?googleAuth=login");
 });
 
 // POST /auth/google-login  { idToken: string }

@@ -56,6 +56,40 @@ describe('ResponsiveKyoResult', () => {
     expect(html).not.toContain('aria-label="和了詳細"')
   })
 
+  it('keeps the result visible after local confirmation while waiting for other players', () => {
+    const html = renderToStaticMarkup(
+      <ResponsiveKyoResult data={DRAW_RESULT} canContinue waitingForOtherPlayers onClose={vi.fn()} />,
+    )
+
+    expect(html).toContain('他のプレイヤーの確認を待っています')
+    expect(html).toContain('確認済み')
+    expect(html).toContain('disabled=""')
+  })
+
+  it('shows all players and marks only confirmed continuations as complete', () => {
+    const html = renderToStaticMarkup(
+      <ResponsiveKyoResult
+        data={DRAW_RESULT}
+        myOdr={0}
+        canContinue
+        playerProgress={{
+          0: { durationMs: 8_000, localDeadlineAt: performance.now() + 8_000, submitted: false },
+          1: { durationMs: 8_000, localDeadlineAt: performance.now(), submitted: true },
+        }}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(html).toContain('プレイヤーの確認状況')
+    expect(html).toContain('確認済み')
+    expect(html).toContain('確認待ち')
+    expect(html).toContain('P0')
+    expect(html).toContain('P1')
+    expect(html).toContain('aria-label="P0の確認時間"')
+    expect(html).not.toContain('aria-label="P1の確認時間"')
+    expect(html).not.toContain('P0</span><strong>確認済み')
+  })
+
   it('marks a tsumo result for the compact mobile hora layout without dropping details', () => {
     const html = renderToStaticMarkup(
       <ResponsiveKyoResult data={TSUMO_RESULT} canContinue onClose={vi.fn()} />,
