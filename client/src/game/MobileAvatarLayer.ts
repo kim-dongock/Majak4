@@ -153,6 +153,11 @@ export default class MobileAvatarLayer {
     return () => image.remove()
   }
 
+  setVisible(visible: boolean): void {
+    this.root.hidden = !visible
+    this.root.style.display = visible ? 'block' : 'none'
+  }
+
   destroy(): void {
     this.slots.forEach(slot => { slot.requestId += 1 })
     this.root.remove()

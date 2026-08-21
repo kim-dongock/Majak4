@@ -1062,6 +1062,7 @@ app.MapGet("/api/player/profile", async (HttpContext ctx, string? memberNo, Play
         await moneyService.CreateCommonRatWithConfiguredMoneyHistAsync(memberNo, "");
 
     await playerRepo.LoadCommonRatAsync(player);
+    await playerRepo.LoadGradeRatAsync(player);
     ratingService.UpdatePlayerLevel(player);
 
     return Results.Ok(new
@@ -1069,6 +1070,7 @@ app.MapGet("/api/player/profile", async (HttpContext ctx, string? memberNo, Play
         gamMoney   = player.GamMoney,
         slevel     = player.SLevel,
         nlevel     = player.NLevel,
+        gradeLevel = player.GradeRecord.Grade,
         rating     = player.Rating,
         trickTitle = player.TrickTitle,
         majakTitle = player.MajakTitle,

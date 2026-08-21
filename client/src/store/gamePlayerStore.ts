@@ -11,6 +11,7 @@ export interface GamePlayerData {
   gamMoney:   number
   slevel:     string
   nlevel:     number
+  gradeLevel: number
   rating:     number
   trickTitle: string
   majakTitle: string

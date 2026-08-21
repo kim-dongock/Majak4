@@ -69,6 +69,7 @@ interface LobbyItem {
   title: string
   match?: '東風戦' | '半荘戦'
   description: string
+  entryRequirement?: string
   count: string
   tableFee: string
   rate: string
@@ -147,14 +148,14 @@ export default function LobbySelectScreen() {
 
   const lobbyItems: LobbyItem[] = isDani
     ? [
-        { title: '通常卓', match: '東風戦', description: INFO_DANI[0], count: countDani[0], tableFee: '500 GP', rate: '20', dragonBall: '1位 1 / 2位 0', onClick: () => toDaniLobby(0) },
-        { title: '段位卓', match: '東風戦', description: INFO_DANI[1], count: countDani[1], tableFee: '500 GP', rate: '20', dragonBall: '1位 2 / 2位 0', onClick: () => toDaniLobby(1) },
-        { title: '高段位卓', match: '東風戦', description: INFO_DANI[2], count: countDani[2], tableFee: '500 GP', rate: '20', dragonBall: '1位 3 / 2位 1', onClick: () => toDaniLobby(2) },
-        { title: '十段位卓', match: '東風戦', description: INFO_DANI[3], count: countDani[3], tableFee: '500 GP', rate: '20', dragonBall: '1位 4 / 2位 2', onClick: () => toDaniLobby(3) },
-        { title: '通常卓', match: '半荘戦', description: INFO_DANI[0], count: countDani[4], tableFee: '500 GP', rate: '20', dragonBall: '1位 1 / 2位 0', onClick: () => toDaniLobby(4) },
-        { title: '段位卓', match: '半荘戦', description: INFO_DANI[1], count: countDani[5], tableFee: '500 GP', rate: '20', dragonBall: '1位 2 / 2位 0', onClick: () => toDaniLobby(5) },
-        { title: '高段位卓', match: '半荘戦', description: INFO_DANI[2], count: countDani[6], tableFee: '500 GP', rate: '20', dragonBall: '1位 3 / 2位 1', onClick: () => toDaniLobby(6) },
-        { title: '十段位卓', match: '半荘戦', description: INFO_DANI[3], count: countDani[7], tableFee: '500 GP', rate: '20', dragonBall: '1位 4 / 2位 2', onClick: () => toDaniLobby(7) },
+        { title: '通常卓', match: '東風戦', description: INFO_DANI[0], entryRequirement: '10級～三段 / GP 500以上', count: countDani[0], tableFee: '500 GP', rate: '20', dragonBall: '1位 1 / 2位 0', onClick: () => toDaniLobby(0) },
+        { title: '段位卓', match: '東風戦', description: INFO_DANI[1], entryRequirement: '初段～九段 / GP 5,000以上', count: countDani[1], tableFee: '500 GP', rate: '20', dragonBall: '1位 2 / 2位 0', onClick: () => toDaniLobby(1) },
+        { title: '高段位卓', match: '東風戦', description: INFO_DANI[2], entryRequirement: '四段～九段 / GP 10,000以上', count: countDani[2], tableFee: '500 GP', rate: '20', dragonBall: '1位 3 / 2位 1', onClick: () => toDaniLobby(2) },
+        { title: '十段位卓', match: '東風戦', description: INFO_DANI[3], entryRequirement: '七段～九段 / GP 30,000以上', count: countDani[3], tableFee: '500 GP', rate: '20', dragonBall: '1位 4 / 2位 2', onClick: () => toDaniLobby(3) },
+        { title: '通常卓', match: '半荘戦', description: INFO_DANI[0], entryRequirement: '10級～三段 / GP 500以上', count: countDani[4], tableFee: '500 GP', rate: '20', dragonBall: '1位 1 / 2位 0', onClick: () => toDaniLobby(4) },
+        { title: '段位卓', match: '半荘戦', description: INFO_DANI[1], entryRequirement: '初段～九段 / GP 5,000以上', count: countDani[5], tableFee: '500 GP', rate: '20', dragonBall: '1位 2 / 2位 0', onClick: () => toDaniLobby(5) },
+        { title: '高段位卓', match: '半荘戦', description: INFO_DANI[2], entryRequirement: '四段～九段 / GP 10,000以上', count: countDani[6], tableFee: '500 GP', rate: '20', dragonBall: '1位 3 / 2位 1', onClick: () => toDaniLobby(6) },
+        { title: '十段位卓', match: '半荘戦', description: INFO_DANI[3], entryRequirement: '七段～九段 / GP 30,000以上', count: countDani[7], tableFee: '500 GP', rate: '20', dragonBall: '1位 4 / 2位 2', onClick: () => toDaniLobby(7) },
       ]
     : [
         { title: channelTitle('0082B', '基本卓（安い部屋）'), description: INFO_KOURYU[0], count: countKouryu[0], tableFee: '500 GP', rate: '20', dragonBall: '1位 0 / 2位 0', onClick: () => toKouryuLobby(0) },
@@ -174,7 +175,7 @@ export default function LobbySelectScreen() {
           <p className="majak-type-xs">ロビー選択</p>
           <h1 className="majak-type-display">{isDani ? '段位戦' : '交流戦'}</h1>
         </div>
-        <MobileUserSummary className="majak-desktop-lobby-select__user-summary" />
+        <MobileUserSummary className="majak-desktop-lobby-select__user-summary" showGrade />
       </header>
       {isDani && (
         <div className="majak-desktop-lobby-select__rule-tabs" role="tablist" aria-label="対局形式">
@@ -194,7 +195,7 @@ export default function LobbySelectScreen() {
       )}
       <main className={`majak-desktop-lobby-select__list${isDani ? ' is-dani' : ''}`} aria-label={`${isDani ? '段位戦' : '交流戦'}ロビー一覧`}>
         <div className="majak-desktop-lobby-select__comparison-header" aria-hidden="true">
-          <span>ロビー</span><span>接続</span><span>場代</span><span>レート</span><span>龍珠</span>
+          <span>ロビー</span><span>接続</span><span>場代</span><span>レート</span><span>龍珠</span><span>入場条件</span>
         </div>
         {visibleLobbyItems.map(item => (
           <div key={`${item.title}-${item.match ?? ''}`} className="majak-desktop-lobby-select__entry">
@@ -206,6 +207,7 @@ export default function LobbySelectScreen() {
               <div><dt>場代</dt><dd>{item.tableFee}</dd></div>
               <div><dt>レート</dt><dd>{item.rate}</dd></div>
               <div><dt>龍珠</dt><dd>{item.dragonBall}</dd></div>
+              <div className="majak-desktop-lobby-select__entry-condition"><dt>入場条件</dt><dd>{item.entryRequirement ?? '-'}</dd></div>
             </dl>
           </div>
         ))}

@@ -2364,7 +2364,7 @@ body {
   grid-row: 2;
   min-height: 0;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 6px;
   padding-top: 3px;
   box-sizing: border-box;
@@ -2413,7 +2413,7 @@ body {
 }
 
 .majak-desktop-lobby-select__list {
-  --majak-lobby-comparison-columns: minmax(240px, 2fr) repeat(4, minmax(0, .875fr));
+  --majak-lobby-comparison-columns: minmax(180px, 1.55fr) repeat(3, minmax(56px, .48fr)) minmax(90px, .75fr) minmax(180px, 1.4fr);
   --majak-lobby-button-title-size: var(--majak-text-xl);
   --majak-lobby-description-size: var(--majak-menu-description-size);
   width: 100%;
@@ -2521,6 +2521,7 @@ body {
   min-width: 0;
   display: grid;
   align-items: center;
+  align-content: center;
   padding: 10px 18px;
   font-weight: 400;
   text-align: center;
@@ -2544,6 +2545,10 @@ body {
   text-shadow: 0 2px 0 rgba(0, 0, 0, .34);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.majak-desktop-lobby-select__entry-condition dd {
+  white-space: normal;
 }
 
 .majak-desktop-lobby-select__card-match {
@@ -2822,7 +2827,7 @@ body {
 
   .majak-desktop-lobby-select__list,
   .majak-desktop-lobby-select__list.is-dani {
-    --majak-lobby-comparison-columns: minmax(190px, 1.75fr) minmax(0, .65fr) minmax(0, .55fr) minmax(0, .55fr) minmax(0, 1.1fr);
+    --majak-lobby-comparison-columns: minmax(150px, 1.35fr) repeat(3, minmax(46px, .42fr)) minmax(70px, .65fr) minmax(145px, 1.2fr);
     width: min(88%, 700px);
     justify-self: center;
     margin-top: 0;
@@ -2846,7 +2851,7 @@ body {
   }
 
   .majak-desktop-lobby-select__entry {
-    --majak-lobby-comparison-columns: minmax(190px, 1.75fr) minmax(0, .65fr) minmax(0, .55fr) minmax(0, .55fr) minmax(0, 1.1fr);
+    --majak-lobby-comparison-columns: minmax(150px, 1.35fr) repeat(3, minmax(46px, .42fr)) minmax(70px, .65fr) minmax(145px, 1.2fr);
     gap: 5px;
   }
 
@@ -4627,8 +4632,9 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, max-content);
   gap: 4px;
+  justify-content: space-between;
 }
 
 .majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields > span {
@@ -4968,8 +4974,9 @@ body:has(.majak-game-screen) {
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, max-content);
   gap: 4px;
+  justify-content: space-between;
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__fields > span {
@@ -6502,7 +6509,6 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-dialog-titlebar {
-  height: 28px;
   display: flex;
   align-items: center;
   padding: 0 12px;
@@ -7544,6 +7550,11 @@ body:has(.majak-game-screen) {
     font-size: var(--majak-lobby-button-title-size) !important;
   }
 
+  .majak-mobile-frame .majak-desktop-lobby-select__entry-condition dd {
+    font-size: var(--majak-text-2xs);
+    line-height: 1.1;
+  }
+
   .majak-mobile-frame .majak-desktop-lobby-select__stats dd,
   .majak-mobile-frame .majak-desktop-lobby-select__stats > div:first-child dd {
     font-size: var(--majak-lobby-description-size);
@@ -8539,6 +8550,149 @@ body:has(.majak-result-overlay) {
   overflow-y: auto;
 }
 
+.majak-currency-history {
+  width: min(920px, 100%);
+  height: min(620px, calc(100dvh - 32px));
+}
+
+.majak-currency-history > .majak-popup-titlebar {
+  min-height: 58px;
+  padding: 0 16px;
+}
+
+.majak-currency-history__filters {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 18px;
+  border-bottom: 1px solid #d0dbd0;
+  background: #edf3e9;
+}
+
+.majak-currency-history fieldset,
+.majak-currency-history__dates {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.majak-currency-history fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.majak-currency-history legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.majak-currency-history fieldset label,
+.majak-currency-history__dates label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.majak-currency-history__dates input {
+  min-width: 120px;
+  padding: 5px;
+  border: 1px solid #9eaba1;
+  color: #253d37;
+  background: #ffffff;
+  font: inherit;
+}
+
+.majak-currency-history__list {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+
+.majak-currency-history__list article {
+  display: grid;
+  grid-template-columns: 140px 58px minmax(0, 1fr) minmax(125px, auto);
+  gap: 8px 12px;
+  align-items: center;
+  padding: 12px 18px;
+  border-bottom: 1px solid #d9e0d7;
+}
+
+.majak-currency-history__list time,
+.majak-currency-history__list small {
+  color: #687a72;
+  font-size: var(--majak-dialog-caption-font-size);
+}
+
+.majak-currency-history__currency {
+  padding: 3px 5px;
+  color: #195b4f;
+  background: #dcebe1;
+  font-size: var(--majak-dialog-caption-font-size);
+  font-weight: 700;
+  text-align: center;
+}
+
+.majak-currency-history__currency.is-mp { color: #72512a; background: #f6e8bd; }
+.majak-currency-history__currency.is-dragon_orb { color: #735041; background: #f3ddd1; }
+
+.majak-currency-history__list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.majak-currency-history__list b { text-align: right; white-space: nowrap; }
+.majak-currency-history__list b.is-earned { color: #19714f; }
+.majak-currency-history__list b.is-spent { color: #a13f2e; }
+.majak-currency-history__list small { grid-column: 4; text-align: right; }
+
+.majak-currency-history__message {
+  margin: 18px;
+  color: #68776f;
+  text-align: center;
+}
+
+.majak-currency-history__error {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 18px;
+  color: #a33b2c;
+}
+
+.majak-currency-history__error p { margin: 0; }
+
+@media (max-width: 680px) {
+  .majak-currency-history__filters { display: grid; padding: 10px 12px; }
+  .majak-currency-history fieldset { justify-content: space-between; gap: 5px; }
+  .majak-currency-history__dates { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; }
+  .majak-currency-history__dates label { display: grid; gap: 2px; }
+  .majak-currency-history__dates input { min-width: 0; width: 100%; box-sizing: border-box; }
+  .majak-currency-history__dates button { grid-column: 1 / -1; }
+  .majak-currency-history__list article { grid-template-columns: 1fr auto; gap: 5px 8px; padding: 11px 12px; }
+  .majak-currency-history__list time { grid-column: 1; }
+  .majak-currency-history__currency { grid-column: 2; grid-row: 1; }
+  .majak-currency-history__list strong { grid-column: 1 / -1; }
+  .majak-currency-history__list b { grid-column: 1; text-align: left; }
+  .majak-currency-history__list small { grid-column: 2; text-align: right; }
+}
+
+@media (orientation: landscape) and (max-height: 540px) {
+  .majak-currency-history > .majak-popup-titlebar {
+    min-height: 42px;
+    padding: 0 12px;
+    font-size: var(--majak-text-lg);
+  }
+}
+
 .majak-mobile-option-dialog .majak-mobile-dialog-section {
   width: 100%;
   padding: 10px;
@@ -8756,16 +8910,6 @@ body:has(.majak-result-overlay) {
 
 .majak-popup-panel .majak-mobile-config-section .majak-mobile-choice:last-child {
   border-bottom: 0;
-}
-
-.majak-popup-panel.majak-mobile-config-dialog > .majak-mobile-dialog-titlebar {
-  font-size: var(--majak-popup-font-title);
-  line-height: var(--majak-popup-leading-title);
-}
-
-.majak-popup-panel.majak-mobile-config-dialog .majak-popup-titlebar__close {
-  font-size: var(--majak-popup-font-body);
-  line-height: 1;
 }
 
 .majak-popup-panel.majak-mobile-config-dialog .majak-mobile-config-tabs button,

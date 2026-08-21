@@ -148,8 +148,8 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
   }
 
   return (
-      <div className={`majak-mobile-dialog-overlay majak-mobile-config-overlay--${layoutMode} majak-popup-overlay`}>
-        <div className="majak-mobile-config-dialog majak-mobile-dialog-panel majak-popup-panel" role="dialog" aria-modal="true" aria-labelledby="config-dialog-title">
+      <div className={`majak-mobile-dialog-overlay majak-room-setup-overlay majak-room-setup-overlay--${layoutMode} majak-mobile-config-overlay--${layoutMode} majak-popup-overlay`}>
+        <div className="majak-mobile-config-dialog majak-room-setup-dialog majak-mobile-dialog-panel majak-popup-panel" role="dialog" aria-modal="true" aria-labelledby="config-dialog-title">
           <header id="config-dialog-title" className="majak-mobile-dialog-titlebar majak-popup-titlebar">
             <span>設定</span>
             <button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button>

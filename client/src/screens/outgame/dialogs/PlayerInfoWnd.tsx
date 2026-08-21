@@ -16,6 +16,7 @@
 import { useEffect, useState } from 'react'
 import * as SignalR from '../../../api/signalr'
 import { getAvatarUrl, getDefaultAvatarUrl } from '../../../utils/resources'
+import { gradeLevelName } from '../../../utils/grade'
 
 const IMG = '/assets/images/game'
 const DETAIL_RECORD_URL = 'http://redirect.hangame.co.jp/majak2/collection/dummy/'
@@ -36,6 +37,7 @@ export interface PlayerInfo {
   lastLogin?: string
   titleId?: number
   nLevel?: number
+  gradeLevel?: number
   /** mjkk46e: トリックタイトル */
   trickTitle?: number
   /** mjkk47e: マジャクタイトル */
@@ -97,6 +99,7 @@ type DetailInfo = {
   regular: DetailRecord
   hiClass: DetailRecord
   gradeMode: DetailRecord
+  gradeLevel?: number
   gradePoint?: number
   gradeMaxPoint?: number
   trickTitle: number
@@ -314,6 +317,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
         regular: readRecord(data.regular),
         hiClass: readRecord(data.hiClass),
         gradeMode: readRecord(data.gradeMode),
+        gradeLevel: data.gradeLevel != null ? Number(data.gradeLevel) : undefined,
         gradePoint: data.gradePoint != null ? Number(data.gradePoint) : undefined,
         gradeMaxPoint: data.gradeMaxPoint != null ? Number(data.gradeMaxPoint) : undefined,
         trickTitle: toNumber(data.trickTitle),
@@ -356,6 +360,8 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
   const majakTitle = detail?.majakTitle ?? player.majakTitle ?? 0
   const avatarId = detail?.avatarId ?? player.avatarId
   const titleText = player.slevel || (majakTitle > 0 ? `実績称号 ${majakTitle}` : '資産なし')
+  const gradeLevel = detail?.gradeLevel ?? player.gradeLevel
+  const gradeText = gradeLevelName(gradeLevel)
   const averageTip = tabRecord.tipMatchCnt > 0 ? `${(tabRecord.tipPoint / tabRecord.tipMatchCnt).toFixed(2)}` : '---.--'
 
   return (
@@ -377,6 +383,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
             <h2 id="majak-player-profile-name">{detail?.name ?? player.name}</h2>
             <div className="majak-player-profile__badges">
               <span>{titleText}</span>
+              <span>段位 {gradeText}{detail?.gradePoint != null && ` ${detail.gradePoint}/${detail.gradeMaxPoint ?? '-'}`}</span>
               {trickTitle > 0 && <span>演出 {trickTitle}</span>}
               {player.location && <span>{player.location}</span>}
             </div>

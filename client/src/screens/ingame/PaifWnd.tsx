@@ -24,8 +24,6 @@ import GameReconnectLoading from '../../components/GameReconnectLoading'
 import { GAME_LOAD_PROGRESS_EVENT, type GameLoadStep } from '../../game/gameLoadProgress'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 import { getDefaultAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
-import PaifuSaveDlg from '../outgame/dialogs/PaifuSaveDlg'
-import { loadLastUsedPaifuFileName, saveLastUsedPaifuFileName } from '../../game/paifuRecording'
 
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
 const PAIFU_HAND_OPEN_EVENT = 'majak:paifu-hand-open'
@@ -150,9 +148,16 @@ export default function PaifWnd() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [handHidden, setHandHidden] = useState(true)
   const [isGraphVisible, setIsGraphVisible] = useState(false)
-  const [showSaveDlg, setShowSaveDlg] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileViewOpen, setMobileViewOpen] = useState(false)
+
+  useEffect(() => {
+    const syncGraphVisibility = (event: Event) => {
+      setIsGraphVisible((event as CustomEvent<{ visible?: unknown }>).detail?.visible === true)
+    }
+    window.addEventListener(PAIFU_GRAPH_EVENT, syncGraphVisibility)
+    return () => window.removeEventListener(PAIFU_GRAPH_EVENT, syncGraphVisibility)
+  }, [])
   const [packetCursor, setPacketCursor] = useState(0)
   const [replaySession, setReplaySession] = useState(0)
   const [isReplayReady, setIsReplayReady] = useState(false)
@@ -286,28 +291,6 @@ export default function PaifWnd() {
     }, delay)
     return () => window.clearTimeout(timer)
   }, [isPlaying, isReplayReady, packetCursor, replayPackets.length])
-
-  /** OnPaifuSave — CPaifuSaveDlg を開いてブラウザダウンロード */
-  const handleSave = () => {
-    if (!hasPaifu) return
-    setShowSaveDlg(true)
-  }
-
-  const savePaifu = (fileName: string, bKyoku: boolean, comment: string) => {
-    const paifuBody = typeof source?.data === 'string'
-      ? source.data
-      : JSON.stringify({ bKyoku, paifu: source?.data }, null, 2)
-    const body = `<${comment}\r\n${paifuBody}`
-    const blob = new Blob([body], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = fileName
-    anchor.click()
-    URL.revokeObjectURL(url)
-    saveLastUsedPaifuFileName(fileName)
-    setShowSaveDlg(false)
-  }
 
   /** OnPaifuGrph — グラフ表示の開閉 */
   const handleGraph = () => {
@@ -445,7 +428,6 @@ export default function PaifWnd() {
           <button type="button" onClick={handleGraph} disabled={!hasPaifu} className={isGraphVisible ? 'is-active' : undefined}>{isGraphVisible ? 'グラフを閉じる' : 'グラフ'}</button>
           <button type="button" onClick={() => handleRotate(3)}>回転</button>
           <button type="button" onClick={handleHide} className={handHidden ? 'is-active' : undefined}>{handHidden ? '手牌表示' : '手牌非表示'}</button>
-          <button type="button" onClick={handleSave} disabled={!hasPaifu}>保存</button>
           <button type="button" onClick={handleClose}>閉じる</button>
         </div>
       </div>
@@ -520,7 +502,6 @@ export default function PaifWnd() {
               <button type="button" onClick={handleGraph} disabled={!hasPaifu} className={isGraphVisible ? 'is-active' : undefined}>{isGraphVisible ? 'グラフを閉じる' : 'グラフ'}</button>
               <button type="button" onClick={() => handleRotate(3)}>回転</button>
               <button type="button" onClick={handleHide} className={handHidden ? 'is-active' : undefined}>{handHidden ? '手牌表示' : '手牌非表示'}</button>
-              <button type="button" onClick={handleSave} disabled={!hasPaifu}>保存</button>
               <button type="button" onClick={handleClose}>閉じる</button>
             </div>
           </div>
@@ -529,14 +510,6 @@ export default function PaifWnd() {
         desktopReplay
       )}
 
-      {showSaveDlg && (
-        <PaifuSaveDlg
-          defaultFileName={source?.title ? `${source.title}.txt` : loadLastUsedPaifuFileName()}
-          initialComment={source?.comment ?? ''}
-          onSave={savePaifu}
-          onCancel={() => setShowSaveDlg(false)}
-        />
-      )}
       <GameReconnectLoading
         visible={isArchiveLoading || !isReplayReady}
         currentStep={isArchiveLoading ? 'server' : replayLoadStep}

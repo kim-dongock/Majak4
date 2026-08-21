@@ -905,7 +905,7 @@ export default function GameScreen() {
       const detail = (event as CustomEvent<{ active?: boolean }>).detail ?? {}
       setSyncLoadingVisible(Boolean(detail.active))
     }
-    const onConnectionLost = () => setSyncLoadingVisible(true)
+    const onConnectionLost = () => navigate('/channel', { replace: true })
     window.addEventListener(GAME_SYNC_EVENT, onSync)
     SignalR.onConnectionLost(onConnectionLost)
     return () => {
@@ -913,7 +913,7 @@ export default function GameScreen() {
       SignalR.offConnectionLost(onConnectionLost)
       if (syncLoadingOffTimerRef.current !== null) window.clearTimeout(syncLoadingOffTimerRef.current)
     }
-  }, [])
+  }, [navigate])
 
   useEffect(() => {
     const onCallAvatar = (event: Event) => {

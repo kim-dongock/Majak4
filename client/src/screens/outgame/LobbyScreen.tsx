@@ -2867,11 +2867,11 @@ export default function LobbyScreen() {
           pix: player?.pix ?? '',
           error,
         })
-        showError('サーバーとの接続が切断されました。再接続中です。')
+        navigate('/channel', { replace: true })
       }
       SignalR.onConnectionLost(onConnectionLost)
       const onReconnected = () => {
-        if (!mounted || !channelId) return
+        if (!mounted || connectionLostHandled || !channelId) return
         connectionLostHandled = false
         const enterPayload = buildEnterChannelPayload(channelId, useAuthStore.getState().player)
         console.info('[LobbyScreen] SignalR reconnected; re-entering channel', { channelId, pix: enterPayload.pix })
@@ -3661,6 +3661,7 @@ export default function LobbyScreen() {
             assetTitle={slevel}
             achievementTitle={majakTitleName}
             trickTitle={trickTitleName}
+            showGrade
             loadProfile={false}
             className="majak-mobile-user-summary--lobby"
           />
@@ -3775,6 +3776,7 @@ export default function LobbyScreen() {
               assetTitle={slevel}
               achievementTitle={majakTitleName}
               trickTitle={trickTitleName}
+              showGrade
               loadProfile={false}
               className="majak-mobile-user-summary--lobby"
             />

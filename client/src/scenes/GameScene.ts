@@ -3450,24 +3450,45 @@ export default class GameScene extends Phaser.Scene {
       return
     }
 
+    const graph = this.paifuGraphBounds()
     const layer = this.add.container(0, 0).setDepth(3000)
     const shade = this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0x000000, 0.45)
       .setOrigin(0, 0)
       .setInteractive()
-    const body = this.add.container(PAIFU_GRAPH.x, PAIFU_GRAPH.y)
+    const body = this.add.container(graph.x, graph.y).setScale(graph.scale)
     body.add(this.add.image(0, 0, this.resolveSkinTextureKey('mj_recBg')).setOrigin(0, 0))
-    const closeBg = this.add.rectangle(PAIFU_GRAPH.x + PAIFU_GRAPH.w + 4, PAIFU_GRAPH.y - 22, 22, 20, 0xd4d0c8)
-      .setOrigin(0, 0)
-      .setInteractive({ useHandCursor: true })
-      .on('pointerdown', () => this.hidePaifuGraph())
-    const closeText = this.add.text(PAIFU_GRAPH.x + PAIFU_GRAPH.w + 10, PAIFU_GRAPH.y - 22, '×', {
-      fontFamily: getUiFontFamily(), fontSize: getUiFontSize(12), color: '#000000',
-    })
 
-    layer.add([shade, body, closeBg, closeText])
+    layer.add([shade, body])
     this.paifuGraphLayer = layer
     this.paifuGraphBody = body
     this.redrawPaifuGraphContent()
+  }
+
+  private paifuGraphBounds() {
+    if (this.layoutMode !== 'mobileLandscape') {
+      const scale = 1.22
+      return {
+        ...PAIFU_GRAPH,
+        x: (this.scale.width - PAIFU_GRAPH.w * scale) / 2,
+        y: (this.scale.height - PAIFU_GRAPH.h * scale) / 2,
+        scale,
+      }
+    }
+
+    const bounds = mobileVisibleWorldBounds()
+    if (!bounds) return { ...PAIFU_GRAPH, x: 1, scale: 0.8 }
+
+    const width = bounds.right - bounds.left
+    const height = bounds.bottom - bounds.top
+    const scale = Math.min(1, (width - 8) / PAIFU_GRAPH.w, (height - 8) / PAIFU_GRAPH.h)
+    const scaledWidth = PAIFU_GRAPH.w * scale
+    const scaledHeight = PAIFU_GRAPH.h * scale
+    return {
+      ...PAIFU_GRAPH,
+      x: bounds.left + (width - scaledWidth) / 2,
+      y: bounds.top + (height - scaledHeight) / 2,
+      scale,
+    }
   }
 
   private hidePaifuGraph() {
@@ -3490,8 +3511,8 @@ export default class GameScene extends Phaser.Scene {
     for (let odr = 0; odr < this.players.length; odr++) {
       const row = PAIFU_GRAPH_ROWS[odr]
       const player = this.players[odr]
-      this.addPaifuGraphText(row.name.x, row.name.y, player.name || `Player ${odr + 1}`, 59)
-      this.addPaifuGraphText(row.point.x, row.point.y, String(player.score), 56, 'right')
+      this.addPaifuGraphText(0, row.name.y - 2, player.name || `Player ${odr + 1}`, row.initial.x, 'center', 14, '#ffffff')
+      this.addPaifuGraphText(row.point.x, row.point.y, String(player.score), 56, 'center', 14, '#ffffff')
 
       const initialHand = this.paifuGraphInitialHands[odr].length > 0
         ? this.paifuGraphInitialHands[odr]
@@ -3577,11 +3598,19 @@ export default class GameScene extends Phaser.Scene {
     })
   }
 
-  private addPaifuGraphText(x: number, y: number, text: string, width: number, align: 'left' | 'right' | 'center' = 'center') {
+  private addPaifuGraphText(
+    x: number,
+    y: number,
+    text: string,
+    width: number,
+    align: 'left' | 'right' | 'center' = 'center',
+    fontSize = 12,
+    color = '#000000',
+  ) {
     const obj = this.add.text(x, y, text, {
-      fontFamily: getUiFontFamily(), fontSize: getUiFontSize(12), color: '#000000',
+      fontFamily: getUiFontFamily(), fontSize: getUiFontSize(fontSize), color,
       fixedWidth: width, align,
-    }).setCrop(0, 0, width, 14)
+    }).setCrop(0, 0, width, Math.max(14, fontSize + 4))
     this.paifuGraphBody?.add(obj)
     this.paifuGraphObjects.push(obj)
   }

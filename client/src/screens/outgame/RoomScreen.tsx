@@ -1992,23 +1992,13 @@ export default function RoomScreen() {
       if (!mounted || connectionLostHandled) return
       connectionLostHandled = true
       logRejoinProbe('SignalR connection lost', { errorMessage: error?.message ?? String(error ?? '') })
-      showError(connectionCloseMessage || 'ルームサーバーとの接続が終了しました。')
-      if (gameReconnectActiveRef.current || inlineGameActiveRef.current) {
-        console.warn('[RoomScreen] SignalR connection lost during inline game; waiting for game resync/reconnect', {
-          channelId,
-          roomId,
-          pix: useAuthStore.getState().player?.pix ?? '',
-          error,
-        })
-        return
-      }
       console.error('[RoomScreen] SignalR connection lost', {
         channelId,
         roomId,
         pix: useAuthStore.getState().player?.pix ?? '',
         error,
       })
-      navigate(channelId ? `/channel/${channelId}` : '/channel', { replace: true })
+      navigate('/channel', { replace: true })
     }
     SignalR.onConnectionLost(onConnectionLost)
     const onBrowserOffline = () => onConnectionLost()
@@ -2191,6 +2181,7 @@ export default function RoomScreen() {
       }
     }
     const onReconnected = () => {
+      if (!mounted || connectionLostHandled) return
       logRejoinProbe('SignalR reconnected callback')
       gameReconnectActiveRef.current = true
       roomActionSentKeyRef.current = ''

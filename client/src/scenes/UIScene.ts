@@ -93,6 +93,7 @@ interface CostumeAnimationState {
 }
 
 const TURN_MARK_EVENT = 'majak:turn-mark'
+const PAIFU_GRAPH_EVENT = 'majak:paifu-graph'
 const UI_FLOW_TRACE_PREFIX = '[UIFlow]'
 const DEBUG_UI_FLOW = import.meta.env.VITE_DEBUG_GAME === '1'
 const IMG = '/assets/images/game'
@@ -421,6 +422,8 @@ export default class UIScene extends Phaser.Scene {
   private waremeOdr: number | null = null
   private lastMobileHudLayoutKey = ''
   private readonly reachedOdr = new Set<number>()
+  private replayGraphVisible = false
+  private graphHiddenHudObjects: Phaser.GameObjects.GameObject[] = []
 
   constructor() {
     super({ key: 'UIScene' })
@@ -564,6 +567,11 @@ export default class UIScene extends Phaser.Scene {
     this.timerKeepBar.on('pointerover', holdAutoPass)
     this.updateTimerLayout()
     if (this.layoutMode === 'mobileLandscape' && !this.isViewer) this.showInactiveTimerBar()
+
+    window.addEventListener(PAIFU_GRAPH_EVENT, this.onPaifuGraphVisibilityChanged)
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener(PAIFU_GRAPH_EVENT, this.onPaifuGraphVisibilityChanged)
+    })
 
     /* ── GameScene からのイベント受信 ── */
     const gs = this.scene.get('GameScene')
@@ -982,6 +990,7 @@ export default class UIScene extends Phaser.Scene {
 
   private updatePlayerTexts(players: PlayerHudState[]) {
     this.players = players
+    const hudVisible = !this.replayGraphVisible
     players.forEach((p, odr) => {
       const loc = this.odrToLoc(odr)
       const pos = odrBoxPos(loc)
@@ -1015,11 +1024,11 @@ export default class UIScene extends Phaser.Scene {
         ? { x: desktopPanelName.x, width: desktopPanelName.width, fontSize: this.fitNameText(loc, desktopPanelName.x, displayName).fontSize }
         : this.fitNameText(loc, isMobileIngameLayout(this.layoutMode) ? mobileNameX : name.x, displayName)
       const nameY = desktopPanelName?.y ?? (isMobileIngameLayout(this.layoutMode) ? mobileNameY : name.y)
-      this.nameTexts[loc].setColor(isComputer ? '#ff6060' : '#ffffff').setFontSize(nameLayout.fontSize).setPosition(nameLayout.x, nameY).setFixedSize(nameLayout.width, HUD_METRICS.nameHeight).setAlign(nameAlign).setText(displayName).setVisible(nameVisible)
-      this.levelTexts[loc].setPosition(textBounds.left, textY).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(levelText).setVisible(mobileInfoVisible && !compactInfo)
-      this.scoreTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? 0 : infoRowHeight)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatPointText(p)).setVisible(mobileInfoVisible)
-      this.rankTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight : infoRowHeight * 2)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatRankText(players, odr)).setVisible(mobileInfoVisible)
-      this.diffTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight * 2 : infoRowHeight * 3)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatDiffText(players, odr)).setVisible(mobileInfoVisible)
+      this.nameTexts[loc].setColor(isComputer ? '#ff6060' : '#ffffff').setFontSize(nameLayout.fontSize).setPosition(nameLayout.x, nameY).setFixedSize(nameLayout.width, HUD_METRICS.nameHeight).setAlign(nameAlign).setText(displayName).setVisible(nameVisible && hudVisible)
+      this.levelTexts[loc].setPosition(textBounds.left, textY).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(levelText).setVisible(mobileInfoVisible && !compactInfo && hudVisible)
+      this.scoreTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? 0 : infoRowHeight)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatPointText(p)).setVisible(mobileInfoVisible && hudVisible)
+      this.rankTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight : infoRowHeight * 2)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatRankText(players, odr)).setVisible(mobileInfoVisible && hudVisible)
+      this.diffTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight * 2 : infoRowHeight * 3)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatDiffText(players, odr)).setVisible(mobileInfoVisible && hudVisible)
       this.updateMobileHudPanel(loc, avt, avatarSize, nameLayout.x, nameY, nameLayout.width, textBounds.left, textY, textBounds.width, compactInfo ? 3 : 4, infoRowHeight)
       const costumeFrame = this.costumeFrameResource(odr, p)
       const costumeUrl = this.costumeAvatarUrl(p)
@@ -1033,22 +1042,32 @@ export default class UIScene extends Phaser.Scene {
           y: avt.y,
           width: avatarSize.width,
           height: avatarSize.height,
-          visible: true,
+          visible: hudVisible,
           alt: displayName,
         })
       } else {
         const avatarFit = costumeFrame || costumeUrl ? 'cover' : 'contain'
         this.setDynamicImage(this.avatarSprites[loc], costumeFrame?.key ?? this.avatarKey(odr, p), avatarUrl, avt.x, avt.y, 10, 'mj_aiAvtrL', true, avatarSize, avatarFit)
       }
+      if (!hudVisible) {
+        this.mobileHudPanels[loc].setVisible(false)
+        this.desktopHudPanels[loc].setVisible(false)
+        this.desktopTurnStrips[loc].setVisible(false)
+        this.avatarSprites[loc].setVisible(false)
+      }
       const majakTitleDepth = isMobileIngameLayout(this.layoutMode) ? 9 : 2
       const trickTitleDepth = isMobileIngameLayout(this.layoutMode) ? 8 : 1
-      this.setDynamicImage(this.majakTitleSprites[loc], this.majakTitleKey(p.majakTitle), this.majakTitleUrl(p.majakTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : ttl.x, isMobileIngameLayout(this.layoutMode) ? avt.y : ttl.y, majakTitleDepth, undefined, mobileInfoVisible)
-      this.setDynamicImage(this.trickTitleSprites[loc], this.trickTitleKey(p.trickTitle), this.trickTitleUrl(p.trickTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : trk.x, isMobileIngameLayout(this.layoutMode) ? avt.y - 2 : trk.y, trickTitleDepth, undefined, mobileInfoVisible)
+      this.setDynamicImage(this.majakTitleSprites[loc], this.majakTitleKey(p.majakTitle), this.majakTitleUrl(p.majakTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : ttl.x, isMobileIngameLayout(this.layoutMode) ? avt.y : ttl.y, majakTitleDepth, undefined, mobileInfoVisible && hudVisible)
+      this.setDynamicImage(this.trickTitleSprites[loc], this.trickTitleKey(p.trickTitle), this.trickTitleUrl(p.trickTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : trk.x, isMobileIngameLayout(this.layoutMode) ? avt.y - 2 : trk.y, trickTitleDepth, undefined, mobileInfoVisible && hudVisible)
     })
     this.updateHostMark()
   }
 
   private updateHostMark() {
+    if (this.replayGraphVisible) {
+      this.hostMark?.setVisible(false)
+      return
+    }
     const hostOdr = this.players.findIndex(player => player.isHost)
     if (hostOdr < 0 || !this.hostMark) {
       this.hostMark?.setVisible(false)
@@ -1114,7 +1133,7 @@ export default class UIScene extends Phaser.Scene {
         .setTexture(this.resolveSkinTextureKey(`mj_myfan_${loc}`))
         .setFrame(this.odrToFon(odr) + (this.activeTurnOdr === odr ? 4 : 0))
         .setPosition(point.x, point.y)
-        .setVisible(true)
+        .setVisible(!this.replayGraphVisible)
     }
     const chichaLoc = this.odrToLoc(this.chicha)
     const chichaPoint = this.chichaMarkerPoint(chichaLoc)
@@ -1122,7 +1141,57 @@ export default class UIScene extends Phaser.Scene {
       ?.setTexture(this.resolveSkinTextureKey(`mj_oyahuda_${chichaLoc}`))
       .setFrame(Math.floor(this.kyokuCnt / 4))
       .setPosition(chichaPoint.x, chichaPoint.y)
-      .setVisible(true)
+      .setVisible(!this.replayGraphVisible)
+  }
+
+  private onPaifuGraphVisibilityChanged = (event: Event) => {
+    const visible = (event as CustomEvent<{ visible?: unknown }>).detail?.visible === true
+    if (this.replayGraphVisible === visible) return
+
+    this.replayGraphVisible = visible
+    if (visible) this.hideHudForPaifuGraph()
+    else this.restoreHudAfterPaifuGraph()
+  }
+
+  private hideHudForPaifuGraph() {
+    const objects = [
+      ...this.majakTitleSprites,
+      ...this.trickTitleSprites,
+      ...this.mobileHudPanels,
+      ...this.desktopHudPanels,
+      ...this.desktopTurnStrips,
+      ...this.avatarSprites,
+      ...this.levelTexts,
+      ...this.scoreTexts,
+      ...this.rankTexts,
+      ...this.diffTexts,
+      ...this.nameTexts,
+      ...this.reachSprites,
+      ...this.menFonSprites,
+      ...this.diceSprites,
+      this.hostMark,
+      this.chichaSprite,
+      this.chaFonSprite,
+      this.kyokuNumSprite,
+      this.waremeSprite,
+      this.timerBack,
+      this.timerBar,
+      this.timerTurnBar,
+      this.timerKeepBar,
+      ...this.leftNumber?.sprites ?? [],
+      ...this.riboNumber?.sprites ?? [],
+      ...this.renchanNumber?.sprites ?? [],
+    ].filter((object): object is Phaser.GameObjects.GameObject => Boolean(object))
+
+    this.graphHiddenHudObjects = objects.filter(object => object.visible)
+    this.graphHiddenHudObjects.forEach(object => object.setVisible(false))
+    this.mobileAvatarLayer?.setVisible(false)
+  }
+
+  private restoreHudAfterPaifuGraph() {
+    this.graphHiddenHudObjects.forEach(object => object.setVisible(true))
+    this.graphHiddenHudObjects = []
+    this.mobileAvatarLayer?.setVisible(true)
   }
 
   private chichaMarkerPoint(loc: number): HudPoint {

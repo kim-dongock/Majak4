@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { getPlayerCollection } from '../api/collection'
 import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
+import { gradeLevelName } from '../utils/grade'
 
 interface MobileUserSummaryProps {
   gameMoney?: number
   assetTitle?: string
   achievementTitle?: string
   trickTitle?: string
+  showGrade?: boolean
   loadProfile?: boolean
   className?: string
 }
@@ -17,6 +19,7 @@ export default function MobileUserSummary({
   assetTitle,
   achievementTitle,
   trickTitle,
+  showGrade = false,
   loadProfile = true,
   className = '',
 }: MobileUserSummaryProps) {
@@ -69,6 +72,7 @@ export default function MobileUserSummary({
       <div className="majak-mobile-user-summary__fields">
         <span><b className="majak-type-xs">GP</b><em className="majak-type-md">{currentGameMoney?.toLocaleString('ja-JP') ?? '-'}</em></span>
         <span><b className="majak-type-xs">資産</b><em className="majak-type-md">{currentAssetTitle || '-'}</em></span>
+        {showGrade && <span><b className="majak-type-xs">段位</b><em className="majak-type-md">{gradeLevelName(profile?.gradeLevel)}</em></span>}
         <span><b className="majak-type-xs">実績</b><em className="majak-type-md">{currentAchievementTitle || '-'}</em></span>
         <span><b className="majak-type-xs">技</b><em className="majak-type-md">{currentTrickTitle || '-'}</em></span>
       </div>
