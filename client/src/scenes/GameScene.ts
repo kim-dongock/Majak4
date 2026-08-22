@@ -56,7 +56,6 @@ import {
   isMobileIngameLayout,
   MOBILE_DEAD_WALL_SHIFT_X,
   MOBILE_DISCARD_CENTER_INFO_OFFSETS,
-  MOBILE_TOP_MELD_CENTER_INFO_OFFSET,
   type IngameLayoutMode,
 } from '../game/ingameLayout'
 import {
@@ -157,6 +156,8 @@ const MOBILE_OTHER_HAND_FIXED_COUNT = 14
 const MOBILE_SELF_HAND_DEPTH = 900
 const LEGACY_GEM_EFFECT_SIZE = { width: 345, height: 353 }
 const LEGACY_YAKUMAN_FINISH_SIZE = { width: 563, height: 435 }
+const LEGACY_TSUMO_EFFECT_THICKNESS = 164
+const LEGACY_LEVEL1_EFFECT_SIZE = { width: 102, height: 124 }
 const MATCH_START_SEAT_REVEAL_DURATION_MS = 3100
 const LEGACY_WAREME_PRESENTATION_DURATION_MS = 3700
 const MATCH_START_SEAT_POSITIONS = [
@@ -391,14 +392,6 @@ function discardPos(loc: 0 | 1 | 2 | 3, idx: number, flag: number, mode: IngameL
 }
 
 function mobileMeldBasePos(loc: 0 | 1 | 2 | 3, meldScale: number): { x: number; y: number } | null {
-  if (loc === 2) {
-    const centerOffset = mobileCenterHudOffset('mobileLandscape')
-    return {
-      x: BOARD_X + CENTER_INFO.x + centerOffset.x + MOBILE_TOP_MELD_CENTER_INFO_OFFSET.x,
-      y: BOARD_Y + CENTER_INFO.y + centerOffset.y + MOBILE_TOP_MELD_CENTER_INFO_OFFSET.y,
-    }
-  }
-
   const handScale = (loc === 0 ? MOBILE_SELF_HAND_TILE_SCALE : MOBILE_OTHER_HAND_TILE_SCALE) * mobileContentScale()
   const handEnd = mobileOuterHandPos(loc, MOBILE_OTHER_HAND_FIXED_COUNT - 1, MOBILE_OTHER_HAND_FIXED_COUNT, false, handScale)
   if (!handEnd) return null
@@ -421,26 +414,35 @@ function meldPos(loc: 0 | 1 | 2 | 3, row: number, col: number, flag: number, mod
   const dir = flag === 2 ? ((loc + 1) % 4) as 0 | 1 | 2 | 3 : loc
   const meldLayout = DESKTOP_INGAME_LAYOUT
   const mobileBase = isMobileIngameLayout(mode) ? mobileMeldBasePos(loc, scale) : null
+  const responsiveBounds = mode === 'responsiveDesktop' ? responsiveDesktopVisibleWorldBounds() : null
+  const responsiveBase = responsiveBounds
+    ? {
+        x: responsiveBounds.left + meldLayout.meldPosition[loc].x / meldLayout.board.width * (responsiveBounds.right - responsiveBounds.left),
+        y: responsiveBounds.top + meldLayout.meldPosition[loc].y / meldLayout.board.height * (responsiveBounds.bottom - responsiveBounds.top),
+      }
+    : null
   const base = mobileBase ?? meldLayout.meldPosition[loc]
   const stepScale = isMobileIngameLayout(mode) ? scale : 1
-  const rowStep = { x: meldLayout.discardRowStep[loc].x * stepScale, y: meldLayout.discardRowStep[loc].y * stepScale }
-  const colStep = { x: meldLayout.discardStep[loc].x * stepScale, y: meldLayout.discardStep[loc].y * stepScale }
-  const rotStep = { x: meldLayout.rotatedDiscardOffset[loc].x * stepScale, y: meldLayout.rotatedDiscardOffset[loc].y * stepScale }
-  let x = base.x - rowStep.x * row - colStep.x * (col + 1)
-  let y = base.y - rowStep.y * row - colStep.y * (col + 1)
+  const scaleX = stepScale
+  const scaleY = stepScale
+  const rowStep = { x: meldLayout.discardRowStep[loc].x * scaleX, y: meldLayout.discardRowStep[loc].y * scaleY }
+  const colStep = { x: meldLayout.discardStep[loc].x * scaleX, y: meldLayout.discardStep[loc].y * scaleY }
+  const rotStep = { x: meldLayout.rotatedDiscardOffset[loc].x * scaleX, y: meldLayout.rotatedDiscardOffset[loc].y * scaleY }
+  let x = (responsiveBase?.x ?? base.x) - rowStep.x * row - colStep.x * (col + 1)
+  let y = (responsiveBase?.y ?? base.y) - rowStep.y * row - colStep.y * (col + 1)
   if (flag === 2) {
-    x += colStep.x + rotStep.x - meldLayout.discardRowStep[dir].x * stepScale
-    y += colStep.y + rotStep.y - meldLayout.discardRowStep[dir].y * stepScale
+    x += colStep.x + rotStep.x - meldLayout.discardRowStep[dir].x * scaleX
+    y += colStep.y + rotStep.y - meldLayout.discardRowStep[dir].y * scaleY
   } else if (flag === 1) {
     const nextLoc = ((loc + 1) % 4) as 0 | 1 | 2 | 3
-    x += colStep.x - meldLayout.discardRowStep[nextLoc].x * stepScale
-    y += colStep.y - meldLayout.discardRowStep[nextLoc].y * stepScale
+    x += colStep.x - meldLayout.discardRowStep[nextLoc].x * scaleX
+    y += colStep.y - meldLayout.discardRowStep[nextLoc].y * scaleY
   }
-  return mobileBase ? { x, y } : boardEdgePoint({ x, y }, loc, mode)
+  return mobileBase || responsiveBase ? { x, y } : boardEdgePoint({ x, y }, loc, mode)
 }
 
 function meldTexture(loc: 0 | 1 | 2 | 3, flag: number, isDown: boolean): { key: string; frame?: number } {
-  if (isDown) return { key: downTexture(loc) }
+  if (isDown) return { key: downTexture(loc), frame: 0 }
   const dir = flag === 2 ? ((loc + 1) % 4) as 0 | 1 | 2 | 3 : loc
   return { key: dir === 0 ? 'hai_sute' : `hai_open_${dir}` }
 }
@@ -848,6 +850,7 @@ export default class GameScene extends Phaser.Scene {
   /* Phaser オブジェクト */
   private handSprites: Phaser.GameObjects.Image[][] = [[], [], [], []]
   private mobileOpponentHandCountTexts: Array<Phaser.GameObjects.Text | undefined> = [undefined, undefined, undefined, undefined]
+  private responsiveLocalHandOffsetY = 0
   private suteSprites: Phaser.GameObjects.Image[][] = [[], [], [], []]
   private meldSprites: Phaser.GameObjects.Image[][] = [[], [], [], []]
   private deadWallSprites: Phaser.GameObjects.Image[] = []
@@ -857,6 +860,7 @@ export default class GameScene extends Phaser.Scene {
   private horaErrorSprite?: Phaser.GameObjects.Sprite
   private boardEffectSprites: Phaser.GameObjects.Image[] = []
   private legacyEffectSprites: Phaser.GameObjects.Image[] = []
+  private legacyBackdrop?: Phaser.GameObjects.GameObject
   private reachTileEffectSprites: Phaser.GameObjects.Image[] = []
   private hoverCursor?: Phaser.GameObjects.Image | Phaser.GameObjects.Graphics
   private selectedCursor?: Phaser.GameObjects.Image | Phaser.GameObjects.Graphics
@@ -2634,7 +2638,7 @@ export default class GameScene extends Phaser.Scene {
     const backdropDuration = scoreDuration
       + middleDuration
       + (hasYakuman ? LEGACY_YAKUMAN_FINISH_DURATION_MS : 0)
-    this.playLegacyFrameSequence(['eff_rontumo_black'], BOARD_X, BOARD_Y, [backdropDuration], { depth: 9990 })
+    this.playLegacyBackdrop(backdropDuration)
 
     if (hasHighHora && skillDuration === 0) {
       const presentation = presentations.find(item => item.isYakuman || item.totalTen >= 3000) ?? presentations[0]
@@ -2680,7 +2684,7 @@ export default class GameScene extends Phaser.Scene {
     x: number,
     y: number,
     frameDelays: readonly number[],
-    options: { delay?: number; depth?: number; additive?: boolean; angle?: number } = {},
+    options: { delay?: number; depth?: number; additive?: boolean; angle?: number; longSize?: number; displaySize?: { width: number; height: number } } = {},
   ) {
     const delay = options.delay ?? 0
     const duration = frameDelays.reduce((sum, value) => sum + value, 0)
@@ -2689,10 +2693,12 @@ export default class GameScene extends Phaser.Scene {
       if (!this.shouldPlayLegacyVisuals()) return
       const sprite = this.clipToBoard(this.add.image(x, y, keys[0]).setOrigin(0, 0).setDepth(options.depth ?? 10000))
       if (options.additive) sprite.setBlendMode(Phaser.BlendModes.ADD)
+      if (options.displaySize) sprite.setDisplaySize(options.displaySize.width, options.displaySize.height)
+      else if (options.longSize) sprite.setDisplaySize(options.longSize, sprite.height)
       const angle = options.angle ?? 0
       if (angle !== 0) {
-        const width = sprite.width
-        const height = sprite.height
+        const width = sprite.displayWidth
+        const height = sprite.displayHeight
         if (angle === -90) sprite.setPosition(x, y + width)
         else if (angle === 90) sprite.setPosition(x + height, y)
         else if (Math.abs(angle) === 180) sprite.setPosition(x + width, y + height)
@@ -2716,13 +2722,69 @@ export default class GameScene extends Phaser.Scene {
     return delay + duration
   }
 
+  private playLegacySkillFrameSequence(keys: string[], x: number, y: number, frameDelays: readonly number[], delay = 0) {
+    const uiScene = this.scene.get('UIScene') as Phaser.Scene & {
+      playLegacySkillFrameSequence?: (effectKeys: string[], effectX: number, effectY: number, delays: readonly number[], startDelay?: number) => number
+    }
+    if (uiScene?.sys.isActive() && uiScene.playLegacySkillFrameSequence) {
+      return uiScene.playLegacySkillFrameSequence(keys, x, y, frameDelays, delay)
+    }
+    return this.playLegacyFrameSequence(keys, x, y, frameDelays, { delay, additive: true })
+  }
+
+  private legacyBoardEffectPlacement() {
+    if (this.layoutMode === 'responsiveDesktop') {
+      const bounds = responsiveDesktopVisibleWorldBounds()
+      if (bounds) {
+        return {
+          x: bounds.left,
+          y: bounds.top,
+          displaySize: { width: bounds.right - bounds.left, height: bounds.bottom - bounds.top },
+        }
+      }
+    }
+    if (isMobileIngameLayout(this.layoutMode)) {
+      const bounds = mobileVisibleWorldBounds()
+      if (bounds) {
+        return {
+          x: bounds.left + (bounds.right - bounds.left - BOARD_W) / 2,
+          y: bounds.top + (bounds.bottom - bounds.top - BOARD_H) / 2,
+        }
+      }
+    }
+    return { x: BOARD_X, y: BOARD_Y }
+  }
+
+  private playLegacyBackdrop(duration: number) {
+    this.legacyBackdrop?.destroy()
+    const bounds = this.layoutMode === 'responsiveDesktop'
+      ? responsiveDesktopVisibleWorldBounds()
+      : isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
+    this.legacyBackdrop = bounds
+      ? this.clipToBoard(this.add.rectangle(
+          bounds.left,
+          bounds.top,
+          bounds.right - bounds.left,
+          bounds.bottom - bounds.top,
+          0x000000,
+          64 / 255,
+        ).setOrigin(0, 0).setDepth(9990))
+      : this.clipToBoard(this.add.image(BOARD_X, BOARD_Y, 'eff_rontumo_black').setOrigin(0, 0).setDepth(9990))
+    const backdrop = this.legacyBackdrop
+    this.time.delayedCall(duration, () => {
+      backdrop.destroy()
+      if (this.legacyBackdrop === backdrop) this.legacyBackdrop = undefined
+    })
+  }
+
   private playLegacyScoreEffect(presentation: LegacyHoraPresentation) {
     const { pinType, level, isYakuman, totalTen, odr } = presentation
     if (pinType === 1) {
       const loc = odrToLoc(odr, this.myOdr)
       if (isYakuman) {
         playMajakSid(SID_EFFECT_YAKUMAN, this.soundSkinOptions())
-        return this.playLegacyFrameSequence(numberedLegacyKeys('eff_rontumoeff_d', 30, 1), BOARD_X, BOARD_Y, Array(30).fill(LEGACY_EFFECT_FRAME_MS), { additive: true })
+        const placement = this.legacyBoardEffectPlacement()
+        return this.playLegacyFrameSequence(numberedLegacyKeys('eff_rontumoeff_d', 30, 1), placement.x, placement.y, Array(30).fill(LEGACY_EFFECT_FRAME_MS), { additive: true, displaySize: placement.displaySize })
       }
       const prefix = level === 3 ? 'eff_tumoeff_c' : level === 2 ? 'eff_tumoeff_b' : 'eff_tumoeff'
       const count = level === 3 ? 15 : level === 2 ? 13 : 12
@@ -2735,8 +2797,22 @@ export default class GameScene extends Phaser.Scene {
           : { ...position, x: position.x + mobileHand.x - BOARD_X - desktopHand.x }
       }
       const angle = [0, -90, 180, 90][loc]
-      const point = boardLocalPoint(position)
-      return this.playLegacyFrameSequence(numberedLegacyKeys(prefix, count, 1), point.x, point.y, Array(count).fill(LEGACY_EFFECT_FRAME_MS), { additive: true, angle })
+      const desktopPoint = boardEdgePoint(position, loc, this.layoutMode)
+      const responsiveBounds = this.layoutMode === 'responsiveDesktop' ? responsiveDesktopVisibleWorldBounds() : null
+      const point = isMobileIngameLayout(this.layoutMode)
+        ? boardLocalPoint(position)
+        : responsiveBounds
+          ? {
+              x: loc === 1 ? responsiveBounds.right - LEGACY_TSUMO_EFFECT_THICKNESS : responsiveBounds.left,
+              y: loc === 1 || loc === 3 ? responsiveBounds.top : desktopPoint.y,
+            }
+          : desktopPoint
+      const longSize = responsiveBounds
+        ? loc % 2 === 0
+          ? responsiveBounds.right - responsiveBounds.left
+          : responsiveBounds.bottom - responsiveBounds.top
+        : undefined
+      return this.playLegacyFrameSequence(numberedLegacyKeys(prefix, count, 1), point.x, point.y, Array(count).fill(LEGACY_EFFECT_FRAME_MS), { additive: true, angle, longSize })
     }
 
     const source = this.lastRonSource ?? { x: BOARD_X + 399, y: BOARD_Y + 383, width: 0, height: 0, isReach: false }
@@ -2759,13 +2835,14 @@ export default class GameScene extends Phaser.Scene {
     })
     if (isYakuman) {
       const yakumanDelay = count * LEGACY_EFFECT_FRAME_MS + 12 * LEGACY_EFFECT_FRAME_MS
+      const placement = this.legacyBoardEffectPlacement()
       this.time.delayedCall(yakumanDelay, () => playMajakSid(SID_EFFECT_YAKUMAN, this.soundSkinOptions()))
       duration = Math.max(duration, this.playLegacyFrameSequence(
         numberedLegacyKeys('eff_rontumoeff_d', 30, 1),
-        BOARD_X,
-        BOARD_Y,
+        placement.x,
+        placement.y,
         Array(30).fill(LEGACY_EFFECT_FRAME_MS),
-        { delay: yakumanDelay, additive: true, depth: 10010 },
+        { delay: yakumanDelay, additive: true, depth: 10010, displaySize: placement.displaySize },
       ))
     }
     return duration
@@ -2800,20 +2877,24 @@ export default class GameScene extends Phaser.Scene {
       const definition = this.legacySkillDefinition(player.trickTitle, 1)
       if (!definition) return
       const loc = odrToLoc(odr, this.myOdr)
-      const desktopPoint = boardLocalPoint(positions[loc])
-      const point = isMobileIngameLayout(this.layoutMode)
-        ? this.mobileHandAnchoredEffectPoint(desktopPoint, odr, loc)
+      const desktopPoint = boardEdgePoint(positions[loc], loc, this.layoutMode)
+      const mobileBounds = isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
+      const point = mobileBounds
+        ? {
+            x: loc === 1 || loc === 2 ? mobileBounds.right - LEGACY_LEVEL1_EFFECT_SIZE.width : mobileBounds.left,
+            y: loc === 0 || loc === 1 ? mobileBounds.bottom - LEGACY_LEVEL1_EFFECT_SIZE.height : mobileBounds.top,
+          }
         : desktopPoint
       if (this.isLocalPlayerOdr(odr)) {
         if (startDelay > 0) this.time.delayedCall(startDelay, () => playMajakSfx(definition.sound, this.soundSkinOptions()))
         else playMajakSfx(definition.sound, this.soundSkinOptions())
       }
-      duration = Math.max(duration, this.playLegacyFrameSequence(
+      duration = Math.max(duration, this.playLegacySkillFrameSequence(
         numberedLegacyKeys(`mj_ef_L1${definition.element}`, definition.delays.length, 1),
         point.x,
         point.y,
         definition.delays,
-        { delay: startDelay, additive: true },
+        startDelay,
       ) + 500)
     })
     return duration
@@ -2832,12 +2913,11 @@ export default class GameScene extends Phaser.Scene {
       : [{ x: -58, y: -87 }, { x: -51, y: -92 }, { x: -55, y: -70 }, { x: -51, y: -92 }]
     const point = { x: source.x + offsets[loc].x, y: source.y + offsets[loc].y }
     playMajakSfx(definition.sound, this.soundSkinOptions())
-    return this.playLegacyFrameSequence(
+    return this.playLegacySkillFrameSequence(
       numberedLegacyKeys(`mj_ef_L2${definition.element}`, definition.delays.length, 1),
       point.x,
       point.y,
       definition.delays,
-      { additive: true, depth: 10012 },
     )
   }
 
@@ -3003,6 +3083,7 @@ export default class GameScene extends Phaser.Scene {
     const right = Math.max(...sprites.map(sprite => sprite.getBounds().right))
     const shiftX = (bounds.left + bounds.right - left - right) / 2
     sprites.forEach(sprite => { sprite.x += shiftX })
+    this.meldSprites[odr].filter(sprite => sprite.active).forEach(sprite => { sprite.x += shiftX })
     if (odr !== this.myOdr) return
     if (this.selectedCursor) this.selectedCursor.x += shiftX
     if (this.drawnTileCursor) this.drawnTileCursor.x += shiftX
@@ -3015,9 +3096,11 @@ export default class GameScene extends Phaser.Scene {
     const handBottom = Math.max(...sprites.map(sprite => sprite.getBounds().bottom))
     const panelTop = this.actionPanelSprite.getBounds().top
     const shiftY = Math.min(0, panelTop - handBottom)
-    if (shiftY === 0) return
-    sprites.forEach(sprite => { sprite.y += shiftY })
-    if (odr !== this.myOdr) return
+    const meldShiftY = shiftY - this.responsiveLocalHandOffsetY
+    this.responsiveLocalHandOffsetY = shiftY
+    if (shiftY !== 0) sprites.forEach(sprite => { sprite.y += shiftY })
+    if (meldShiftY !== 0) this.meldSprites[odr].forEach(sprite => { sprite.y += meldShiftY })
+    if (odr !== this.myOdr || shiftY === 0) return
     if (this.selectedCursor) this.selectedCursor.y += shiftY
     if (this.drawnTileCursor) this.drawnTileCursor.y += shiftY
   }
@@ -3260,9 +3343,10 @@ export default class GameScene extends Phaser.Scene {
 
     player.flowers.forEach((tile, col) => {
       const { x, y } = meldPos(loc, 0, col, 0, this.layoutMode, meldScale)
+      const adjustedY = y + (this.layoutMode === 'responsiveDesktop' && loc === 0 ? this.responsiveLocalHandOffsetY : 0)
       const frame = paiToFrame(tile.code)
       const texture = this.resolveSkinTexture(meldTexture(loc, 0, false))
-      const spr = this.clipToBoard(this.add.image(x, y, texture.key, frame).setOrigin(0, 0).setScale(meldScale).setDepth(y))
+      const spr = this.clipToBoard(this.add.image(x, adjustedY, texture.key, frame).setOrigin(0, 0).setScale(meldScale).setDepth(adjustedY))
       this.bindAssistTileInput(spr, tile.code)
       this.meldSprites[odr].push(spr)
     })
@@ -3271,14 +3355,47 @@ export default class GameScene extends Phaser.Scene {
       const row = meldIdx + flowerOffset
       meld.tiles.forEach((tile, col) => {
         const { x, y } = meldPos(loc, row, col, tile.flag, this.layoutMode, meldScale)
+        const adjustedY = y + (this.layoutMode === 'responsiveDesktop' && loc === 0 ? this.responsiveLocalHandOffsetY : 0)
         const texture = this.resolveSkinTexture(meldTexture(loc, tile.flag, Boolean(tile.isDown)))
         const frame = texture.frame ?? paiToFrame(tile.code)
-        const spr = this.clipToBoard(this.add.image(x, y, texture.key, frame).setOrigin(0, 0).setScale(meldScale).setDepth(y))
+        const spr = this.clipToBoard(this.add.image(x, adjustedY, texture.key, frame).setOrigin(0, 0).setScale(meldScale).setDepth(adjustedY))
         if (!tile.isDown) this.bindAssistTileInput(spr, tile.code)
         this.meldSprites[odr].push(spr)
       })
     })
+    this.alignResponsiveMeldsWithHand(odr, loc)
     this.redrawPaifuGraphContent()
+  }
+
+  private alignResponsiveMeldsWithHand(odr: number, loc: 0 | 1 | 2 | 3) {
+    if (this.layoutMode !== 'responsiveDesktop') return
+    const handSprites = this.handSprites[odr].filter(sprite => sprite.active)
+    const meldSprites = this.meldSprites[odr].filter(sprite => sprite.active)
+    if (handSprites.length === 0 || meldSprites.length === 0) return
+
+    const handBounds = {
+      left: Math.min(...handSprites.map(sprite => sprite.getBounds().left)),
+      right: Math.max(...handSprites.map(sprite => sprite.getBounds().right)),
+      top: Math.min(...handSprites.map(sprite => sprite.getBounds().top)),
+      bottom: Math.max(...handSprites.map(sprite => sprite.getBounds().bottom)),
+    }
+    const meldBounds = {
+      left: Math.min(...meldSprites.map(sprite => sprite.getBounds().left)),
+      right: Math.max(...meldSprites.map(sprite => sprite.getBounds().right)),
+      top: Math.min(...meldSprites.map(sprite => sprite.getBounds().top)),
+      bottom: Math.max(...meldSprites.map(sprite => sprite.getBounds().bottom)),
+    }
+    const attachShift = loc === 0
+      ? { x: handBounds.right - meldBounds.left, y: handBounds.bottom - meldBounds.bottom }
+      : loc === 1
+        ? { x: handBounds.right - meldBounds.right, y: handBounds.top - meldBounds.bottom }
+        : loc === 2
+          ? { x: handBounds.left - meldBounds.right, y: handBounds.top - meldBounds.top }
+          : { x: handBounds.left - meldBounds.left, y: handBounds.bottom - meldBounds.top }
+    meldSprites.forEach(sprite => {
+      sprite.x += attachShift.x
+      sprite.y += attachShift.y
+    })
   }
 
   private clearDeadWall() {
@@ -3292,17 +3409,13 @@ export default class GameScene extends Phaser.Scene {
     if (!shouldReveal) return 0
 
     const scale = this.tileScale()
-    const centerOffset = mobileCenterHudOffset(this.layoutMode)
     const seatPoint = (loc: 0 | 1 | 2 | 3, offset = { x: 0, y: 0 }) => {
       if (isMobileIngameLayout(this.layoutMode)) {
         const point = mobileOuterHandPos(loc, 6, MOBILE_OTHER_HAND_FIXED_COUNT, false, scale)
         if (point) return { x: point.x + offset.x, y: point.y + offset.y }
       }
       const base = MATCH_START_SEAT_POSITIONS[loc]
-      return boardLocalPoint({
-        x: base.x + offset.x + centerOffset.x,
-        y: base.y + offset.y + centerOffset.y,
-      })
+      return boardEdgePoint({ x: base.x + offset.x, y: base.y + offset.y }, loc, this.layoutMode)
     }
     const sprites = this.players.map((_player, odr) => {
       const loc = odrToLoc(odr, this.myOdr)
@@ -5194,9 +5307,12 @@ export default class GameScene extends Phaser.Scene {
     const prefix = this.boardEffectPrefix(action)
     if (!prefix) return
     const loc = odrToLoc(odr, this.myOdr)
-    const basePoint = boardLocalPoint(BOARD_EFFECT_POS[loc])
+    const basePoint = isMobileIngameLayout(this.layoutMode)
+      ? boardLocalPoint(BOARD_EFFECT_POS[loc])
+      : boardEdgePoint(BOARD_EFFECT_POS[loc], loc, this.layoutMode)
+    const mobileOffset = mobileCenterHudOffset(this.layoutMode)
     const point = isMobileIngameLayout(this.layoutMode)
-      ? this.mobileHandAnchoredEffectPoint(basePoint, odr, loc)
+      ? { x: basePoint.x + mobileOffset.x, y: basePoint.y + mobileOffset.y }
       : basePoint
     let frame = 1
     const sprite = this.clipToBoard(this.add.image(point.x, point.y, `${prefix}_${String(frame).padStart(2, '0')}`)
@@ -5804,6 +5920,8 @@ export default class GameScene extends Phaser.Scene {
     this.clearAllDiscardFlights()
     this.legacyEffectSprites.forEach(sprite => sprite.destroy())
     this.legacyEffectSprites = []
+    this.legacyBackdrop?.destroy()
+    this.legacyBackdrop = undefined
     this.selectedIdx = -1
     this.lastDiscardOdr = null
     this.lastRonSource = undefined

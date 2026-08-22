@@ -31,7 +31,7 @@ import {
   type LegacyCostumeId,
 } from '../game/legacyAnimations'
 import MobileAvatarLayer from '../game/MobileAvatarLayer'
-import { mobileCenterHudOffset, mobileEffectPointFromAnchor, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey, responsiveDesktopCenterOffset, responsiveDesktopSeatOffset } from '../game/mobileIngameViewport'
+import { mobileCenterHudOffset, mobileEffectPointFromAnchor, mobileVisibleWorldBounds, mobileVisibleWorldLayoutKey, responsiveDesktopCenterOffset, responsiveDesktopSeatOffset, responsiveDesktopVisibleWorldBounds } from '../game/mobileIngameViewport'
 import { isTengokuBoardSkin } from '../utils/legacySkinPalette'
 import { playMajakSfx, playMajakSid, SID_RICSTK } from '../utils/majakSound'
 import { getUiFontFamily, getUiFontSize, getUiFontSizePx } from '../utils/typography'
@@ -117,7 +117,6 @@ const MOBILE_HUD_ICON_WIDTH = 44
 const MOBILE_HUD_ICON_HEIGHT = 66
 const HUD_NAME_MIN_FONT_SIZE = 8
 const DESKTOP_HUD_INFO_Y_SHIFT = -24
-const RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y = 24
 
 function cssPx(value: string): number {
   const match = value.match(/\d+/)
@@ -142,14 +141,31 @@ function boardLocalPoint(point: HudPoint): HudPoint {
 
 function playerHudPoint(point: HudPoint, loc: number): HudPoint {
   const base = boardLocalPoint(point)
+  if (UI_LAYOUT_MODE === 'responsiveDesktop') {
+    const bounds = responsiveDesktopVisibleWorldBounds()
+    if (bounds) {
+      const board = getIngameLayout(UI_LAYOUT_MODE).board
+      const avatarBoxHeight = DESKTOP_PLAYER_AVATAR_SIZE.height
+      const usableHeight = Math.max(0, bounds.bottom - bounds.top - avatarBoxHeight)
+      const centerOffset = responsiveDesktopCenterOffset(UI_LAYOUT_MODE)
+      const seatOffset = responsiveDesktopSeatOffset(UI_LAYOUT_MODE, loc)
+      return {
+        x: base.x + seatOffset.x - centerOffset.x,
+        y: bounds.top + avatarBoxHeight / 2 + point.y / board.height * usableHeight,
+      }
+    }
+  }
+
+  return base
+}
+
+function seatEffectPoint(point: HudPoint, loc: number): HudPoint {
+  const base = boardLocalPoint(point)
   const centerOffset = responsiveDesktopCenterOffset(UI_LAYOUT_MODE)
   const seatOffset = responsiveDesktopSeatOffset(UI_LAYOUT_MODE, loc)
-  const edgeOffsetY = UI_LAYOUT_MODE === 'responsiveDesktop'
-    ? (loc === 0 || loc === 1 ? RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y : -RESPONSIVE_DESKTOP_PLAYER_INFO_EDGE_OFFSET_Y)
-    : 0
   return {
     x: base.x + seatOffset.x - centerOffset.x,
-    y: base.y + seatOffset.y - centerOffset.y + edgeOffsetY,
+    y: base.y + seatOffset.y - centerOffset.y,
   }
 }
 
@@ -178,6 +194,8 @@ const DESKTOP_HUD_METRICS: HudMetrics = {
 }
 
 const DESKTOP_PLAYER_AVATAR_SIZE = { width: 60, height: 112 } as const
+const RESPONSIVE_DESKTOP_TITLE_OFFSET_Y = -12
+const RESPONSIVE_DESKTOP_PLAYER_INFO_OFFSET_Y = 12
 const MOBILE_HUD_METRICS: HudMetrics = {
   avatar: { width: MOBILE_HUD_ICON_WIDTH, height: MOBILE_HUD_ICON_HEIGHT },
   nameWidth: 132,
@@ -397,6 +415,7 @@ export default class UIScene extends Phaser.Scene {
   private diceRollDelay?: Phaser.Time.TimerEvent
   private diceRollTimer?: Phaser.Time.TimerEvent
   private callSprites: Phaser.GameObjects.Image[] = []
+  private skillEffectSprites: Phaser.GameObjects.Image[] = []
   private mobileAvatarLayer?: MobileAvatarLayer
   private costumeAnimationStates: Array<CostumeAnimationState | undefined> = [undefined, undefined, undefined, undefined]
 
@@ -487,7 +506,7 @@ export default class UIScene extends Phaser.Scene {
       this.mobileHudPanels[odr] = this.add.rectangle(0, 0, 1, 1, 0x103916, 0.78)
         .setOrigin(0, 0).setDepth(7).setVisible(false)
       this.desktopHudPanels[odr] = this.add.image(0, 0, this.desktopHudPanelTextureKey())
-        .setOrigin(0, 0).setDepth(7).setVisible(false)
+        .setOrigin(0, 0).setDepth(0).setVisible(false)
       this.desktopTurnStrips[odr] = this.add.image(0, 0, this.desktopTurnStripTextureKey())
         .setOrigin(0, 0).setDepth(8).setVisible(false)
       this.avatarSprites[odr] = this.add.image(avt.x, avt.y, this.resolveSkinTextureKey('mj_aiAvtrL'))
@@ -685,8 +704,35 @@ export default class UIScene extends Phaser.Scene {
     })
   }
 
+  playLegacySkillFrameSequence(keys: string[], x: number, y: number, frameDelays: readonly number[], delay = 0) {
+    const duration = frameDelays.reduce((sum, value) => sum + value, 0)
+    if (keys.length === 0 || !this.textures.exists(keys[0])) return delay + duration
+    const start = () => {
+      if (document.visibilityState !== 'visible' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+      const sprite = this.add.image(x, y, keys[0])
+        .setOrigin(0, 0)
+        .setDepth(10000)
+        .setBlendMode(Phaser.BlendModes.ADD)
+      this.skillEffectSprites.push(sprite)
+      let elapsed = 0
+      for (let frame = 1; frame < keys.length; frame++) {
+        elapsed += frameDelays[frame - 1] ?? 0
+        this.time.delayedCall(elapsed, () => {
+          if (sprite.active && this.textures.exists(keys[frame])) sprite.setTexture(keys[frame])
+        })
+      }
+      this.time.delayedCall(duration, () => {
+        sprite.destroy()
+        this.skillEffectSprites = this.skillEffectSprites.filter(item => item !== sprite)
+      })
+    }
+    if (delay > 0) this.time.delayedCall(delay, start)
+    else start()
+    return delay + duration
+  }
+
   private callActionPoint(loc: number): HudPoint {
-    const point = isMobileIngameLayout(this.layoutMode) ? this.mobileCallActionPoint(loc) : boardLocalPoint(CALL_POS[loc])
+    const point = isMobileIngameLayout(this.layoutMode) ? this.mobileCallActionPoint(loc) : seatEffectPoint(CALL_POS[loc], loc)
     if (!isMobileIngameLayout(this.layoutMode)) return point
     const bounds = mobileVisibleWorldBounds()
     const size = CALL_BALLOON_SIZE[loc]
@@ -1008,7 +1054,8 @@ export default class UIScene extends Phaser.Scene {
       const mobileTextLeft = loc === 1 || loc === 2 ? avt.x - MOBILE_HUD_INFO_WIDTH - MOBILE_HUD_TEXT_GAP : avt.x + avatarSize.width + MOBILE_HUD_TEXT_GAP
       const mobileNameX = avt.x + (avatarSize.width - MOBILE_HUD_NAME_WIDTH) / 2
       const mobileNameY = avt.y + avatarSize.height + MOBILE_HUD_NAME_GAP
-      const textY = isMobileIngameLayout(this.layoutMode) ? avt.y + MOBILE_HUD_INFO_TOP_OFFSET : txt.y + DESKTOP_HUD_INFO_Y_SHIFT
+      const desktopInfoOffsetY = this.layoutMode === 'responsiveDesktop' ? RESPONSIVE_DESKTOP_PLAYER_INFO_OFFSET_Y : 0
+      const textY = isMobileIngameLayout(this.layoutMode) ? avt.y + MOBILE_HUD_INFO_TOP_OFFSET : txt.y + DESKTOP_HUD_INFO_Y_SHIFT + desktopInfoOffsetY
       const textBounds = isMobileIngameLayout(this.layoutMode) ? { left: mobileTextLeft, width: MOBILE_HUD_INFO_WIDTH } : avatarTextBounds(loc)
       const textAlign = isMobileIngameLayout(this.layoutMode)
         ? (loc === 1 || loc === 2 ? 'right' : 'left')
@@ -1057,8 +1104,10 @@ export default class UIScene extends Phaser.Scene {
       }
       const majakTitleDepth = isMobileIngameLayout(this.layoutMode) ? 9 : 2
       const trickTitleDepth = isMobileIngameLayout(this.layoutMode) ? 8 : 1
-      this.setDynamicImage(this.majakTitleSprites[loc], this.majakTitleKey(p.majakTitle), this.majakTitleUrl(p.majakTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : ttl.x, isMobileIngameLayout(this.layoutMode) ? avt.y : ttl.y, majakTitleDepth, undefined, mobileInfoVisible && hudVisible)
-      this.setDynamicImage(this.trickTitleSprites[loc], this.trickTitleKey(p.trickTitle), this.trickTitleUrl(p.trickTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : trk.x, isMobileIngameLayout(this.layoutMode) ? avt.y - 2 : trk.y, trickTitleDepth, undefined, mobileInfoVisible && hudVisible)
+      const titleVisible = (isMobileIngameLayout(this.layoutMode) || mobileInfoVisible) && hudVisible
+      const desktopTitleOffsetY = this.layoutMode === 'responsiveDesktop' ? RESPONSIVE_DESKTOP_TITLE_OFFSET_Y : 0
+      this.setDynamicImage(this.majakTitleSprites[loc], this.majakTitleKey(p.majakTitle), this.majakTitleUrl(p.majakTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : ttl.x, (isMobileIngameLayout(this.layoutMode) ? avt.y : ttl.y) + desktopTitleOffsetY, majakTitleDepth, undefined, titleVisible)
+      this.setDynamicImage(this.trickTitleSprites[loc], this.trickTitleKey(p.trickTitle), this.trickTitleUrl(p.trickTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : trk.x, (isMobileIngameLayout(this.layoutMode) ? avt.y - 2 : trk.y) + desktopTitleOffsetY, trickTitleDepth, undefined, titleVisible)
     })
     this.updateHostMark()
   }
@@ -1086,7 +1135,7 @@ export default class UIScene extends Phaser.Scene {
     const desktopHudBounds = this.layoutMode === 'responsiveDesktop' ? this.desktopHudBounds[loc] : undefined
     const point = desktopHudBounds
       ? { x: desktopHudBounds.left + 3, y: desktopHudBounds.top + 3 }
-      : isMobileIngameLayout(this.layoutMode) ? { x: avt.x + 24, y: avt.y + 58 } : playerHudPoint(odrBoxPos(loc).hst, loc)
+      : isMobileIngameLayout(this.layoutMode) ? { x: avt.x + 24, y: avt.y + 58 } : { x: avt.x + 3, y: avt.y + 3 }
     this.hostMark.setPosition(point.x, point.y).setVisible(true)
   }
 
@@ -1418,7 +1467,10 @@ export default class UIScene extends Phaser.Scene {
         ? [{ x: 328, y: 351 }, { x: 445, y: 110 }, { x: 152, y: 213 }, { x: 207, y: 288 }]
         : [{ x: 193, y: 235 }, { x: 330, y: 123 }, { x: 193, y: 97 }, { x: 92, y: 123 }]
       playMajakSfx(effect === 1 ? 'mjkreach01' : 'mjkreach02')
-      this.playReachFrameSequence(keys, delays, this.mobileReachAnimationPoint(loc, positions[loc]))
+      const point = this.layoutMode === 'responsiveDesktop'
+        ? seatEffectPoint(positions[loc], loc)
+        : this.mobileReachAnimationPoint(loc, positions[loc])
+      this.playReachFrameSequence(keys, delays, point)
       return true
     }
 
@@ -1426,8 +1478,12 @@ export default class UIScene extends Phaser.Scene {
     const spinPositions = [{ x: 333, y: 364 }, { x: 453, y: 294 }, { x: 333, y: 226 }, { x: 215, y: 294 }]
     const effectPositions = [{ x: 373, y: 397 }, { x: 488, y: 332 }, { x: 373, y: 259 }, { x: 250, y: 332 }]
     const bigKey = loc % 2 === 0 ? 'mj_GrichBar_0' : 'mj_GrichBar_1'
-    const spinPoint = this.mobileReachAnimationPoint(loc, spinPositions[loc])
-    const bigPoint = this.mobileReachAnimationPoint(loc, bigPositions[loc])
+    const spinPoint = this.layoutMode === 'responsiveDesktop'
+      ? seatEffectPoint(spinPositions[loc], loc)
+      : this.mobileReachAnimationPoint(loc, spinPositions[loc])
+    const bigPoint = this.layoutMode === 'responsiveDesktop'
+      ? seatEffectPoint(bigPositions[loc], loc)
+      : this.mobileReachAnimationPoint(loc, bigPositions[loc])
     const spin = this.add.image(spinPoint.x, spinPoint.y, 'mj_GrichBar_Spin1').setOrigin(0, 0).setDepth(Z_REACH_STICK + 1).setVisible(false)
     const big = this.add.image(bigPoint.x, bigPoint.y, bigKey).setOrigin(0, 0).setDepth(Z_REACH_STICK + 1)
     this.reachAnimationSprites.push(big, spin)
@@ -1451,8 +1507,12 @@ export default class UIScene extends Phaser.Scene {
           spin.destroy()
           const reachKey = loc % 2 === 0 ? 'mj_richbar_0_Festa' : 'mj_richbar_1_Festa'
           const flashKey = loc % 2 === 0 ? 'mj_Grich_Effect_0' : 'mj_Grich_Effect_1'
-          const reachPoint = this.mobileReachAnimationPoint(loc, DESKTOP_REACH_POSITIONS[loc])
-          const flashPoint = this.mobileReachAnimationPoint(loc, effectPositions[loc])
+          const reachPoint = this.layoutMode === 'responsiveDesktop'
+            ? seatEffectPoint(DESKTOP_REACH_POSITIONS[loc], loc)
+            : this.mobileReachAnimationPoint(loc, DESKTOP_REACH_POSITIONS[loc])
+          const flashPoint = this.layoutMode === 'responsiveDesktop'
+            ? seatEffectPoint(effectPositions[loc], loc)
+            : this.mobileReachAnimationPoint(loc, effectPositions[loc])
           const reach = this.add.image(reachPoint.x, reachPoint.y, reachKey).setOrigin(0, 0).setDepth(Z_REACH_STICK + 1)
           const flash = this.add.image(flashPoint.x, flashPoint.y, flashKey).setOrigin(0, 0).setDepth(Z_REACH_STICK + 2)
           this.reachAnimationSprites.push(reach, flash)

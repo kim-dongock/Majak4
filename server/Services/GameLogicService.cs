@@ -2489,7 +2489,10 @@ public class GameLogicService
     {
 
         var playersForContinueClear = room.Seats.Where(seat => seat != null).Select(seat => seat!).ToArray();
-        ClearOutPlayerSeats(room);
+        if (room.IsAutoMatchChannel)
+            ClearOutPlayerSeats(room);
+        else
+            ClearOutDisconnectedPlayerSeats(room);
         if (_roomRegistry != null)
         {
             foreach (var player in playersForContinueClear)
@@ -2892,6 +2895,19 @@ public class GameLogicService
         {
             var player = room.Seats[i];
             if (player == null) continue;
+
+            player.RoomId = null;
+            player.IsViewer = false;
+            room.Seats[i] = null;
+        }
+    }
+
+    private static void ClearOutDisconnectedPlayerSeats(GameRoom room)
+    {
+        for (int i = 0; i < GameConst.PlayerMaxCount; i++)
+        {
+            var player = room.Seats[i];
+            if (player?.IsOutPlayer != true) continue;
 
             player.RoomId = null;
             player.IsViewer = false;

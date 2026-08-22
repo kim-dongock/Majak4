@@ -117,9 +117,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
     || /\/channel\/[^/]+\/lobby\/room\/[^/]+$/.test(location.pathname)
   const desktopFrameWidth = isResponsiveDesktopScreen ? 'min(1320px, calc(100vw - 48px))' : frameWidth
   const desktopFrameHeight = isResponsiveDesktopScreen
-    ? accBox === 'room'
-      ? 'min(860px, calc(100dvh - 16px))'
-      : 'min(860px, calc(100dvh - 48px))'
+    ? '100dvh'
     : frameHeight
   const routeState = (location.state ?? {}) as { customBgId?: number; customBoardType?: number }
   const fallbackSkin = useCustomSkinStore()

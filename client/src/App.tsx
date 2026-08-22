@@ -8,6 +8,7 @@ import LobbyScreen from './screens/outgame/LobbyScreen'
 import RoomScreen from './screens/outgame/RoomScreen'
 import GameScreen from './screens/ingame/GameScreen'
 import PaifWnd from './screens/ingame/PaifWnd'
+import MeldLayoutFixtureScreen from './screens/ingame/MeldLayoutFixtureScreen'
 import PaifuArchiveScreen from './screens/outgame/PaifuArchiveScreen'
 import PopupPreviewScreen from './screens/outgame/PopupPreviewScreen'
 import AnnouncementListScreen from './screens/outgame/AnnouncementListScreen'
@@ -656,6 +657,9 @@ export default function App() {
 
   if (import.meta.env.DEV && window.location.pathname === '/popup-preview') {
     return <PopupPreviewScreen />
+  }
+  if (import.meta.env.DEV && window.location.pathname === '/meld-layout-fixture') {
+    return <MeldLayoutFixtureScreen />
   }
 
   return (

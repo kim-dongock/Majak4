@@ -66,7 +66,7 @@ OPAQUE_HIM_STEMS = {
 
 # CMJImgBmpEx / CHgGrpDib32 effects store per-pixel alpha in the fourth byte of
 # a BI_RGB bitmap. Pillow treats that format as RGB and otherwise makes it opaque.
-SOURCE_ALPHA_HIM_PREFIXES = ("mj_ef_", "eff_")
+SOURCE_ALPHA_HIM_PREFIXES = ("mj_ef_", "eff_", "mj_ron_w", "mj_tumo_w")
 
 # .him files that are NOT images — skip conversion
 # mj_images*.him : MD5 checksum database for skin integrity verification (MJGraph.cpp)

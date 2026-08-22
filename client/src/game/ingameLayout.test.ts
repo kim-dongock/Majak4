@@ -8,7 +8,6 @@ import {
   MOBILE_DISCARD_CENTER_INFO_OFFSETS,
   MOBILE_INGAME_LAYOUT,
   MOBILE_REACH_POSITIONS,
-  MOBILE_TOP_MELD_CENTER_INFO_OFFSET,
 } from './ingameLayout'
 
 describe('responsive desktop layout mode', () => {
@@ -63,8 +62,6 @@ describe('mobile reach-stick ring', () => {
     expect(MOBILE_INGAME_LAYOUT.discardRowStep[0].y * layoutScale).toBe(32.4)
     expect(MOBILE_INGAME_LAYOUT.discardRowStep[1].x * layoutScale).toBeGreaterThan(45 * tileScale)
 
-    expect(MOBILE_TOP_MELD_CENTER_INFO_OFFSET.x - center.width).toBe(-14)
-    expect(MOBILE_TOP_MELD_CENTER_INFO_OFFSET.y).toBe(-48)
     expect(MOBILE_DEAD_WALL_SHIFT_X).toBe(24)
   })
 })

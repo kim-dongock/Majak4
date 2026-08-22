@@ -91,12 +91,12 @@ export default function PaifuArchiveScreen() {
       </section>
       <section className="majak-paifu-archive__content">
         <div className="majak-paifu-archive__list" aria-live="polite">
-          <div className="majak-paifu-archive__list-header"><time>対局日時</time><strong>ゲーム種類</strong><span>順位</span><span>参加者</span></div>
+          <div className="majak-paifu-archive__list-header"><time>対局日時</time><strong>ゲーム種類</strong><span>順位・参加者</span></div>
           {isLoading && <p>読み込み中...</p>}
           {!isLoading && archives.length === 0 && <p>再生できる牌譜はありません。</p>}
           {!isLoading && archives.map(archive => (
             <button key={archive.archiveId} type="button" className={archive.archiveId === selectedId ? 'is-selected' : undefined} onClick={() => setSelectedId(archive.archiveId)}>
-              <time>{formatPlayedAt(archive.playedAt)}</time><strong>{archive.roomName || 'ゲーム情報なし'}</strong><span>{archive.result === '1' ? '-' : archive.result || '-'}</span>
+              <time>{formatPlayedAt(archive.playedAt)}</time><strong>{archive.roomName || 'ゲーム情報なし'}</strong>
               <div className="majak-paifu-archive__members">{archive.members.map((member, index) => <span key={`${member.name}-${index}`}>{index > 0 && ' / '}{member.name || '-'}{member.result && <small> {member.result}</small>}</span>)}</div>
             </button>
           ))}

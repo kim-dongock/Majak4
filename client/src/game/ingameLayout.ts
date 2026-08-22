@@ -183,8 +183,6 @@ export const MOBILE_DISCARD_CENTER_INFO_OFFSETS = [
   { x: -46, y: -15.5 },
 ] as const
 
-export const MOBILE_TOP_MELD_CENTER_INFO_OFFSET = { x: 251, y: -48 } as const
-
 export const MOBILE_DEAD_WALL_SHIFT_X = 24
 
 export const MOBILE_INGAME_LAYOUT: IngameLayout = {

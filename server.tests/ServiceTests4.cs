@@ -3285,21 +3285,22 @@ public class GameLogicHelperTests
         Assert.Empty(room.PlayHistory);
     }
 
-    // シナリオ: GameReportProcess はレガシーの Report/ClearOutPlayerList/LimitCnt reset に合わせて
-    // 全プレイヤーを終了済みルームから解放し、次のオートマッチングへ参加可能にする。
-    // 原典: GameReportProcess → Report() → GameReport() → ClearOutPlayerList() → LimitCnt=maxPlayer → SendChannelChangeRoomInfo
+    // シナリオ: 通常ルームは終局後も接続中の参加者を待機室に残し、
+    // 切断済みの参加者だけを解放する。オートマッチングルームは別テストで全員を解放する。
     [Fact]
-    public async Task GameReportProcess_ResetsRoomAndReleasesAllPlayersAfterReport()
+    public async Task GameReportProcess_NormalRoom_KeepsConnectedPlayersAfterReport()
     {
         var room = BuildPaiInfoRoom("00N5A");
         room.RoomId = 86;
+        foreach (var player in room.Seats.Where(player => player != null).Select(player => player!))
+            player.RoomId = room.RoomId;
         room.State = GameRoomState.Finished;
         room.LimitCnt = 2;
         room.PlayHistory.Add(new { playType = "MJPID_ACTION" });
         room.OkButtonStates[0] = true;
         room.OkButtonStates[1] = true;
         for (int seat = 0; seat < 4; seat++) room.SeatToEngineOrder[seat] = seat;
-        var completedPlayers = room.Seats.Where(player => player != null).Select(player => player!).ToArray();
+        var disconnectedPlayer = room.Seats[1]!;
         room.Seats[1]!.IsOutPlayer = true;
         var (ctx, sent) = CommandTestHelper.MakeContext(room.Seats[0]!);
 
@@ -3312,12 +3313,37 @@ public class GameLogicHelperTests
         Assert.True(reportIndex >= 0, $"Expected game report. order={sentOrder}");
         Assert.True(roomStateIndex >= 0, $"Expected room state. order={sentOrder}");
         Assert.True(reportIndex < roomStateIndex, $"Expected game report before room state. order={sentOrder}");
-        Assert.All(room.Seats, Assert.Null);
-        Assert.All(completedPlayers, player => Assert.Null(player.RoomId));
+        Assert.NotNull(room.Seats[0]);
+        Assert.Null(room.Seats[1]);
+        Assert.NotNull(room.Seats[2]);
+        Assert.NotNull(room.Seats[3]);
+        Assert.Equal(room.RoomId, room.Seats[0]!.RoomId);
+        Assert.Equal(room.RoomId, room.Seats[2]!.RoomId);
+        Assert.Equal(room.RoomId, room.Seats[3]!.RoomId);
+        Assert.Null(disconnectedPlayer.RoomId);
         Assert.Equal(GameRoomState.Waiting, room.State);
         Assert.Equal(GameConst.PlayerMaxCount, room.LimitCnt);
         Assert.Empty(room.PlayHistory);
         Assert.All(room.OkButtonStates, Assert.False);
+    }
+
+    [Fact]
+    public async Task GameReportProcess_AutoMatchRoom_ReleasesAllPlayersAfterReport()
+    {
+        var room = BuildPaiInfoRoom("0ZG5A");
+        room.RoomId = 88;
+        foreach (var player in room.Seats.Where(player => player != null).Select(player => player!))
+            player.RoomId = room.RoomId;
+        room.State = GameRoomState.Finished;
+        for (int seat = 0; seat < GameConst.PlayerMaxCount; seat++) room.SeatToEngineOrder[seat] = seat;
+        var completedPlayers = room.Seats.Where(player => player != null).Select(player => player!).ToArray();
+        var (ctx, _) = CommandTestHelper.MakeContext(room.Seats[0]!);
+
+        await BuildService().GameReportProcessAsync(room, ctx);
+
+        Assert.All(room.Seats, Assert.Null);
+        Assert.All(completedPlayers, player => Assert.Null(player.RoomId));
+        Assert.Equal(GameRoomState.Waiting, room.State);
     }
 
     [Fact]
