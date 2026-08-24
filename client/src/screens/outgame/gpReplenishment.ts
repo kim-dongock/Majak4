@@ -9,6 +9,11 @@ export interface GpAssetUpdate {
   nlevel?: number
 }
 
+export function readFreeGpReplenishmentRemaining(data: Record<string, unknown>): number | undefined {
+  const remaining = Number(data.restAllInCnt ?? data.mjkk43e)
+  return Number.isInteger(remaining) && remaining >= 0 ? remaining : undefined
+}
+
 export function readGpAssetUpdate(data: Record<string, unknown>): GpAssetUpdate {
   const gamMoney = Number(data.gammoney ?? data.gamMoney ?? data.k34e)
   const nlevel = Number(data.nlevel ?? data.nLevel ?? data.k33e)

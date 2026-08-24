@@ -1648,6 +1648,11 @@ export default class GameScene extends Phaser.Scene {
               timeBankEnabled,
             }
           : null
+        if (isForLocalPlayer && this.currentActionPrompt === null) {
+          this.expireCurrentActionPrompt('invalid or expired ACTIONS prompt')
+          this.requestGameResync('invalid-or-expired-action-prompt')
+          return
+        }
         this.clearTimeWarningTimers()
         this.currentActionSeatOrder = isForLocalPlayer ? seatOrder : null
         this.canDiscardOnTileClick = isForLocalPlayer && isTurnMode && actionOffers.includes('Tap')
@@ -2876,6 +2881,9 @@ export default class GameScene extends Phaser.Scene {
     this.players.forEach((player, odr) => {
       const definition = this.legacySkillDefinition(player.trickTitle, 1)
       if (!definition) return
+      this.emitToUiScene('titleSkill', { odr, element: definition.element, level: 1, delays: definition.delays, delay: startDelay })
+      duration = Math.max(duration, startDelay + definition.delays.reduce((sum, delay) => sum + delay, 0) + 500)
+      return
       const loc = odrToLoc(odr, this.myOdr)
       const desktopPoint = boardEdgePoint(positions[loc], loc, this.layoutMode)
       const mobileBounds = isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
@@ -2903,6 +2911,9 @@ export default class GameScene extends Phaser.Scene {
   private playLegacyLevel2Skill(presentation: LegacyHoraPresentation) {
     const definition = this.legacySkillDefinition(this.players[presentation.odr]?.trickTitle, 2)
     if (!definition) return 0
+    playMajakSfx(definition.sound, this.soundSkinOptions())
+    this.emitToUiScene('titleSkill', { odr: presentation.odr, element: definition.element, level: 2, delays: definition.delays })
+    return definition.delays.reduce((sum, delay) => sum + delay, 0)
     const loc = odrToLoc(presentation.odr, this.myOdr)
     const source = presentation.pinType === 0
       ? this.lastRonSource
@@ -3068,6 +3079,7 @@ export default class GameScene extends Phaser.Scene {
     })
     this.centerResponsiveHorizontalHand(odr, loc)
     this.alignResponsiveLocalHandAbovePanel(odr, loc)
+    this.alignResponsiveMeldsWithHand(odr, loc)
     this.updateMobileActionHandVisibility()
     if (!this.isViewer && odr === this.myOdr) this.redrawTenpaiMarkers()
     this.redrawDiscardSourceMarker(odr)

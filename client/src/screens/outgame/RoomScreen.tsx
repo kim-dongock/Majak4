@@ -19,6 +19,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useState, useEffect, useRef, type CSSProperties } from 'react'
 import * as SignalR from '../../api/signalr'
 import { useAuthStore } from '../../store/authStore'
+import { useGamePlayerStore } from '../../store/gamePlayerStore'
 import { useCustomSkinStore } from '../../store/customSkinStore'
 import { isOk, showError, showMessage } from '../../utils/msgbox'
 import { readNoticePayload, type NoticeDisplay } from '../../utils/notice'
@@ -1608,6 +1609,14 @@ export default function RoomScreen() {
       const shouldAutoExit = autoControlRef.current.prox
       const seatPos = playersRef.current.find(player => player.playerId === myPix)?.pos
       const myResult = players.find(player => player.isMe)
+      if (myResult) {
+        useGamePlayerStore.getState().setData({
+          ...(typeof myResult.gameMoney === 'number' && Number.isFinite(myResult.gameMoney) ? { gamMoney: myResult.gameMoney } : {}),
+          ...(typeof myResult.nlevel === 'number' && Number.isFinite(myResult.nlevel) ? { nlevel: myResult.nlevel } : {}),
+          ...(myResult.levelName ? { slevel: myResult.levelName } : {}),
+          ...(typeof myResult.gemCount === 'number' && Number.isFinite(myResult.gemCount) ? { gemCount: myResult.gemCount } : {}),
+        })
+      }
       finalizePaifuRecording({
         roomName: roomTitle,
         result: myResult ? `${myResult.rank + 1}位` : '',

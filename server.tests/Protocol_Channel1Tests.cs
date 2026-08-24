@@ -471,6 +471,18 @@ public class AutoMatchingLifecycleTests
 
         Assert.Equal(expectedRoomOption, method.Invoke(null, new object[] { subId }));
     }
+
+    [Theory]
+    [InlineData("0ZG6A", "0ZG6A")]
+    [InlineData("MAJAK20ZG6A001", "0ZG6A")]
+    public void ExtractSubId_PreservesShortGradeChannelId(string channelId, string expectedSubId)
+    {
+        var method = typeof(AutoMatchingBackgroundService).GetMethod(
+            "ExtractSubId",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+
+        Assert.Equal(expectedSubId, method.Invoke(null, new object[] { channelId }));
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

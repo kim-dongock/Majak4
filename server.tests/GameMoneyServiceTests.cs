@@ -78,6 +78,25 @@ public class GameMoneyServiceTests
         policy.Verify(service => service.GetCurrentAsync(), Times.Exactly(2));
     }
 
+    [Fact]
+    public async Task SetNewPlayerInitialMoneyWithHistoryAsync_UsesPolicyAndWritesInitialGpHistory()
+    {
+        var policy = new Mock<IGameEconomyPolicyService>();
+        policy.Setup(service => service.GetCurrentAsync()).ReturnsAsync(
+            new GameEconomyPolicy(750, 1500, 2, DateTime.UtcNow));
+        var service = new GameMoneyService(
+            _playerRepoMock.Object,
+            _ratingService,
+            _histMock.Object,
+            policy.Object);
+
+        await service.SetNewPlayerInitialMoneyWithHistoryAsync("user01", "1.2.3.4");
+
+        _playerRepoMock.Verify(repository => repository.SetNewPlayerInitialGameMoneyAsync("user01", 750), Times.Once);
+        _histMock.Verify(repository => repository.InsertGameMoneyHistAsync(
+            "user01", GameConst.EvtCodeDefaultMoney, 750, 0, 750, "1.2.3.4"), Times.Once);
+    }
+
     // ─── AddMoneyAsync ─────────────────────────────────────────────────────
 
     [Fact]

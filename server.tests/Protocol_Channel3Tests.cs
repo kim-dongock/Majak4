@@ -20,6 +20,19 @@ namespace MajakServer.Tests;
 // ═══════════════════════════════════════════════════════════════════════════
 public class CreateRoomCommandTests
 {
+    private static MasterCacheService CreateMasterCache(
+        PlayerRepository playerRepo, string channelId, string subId, int unitMoney = 20)
+    {
+        var channelRepo = new Mock<ChannelRepository>(MockBehavior.Loose,
+            (GameDataContextFactory)null!, TestMasterCacheFactory.CreateRedisService());
+        channelRepo.Setup(repo => repo.GetChannelListAsync("MAJAK4"))
+            .ReturnsAsync(new List<ChannelInfo>
+            {
+                new() { ChanelId = channelId, SubId = subId, UnitMoney = unitMoney },
+            });
+        return TestMasterCacheFactory.Create(playerRepo: playerRepo, channelRepo: channelRepo.Object);
+    }
+
     [Fact]
     public async Task Execute_WithLiveContinueRoom_DeniesCreatingOtherRoom()
     {
@@ -56,7 +69,7 @@ public class CreateRoomCommandTests
             session,
             repoMock.Object,
             registry,
-            TestMasterCacheFactory.Create(playerRepo: repoMock.Object),
+            CreateMasterCache(repoMock.Object, channelId, "00000"),
             Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
             new Mock<ILogger<CreateRoomCommand>>().Object);
         var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
@@ -102,7 +115,7 @@ public class CreateRoomCommandTests
             session,
             repoMock.Object,
             new RoomRegistryService(TestMasterCacheFactory.CreateRedisService()),
-            TestMasterCacheFactory.Create(playerRepo: repoMock.Object),
+            CreateMasterCache(repoMock.Object, channelId, "00000"),
             Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
             new Mock<ILogger<CreateRoomCommand>>().Object);
         var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
@@ -144,7 +157,7 @@ public class CreateRoomCommandTests
             session,
             repoMock.Object,
             new RoomRegistryService(TestMasterCacheFactory.CreateRedisService()),
-            TestMasterCacheFactory.Create(playerRepo: repoMock.Object),
+            CreateMasterCache(repoMock.Object, player.ChannelId, "00000"),
             Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
             new Mock<ILogger<CreateRoomCommand>>().Object);
         var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
@@ -162,6 +175,80 @@ public class CreateRoomCommandTests
         var room = session.GetRoom(101)!;
         Assert.Single(room.RequiredCircles);
         Assert.Equal("Circle One", room.RequiredCircles["circle01"]);
+        Assert.Contains(sent, x => x.method == Cmd.RoomCreated);
+    }
+
+    [Fact]
+    public async Task Execute_PaidBasicRoomWithInsufficientGp_DoesNotCreateRoom()
+    {
+        const string channelId = "MAJAK20082B001";
+        var session = new PlayerSessionService();
+        var player = new MajakPlayer
+        {
+            ConnectionId = "c1",
+            MemberNo = "host01",
+            ChannelId = channelId,
+            GamMoney = 499,
+        };
+        session.Register(player);
+
+        var repoMock = new Mock<PlayerRepository>(MockBehavior.Loose);
+        var cmd = new CreateRoomCommand(
+            session,
+            repoMock.Object,
+            new RoomRegistryService(TestMasterCacheFactory.CreateRedisService()),
+            CreateMasterCache(repoMock.Object, channelId, "0082B"),
+            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
+            new Mock<ILogger<CreateRoomCommand>>().Object);
+        var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.SubId] = "0082B",
+            [GKey.RoomOption] = "120000001000000",
+            [GKey.RoomId] = 101,
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Null(session.GetRoom(101));
+        Assert.Contains(sent, x => x.method == Cmd.ConnectTypeError);
+        Assert.DoesNotContain(sent, x => x.method == Cmd.RoomCreated);
+    }
+
+    [Fact]
+    public async Task Execute_BasicRoomUsesChannelMasterUnitMoney()
+    {
+        const string channelId = "MAJAK20082B001";
+        var session = new PlayerSessionService();
+        var player = new MajakPlayer
+        {
+            ConnectionId = "c1",
+            MemberNo = "host01",
+            ChannelId = channelId,
+            GamMoney = 1_000,
+        };
+        session.Register(player);
+
+        var repoMock = new Mock<PlayerRepository>(MockBehavior.Loose);
+        var cmd = new CreateRoomCommand(
+            session,
+            repoMock.Object,
+            new RoomRegistryService(TestMasterCacheFactory.CreateRedisService()),
+            CreateMasterCache(repoMock.Object, channelId, "0082B", unitMoney: 20),
+            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
+            new Mock<ILogger<CreateRoomCommand>>().Object);
+        var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.SubId] = "0082B",
+            [GKey.RoomOption] = "120000001000000",
+            [GKey.RoomId] = 101,
+            ["unitMoney"] = 500,
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Equal(20L, session.GetRoom(101)!.UnitMoney);
         Assert.Contains(sent, x => x.method == Cmd.RoomCreated);
     }
 }

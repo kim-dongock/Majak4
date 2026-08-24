@@ -39,7 +39,7 @@ import { MAJAK_ACCUSE_EVENT, MAJAK_EXIT_REQUEST_EVENT } from '../../components/M
 import MobileUserSummary from '../../components/MobileUserSummary'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 import { DEFAULT_MEMBER_FILTER, isMemberFilterActive, matchesMemberFilter, type MemberFilterValue } from './memberFilter'
-import { gpReplenishmentFailureMessage, isOwnGpReplenishmentResponse, readGpAssetUpdate } from './gpReplenishment'
+import { gpReplenishmentFailureMessage, isOwnGpReplenishmentResponse, readFreeGpReplenishmentRemaining, readGpAssetUpdate } from './gpReplenishment'
 
 const IMG = '/assets/images/game'
 const ABANDON_ROOM_STORAGE_KEY = 'majak:abandonRoomOnNextLobbyEnter'
@@ -2027,7 +2027,11 @@ export default function LobbyScreen() {
   const [roomOpt, setRoomOpt]   = useState<MJOption>(() => ({ ...DEFAULT_OPTION, ...(navState?.lobbyOption ?? {}) }))
   const [clientCfg, setClientCfg] = useState<MJConfig>(() => loadMajakConfig())
   /** ゲームコイン残高 — mjkc17e / channel:entered で更新 (原典: m_pMember->m_llGamMoney) */
-  const [gamMoney, setGamMoney] = useState<number>(0)
+  const storedGamMoney = useGamePlayerStore(state => state.data?.gamMoney)
+  const [gamMoney, setGamMoney] = useState<number>(() => storedGamMoney ?? 0)
+  const [freeGpRestCount, setFreeGpRestCount] = useState<number | null>(null)
+  const [freeGpReplenishmentPending, setFreeGpReplenishmentPending] = useState(false)
+  const freeGpReplenishmentPendingRef = useRef(false)
   /** 龍珠残高 — channel:entered / mjkc33e で更新 (原典: m_pMember->m_nGemCount) */
   const [gemCount, setGemCount] = useState<number>(0)
   /** キャッシュ残高 — channel:entered で更新 */
@@ -2049,6 +2053,10 @@ export default function LobbyScreen() {
     window.sessionStorage.removeItem(SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY)
     setShowWelcome(true)
   }, [])
+
+  useEffect(() => {
+    if (storedGamMoney !== undefined) setGamMoney(storedGamMoney)
+  }, [storedGamMoney])
 
   useEffect(() => {
     if (layoutMode === 'desktop') return
@@ -2094,11 +2102,12 @@ export default function LobbyScreen() {
   const trainingChannel = isTrainingChannel(channelId)
   const replayChannel = isReplayChannel(channelId)
   const tournamentChannel = isTournamentChannel(channelId)
-  const useResponsiveDesktopLayout = layoutMode === 'desktop' && !tournamentChannel
+  const useResponsiveDesktopLayout = layoutMode === 'desktop'
   const showShopButtons = !trainingChannel
   const showRankingButton = !trainingChannel && daniChannel && !tournamentChannel
   const showMissionButton = !trainingChannel && !daniChannel && !tournamentChannel
   const showFreeChargeButton = !trainingChannel && !tournamentChannel
+  const isFreeGpReplenishmentAvailable = showFreeChargeButton && gamMoney < 1000 && freeGpRestCount !== null && freeGpRestCount > 0
   const selectedTournamentFromList = tournamentList.find(item => item.seqNo === selectedTournamentSeqNo) ?? null
 
   useEffect(() => {
@@ -2337,6 +2346,8 @@ export default function LobbyScreen() {
         const assetUpdate = readGpAssetUpdate(data)
         if (assetUpdate.gamMoney !== undefined) setGamMoney(assetUpdate.gamMoney)
         if (assetUpdate.slevel !== undefined) setSlevel(assetUpdate.slevel)
+        const replenishmentRemaining = readFreeGpReplenishmentRemaining(data)
+        if (replenishmentRemaining !== undefined) setFreeGpRestCount(replenishmentRemaining)
         useGamePlayerStore.getState().setData(assetUpdate)
         if (typeof data.gemcount === 'number') setGemCount(data.gemcount as number)
         if (typeof data.cashCount === 'number') setCashCount(data.cashCount as number)
@@ -2706,14 +2717,14 @@ export default function LobbyScreen() {
         if (!mounted) return
         const currentPix = useAuthStore.getState().player?.pix ?? ''
         if (!isOwnGpReplenishmentResponse(data, currentPix)) return
-        if (!isOk(data)) {
-          showMessage(gpReplenishmentFailureMessage(data))
-          return
-        }
+        freeGpReplenishmentPendingRef.current = false
+        setFreeGpReplenishmentPending(false)
         // 原典: ProcessMoneyReplenishmentCommand → GP と資産称号を同時更新
         const assetUpdate = readGpAssetUpdate(data)
         if (assetUpdate.gamMoney !== undefined) setGamMoney(assetUpdate.gamMoney)
         if (assetUpdate.slevel !== undefined) setSlevel(assetUpdate.slevel)
+        const replenishmentRemaining = readFreeGpReplenishmentRemaining(data)
+        if (replenishmentRemaining !== undefined) setFreeGpRestCount(replenishmentRemaining)
         useGamePlayerStore.getState().setData(assetUpdate)
         _setMembers(prev => prev.map(member => member.pix === currentPix
           ? {
@@ -2722,6 +2733,10 @@ export default function LobbyScreen() {
               ...(assetUpdate.nlevel !== undefined ? { nlevel: assetUpdate.nlevel } : {}),
             }
           : member))
+        if (!isOk(data.result ?? data.k1e)) {
+          showMessage(gpReplenishmentFailureMessage(data))
+          return
+        }
         setShowGetCoin(true)
       }
       SignalR.on('mjkc17e', onMoneyReplenishment)
@@ -3124,11 +3139,18 @@ export default function LobbyScreen() {
 
   /** OnBtnInsuranceClicked 相当 — 無料GP補充を要求する。 */
   const onFreeGpReplenish = async () => {
+    if (freeGpReplenishmentPendingRef.current) return
     if (isMatching) {
       setChatLog(prev => [...prev, ...systemChatMessages(['対局参加表明中は無料補充できません。'], '#c00000')])
       return
     }
-    await SignalR.send('mjkc17e', { 'mjkk42e': '0' }).catch(() => {})
+    freeGpReplenishmentPendingRef.current = true
+    setFreeGpReplenishmentPending(true)
+    await SignalR.send('mjkc17e', { 'mjkk42e': '0' }).catch(() => {
+      freeGpReplenishmentPendingRef.current = false
+      setFreeGpReplenishmentPending(false)
+      showError('サーバーへの送信に失敗しました')
+    })
   }
 
   /** OnBtnSerialCodeClicked → SendSerialCode 相当 */
@@ -3650,35 +3672,46 @@ export default function LobbyScreen() {
     const mobileTitle = channelName || 'トーナメント'
     const tournamentDetailLines = getTournamentDetailLines(selectedTournament, memberNameByPix)
     return (
-      <div className="majak-mobile-screen majak-mobile-lobby-screen majak-mobile-tournament-screen">
-        <section className="majak-mobile-lobby-toolbar majak-mobile-lobby-toolbar--with-user">
+      <div className={`majak-mobile-screen majak-mobile-lobby-screen majak-mobile-tournament-screen${useResponsiveDesktopLayout ? ' majak-responsive-desktop-lobby' : ''}`}>
+        <section className={`majak-mobile-lobby-toolbar${useResponsiveDesktopLayout ? ' majak-mobile-lobby-toolbar--with-user' : ''}`}>
           <div>
             <div className="majak-mobile-eyebrow">TOURNAMENT</div>
             <h1>{mobileTitle}</h1>
           </div>
-          <MobileUserSummary
-            gameMoney={gamMoney}
-            assetTitle={slevel}
-            achievementTitle={majakTitleName}
-            trickTitle={trickTitleName}
-            showGrade
-            loadProfile={false}
-            className="majak-mobile-user-summary--lobby"
-          />
-          <div className="majak-mobile-lobby-actions">
-            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowShop(true)}>ショップ</button>
-            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowMission(true)}>ミッション</button>
-            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCustom(true)}>所持品</button>
-            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCollection(true)}>コレクション</button>
-            <button type="button" className="majak-mobile-lobby-header-button" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
-            <button
-              type="button"
-              className="majak-mobile-lobby-header-button"
-              onClick={tournamentPage === 'match' ? onTournamentBack : onChangeLobby}
-            >
-              {tournamentPage === 'match' ? '一覧に戻る' : 'ロビー変更'}
-            </button>
-          </div>
+          {useResponsiveDesktopLayout && (
+            <MobileUserSummary
+              gameMoney={gamMoney}
+              assetTitle={slevel}
+              achievementTitle={majakTitleName}
+              trickTitle={trickTitleName}
+              showGrade
+              loadProfile={false}
+              className="majak-mobile-user-summary--lobby"
+            />
+          )}
+          {!useResponsiveDesktopLayout && (
+            <div className="majak-mobile-lobby-action-groups">
+              <div className="majak-mobile-lobby-actions">
+                <button type="button" className="majak-mobile-lobby-header-button" onClick={() => void onRefreshRoomList()}>更新</button>
+                <button
+                  type="button"
+                  className="majak-mobile-lobby-header-button"
+                  onClick={tournamentPage === 'match' ? onTournamentBack : onChangeLobby}
+                >
+                  {tournamentPage === 'match' ? '一覧に戻る' : 'ロビー変更'}
+                </button>
+                <button type="button" className="majak-mobile-lobby-header-button" aria-expanded={mobileActionGroup === 'items'} onClick={() => setMobileActionGroup(current => current === 'items' ? null : 'items')}>アイテム</button>
+              </div>
+              {mobileActionGroup === 'items' && (
+                <div className="majak-mobile-lobby-action-panel">
+                  <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowShop(true) }}>ショップ</button>
+                  <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCustom(true) }}>所持品</button>
+                  <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCollection(true) }}>コレクション</button>
+                  <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCurrencyHistory(true) }}>通貨履歴</button>
+                </div>
+              )}
+            </div>
+          )}
         </section>
         {notice && <div className="majak-mobile-lobby-notice" style={{ color: notice.color }}>{notice.text}</div>}
         {tournamentPage === 'match' ? (
@@ -3757,6 +3790,23 @@ export default function LobbyScreen() {
             </aside>
           </div>
         )}
+        {useResponsiveDesktopLayout && (
+          <nav className="majak-responsive-lobby-actions" aria-label="ロビー操作">
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onRefreshRoomList}>更新</button>
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowShop(true)}>ショップ</button>
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowMission(true)}>ミッション</button>
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCollection(true)}>コレクション</button>
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
+            <button
+              type="button"
+              className="majak-responsive-control-button majak-type-md"
+              onClick={tournamentPage === 'match' ? onTournamentBack : onChangeLobby}
+            >
+              {tournamentPage === 'match' ? '一覧に戻る' : 'ロビー変更'}
+            </button>
+          </nav>
+        )}
         {lobbyDialogs}
       </div>
     )
@@ -3800,7 +3850,7 @@ export default function LobbyScreen() {
                   {mobileActionGroup === 'other' && <>
                     {showRankingButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); void openRanking() }}>ランキング</button>}
                     {showMissionButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowMission(true) }}>ミッション</button>}
-                    {showFreeChargeButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); void onFreeGpReplenish() }}>無料GP補充</button>}
+                    {showFreeChargeButton && <button type="button" className={`majak-mobile-lobby-header-button${isFreeGpReplenishmentAvailable ? ' is-free-gp-available' : ''}`} disabled={freeGpReplenishmentPending} onClick={() => { setMobileActionGroup(null); void onFreeGpReplenish() }}>無料GP補充</button>}
                   </>}
                 </div>
               )}
@@ -3889,7 +3939,7 @@ export default function LobbyScreen() {
             {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>}
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCollection(true)}>コレクション</button>
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
-            {showFreeChargeButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
+            {showFreeChargeButton && <button type="button" className={`majak-responsive-control-button majak-type-md${isFreeGpReplenishmentAvailable ? ' is-free-gp-available' : ''}`} disabled={freeGpReplenishmentPending} onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onChangeLobby}>ロビー変更</button>
           </nav>
         )}
@@ -4286,6 +4336,7 @@ export default function LobbyScreen() {
         onClick={() => { void onFreeGpReplenish() }}
         title="無料GP補充"
         hidden={!showFreeChargeButton}
+        disabled={freeGpReplenishmentPending}
       />
 
       {lobbyDialogs}

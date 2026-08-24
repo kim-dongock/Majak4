@@ -279,13 +279,16 @@ public class TournamentService
     {
         using var scope = _scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<TournamentRepository>();
+        var historyRepo = scope.ServiceProvider.GetService<HistoryRepository>();
         long planMoney = TournamentTables.CalcPlanMoney(plan.GradeMoney);
         if (organizer.GamMoney < planMoney) return false;
 
         bool ok = await repo.InsertPlanAndDebitOrganizerAsync(plan, organizer, planMoney);
         if (!ok) return false;
 
+        long moneyBefore = organizer.GamMoney;
         organizer.GamMoney -= planMoney;
+        await WriteMoneyHistoryAsync(historyRepo, organizer, GameConst.EvtCodeTournamentPlan, -planMoney, moneyBefore, organizer.GamMoney);
         _plans[plan.SeqNo] = plan;
         _details[plan.SeqNo] = new();
         _useRoomNum += plan.MaxRoomNum;
@@ -298,22 +301,21 @@ public class TournamentService
     {
         using var scope = _scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<TournamentRepository>();
+        var historyRepo = scope.ServiceProvider.GetService<HistoryRepository>();
         if (!_plans.TryGetValue(seqNo, out var plan)) return (false, 0);
 
-        if (plan.JoinMoney > 0)
-        {
-            if (player.GamMoney < plan.JoinMoney) return (false, 0);
-            player.GamMoney -= plan.JoinMoney;
-        }
+        if (plan.JoinMoney > 0 && player.GamMoney < plan.JoinMoney) return (false, 0);
 
         var normalizedMemberNo = string.IsNullOrWhiteSpace(memberNo) ? "00" : memberNo;
         var (ok, count) = await repo.MergeJoinAsync(
-            player.MemberNo, seqNo, TournamentJoinStatus.Join, normalizedMemberNo);
+            player.MemberNo, seqNo, TournamentJoinStatus.Join, normalizedMemberNo, -plan.JoinMoney);
+        if (!ok) return (false, 0);
 
-        if (!ok)
+        if (plan.JoinMoney > 0)
         {
-            player.GamMoney += plan.JoinMoney;
-            return (false, 0);
+            long moneyBefore = player.GamMoney;
+            player.GamMoney -= plan.JoinMoney;
+            await WriteMoneyHistoryAsync(historyRepo, player, GameConst.EvtCodeTournamentJoin, -plan.JoinMoney, moneyBefore, player.GamMoney);
         }
 
         plan.PlayerNum++;
@@ -327,19 +329,50 @@ public class TournamentService
     {
         using var scope = _scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<TournamentRepository>();
+        var historyRepo = scope.ServiceProvider.GetService<HistoryRepository>();
         if (!_plans.TryGetValue(seqNo, out var plan)) return (false, 0);
 
         var (ok, count) = await repo.MergeJoinAsync(
-            player.MemberNo, seqNo, TournamentJoinStatus.Cancel);
+            player.MemberNo, seqNo, TournamentJoinStatus.Cancel, gameMoneyDelta: plan.JoinMoney);
 
         if (!ok) return (false, 0);
 
         if (plan.JoinMoney > 0)
+        {
+            long moneyBefore = player.GamMoney;
             player.GamMoney += plan.JoinMoney;
+            await WriteMoneyHistoryAsync(historyRepo, player, GameConst.EvtCodeTournamentJoinCancel, plan.JoinMoney, moneyBefore, player.GamMoney);
+        }
 
         plan.PlayerNum = Math.Max(0, plan.PlayerNum - 1);
         await repo.UpdatePlayerNumAsync(seqNo, -1);
         return (true, count);
+    }
+
+    private async Task WriteMoneyHistoryAsync(
+        HistoryRepository? historyRepo,
+        MajakPlayer player,
+        string eventCode,
+        long amount,
+        long balanceBefore,
+        long balanceAfter)
+    {
+        if (historyRepo is null || amount == 0) return;
+
+        try
+        {
+            await historyRepo.InsertGameMoneyHistAsync(
+                player.MemberNo,
+                eventCode,
+                amount,
+                balanceBefore,
+                balanceAfter,
+                player.IpAddress);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Tournament GP history write failed. memberNo={MemberNo} eventCode={EventCode}", player.MemberNo, eventCode);
+        }
     }
 
     // ─────────────────────────────── マッチング ──────────────────────────

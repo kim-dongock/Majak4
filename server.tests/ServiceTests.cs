@@ -405,6 +405,42 @@ public class MajItemServiceTests
         Assert.Equal(5, result.Qty);
     }
 
+    [Theory]
+    [InlineData("sell075", 20)]
+    [InlineData("sell076", 10)]
+    public async Task BuyMajItemAsync_HighRateChargeFreeItem_WritesDragonOrbHistory(string sellCode, int costGem)
+    {
+        _itemRepoMock.Setup(repository => repository.ExchangeMajItemAsync(
+                "u1", "MJ23", It.IsAny<int>(), It.IsAny<int>(), 0, costGem, It.IsAny<string?>()))
+            .ReturnsAsync(new MajItemInfo
+            {
+                ItemCode = "MJ23",
+                BuyDt = DateTime.Now,
+                EndDt = DateTime.Now.AddDays(1),
+                Qty = 1,
+            });
+        _histMock.Setup(repository => repository.InsertGameMoneyHistAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(),
+                It.IsAny<long>(), It.IsAny<long>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        var player = new MajakPlayer
+        {
+            MemberNo = "u1",
+            IpAddress = "127.0.0.1",
+            GamMoney = 10_000,
+            GemCount = 100,
+            MajItems = [new MajItemInfo { ItemCode = "MJ23", Qty = 1 }],
+        };
+
+        var result = await BuildService().BuyMajItemAsync(player, sellCode);
+
+        Assert.True(result.Ok);
+        Assert.Equal(100 - costGem, player.GemCount);
+        _histMock.Verify(repository => repository.InsertGameMoneyHistAsync(
+            "u1", "JM00657", -costGem, 100, 100 - costGem, "127.0.0.1"), Times.Once);
+    }
+
     // シナリオ6: CAT_TITLE 正常購入 (sell007: mjkt100, CostGem=5, CostMoney=150)
     [Fact]
     public async Task BuyMajItemAsync_CatTitle_CallsInsertTitle()

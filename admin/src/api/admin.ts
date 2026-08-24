@@ -79,6 +79,19 @@ export const cashApi = {
     api.get<DailyRevenue[]>(`/api/admin/cash/revenue?days=${days}`),
 }
 
+export type AdjustableCurrency = 'gp' | 'mp' | 'dragon_orb'
+
+export const currencyApi = {
+  adjust: (memberNo: number, currency: AdjustableCurrency, amount: number, memo: string) =>
+    api.post<{
+      memberNo: number
+      currency: AdjustableCurrency
+      amount: number
+      balanceBefore: number
+      balanceAfter: number
+    }>('/api/admin/currency/adjust', { memberNo, currency, amount, memo }),
+}
+
 // ── Admin Accounts ────────────────────────────────────────────────────────
 export const accountApi = {
   list: () => api.get<AdminAccount[]>('/api/admin/accounts'),

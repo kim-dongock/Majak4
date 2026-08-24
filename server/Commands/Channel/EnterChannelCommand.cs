@@ -382,6 +382,7 @@ public class EnterChannelCommand : ICommand
 
         player.ActiveRecord = isGradeChannel    ? player.GradeRecord
                             : isCompeteChannel  ? player.CompeteRecord
+                            : isHiClassChannel  ? player.HiClassRecord
                             :                     player.RegularRecord;
         player.IsPro = _gradeRank.IsPro(memberNo);
         player.ProPictureUrl = player.IsPro ? _gradeRank.GetProPictureUrl(memberNo) : "";

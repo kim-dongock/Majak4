@@ -527,6 +527,14 @@ public class CreateRoomCommand : ICommand
         string subId = First(ctx.GetString(GKey.SubId), ctx.GetString("subId"), ExtractSubId(channelId));
         bool isCircleChannel = subId == "00000";
 
+        var channelInfo = (await _masterCache.GetChannelListAsync())
+            .FirstOrDefault(channel => channel.ChanelId == channelId || channel.SubId == subId);
+        if (channelInfo is null)
+        {
+            await SendRoomConnectError(ctx, 0, "チャンネル設定が見つかりません。", LegacyErrorCode.MajAutoEnterRoomFailed);
+            return;
+        }
+
         var cupConfigs = await _masterCache.GetCupConfigsAsync();
         var thisCupRoom = cupConfigs.FirstOrDefault(c => c.ChannelId == channelId);
 
@@ -546,7 +554,7 @@ public class CreateRoomCommand : ICommand
         string roomType = ctx.GetString("roomType");
         long moneyRate = ctx.GetLong("moneyRate");
         if (moneyRate == 0) moneyRate = 500;
-        long unitMoney = ctx.GetLong("unitMoney");
+        long unitMoney = channelInfo.UnitMoney;
         long minMoney = ctx.GetLong("minMoney");
         long maxMoney = ctx.GetLong("maxMoney");
         int minCnt = ctx.GetInt(GKey.RoomMinCnt, ctx.GetInt("roomMinCnt"));
@@ -559,6 +567,17 @@ public class CreateRoomCommand : ICommand
         if (requestRoomId <= 0)
         {
             await SendRoomConnectError(ctx, 0, "ルーム番号が不正です。", LegacyErrorCode.MajAutoEnterRoomFailed);
+            return;
+        }
+
+        long roomCharge = GameLogicService.GetRoomCharge(subId);
+        if (player.GamMoney < roomCharge)
+        {
+            await SendRoomConnectError(
+                ctx,
+                requestRoomId,
+                $"場代 {roomCharge:N0} GPを支払うためのGPが不足しています。現在のGP: {player.GamMoney:N0} GP\nロビーの「無料GP補充」をご利用ください。",
+                LegacyErrorCode.MajAutoEnterRoomFailed);
             return;
         }
 
@@ -634,7 +653,7 @@ public class CreateRoomCommand : ICommand
             cupNormalYakuCondition: thisCupRoom?.NormalYakuCondition ?? "",
             cupYakumanCondition:    thisCupRoom?.YakumanCondition    ?? "",
             subId:            subId,
-            unitMoney:        unitMoney > 0 ? unitMoney : moneyRate,
+            unitMoney:        unitMoney,
             minCnt:           minCnt,
             roomId:           requestRoomId);
         room.ServerUrl = _channelSettings.Value.ResolveUrl(channelId);

@@ -55,6 +55,21 @@ public class GameMoneyService
         await CreateCommonRatWithDefaultMoneyHistAsync(memberNo, policy.InitialGp, remoteAddr);
     }
 
+    public async Task SetNewPlayerInitialMoneyWithHistoryAsync(string memberNo, string remoteAddr)
+    {
+        var policy = await GetEconomyPolicyAsync();
+        await _playerRepo.SetNewPlayerInitialGameMoneyAsync(memberNo, policy.InitialGp);
+        if (_historyRepo is null) return;
+
+        await _historyRepo.InsertGameMoneyHistAsync(
+            memberNo,
+            GameConst.EvtCodeDefaultMoney,
+            policy.InitialGp,
+            0,
+            policy.InitialGp,
+            remoteAddr);
+    }
+
     /// <summary>
     /// コイン増減処理 + GAMEMONEYHIST 記録
     /// 原典: WriteGameMoneyHist → PC_MAJAK2_HIST 呼び出し

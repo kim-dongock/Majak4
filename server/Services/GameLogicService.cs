@@ -2338,6 +2338,8 @@ public class GameLogicService
             var p = _session.GetByMember(u!.MemberNo);
             if (p == null) continue;
             var resultUpdate = BuildResultUpdatePlayer(p, u, room);
+            long moneyBeforeResult = p.GamMoney;
+            long grossSettlement = checked(u.MoneyChange + u.DealerFee);
 
             p.GamMoney   += u.MoneyChange;
             p.Experience += u.ExperienceGain;
@@ -2372,17 +2374,59 @@ public class GameLogicService
                 else
                     await _playerRepo.UpdateRegularRatAsync(resultUpdate);
 
+                if (p.RoomCharge > 0)
+                {
+                    try
+                    {
+                        if (grossSettlement != 0)
+                        {
+                            await _historyRepo.InsertGameMoneyHistAsync(
+                                p.MemberNo,
+                                GameConst.EvtCodeGameSettlement,
+                                grossSettlement,
+                                moneyBeforeResult,
+                                checked(moneyBeforeResult + grossSettlement),
+                                p.IpAddress);
+                        }
+
+                        await _historyRepo.InsertGameMoneyHistAsync(
+                            p.MemberNo,
+                            GameConst.EvtCodeRoomCharge,
+                            -p.RoomCharge,
+                            checked(moneyBeforeResult + grossSettlement),
+                            p.GamMoney,
+                            p.IpAddress);
+                    }
+                    catch
+                    {
+                    }
+                }
+                else if (grossSettlement != 0)
+                {
+                    try
+                    {
+                        await _historyRepo.InsertGameMoneyHistAsync(
+                            p.MemberNo,
+                            GameConst.EvtCodeGameSettlement,
+                            grossSettlement,
+                            moneyBeforeResult,
+                            p.GamMoney,
+                            p.IpAddress);
+                    }
+                    catch
+                    {
+                    }
+                }
+
                 if (room.IsCupChannel)
                 {
                     p.CupRec.CupMatchCnt++;
                     await _playerRepo.UpdateCupRatAsync(p, room.CupId);
-                    p.CupPointGain = 0;
                 }
 
                 if (room.IsGradeChannel)
                     await UpdateGradeResultSideEffectsAsync(p, u);
             }
-
 
 
             if (!room.IsTrainingChannel)
@@ -4321,7 +4365,7 @@ public class GameLogicService
                     gammoney     = currentMoney,
                     moneyChange  = u.MoneyChange,
                     lentMoney    = u.CurrLent,
-                    coinGain     = Math.Max(0, (long)setBal * room.MoneyRate),
+                    coinGain     = Math.Max(0, u.MoneyChange),
                     coinNeed     = GetNextLevelMoneyNeed(p?.NLevel ?? 0, currentMoney),
                     dealerFee    = u.DealerFee,
                     gemCount,
@@ -4645,7 +4689,12 @@ public class GameLogicService
     /// </summary>
     public static long GetRoomCharge(GameRoom room)
     {
-        if (s_baDaiMap.TryGetValue(room.SubId, out int badai))
+        return GetRoomCharge(room.SubId);
+    }
+
+    public static long GetRoomCharge(string subId)
+    {
+        if (s_baDaiMap.TryGetValue(subId, out int badai))
             return badai;
         return 0L;
     }

@@ -217,39 +217,64 @@ public class TournamentRepository
     /// 参加/キャンセル/離脱を MERGE で更新 — 原典: MergeTournamentJoinPlayer
     /// </summary>
     public virtual async Task<(bool Ok, int UpdatedCount)> MergeJoinAsync(
-        string memberNo, long seqNo, int status, string joinMemberNo = "00")
+        string memberNo, long seqNo, int status, string joinMemberNo = "00", long gameMoneyDelta = 0)
     {
         try
         {
             var parsedMemberNo = ParseMemberNo(memberNo);
             var normalizedJoinMemberNo = string.IsNullOrWhiteSpace(joinMemberNo) ? "00" : joinMemberNo;
-            await using var db = await RequireGameDb().CreateAsync();
-            var participant = await db.TournamentParticipants
-                .SingleOrDefaultAsync(item => item.MemberNo == parsedMemberNo);
-            var now = DateTime.Now;
-            if (participant is null)
+            await using var strategyDb = await RequireGameDb().CreateAsync();
+            var strategy = strategyDb.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
             {
-                db.TournamentParticipants.Add(new TournamentParticipantEntity
+                await using var db = await RequireGameDb().CreateAsync();
+                await using var tx = await db.Database.BeginTransactionAsync();
+                try
                 {
-                    MemberNo = parsedMemberNo,
-                    SessionId = checked((ulong)seqNo),
-                    JoinSequenceNo = checked((ulong)seqNo),
-                    JoinMemberNo = normalizedJoinMemberNo,
-                    JoinStatus = checked((byte)status),
-                    CreatedAt = now,
-                    UpdatedAt = now,
-                });
-            }
-            else
-            {
-                participant.SessionId = checked((ulong)seqNo);
-                participant.JoinSequenceNo = checked((ulong)seqNo);
-                participant.JoinMemberNo = normalizedJoinMemberNo;
-                participant.JoinStatus = checked((byte)status);
-                participant.UpdatedAt = now;
-            }
-            await db.SaveChangesAsync();
-            return (true, 1);
+                    var participant = await db.TournamentParticipants
+                        .SingleOrDefaultAsync(item => item.MemberNo == parsedMemberNo);
+                    var now = DateTime.Now;
+                    if (participant is null)
+                    {
+                        db.TournamentParticipants.Add(new TournamentParticipantEntity
+                        {
+                            MemberNo = parsedMemberNo,
+                            SessionId = checked((ulong)seqNo),
+                            JoinSequenceNo = checked((ulong)seqNo),
+                            JoinMemberNo = normalizedJoinMemberNo,
+                            JoinStatus = checked((byte)status),
+                            CreatedAt = now,
+                            UpdatedAt = now,
+                        });
+                    }
+                    else
+                    {
+                        participant.SessionId = checked((ulong)seqNo);
+                        participant.JoinSequenceNo = checked((ulong)seqNo);
+                        participant.JoinMemberNo = normalizedJoinMemberNo;
+                        participant.JoinStatus = checked((byte)status);
+                        participant.UpdatedAt = now;
+                    }
+
+                    if (gameMoneyDelta != 0)
+                    {
+                        var wallet = await db.PlayerWallets.SingleOrDefaultAsync(item => item.MemberNo == parsedMemberNo);
+                        if (wallet is null || (gameMoneyDelta < 0 && wallet.GameMoney < -gameMoneyDelta))
+                            return (false, 0);
+                        wallet.GameMoney = checked(wallet.GameMoney + gameMoneyDelta);
+                        wallet.UpdatedAt = now;
+                    }
+
+                    await db.SaveChangesAsync();
+                    await tx.CommitAsync();
+                    return (true, 1);
+                }
+                catch
+                {
+                    await tx.RollbackAsync();
+                    throw;
+                }
+            });
         }
         catch (Exception ex)
         {

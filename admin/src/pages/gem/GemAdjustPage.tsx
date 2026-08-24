@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import {
-  Card, Form, Input, InputNumber, Button, Alert, Typography, Space, Divider, List, Tag,
+  Card, Form, Input, InputNumber, Button, Alert, Typography, Space, Divider, List, Tag, Select,
 } from 'antd'
 import { useSearchParams } from 'react-router-dom'
-import { cashApi, userApi } from '../../api/admin'
+import { currencyApi, userApi } from '../../api/admin'
 import type { PlayerSummary } from '../../api/types'
 import { useAuthStore } from '../../store/authStore'
 
@@ -20,10 +20,9 @@ export default function GemAdjustPage() {
   const [player, setPlayer]     = useState<PlayerSummary | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [result, setResult]     = useState<{
+    currency: 'gp' | 'mp' | 'dragon_orb'
     balanceBefore: number
     balanceAfter: number
-    paidCashAfter: number
-    freeCashAfter: number
   } | null>(null)
   const [error, setError]       = useState<string | null>(null)
 
@@ -56,18 +55,18 @@ export default function GemAdjustPage() {
     setError(null)
   }
 
-  const handleSubmit = async (values: { memberNo: string; amount: number; memo: string }) => {
+  const handleSubmit = async (values: { memberNo: string; currency: 'gp' | 'mp' | 'dragon_orb'; amount: number; memo: string }) => {
     setSubmitting(true)
     setResult(null)
     setError(null)
     try {
-      const res = await cashApi.adjust(Number(values.memberNo), values.amount, values.memo)
+      const res = await currencyApi.adjust(Number(values.memberNo), values.currency, values.amount, values.memo)
       setResult(res)
       setPlayer(prev => prev ? {
         ...prev,
-        cashCount: res.balanceAfter,
-        paidCashCount: res.paidCashAfter,
-        freeCashCount: res.freeCashAfter,
+        gameMoney: values.currency === 'gp' ? res.balanceAfter : prev.gameMoney,
+        gemCount: values.currency === 'dragon_orb' ? res.balanceAfter : prev.gemCount,
+        cashCount: values.currency === 'mp' ? res.balanceAfter : prev.cashCount,
       } : prev)
     } catch (e) {
       setError((e as Error).message)
@@ -82,7 +81,7 @@ export default function GemAdjustPage() {
 
   return (
     <>
-      <Title level={4}>キャッシュ 支給・調整</Title>
+      <Title level={4}>通貨 支給・調整</Title>
       <Card style={{ maxWidth: 560 }}>
         <Space.Compact style={{ width: '100%', marginBottom: 16 }}>
           <Input
@@ -118,7 +117,9 @@ export default function GemAdjustPage() {
                 <Space>
                   <Text strong>{candidate.displayName}</Text>
                   <Text type="secondary">#{candidate.memberNo}</Text>
-                  <Tag color="blue">有償 {candidate.paidCashCount.toLocaleString()} MP / 無償 {candidate.freeCashCount.toLocaleString()} MP</Tag>
+                  <Tag color="gold">{candidate.gameMoney.toLocaleString()} GP</Tag>
+                  <Tag color="blue">{candidate.cashCount.toLocaleString()} MP</Tag>
+                  <Tag color="purple">{candidate.gemCount.toLocaleString()} 龍珠</Tag>
                 </Space>
               </List.Item>
             )}
@@ -128,7 +129,7 @@ export default function GemAdjustPage() {
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ memberNo: defaultMemberNo, amount: 0 }}
+          initialValues={{ memberNo: defaultMemberNo, currency: 'gp', amount: 0 }}
           onFinish={handleSubmit}
         >
           <Form.Item name="memberNo" rules={[{ required: true, message: 'プレイヤーを選択してください' }]} hidden>
@@ -140,12 +141,20 @@ export default function GemAdjustPage() {
               <Space>
                 <Text strong>{player.displayName}</Text>
                 <Text type="secondary">#{player.memberNo}</Text>
-                <Text>現在キャッシュ: </Text>
+                <Text strong style={{ color: '#ad6800' }}>{player.gameMoney.toLocaleString()} GP</Text>
                 <Text strong style={{ color: '#1677ff' }}>{player.cashCount.toLocaleString()} MP</Text>
-                <Text type="secondary">(有償 {player.paidCashCount.toLocaleString()} MP / 無償 {player.freeCashCount.toLocaleString()} MP)</Text>
+                <Text strong style={{ color: '#722ed1' }}>{player.gemCount.toLocaleString()} 龍珠</Text>
               </Space>
             </Card>
           )}
+
+          <Form.Item label="通貨" name="currency" rules={[{ required: true }]}>
+            <Select options={[
+              { value: 'gp', label: 'GP' },
+              { value: 'mp', label: 'MP' },
+              { value: 'dragon_orb', label: '龍珠' },
+            ]} />
+          </Form.Item>
 
           <Form.Item
             label="調整量 (正数: 支給 / 負数: 回収)"
@@ -183,7 +192,7 @@ export default function GemAdjustPage() {
           <Alert
             style={{ marginTop: 16 }}
             type="success"
-            message={`完了: ${result.balanceBefore.toLocaleString()} MP → ${result.balanceAfter.toLocaleString()} MP (有償 ${result.paidCashAfter.toLocaleString()} MP / 無償 ${result.freeCashAfter.toLocaleString()} MP)`}
+            message={`完了: ${result.balanceBefore.toLocaleString()} ${result.currency === 'gp' ? 'GP' : result.currency === 'mp' ? 'MP' : '龍珠'} → ${result.balanceAfter.toLocaleString()} ${result.currency === 'gp' ? 'GP' : result.currency === 'mp' ? 'MP' : '龍珠'}`}
           />
         )}
         {error && (

@@ -283,6 +283,9 @@ export function ResponsiveHanResult({ players, hasTor, hasTip, isViewer, isTourn
   const showYakitori = hasTor || players.some(player => player.setTor !== undefined)
   const showTip = hasTip || players.some(player => player.setTip !== undefined)
   const showRoomCharge = players.some(player => (player.dealerFee ?? 0) > 0)
+  const netGpChange = me?.moneyChange ?? me?.coinGain ?? 0
+  const roomCharge = me?.dealerFee ?? 0
+  const grossGpSettlement = netGpChange + roomCharge
 
   return (
     <div className="majak-result-overlay" role="dialog" aria-modal="true" aria-label="最終結果">
@@ -292,7 +295,7 @@ export function ResponsiveHanResult({ players, hasTor, hasTip, isViewer, isTourn
           <span className="majak-result-round">{isTournament ? 'TOURNAMENT' : 'MATCH COMPLETE'}</span>
         </header>
 
-        <div className="majak-han-result-table" role="table" aria-label="最終順位">
+        <div className={`majak-han-result-table${showRoomCharge ? ' has-room-charge' : ''}`} role="table" aria-label="最終順位">
           <div className="majak-han-result-table__head" role="row">
             <span>順位</span><span>プレイヤー</span><span>最終点</span><span>合計</span>
             <span className="majak-han-result-table__detail-head">
@@ -316,7 +319,17 @@ export function ResponsiveHanResult({ players, hasTor, hasTip, isViewer, isTourn
           ))}
         </div>
 
-        {!isViewer && !isTournament && me && <div className="majak-result-reward"><span>今回の収支</span><strong><AnimatedNumber value={me.coinGain ?? 0} delay={560} suffix="GP" /></strong>{me.coinNeed != null && <small>次の資産ランクまで <AnimatedNumber value={me.coinNeed} delay={620} suffix="GP" /></small>}</div>}
+        {!isViewer && !isTournament && me && (
+          <div className="majak-result-reward">
+            <span>今回の収支</span>
+            <div className="majak-result-reward__breakdown" aria-label="GP収支内訳">
+              <span>対局精算 <b className={grossGpSettlement >= 0 ? 'is-plus' : ''}><AnimatedNumber value={grossGpSettlement} signed delay={520} suffix="GP" /></b></span>
+              <span>場代 <b><AnimatedNumber value={-roomCharge} signed delay={560} suffix="GP" /></b></span>
+              <span>最終 <strong className={netGpChange >= 0 ? 'is-plus' : ''}><AnimatedNumber value={netGpChange} signed delay={600} suffix="GP" /></strong></span>
+            </div>
+            {me.coinNeed != null && <small>次の資産ランクまで <AnimatedNumber value={me.coinNeed} delay={660} suffix="GP" /></small>}
+          </div>
+        )}
         <footer className="majak-result-actions"><span>{isViewer ? '観戦モード' : '最終順位が確定しました'}</span><button type="button" onClick={onClose}>OK</button></footer>
       </section>
     </div>

@@ -539,6 +539,32 @@ app.MapPost("/api/admin/cash/adjust", async (
     logCmd.Parameters.AddWithValue("@ip",        (object?)ctx.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value);
     await logCmd.ExecuteNonQueryAsync();
 
+    var role = adminAuth.ValidateJwt(ctx.Request.Headers.Authorization.FirstOrDefault()? ["Bearer ".Length..].Trim() ?? string.Empty)
+        ?.FindFirst("role")?.Value ?? "operator";
+    await using var auditCmd = new MySqlConnector.MySqlCommand(@"
+        INSERT INTO admin_operation_log
+            (operator_no, operator_role, action, target_type, target_id, payload_before, payload_after, client_ip, occurred_at)
+        VALUES (@operatorNo, @role, 'CASH_ADJUST', 'PLAYER_WALLET', @memberNo, @before, @after, @ip, CURRENT_TIMESTAMP(3))", logConn);
+    auditCmd.Parameters.AddWithValue("@operatorNo", operatorNo.Value);
+    auditCmd.Parameters.AddWithValue("@role", role);
+    auditCmd.Parameters.AddWithValue("@memberNo", body.MemberNo.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    auditCmd.Parameters.AddWithValue("@before", System.Text.Json.JsonSerializer.Serialize(new
+    {
+        cashCount = adjustment.TotalBefore,
+        paidCashCount = adjustment.PaidBefore,
+        freeCashCount = adjustment.FreeBefore,
+        memo = body.Memo,
+    }));
+    auditCmd.Parameters.AddWithValue("@after", System.Text.Json.JsonSerializer.Serialize(new
+    {
+        cashCount = adjustment.TotalAfter,
+        paidCashCount = adjustment.PaidAfter,
+        freeCashCount = adjustment.FreeAfter,
+        memo = body.Memo,
+    }));
+    auditCmd.Parameters.AddWithValue("@ip", (object?)ctx.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value);
+    await auditCmd.ExecuteNonQueryAsync();
+
     return Results.Ok(new
     {
         memberNo = body.MemberNo,
@@ -549,6 +575,130 @@ app.MapPost("/api/admin/cash/adjust", async (
         freeCashBefore = adjustment.FreeBefore,
         freeCashAfter = adjustment.FreeAfter,
     });
+}).RequireCors("AdminPolicy");
+
+// ── POST /api/admin/currency/adjust  (Operator 以上) ──────────────────────
+app.MapPost("/api/admin/currency/adjust", async (
+    HttpContext ctx,
+    AdminAuthService adminAuth,
+    AdminRepository adminRepo,
+    LogDbContext logDb,
+    LogRepository logRepo,
+    PlayerSessionService sessions,
+    RatingService ratingService) =>
+{
+    if (RequireAdminAuth(ctx, adminAuth, "operator") is { } err) return err;
+
+    var body = await ctx.Request.ReadFromJsonAsync<CurrencyAdjustRequest>();
+    string currency = body?.Currency?.Trim().ToLowerInvariant() ?? string.Empty;
+    if (body is null || body.MemberNo == 0 || body.Amount == 0 || currency is not ("gp" or "mp" or "dragon_orb"))
+        return Results.BadRequest(new { error = "memberNo, currency (gp|mp|dragon_orb), and non-zero amount required" });
+    if (string.IsNullOrWhiteSpace(body.Memo))
+        return Results.BadRequest(new { error = "memo required for admin currency adjustment" });
+    if (currency == "mp" && (body.Amount < int.MinValue || body.Amount > int.MaxValue))
+        return Results.BadRequest(new { error = "MP adjustment is out of range" });
+
+    var player = await adminRepo.GetPlayerDetailAsync(body.MemberNo);
+    if (player is null) return Results.NotFound(new { error = "player not found" });
+    var operatorNo = GetAdminNoClaim(ctx, adminAuth);
+    if (operatorNo is null) return Results.Unauthorized();
+
+    long balanceBefore;
+    long balanceAfter;
+    CashBalanceAdjustment? cashAdjustment = null;
+    string eventTitle;
+    string eventCode;
+    if (currency == "mp")
+    {
+        cashAdjustment = await adminRepo.AdjustCashAsync(body.MemberNo, checked((int)body.Amount));
+        balanceBefore = cashAdjustment.TotalBefore;
+        balanceAfter = cashAdjustment.TotalAfter;
+        eventTitle = body.Amount > 0 ? "管理者MP支給" : "管理者MP回収";
+        eventCode = body.Amount > 0 ? "ADMIN_GRANT_FREE" : "ADMIN_DEDUCT";
+    }
+    else
+    {
+        var adjustment = await adminRepo.AdjustGameCurrencyAsync(body.MemberNo, currency, body.Amount);
+        balanceBefore = adjustment.BalanceBefore;
+        balanceAfter = adjustment.BalanceAfter;
+        eventTitle = currency == "gp"
+            ? body.Amount > 0 ? "管理者GP支給" : "管理者GP回収"
+            : body.Amount > 0 ? "管理者龍珠支給" : "管理者龍珠回収";
+        eventCode = currency == "gp" ? "ADMIN_GP_ADJUST" : "DRAGON_ORB_ADMIN_ADJUST";
+        await logRepo.InsertGameMoneyHistAsync(
+            body.MemberNo.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            eventCode,
+            body.Amount,
+            balanceBefore,
+            balanceAfter,
+            ctx.Connection.RemoteIpAddress?.ToString() ?? string.Empty,
+            eventTitle);
+    }
+
+    await using var logConn = await logDb.CreateConnectionAsync();
+    if (cashAdjustment is not null)
+    {
+        await using var cashCmd = new MySqlConnector.MySqlCommand(@"
+            INSERT INTO cash_transaction_log
+                (member_no, event_type, amount, balance_before, balance_after,
+                 paid_amount, free_amount, paid_before, paid_after, free_before, free_after,
+                 ref_id, memo, operator_no, client_ip, occurred_at)
+            VALUES
+                (@memberNo, @eventType, @amount, @before, @after,
+                 @paidAmount, @freeAmount, @paidBefore, @paidAfter, @freeBefore, @freeAfter,
+                 NULL, @memo, @operatorNo, @ip, CURRENT_TIMESTAMP(3))", logConn);
+        cashCmd.Parameters.AddWithValue("@memberNo", body.MemberNo);
+        cashCmd.Parameters.AddWithValue("@eventType", eventCode);
+        cashCmd.Parameters.AddWithValue("@amount", body.Amount);
+        cashCmd.Parameters.AddWithValue("@before", balanceBefore);
+        cashCmd.Parameters.AddWithValue("@after", balanceAfter);
+        cashCmd.Parameters.AddWithValue("@paidAmount", cashAdjustment.PaidAfter - cashAdjustment.PaidBefore);
+        cashCmd.Parameters.AddWithValue("@freeAmount", cashAdjustment.FreeAfter - cashAdjustment.FreeBefore);
+        cashCmd.Parameters.AddWithValue("@paidBefore", cashAdjustment.PaidBefore);
+        cashCmd.Parameters.AddWithValue("@paidAfter", cashAdjustment.PaidAfter);
+        cashCmd.Parameters.AddWithValue("@freeBefore", cashAdjustment.FreeBefore);
+        cashCmd.Parameters.AddWithValue("@freeAfter", cashAdjustment.FreeAfter);
+        cashCmd.Parameters.AddWithValue("@memo", body.Memo);
+        cashCmd.Parameters.AddWithValue("@operatorNo", operatorNo.Value);
+        cashCmd.Parameters.AddWithValue("@ip", (object?)ctx.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value);
+        await cashCmd.ExecuteNonQueryAsync();
+    }
+
+    var role = adminAuth.ValidateJwt(ctx.Request.Headers.Authorization.FirstOrDefault()? ["Bearer ".Length..].Trim() ?? string.Empty)
+        ?.FindFirst("role")?.Value ?? "operator";
+    await using var auditCmd = new MySqlConnector.MySqlCommand(@"
+        INSERT INTO admin_operation_log
+            (operator_no, operator_role, action, target_type, target_id, payload_before, payload_after, client_ip, occurred_at)
+        VALUES (@operatorNo, @role, 'CURRENCY_ADJUST', 'PLAYER_WALLET', @memberNo, @before, @after, @ip, CURRENT_TIMESTAMP(3))", logConn);
+    auditCmd.Parameters.AddWithValue("@operatorNo", operatorNo.Value);
+    auditCmd.Parameters.AddWithValue("@role", role);
+    auditCmd.Parameters.AddWithValue("@memberNo", body.MemberNo.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    auditCmd.Parameters.AddWithValue("@before", System.Text.Json.JsonSerializer.Serialize(new { currency, balance = balanceBefore, memo = body.Memo }));
+    auditCmd.Parameters.AddWithValue("@after", System.Text.Json.JsonSerializer.Serialize(new { currency, balance = balanceAfter, memo = body.Memo }));
+    auditCmd.Parameters.AddWithValue("@ip", (object?)ctx.Connection.RemoteIpAddress?.ToString() ?? DBNull.Value);
+    await auditCmd.ExecuteNonQueryAsync();
+
+    var activePlayer = sessions.GetByMember(body.MemberNo.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    if (activePlayer is not null)
+    {
+        if (currency == "gp")
+        {
+            activePlayer.GamMoney = balanceAfter;
+            ratingService.UpdatePlayerLevel(activePlayer);
+        }
+        else if (currency == "dragon_orb")
+        {
+            activePlayer.GemCount = checked((int)balanceAfter);
+        }
+        else
+        {
+            activePlayer.CashCount = checked((int)balanceAfter);
+            activePlayer.PaidCashCount = cashAdjustment!.PaidAfter;
+            activePlayer.FreeCashCount = cashAdjustment.FreeAfter;
+        }
+    }
+
+    return Results.Ok(new { memberNo = body.MemberNo, currency, amount = body.Amount, balanceBefore, balanceAfter });
 }).RequireCors("AdminPolicy");
 
 // ── GET /api/admin/gem/products ─────────────────────────────────────────
@@ -763,6 +913,7 @@ app.MapPost("/auth/majak-login", async Task<IResult> (
     HttpRequest req,
     GamePlayerRepository gamePlayers,
     PlayerRepository playerRepo,
+    GameMoneyService moneyService,
     PlayerSessionService sessions,
     GameAuthTokenService gameAuth) =>
 {
@@ -861,6 +1012,7 @@ app.MapPost("/auth/majak-register", async Task<IResult> (
     MajakRegisterRequest body,
     GamePlayerRepository gamePlayers,
     PlayerRepository playerRepo,
+    GameMoneyService moneyService,
     PlayerSessionService sessions,
     GameAuthTokenService gameAuth) =>
 {
@@ -897,6 +1049,7 @@ app.MapPost("/auth/majak-register", async Task<IResult> (
             sexCode,
             body.AvatarId!,
             isTest);
+        await moneyService.SetNewPlayerInitialMoneyWithHistoryAsync(memberNo, ctx.Connection.RemoteIpAddress?.ToString() ?? string.Empty);
 account = new GamePlayerAccount(displayName ?? string.Empty, sexCode, null, body.AvatarId!, 0, null);
     }
     await playerRepo.SetDailyMissionAsync(memberNo, conditionType: 1, progressIncrement: 1);
@@ -1291,6 +1444,7 @@ app.MapPost("/auth/google-login-redirect", async Task<IResult> (
     GamePlayerRepository gamePlayers,
     PlayerRepository playerRepo,
     LogRepository logRepo,
+    GameMoneyService moneyService,
     IConfiguration config,
     ILogger<Program> logger,
     PlayerSessionService sessions,
@@ -1355,6 +1509,7 @@ app.MapPost("/auth/google-login", async Task<IResult> (
     GamePlayerRepository gamePlayers,
     PlayerRepository playerRepo,
     LogRepository logRepo,
+    GameMoneyService moneyService,
     IConfiguration config,
     ILogger<Program> logger,
     PlayerSessionService sessions,
@@ -1493,6 +1648,7 @@ app.MapPost("/auth/google-register", async Task<IResult> (
     GamePlayerRepository gamePlayers,
     PlayerRepository playerRepo,
     LogRepository logRepo,
+    GameMoneyService moneyService,
     IConfiguration config,
     ILogger<Program> logger,
     PlayerSessionService sessions,
@@ -1573,6 +1729,7 @@ app.MapPost("/auth/google-register", async Task<IResult> (
 
     var memberNo = (await gamePlayers.RegisterGoogleAsync(googleSub, googleEmail, nickname, sexCode, (ushort)body.BirthYear.Value, body.AvatarId!))
         .ToString(System.Globalization.CultureInfo.InvariantCulture);
+    await moneyService.SetNewPlayerInitialMoneyWithHistoryAsync(memberNo, ctx.Connection.RemoteIpAddress?.ToString() ?? string.Empty);
     await playerRepo.SetDailyMissionAsync(memberNo, conditionType: 1, progressIncrement: 1);
     var pix = sessions.IssuePix(memberNo);
     if (await IssueRefreshCookieAsync(ctx, refreshSessions, memberNo))
@@ -1675,6 +1832,7 @@ internal sealed record GameAnnouncementRequest(string Title, string Body, bool I
 
 /// <summary>POST /api/admin/cash/adjust のリクエストボディ</summary>
 internal sealed record CashAdjustRequest(ulong MemberNo, int Amount, string Memo);
+internal sealed record CurrencyAdjustRequest(ulong MemberNo, string? Currency, long Amount, string Memo);
 internal sealed record EconomyPolicyRequest(long InitialGp, long FreeReplenishTargetGp, int FreeReplenishDailyLimit);
 internal sealed record SuspendRequest(string? Reason);
 

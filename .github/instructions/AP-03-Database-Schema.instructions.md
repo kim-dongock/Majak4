@@ -112,7 +112,7 @@ description: "使用条件: MySQLゲーム・ログDBのテーブル、カラム
 | テーブル | 初期行数 |
 |---|---:|
 | `cash_product_master` | 15 |
-| `transaction_code_master` | 233 |
+| `transaction_code_master` | 235 |
 | `channel_master` | 20 |
 | `rule_master` | 25 |
 | `title_master` | 150 |

@@ -150,6 +150,7 @@ public class MajItemService
         ["sell070"] = ("JM00294", "JM00295"), ["sell071"] = ("JM00296", "JM00297"),
         ["sell072"] = ("JM00302", "JM00303"), ["sell073"] = ("JM00304", "JM00305"),
         ["sell074"] = ("JM00306", "JM00307"),
+        ["sell075"] = ("", "JM00657"), ["sell076"] = ("", "JM00657"),
     };
 
     private static readonly Dictionary<string, MajSellMast> SellMasterDict =

@@ -206,6 +206,21 @@ public class PlayerRepository
         await db.SaveChangesAsync();
     }
 
+    public virtual async Task SetNewPlayerInitialGameMoneyAsync(string memberNo, long initialMoney)
+    {
+        var memberNoValue = ParseMemberNo(memberNo);
+        await using var db = await RequireGameDb().CreateAsync();
+        var wallet = await db.PlayerWallets.SingleOrDefaultAsync(item => item.MemberNo == memberNoValue)
+            ?? throw new InvalidOperationException($"Player wallet does not exist: {memberNo}");
+
+        wallet.GameMoney = initialMoney;
+        wallet.PendingGameMoney = 0;
+        wallet.EarnedGameMoney = 0;
+        wallet.LoanedGameMoney = 0;
+        wallet.UpdatedAt = DateTime.Now;
+        await db.SaveChangesAsync();
+    }
+
     /// <summary>
     /// Clears existing guest game records before HMajDBObject::OnSvcGetMemberInfoSuccess migration.
     /// </summary>
@@ -583,7 +598,10 @@ public class PlayerRepository
                     profile.CommonRating = player.Rating;
                     profile.BestMoneyLevel = checked((byte)player.NLevel);
                 }
-                wallet.PendingGameMoney = checked(wallet.PendingGameMoney + moneyChange);
+                else
+                {
+                    wallet.PendingGameMoney = checked(wallet.PendingGameMoney + moneyChange);
+                }
                 wallet.GemCount = checked(wallet.GemCount + gemCount);
                 wallet.UpdatedAt = now;
                 profile.Experience = checked(profile.Experience + experienceGain);
@@ -2410,10 +2428,15 @@ public class PlayerRepository
             player.SLevel = RatingService.GetSLevelName(result.NextLevel);
             if (_log is not null)
             {
+                long balanceBeforeGift = preMoney;
                 foreach (var gift in result.Gifts)
+                {
+                    long balanceAfterGift = checked(balanceBeforeGift + gift.GiftValue);
                     await InsertGameMoneyHistFromTransactionCodeAsync(
                         player.MemberNo, GameConst.EvtCodeLoginGiftMoney, gift.GiftValue,
-                        preMoney, result.NextMoney, player.IpAddress);
+                        balanceBeforeGift, balanceAfterGift, player.IpAddress);
+                    balanceBeforeGift = balanceAfterGift;
+                }
             }
             return true;
         }

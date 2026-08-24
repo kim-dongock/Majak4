@@ -54,7 +54,7 @@ public class AutoMatchingCommand : ICommand
 
         // Legacy reference: CheckEnterGradeMode for grade and billing checks.
         // IsGradeChannel = subId[2] == 'G'
-        var subId = player.ChannelId.Length >= 11 ? player.ChannelId.Substring(6, 5) : "";
+        var subId = player.ChannelId.Length >= 11 ? player.ChannelId.Substring(6, 5) : player.ChannelId;
         if (subId.Length > 0 && subId[0] == '1' && player.RegularRecord.MatchCnt > 10)
         {
             await SendAutoMatchingFailure(ctx, EInsufficientMoney, "所持金額不足で対戦できません。");

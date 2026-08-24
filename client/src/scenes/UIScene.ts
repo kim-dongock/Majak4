@@ -393,6 +393,7 @@ export default class UIScene extends Phaser.Scene {
   private desktopHudPanels: Phaser.GameObjects.Image[] = []
   private desktopTurnStrips: Phaser.GameObjects.Image[] = []
   private desktopHudBounds: Array<{ left: number; top: number; width: number; height: number } | undefined> = []
+  private avatarBounds: Array<{ x: number; y: number; width: number; height: number } | undefined> = []
   private avatarSprites: Phaser.GameObjects.Image[] = []
   private majakTitleSprites: Phaser.GameObjects.Image[] = []
   private trickTitleSprites: Phaser.GameObjects.Image[] = []
@@ -659,6 +660,10 @@ export default class UIScene extends Phaser.Scene {
       this.showCallAction(data)
     })
 
+    gs.events.on('titleSkill', (data: { odr: number; element: string; level: 1 | 2; delays: number[]; delay?: number }) => {
+      this.showTitleSkill(data)
+    })
+
     this.time.addEvent({ delay: 100, loop: true, callback: () => this.advanceCostumeAnimations() })
 
     /* 局結果 → CMJKyoRes ダイアログへ (将来実装) */
@@ -702,6 +707,23 @@ export default class UIScene extends Phaser.Scene {
       avatar.destroy()
       this.callSprites = this.callSprites.filter(item => item !== balloon && item !== avatar.sprite)
     })
+  }
+
+  private showTitleSkill(data: { odr: number; element: string; level: 1 | 2; delays: number[]; delay?: number }) {
+    if (data.odr < 0 || data.odr >= 4) return
+    const loc = this.odrToLoc(data.odr)
+    const avatar = this.avatarBounds[loc]
+    const keys = Array.from({ length: data.delays.length }, (_, index) => `mj_ef_L${data.level}${data.element}_${String(index + 1).padStart(2, '0')}`)
+    const frame = this.textures.getFrame(keys[0])
+    const width = frame?.width ?? 102
+    const height = frame?.height ?? 124
+    const point = avatar
+      ? {
+          x: data.level === 1 ? avatar.x + avatar.width / 2 - 57 : avatar.x + (avatar.width - width) / 2,
+          y: avatar.y + (avatar.height - height) / 2,
+        }
+      : this.callActionPoint(loc)
+    this.playLegacySkillFrameSequence(keys, point.x, point.y, data.delays, data.delay)
   }
 
   playLegacySkillFrameSequence(keys: string[], x: number, y: number, frameDelays: readonly number[], delay = 0) {
@@ -1051,6 +1073,7 @@ export default class UIScene extends Phaser.Scene {
       const avt = isMobileIngameLayout(this.layoutMode)
         ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
         : this.desktopAvatarPoint(baseAvt)
+      this.avatarBounds[loc] = { x: avt.x, y: avt.y, width: avatarSize.width, height: avatarSize.height }
       const mobileTextLeft = loc === 1 || loc === 2 ? avt.x - MOBILE_HUD_INFO_WIDTH - MOBILE_HUD_TEXT_GAP : avt.x + avatarSize.width + MOBILE_HUD_TEXT_GAP
       const mobileNameX = avt.x + (avatarSize.width - MOBILE_HUD_NAME_WIDTH) / 2
       const mobileNameY = avt.y + avatarSize.height + MOBILE_HUD_NAME_GAP

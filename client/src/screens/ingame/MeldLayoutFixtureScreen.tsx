@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 import { FEMALE_AVATARS, MALE_AVATARS } from '../../utils/resources'
+import LevelupDlg from '../outgame/dialogs/LevelupDlg'
+import SlideAnnounce, { ANNOUNCE_GET_MAJAKTITLE, type SlideAnnounceData } from './SlideAnnounce'
 
 type FixtureAction = 'chi' | 'pon' | 'kan' | 'ron'
 type FixtureEffect =
@@ -9,7 +11,7 @@ type FixtureEffect =
   | 'reach1' | 'reach2' | 'reach3' | 'reachTile'
   | 'seatReveal' | 'deal' | 'discard' | 'turn' | 'timer' | 'dice'
   | 'ronLow' | 'ronMangan' | 'ronYakuman' | 'tsumoLow' | 'tsumoMangan' | 'tsumoYakuman'
-  | 'skill1' | 'skill2' | 'gemNormal' | 'gemBig'
+  | 'skill1' | 'skill2' | 'gemNormal' | 'gemBig' | 'levelUp' | 'majakTitleAward'
 
 const PLAYER_NAMES = ['Bottom', 'Right', 'Top', 'Left']
 const PLAYER_AVATARS = [MALE_AVATARS[1], FEMALE_AVATARS[3], MALE_AVATARS[7], FEMALE_AVATARS[11]]
@@ -23,13 +25,15 @@ const ACTION_LABELS: Record<FixtureAction, string> = {
   ron: 'ロン',
 }
 const EFFECT_LABELS: Record<FixtureEffect, string> = {
-  chiVoice: 'チー演出', ponVoice: 'ポン演出', kanVoice: 'カン演出', ron: 'ロン演出', tsumo: 'ツモ演出',
+  chiVoice: '対象アバター吹き出し：チー', ponVoice: '対象アバター吹き出し：ポン', kanVoice: '対象アバター吹き出し：カン', ron: '対象アバター吹き出し：ロン', tsumo: '対象アバター吹き出し：ツモ',
   reach1: 'リーチ演出 1', reach2: 'リーチ演出 2', reach3: 'リーチ演出 3', reachTile: 'リーチ牌発光',
   seatReveal: '席公開', deal: '配牌', discard: '打牌',
   turn: '手番表示', timer: '持ち時間', dice: 'サイコロ',
   ronLow: 'ロン 通常', ronMangan: 'ロン 満貫', ronYakuman: 'ロン 役満',
   tsumoLow: 'ツモ 通常', tsumoMangan: 'ツモ 満貫', tsumoYakuman: 'ツモ 役満',
-  skill1: '称号技 Lv1', skill2: '称号技 Lv2', gemNormal: '龍珠 通常', gemBig: '龍珠 大',
+  skill1: '称号技 Lv1（開始・アバター周辺）', skill2: '称号技 Lv2（和了・牌周辺）', gemNormal: '龍珠 通常', gemBig: '龍珠 大',
+  levelUp: '資産称号昇格（対局結果後）',
+  majakTitleAward: '麻雀称号獲得（右上スライド通知）',
 }
 
 const ACT_CHI = 2
@@ -287,6 +291,8 @@ export default function MeldLayoutFixtureScreen() {
   const [action, setAction] = useState<FixtureAction>('chi')
   const [effect, setEffect] = useState<FixtureEffect>('ron')
   const [effectOdr, setEffectOdr] = useState(0)
+  const [showLevelUp, setShowLevelUp] = useState(false)
+  const [titleAwardAnnouncement, setTitleAwardAnnouncement] = useState<SlideAnnounceData | null>(null)
   const actionRef = useRef<FixtureAction>(action)
   const [ready, setReady] = useState(false)
   const [chatText, setChatText] = useState('')
@@ -373,7 +379,17 @@ export default function MeldLayoutFixtureScreen() {
       <select aria-label="ゲーム効果" value={effect} onChange={event => setEffect(event.target.value as FixtureEffect)}>
         {(Object.keys(EFFECT_LABELS) as FixtureEffect[]).map(value => <option key={value} value={value}>{EFFECT_LABELS[value]}</option>)}
       </select>
-      <button type="button" onClick={() => gameRef.current && playFixtureEffect(gameRef.current, effect, effectOdr)}>再生</button>
+      <button type="button" onClick={() => {
+        if (effect === 'levelUp') {
+          setShowLevelUp(true)
+          return
+        }
+        if (effect === 'majakTitleAward') {
+          setTitleAwardAnnouncement({ type: ANNOUNCE_GET_MAJAKTITLE, code: 24, name: '称号獲得プレビュー' })
+          return
+        }
+        if (gameRef.current) playFixtureEffect(gameRef.current, effect, effectOdr)
+      }}>再生</button>
     </>
   )
 
@@ -404,6 +420,10 @@ export default function MeldLayoutFixtureScreen() {
           {effectControls}
           <span>{ready ? 'Fixture data rendered' : 'Loading scene...'}</span>
         </header>
+        <div style={{ position: 'absolute', inset: 0, width: GAME_WIDTH, height: GAME_HEIGHT, pointerEvents: 'none', zIndex: 500, overflow: 'hidden' }}>
+          <SlideAnnounce data={titleAwardAnnouncement} onDone={() => setTitleAwardAnnouncement(null)} />
+        </div>
+        {showLevelUp && <LevelupDlg level={8} lentMoney={50_000} onClose={() => setShowLevelUp(false)} />}
       </main>
     )
   }
@@ -441,6 +461,10 @@ export default function MeldLayoutFixtureScreen() {
                 ? 'Four discard sources are shown. Replay Ron to verify all four call positions.'
                 : `${ACTION_LABELS[action]} is shown at Bottom, Right, Top, and Left. Each seat uses a different called-tile column.`}
             </p>
+            <div style={{ position: 'absolute', inset: 0, width: GAME_WIDTH, height: GAME_HEIGHT, pointerEvents: 'none', zIndex: 500, overflow: 'hidden' }}>
+              <SlideAnnounce data={titleAwardAnnouncement} onDone={() => setTitleAwardAnnouncement(null)} />
+            </div>
+            {showLevelUp && <LevelupDlg level={8} lentMoney={50_000} onClose={() => setShowLevelUp(false)} />}
           </div>
           <aside className="majak-responsive-ingame-sidebar">
             <div className="majak-responsive-ingame-sidebar__status">

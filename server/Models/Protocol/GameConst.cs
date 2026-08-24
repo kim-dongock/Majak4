@@ -44,6 +44,7 @@ public static class GameConst
     public const string EvtCodeDefaultMoney    = "JM00068";
     public const string EvtCodeRoomCharge      = "JM00069";
     public const string EvtCodeFreeMoney       = "JM00070";
+    public const string EvtCodeGameSettlement  = "JM00071";
     public const string EvtCodeCollectInsurance = "JM00100";
     public const string EvtCodeProvideInsurance = "JM00101";
     public const string EvtCodeDragonGem       = "JM00119";

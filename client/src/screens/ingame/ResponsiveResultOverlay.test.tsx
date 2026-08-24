@@ -138,4 +138,19 @@ describe('ResponsiveHanResult', () => {
     expect(html).toContain('今回の収支')
     expect(html.match(/majak-han-result-row/g)).toHaveLength(4)
   })
+
+  it('keeps the room charge on the same result row and shows the net GP breakdown', () => {
+    const players = FORCED_HAN_RESULT.map((player, index) => index === 0
+      ? { ...player, moneyChange: 0, dealerFee: 500, coinGain: 0 }
+      : { ...player, dealerFee: 500 })
+    const html = renderToStaticMarkup(
+      <ResponsiveHanResult players={players} hasTip onClose={vi.fn()} />,
+    )
+
+    expect(html).toContain('has-room-charge')
+    expect(html).toContain('場代')
+    expect(html).toContain('対局精算')
+    expect(html).toContain('最終')
+    expect(html).toContain('aria-label="GP収支内訳"')
+  })
 })

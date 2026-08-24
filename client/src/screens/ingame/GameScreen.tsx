@@ -22,6 +22,7 @@ import LevelupDlg from '../outgame/dialogs/LevelupDlg'
 import GameInviteDialog from './GameInviteDialog'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuthStore } from '../../store/authStore'
+import { useGamePlayerStore } from '../../store/gamePlayerStore'
 import { useCustomSkinStore } from '../../store/customSkinStore'
 import { getAvatarUrl, getDefaultAvatarUrl } from '../../utils/resources'
 import { getChannelServerUrl } from '../../api/channel'
@@ -759,6 +760,10 @@ export default function GameScreen() {
   const displayedHanResData = FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed ? FORCED_HAN_RESULT : hanResData
   const [hanResFlags, setHanResFlags] = useState({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
   const [levelUp, setLevelUp] = useState<{ level: number; lentMoney: number } | null>(null)
+  const [pendingHanResult, setPendingHanResult] = useState<{
+    players: HanResPlayer[]
+    flags: { hasTor: boolean; hasTip: boolean; isViewer: boolean; isTournament: boolean }
+  } | null>(null)
   /** CMJKyoRes 表示状態 */
   const [kyoResData, setKyoResData] = useState<KyoResData | null>(null)
   const displayedKyoResData = FORCE_KYO_RESULT_FOR_TEST ? FORCED_KYO_RESULT : kyoResData
@@ -1350,17 +1355,39 @@ export default function GameScreen() {
         gradeUpDown: u.gradeUpDown !== undefined ? Number(u.gradeUpDown) : undefined,
         isMe:      String(u.pix ?? u.k3e ?? '') === myPix,
       }))
+      const myResult = players.find(player => player.isMe)
+      if (myResult) {
+        useGamePlayerStore.getState().setData({
+          ...(typeof myResult.gameMoney === 'number' && Number.isFinite(myResult.gameMoney) ? { gamMoney: myResult.gameMoney } : {}),
+          ...(typeof myResult.nlevel === 'number' && Number.isFinite(myResult.nlevel) ? { nlevel: myResult.nlevel } : {}),
+          ...(myResult.levelName ? { slevel: myResult.levelName } : {}),
+          ...(typeof myResult.gemCount === 'number' && Number.isFinite(myResult.gemCount) ? { gemCount: myResult.gemCount } : {}),
+        })
+      }
       const mySetBal = players.find(player => player.isMe)?.setBal ?? 0
       stopMajakBgm()
       if (mySetBal > 0) playMajakSfx('mjkhiendwin', boardSoundOptions)
       else if (mySetBal < 0) playMajakSfx('mjkhiendlost', boardSoundOptions)
-      setHanResFlags({
+      const nextHanResFlags = {
         hasTor: Boolean(data.hasTor),
         hasTip: Boolean(data.hasTip),
         isViewer: !players.some(p => p.isMe),
         isTournament: Boolean(data.isTournament),
-      })
+      }
       gameEndStatusLines(data).forEach(line => putStatus(line, legacyPalette.normal, true))
+      const shouldShowLevelUp = !nextHanResFlags.isViewer
+        && !nextHanResFlags.isTournament
+        && myResult?.nlevel !== undefined
+        && myResult.prevNlevel !== undefined
+        && myResult.nlevel > myResult.prevNlevel
+
+      if (shouldShowLevelUp && myResult) {
+        setPendingHanResult({ players, flags: nextHanResFlags })
+        setLevelUp({ level: myResult.nlevel, lentMoney: myResult.lentMoney ?? 0 })
+        return
+      }
+
+      setHanResFlags(nextHanResFlags)
       setHanResData(players)
     }
     SignalR.on('c32e', onGameReport)
@@ -1390,6 +1417,8 @@ export default function GameScreen() {
         if (startedPlayers.some(player => player.playerId === myPix)) playMajakSfx('mjkhistart', boardSoundOptions)
         setHanResData(null)
         setHanResFlags({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
+        setPendingHanResult(null)
+        setLevelUp(null)
         setKyoResData(null)
         setAskEndSet(null)
         setKyoResultAction(null)
@@ -1885,23 +1914,10 @@ export default function GameScreen() {
   }
 
   const onCloseHanRes = () => {
-    const me = hanResData?.find(player => player.isMe)
-    const shouldShowLevelUp = !hanResFlags.isViewer
-      && !hanResFlags.isTournament
-      && me?.nlevel !== undefined
-      && me.prevNlevel !== undefined
-      && me.nlevel > me.prevNlevel
-
     setHanResData(null)
     setHanResFlags({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
     setTournamentTotalResult(null)
     setShowTournamentTotalResult(false)
-
-    if (shouldShowLevelUp && me) {
-      setLevelUp({ level: me.nlevel ?? 0, lentMoney: me.lentMoney ?? 0 })
-      return
-    }
-
     returnFromHanRes()
   }
 
@@ -2110,6 +2126,13 @@ export default function GameScreen() {
           lentMoney={levelUp.lentMoney}
           onClose={() => {
             setLevelUp(null)
+            const nextHanResult = pendingHanResult
+            setPendingHanResult(null)
+            if (nextHanResult) {
+              setHanResFlags(nextHanResult.flags)
+              setHanResData(nextHanResult.players)
+              return
+            }
             returnFromHanRes()
           }}
         />

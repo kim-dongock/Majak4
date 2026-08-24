@@ -2690,6 +2690,27 @@ public class GameLogicHelperTests
     }
 
     [Fact]
+    public void GameResultPayload_CoinGainUsesNetWalletSettlement()
+    {
+        var room = new GameRoom { RoomId = 12, MoneyRate = 500 };
+        room.AddPlayer(new MajakPlayer { MemberNo = "player1", Pix = "player1", NickName = "Player 1" }, 0);
+        var report = new GameReport();
+        report.Users[0] = new GameReport.UserResult
+        {
+            MemberNo = "player1",
+            Ranking = 1,
+            SetPoint = 25,
+            MoneyChange = 500,
+            DealerFee = 500,
+        };
+
+        var resultPayload = InvokeBuildGameResultPayload(room, report);
+        var user = ((JsonElement)resultPayload["users"]!).EnumerateArray().Single();
+
+        Assert.Equal(500, user.GetProperty("coinGain").GetInt64());
+    }
+
+    [Fact]
     public async Task OnInitKyoku_SendsLegacyKyokuInfoFieldsAndStoresHistory()
     {
         var room = BuildPaiInfoRoom("00N5A");
@@ -3485,6 +3506,40 @@ public class GameLogicHelperTests
         history.Verify(r => r.InsertTrainingHistAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<(string MemberNo, int Point)[]>()), Times.Never);
         log.Verify(r => r.InsertTrainingHistAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<(string MemberNo, int Point)[]>()), Times.Never);
         log.Verify(r => r.InsertGameHistAsync(It.IsAny<GameReport>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GameReportProcess_WritesGrossSettlementBeforeRoomChargeHistory()
+    {
+        var room = BuildPaiInfoRoom("00000");
+        room.RoomId = 881;
+        room.State = GameRoomState.Finished;
+        room.UnitMoney = 500;
+        for (int seat = 0; seat < GameConst.PlayerMaxCount; seat++) room.SeatToEngineOrder[seat] = seat;
+        room.Engine.Player[0].SetRank = 0;
+        room.Engine.Player[0].SetTotal = 25;
+
+        var session = new PlayerSessionService();
+        foreach (var player in room.Seats.Where(player => player != null).Select(player => player!))
+        {
+            player.GamMoney = 10_000;
+            session.Register(player);
+        }
+
+        var history = new Mock<HistoryRepository>(MockBehavior.Loose);
+        history.Setup(repository => repository.InsertGameMoneyHistAsync(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<long>(),
+                It.IsAny<long>(), It.IsAny<long>(), It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+        var (ctx, _) = CommandTestHelper.MakeContext(room.Seats[0]!);
+
+        await BuildService(session, historyRepo: history.Object).GameReportProcessAsync(room, ctx);
+
+        Assert.Equal(22_000, room.Seats[0]!.GamMoney);
+        history.Verify(repository => repository.InsertGameMoneyHistAsync(
+            "p0", GameConst.EvtCodeGameSettlement, 12_500, 10_000, 22_500, ""), Times.Once);
+        history.Verify(repository => repository.InsertGameMoneyHistAsync(
+            "p0", GameConst.EvtCodeRoomCharge, -500, 22_500, 22_000, ""), Times.Once);
     }
 
     [Fact]

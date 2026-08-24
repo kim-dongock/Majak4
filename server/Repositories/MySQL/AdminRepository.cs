@@ -315,6 +315,54 @@ public class AdminRepository
         }
     }
 
+    public async Task<CurrencyBalanceAdjustment> AdjustGameCurrencyAsync(
+        ulong memberNo,
+        string currency,
+        long amount)
+    {
+        string column = currency switch
+        {
+            "gp" => "game_money",
+            "dragon_orb" => "gem_count",
+            _ => throw new ArgumentOutOfRangeException(nameof(currency)),
+        };
+
+        await using var conn = await _db.CreateConnectionAsync();
+        await using var tx = await conn.BeginTransactionAsync();
+        try
+        {
+            await using var selectCmd = new MySqlCommand(
+                $"SELECT {column}, row_version FROM player_wallet WHERE member_no = @memberNo FOR UPDATE", conn, tx);
+            selectCmd.Parameters.AddWithValue("@memberNo", memberNo);
+            await using var reader = await selectCmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync()) throw new InvalidOperationException("player_wallet not found");
+            long balanceBefore = reader.GetInt64(0);
+            long rowVersion = reader.GetInt64(1);
+            await reader.CloseAsync();
+
+            long balanceAfter = checked(balanceBefore + amount);
+            if (balanceAfter < 0)
+                throw new InvalidOperationException($"{currency} balance would go negative: {balanceBefore} + {amount}");
+
+            await using var updateCmd = new MySqlCommand(
+                $"UPDATE player_wallet SET {column} = @balanceAfter, row_version = row_version + 1, " +
+                "updated_at = CURRENT_TIMESTAMP(3) WHERE member_no = @memberNo AND row_version = @rowVersion", conn, tx);
+            updateCmd.Parameters.AddWithValue("@balanceAfter", balanceAfter);
+            updateCmd.Parameters.AddWithValue("@memberNo", memberNo);
+            updateCmd.Parameters.AddWithValue("@rowVersion", rowVersion);
+            if (await updateCmd.ExecuteNonQueryAsync() != 1)
+                throw new InvalidOperationException("player_wallet was updated concurrently");
+
+            await tx.CommitAsync();
+            return new CurrencyBalanceAdjustment(balanceBefore, balanceAfter);
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
     // ─── キャッシュ商品マスター ────────────────────────────────────────
     public async Task<IReadOnlyList<CashProduct>> GetCashProductsAsync()
     {
@@ -446,6 +494,8 @@ public record CashBalanceAdjustment(
     int TotalBefore, int TotalAfter,
     int PaidBefore, int PaidAfter,
     int FreeBefore, int FreeAfter);
+
+public record CurrencyBalanceAdjustment(long BalanceBefore, long BalanceAfter);
 
 public record CashProduct(
     string ProductId, string DisplayName, int CashAmount,

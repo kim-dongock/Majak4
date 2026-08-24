@@ -52,9 +52,9 @@ export default function AdminLayout() {
     {
       key: 'cash',
       icon: <GiftOutlined />,
-      label: 'キャッシュ管理',
+      label: '通貨管理',
       children: [
-        { key: '/cash/adjust', label: 'キャッシュ 支給・調整' },
+        { key: '/cash/adjust', label: '通貨 支給・調整' },
         { key: '/cash/stats',  label: 'キャッシュ 統計・売上' },
       ],
     },

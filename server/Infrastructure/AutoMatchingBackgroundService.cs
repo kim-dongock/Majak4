@@ -100,7 +100,7 @@ public class AutoMatchingBackgroundService : BackgroundService
 
     private static int GetMatchingRating(MajakServer.Models.Player.MajakPlayer player, string channelId)
     {
-        string subId = channelId.Length >= 11 ? channelId.Substring(6, 5) : "";
+        string subId = ExtractSubId(channelId);
         bool isCup = subId.Length > 2 && subId[2] == 'C';
         return isCup && subId.Length > 4 && subId[4] == 'A'
             ? player.RegularRecord.Rating
@@ -148,7 +148,7 @@ public class AutoMatchingBackgroundService : BackgroundService
         }
 
         // GemGame judgment, equivalent to onStartNewGame.
-        string subId    = channelId.Length >= 11 ? channelId.Substring(6, 5) : "";
+        string subId    = ExtractSubId(channelId);
         bool canGemGame = subId.Length == 5 && subId[2] != 'C' && subId[4] > 'A';
         int gemGame     = 0;
         if (canGemGame)
@@ -281,6 +281,9 @@ public class AutoMatchingBackgroundService : BackgroundService
             "AutoMatching [{Channel}]: room {RoomId} reserved for [{Members}]. FAILEROOM timer started.",
             channelId, room.RoomId, string.Join(",", memberNos));
     }
+
+    private static string ExtractSubId(string channelId)
+        => channelId.Length >= 11 ? channelId.Substring(6, 5) : channelId;
 
     private static string ResolveHost(string serverUrl)
         => Uri.TryCreate(serverUrl, UriKind.Absolute, out var uri) ? uri.Host : serverUrl;
