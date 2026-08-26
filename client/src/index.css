@@ -284,6 +284,34 @@ button.majak-press-feedback {
   background: #dce5dc;
 }
 
+/* Responsive popups share a compact text hierarchy even when local dialog
+   styles use the broader emphasis token for controls. */
+.shop-transaction footer button,
+.mission-dialog__header button,
+.mission-dialog__reward-grid button,
+.mission-dialog footer button,
+.mission-reward-guide footer button,
+.custom-inventory__item button,
+.custom-inventory__footer button,
+.responsive-owned-items__equip,
+.responsive-owned-items__footer button,
+.majak-ranking-dialog__footer button,
+.majak-collection-footer button,
+.majak-invite-request__actions button,
+.event-dialog button {
+  font-size: var(--majak-popup-command-font-size) !important;
+}
+
+.custom-inventory__tabs button,
+.majak-collection-tabs button {
+  font-size: var(--majak-popup-tab-font-size) !important;
+}
+
+.custom-inventory__item h3,
+.responsive-owned-items__title h3 {
+  font-size: var(--majak-text-md) !important;
+}
+
 @media (orientation: landscape) and (max-height: 540px) {
   .majak-popup-overlay {
     padding: 8px 12px;
@@ -492,6 +520,11 @@ button.majak-press-feedback {
 
 .majak-ending-popup {
   width: min(440px, 100%);
+  font-family: var(--majak-font-family-ui);
+}
+
+.majak-ending-popup :is(button, a) {
+  font-family: inherit;
 }
 
 .majak-popup-panel.majak-ending-popup > .majak-popup-titlebar,
@@ -505,11 +538,17 @@ button.majak-press-feedback {
   gap: 16px;
 }
 
-.majak-ending-popup__body > p {
+.majak-popup-panel > .majak-ending-popup__body > p {
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: var(--majak-popup-font-body);
+  font-size: 15px;
   line-height: var(--majak-popup-leading-body);
+}
+
+@media (max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse) {
+  .majak-popup-panel > .majak-ending-popup__body > p {
+    font-size: var(--majak-text-sm);
+  }
 }
 
 .majak-ending-popup__banner {
@@ -521,11 +560,6 @@ button.majak-press-feedback {
   width: 100%;
   max-height: 110px;
   object-fit: contain;
-}
-
-.majak-popup-panel.majak-ending-popup > .majak-popup-actions > button {
-  font-size: var(--majak-popup-font-emphasis);
-  line-height: 1;
 }
 
 .majak-debug-login-dialog {
@@ -1095,7 +1129,7 @@ button.majak-press-feedback {
   --majak-popup-close-font-size: var(--majak-font-18);
   --majak-popup-command-width: 110px;
   --majak-popup-command-height: 34px;
-  --majak-popup-command-font-size: var(--majak-text-lg);
+  --majak-popup-command-font-size: var(--majak-text-md);
   --majak-popup-button-font-weight: 400;
   --majak-button-font-weight: 400;
   --majak-popup-tab-height: 40px;
@@ -1120,21 +1154,21 @@ button.majak-press-feedback {
   --majak-font-family-ui: 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', Meiryo, 'Noto Sans JP', sans-serif;
   --majak-type-scale: 1;
   /* Responsive Web UI typography: meta, label, body, subtitle, title, display. */
-  --majak-text-xs: calc(12px * var(--majak-type-scale));
-  --majak-text-sm: calc(14px * var(--majak-type-scale));
-  --majak-text-md: calc(16px * var(--majak-type-scale));
-  --majak-text-lg: calc(20px * var(--majak-type-scale));
-  --majak-text-xl: calc(24px * var(--majak-type-scale));
-  --majak-text-display: calc(32px * var(--majak-type-scale));
+  --majak-text-xs: calc(11px * var(--majak-type-scale));
+  --majak-text-sm: calc(13px * var(--majak-type-scale));
+  --majak-text-md: calc(15px * var(--majak-type-scale));
+  --majak-text-lg: calc(18px * var(--majak-type-scale));
+  --majak-text-xl: calc(22px * var(--majak-type-scale));
+  --majak-text-display: calc(30px * var(--majak-type-scale));
   --majak-popup-font-title: var(--majak-text-xl);
-  --majak-popup-font-emphasis: var(--majak-text-xl);
+  --majak-popup-font-emphasis: var(--majak-text-lg);
   --majak-popup-font-body: var(--majak-text-md);
   --majak-popup-leading-title: var(--majak-leading-tight);
   --majak-popup-leading-emphasis: var(--majak-leading-tight);
   --majak-popup-leading-body: var(--majak-leading-body);
   --majak-dialog-caption-font-size: var(--majak-text-md);
-  --majak-dialog-label-font-size: var(--majak-text-lg);
-  --majak-dialog-body-font-size: var(--majak-text-xl);
+  --majak-dialog-label-font-size: var(--majak-text-md);
+  --majak-dialog-body-font-size: var(--majak-text-md);
   --majak-dialog-heading-font-size: var(--majak-text-lg);
   --majak-dialog-title-font-size: var(--majak-text-xl);
   --majak-dialog-compact-font-size: var(--majak-text-xs);
@@ -1142,9 +1176,9 @@ button.majak-press-feedback {
   --majak-menu-description-size: var(--majak-text-md);
   --majak-leading-tight: 1.2;
   --majak-leading-body: 1.5;
-  --majak-weight-regular: 500;
-  --majak-weight-strong: 700;
-  --majak-weight-title: 900;
+  --majak-weight-regular: 400;
+  --majak-weight-strong: 600;
+  --majak-weight-title: 700;
   --majak-font-caption: var(--majak-text-xs);
   --majak-font-label: var(--majak-text-sm);
   --majak-font-body: var(--majak-text-md);
@@ -1185,6 +1219,15 @@ button.majak-press-feedback {
 
 @media (max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse) {
   :root {
+    --majak-text-xs: calc(12px * var(--majak-type-scale));
+    --majak-text-sm: calc(14px * var(--majak-type-scale));
+    --majak-text-md: calc(16px * var(--majak-type-scale));
+    --majak-text-lg: calc(20px * var(--majak-type-scale));
+    --majak-text-xl: calc(24px * var(--majak-type-scale));
+    --majak-text-display: calc(32px * var(--majak-type-scale));
+    --majak-weight-regular: 500;
+    --majak-weight-strong: 700;
+    --majak-weight-title: 900;
     --majak-popup-close-font-size: var(--majak-text-sm);
     --majak-popup-command-font-size: var(--majak-text-sm);
     --majak-popup-tab-font-size: var(--majak-text-xs);
@@ -1707,6 +1750,8 @@ body {
 .majak-paifu-archive__filters {
   display: grid;
   grid-template-columns: repeat(6, minmax(120px, 1fr)) auto auto;
+  width: min(100%, 1216px);
+  justify-self: start;
   gap: 10px;
   align-items: end;
   padding: 14px;
@@ -1720,6 +1765,7 @@ body {
 .majak-paifu-archive__date-range { grid-column: span 2; }
 .majak-paifu-archive__date-range > span { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .majak-paifu-archive__date-range input { width: 100%; }
+.majak-paifu-archive__filters > .majak-responsive-control-button { height: 36px; }
 
 .majak-paifu-archive__content { min-height: 0; display: grid; }
 .majak-paifu-archive__list { min-height: 0; overflow: auto; border: 1px solid rgba(229, 242, 218, .35); background: rgba(4, 37, 27, .72); }
@@ -1751,10 +1797,14 @@ body {
     align-items: center;
     gap: 6px;
   }
-  .majak-paifu-archive__filters input,
-  .majak-paifu-archive__filters select { height: 30px; }
+  .majak-mobile-frame .majak-paifu-archive__filters input,
+  .majak-mobile-frame .majak-paifu-archive__filters select { height: 30px; }
   .majak-paifu-archive__date-range { grid-column: auto; }
-  .majak-paifu-archive__filters > .majak-responsive-control-button { min-width: 0; width: 100%; }
+  .majak-mobile-frame .majak-paifu-archive__filters > .majak-responsive-control-button {
+    min-width: 0;
+    width: 100%;
+    height: 30px;
+  }
   .majak-paifu-archive__content { grid-template-columns: 1fr; }
   .majak-paifu-archive__list { height: 100%; max-height: none; }
   .majak-paifu-archive__list-header {
@@ -1855,13 +1905,101 @@ body {
   min-width: 0;
   min-height: 0;
   display: grid;
-  grid-template-rows: minmax(110px, .75fr) minmax(180px, 1.45fr) auto auto;
+  grid-template-rows: minmax(96px, .65fr) minmax(148px, .9fr) minmax(140px, 1.05fr) auto auto;
   gap: 8px;
   padding: 10px;
   border-left: 2px solid rgba(230, 189, 114, .72);
   color: #102014;
   background: #dfe8d4;
   box-sizing: border-box;
+}
+
+.majak-responsive-ingame-sidebar__viewers {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  color: #061b0c;
+  background: transparent;
+  font-family: var(--majak-font-family-ui);
+  box-sizing: border-box;
+}
+
+.majak-responsive-ingame-sidebar__viewers > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 20px;
+  font-size: var(--majak-text-sm);
+  font-weight: 900;
+}
+
+.majak-responsive-ingame-sidebar__viewers > header strong {
+  min-width: 24px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list {
+  min-height: 0;
+  gap: 4px;
+  padding: 4px;
+  overflow-y: auto;
+  border: 0;
+  background: transparent;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member,
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__select {
+  min-height: 44px;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__select {
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 7px;
+  padding: 4px 5px;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member img {
+  width: 30px;
+  height: 30px;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__identity {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-areas:
+    "name name"
+    "title location";
+  gap: 1px 6px;
+  font-size: var(--majak-text-xs);
+  line-height: 1.15;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__name,
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__title,
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__location {
+  font-size: inherit;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__name {
+  grid-area: name;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__title {
+  grid-area: title;
+}
+
+.majak-responsive-ingame-sidebar__viewer-list .majak-mobile-lobby-member__location {
+  grid-area: location;
+}
+
+.majak-responsive-ingame-sidebar__viewer-empty {
+  padding: 5px 0 2px;
+  color: #657363;
+  font-size: var(--majak-text-xs);
 }
 
 .majak-responsive-ingame-sidebar__status,
@@ -1877,6 +2015,15 @@ body {
   font-weight: 700;
   line-height: 1.4;
   box-sizing: border-box;
+}
+
+.majak-responsive-ingame-sidebar__brand {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  object-position: center;
+  pointer-events: none;
 }
 
 .majak-responsive-ingame-sidebar__input {
@@ -1943,7 +2090,12 @@ body {
 
 .majak-responsive-ingame-sidebar__actions {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.majak-responsive-ingame-sidebar__actions:not(.is-viewer) > button:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
 }
 
 .majak-responsive-paifu__control-group {
@@ -2835,7 +2987,7 @@ body {
 
   .majak-desktop-lobby-select__list,
   .majak-desktop-lobby-select__list.is-dani {
-    --majak-lobby-comparison-columns: minmax(150px, 1.35fr) repeat(3, minmax(46px, .42fr)) minmax(70px, .65fr) minmax(145px, 1.2fr);
+    --majak-lobby-comparison-columns: minmax(210px, 1.75fr) repeat(3, minmax(46px, .42fr)) minmax(70px, .65fr) minmax(90px, .75fr);
     width: min(88%, 700px);
     justify-self: center;
     margin-top: 0;
@@ -2859,7 +3011,7 @@ body {
   }
 
   .majak-desktop-lobby-select__entry {
-    --majak-lobby-comparison-columns: minmax(150px, 1.35fr) repeat(3, minmax(46px, .42fr)) minmax(70px, .65fr) minmax(145px, 1.2fr);
+    --majak-lobby-comparison-columns: minmax(210px, 1.75fr) repeat(3, minmax(46px, .42fr)) minmax(70px, .65fr) minmax(90px, .75fr);
     gap: 5px;
   }
 
@@ -3254,6 +3406,11 @@ body:has(.majak-game-screen) {
   border: 2px solid #0b552a;
   background: #2c9827;
   box-shadow: inset 0 0 0 2px #063618, 0 0 0 1px rgba(84, 168, 91, .48);
+}
+
+.majak-responsive-paifu__frame.is-fullscreen {
+  width: 100vw;
+  height: 100dvh;
 }
 
 .majak-responsive-paifu__sidebar { grid-template-rows: auto minmax(180px, 1fr) auto; }
@@ -4204,6 +4361,8 @@ body:has(.majak-game-screen) {
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-primary-actions {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 160px));
+  justify-content: center;
   gap: 8px;
 }
 
@@ -4552,6 +4711,7 @@ body:has(.majak-game-screen) {
   --majak-mobile-lobby-side-width: 244px;
   --majak-mobile-room-action-scale: 1.3;
   --majak-mobile-lobby-body-font-size: var(--majak-font-12);
+  --majak-mobile-lobby-member-font-size: var(--majak-font-11);
   position: relative;
   height: 100%;
   display: flex;
@@ -4974,6 +5134,48 @@ body:has(.majak-game-screen) {
   margin-bottom: 0;
 }
 
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-responsive-lobby-chat__log {
+  padding: 9px 12px;
+  font-size: var(--majak-text-md);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-chat-row {
+  flex-basis: 90px;
+  min-height: 90px;
+  gap: 8px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-chat-compose {
+  grid-template-rows: 44px 38px;
+  gap: 8px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-chat-input,
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-chat-compose button {
+  font-size: var(--majak-text-md);
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-members {
+  --majak-mobile-lobby-body-font-size: var(--majak-text-md);
+  --majak-mobile-lobby-member-font-size: var(--majak-text-sm);
+  padding: 8px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-member,
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-member__select {
+  min-height: 42px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-member__select {
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-member img {
+  width: 28px;
+  height: 28px;
+}
+
 .majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-toolbar--with-user {
   grid-template-columns: minmax(180px, max-content) minmax(0, 1fr);
   grid-template-areas: "heading user";
@@ -5237,6 +5439,11 @@ body:has(.majak-game-screen) {
     --majak-mobile-room-cell-scale: calc((100cqw - 44px) / 600px);
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+}
+
+.majak-responsive-desktop-frame.is-fullscreen .majak-responsive-desktop-lobby .majak-mobile-lobby-room-grid {
+  --majak-mobile-room-cell-scale: min(1.43, calc((100cqw - 44px) / 600px));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .majak-desktop-lobby-room-list {
@@ -6680,9 +6887,10 @@ body:has(.majak-game-screen) {
   display: none;
 }
 
-.majak-ranking-dialog__header h2 {
+.majak-popup-panel > .majak-ranking-dialog__header > h2 {
   margin: 0 0 2px;
   font-size: var(--majak-popup-font-title);
+  font-weight: 400;
   line-height: var(--majak-popup-leading-title);
 }
 
@@ -6737,13 +6945,13 @@ body:has(.majak-game-screen) {
 .majak-ranking-dialog__self > span {
   color: #506650;
   font-size: var(--majak-popup-font-body);
-  font-weight: 800;
 }
 
 .majak-ranking-dialog__self > strong {
   color: #285b3a;
-  font-size: var(--majak-popup-font-title);
-  line-height: var(--majak-popup-leading-title);
+  font-size: var(--majak-popup-font-emphasis);
+  font-weight: 400;
+  line-height: var(--majak-popup-leading-emphasis);
   text-align: right;
 }
 
@@ -6751,9 +6959,9 @@ body:has(.majak-game-screen) {
 
 .majak-ranking-dialog__self div,
 .majak-ranking-dialog__self div span { min-width: 0; display: block; }
-.majak-ranking-dialog__self div b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--majak-popup-font-emphasis); }
+.majak-ranking-dialog__self div b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--majak-text-md); font-weight: 400; }
 .majak-ranking-dialog__self div span { margin-top: 3px; color: #526158; font-size: var(--majak-popup-font-body); }
-.majak-ranking-dialog__self em { color: #506650; font-size: var(--majak-popup-font-body); font-style: normal; font-weight: 800; white-space: nowrap; }
+.majak-ranking-dialog__self em { color: #506650; font-size: var(--majak-popup-font-body); font-style: normal; white-space: nowrap; }
 
 .majak-ranking-dialog__list {
   min-height: 0;
@@ -6779,8 +6987,7 @@ body:has(.majak-game-screen) {
   padding: 0 12px;
   color: #ffffff;
   background: #587864;
-  font-size: var(--majak-popup-font-emphasis);
-  font-weight: 800;
+  font-size: var(--majak-text-md);
   box-sizing: border-box;
 }
 
@@ -6800,13 +7007,13 @@ body:has(.majak-game-screen) {
 
 .majak-ranking-dialog__row:nth-child(even) { background: #f2f6f0; }
 .majak-ranking-dialog__row.is-self { background: #e2f0dd; box-shadow: inset 4px 0 #4d8657; }
-.majak-ranking-dialog__place { color: #355447; font-size: var(--majak-popup-font-emphasis); }
+.majak-ranking-dialog__place { color: #355447; font-size: var(--majak-text-md); font-weight: 400; }
 .majak-ranking-dialog__place small { margin-left: 1px; color: #5d6b61; }
 .majak-ranking-dialog__place.rank-1 { color: #9a6a12; }
 .majak-ranking-dialog__place.rank-2 { color: #5d6971; }
 .majak-ranking-dialog__place.rank-3 { color: #9a5534; }
-.majak-ranking-dialog__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--majak-popup-font-emphasis); }
-.majak-ranking-dialog__rating { color: #1d5e47; font-size: var(--majak-popup-font-emphasis); font-weight: 800; }
+.majak-ranking-dialog__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--majak-text-md); font-weight: 400; }
+.majak-ranking-dialog__rating { color: #1d5e47; font-size: var(--majak-text-md); }
 .majak-ranking-dialog__grade { color: #56695c; font-size: var(--majak-popup-font-body); }
 .majak-ranking-dialog__empty { margin: 0; padding: 32px 12px; color: #65746b; text-align: center; font-size: var(--majak-popup-font-body); }
 
@@ -6830,7 +7037,6 @@ body:has(.majak-game-screen) {
   color: #ffffff;
   background: #356246;
   font-size: var(--majak-popup-command-font-size);
-  font-weight: 800;
 }
 
 @media (max-width: 520px) {
@@ -6851,9 +7057,9 @@ body:has(.majak-game-screen) {
   .majak-ranking-dialog__columns span:nth-child(3) { text-align: right; }
   .majak-ranking-dialog__columns span:nth-child(4) { display: none; }
   .majak-ranking-dialog__row { grid-template-columns: 43px minmax(0, 1fr) auto; grid-template-areas: 'place name rating' 'place grade grade'; column-gap: 7px; min-height: 57px; padding: 7px 9px; }
-  .majak-ranking-dialog__place { grid-area: place; font-size: var(--majak-popup-font-emphasis); }
+  .majak-ranking-dialog__place { grid-area: place; font-size: var(--majak-text-md); }
   .majak-ranking-dialog__name { grid-area: name; }
-  .majak-ranking-dialog__rating { grid-area: rating; font-size: var(--majak-popup-font-emphasis); }
+  .majak-ranking-dialog__rating { grid-area: rating; font-size: var(--majak-text-md); }
   .majak-ranking-dialog__grade { grid-area: grade; color: #65746b; text-align: left; font-size: var(--majak-popup-font-body); }
   .majak-ranking-dialog__footer { flex-basis: 46px; padding: 6px 8px; }
   .majak-ranking-dialog__footer button { width: 100%; }
@@ -7240,7 +7446,7 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-lobby-member__name {
-  font-size: var(--majak-mobile-lobby-body-font-size);
+  font-size: var(--majak-mobile-lobby-member-font-size, var(--majak-mobile-lobby-body-font-size));
   font-weight: 800;
 }
 
@@ -7248,13 +7454,13 @@ body:has(.majak-game-screen) {
   overflow: hidden;
   text-overflow: ellipsis;
   color: #9a6322;
-  font-size: var(--majak-mobile-lobby-body-font-size);
+  font-size: var(--majak-mobile-lobby-member-font-size, var(--majak-mobile-lobby-body-font-size));
   white-space: nowrap;
 }
 
 .majak-mobile-lobby-member__location {
   color: #65736d;
-  font-size: var(--majak-mobile-lobby-body-font-size);
+  font-size: var(--majak-mobile-lobby-member-font-size, var(--majak-mobile-lobby-body-font-size));
 }
 
 .majak-mobile-lobby-member.is-selected .majak-mobile-lobby-member__title,
@@ -7290,6 +7496,10 @@ body:has(.majak-game-screen) {
   place-items: center;
   padding: 16px;
   background: rgb(0 0 0 / 45%);
+}
+
+.majak-accuse-overlay {
+  z-index: 1100;
 }
 
 .majak-one-to-one-chat__window {
@@ -8085,7 +8295,8 @@ body:has(.majak-result-overlay) {
   --result-font-emphasis: var(--majak-font-22);
   --result-font-title: calc(32px * var(--majak-type-scale));
   width: min(940px, 100%);
-  max-height: 100%;
+  max-height: calc(100% - 12px);
+  box-sizing: border-box;
   overflow: auto;
   border: 1px solid #a99454;
   border-radius: 6px;
@@ -8095,6 +8306,26 @@ body:has(.majak-result-overlay) {
 }
 
 .majak-kyo-result-panel { overflow: hidden; }
+.majak-kyo-result-panel.is-hora {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  height: 100%;
+}
+.majak-kyo-result-panel.is-hora .majak-kyo-result-body {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (min-width: 641px) and (min-height: 541px) {
+  .majak-kyo-result-panel.is-hora .majak-result-header { padding-block: 12px; }
+  .majak-kyo-result-panel.is-hora .majak-result-players { gap: 3px; padding-block: 8px; }
+  .majak-kyo-result-panel.is-hora .majak-result-player { min-height: 48px; padding-block: 3px; }
+  .majak-kyo-result-panel.is-hora .majak-result-detail { gap: 7px; padding-block: 10px; }
+  .majak-kyo-result-panel.is-hora .majak-result-yaku div { padding-block: 5px; }
+  .majak-kyo-result-panel.is-hora .majak-result-total,
+  .majak-kyo-result-panel.is-hora .majak-result-dora { padding-block: 6px; }
+  .majak-kyo-result-panel.is-hora .majak-kyo-confirmation-progress { padding-block: 8px; }
+}
 
 .majak-result-header {
   display: flex;
@@ -8202,11 +8433,10 @@ body:has(.majak-result-overlay) {
   }
   .majak-result-overlay { padding: 5px; }
   .majak-result-panel { border-radius: 4px; }
-  .majak-kyo-result-panel:is(.is-draw, .is-hora) { overflow: hidden; }
-  .majak-kyo-result-panel.is-hora { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; }
+  .majak-kyo-result-panel:is(.is-draw, .is-hora) { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; height: 100%; overflow: hidden; }
   .majak-result-header { padding: 10px 12px; }
   .majak-kyo-result-body { grid-template-columns: 1fr; min-height: 0; }
-  .majak-kyo-result-panel.is-hora .majak-kyo-result-body { display: block; overflow: hidden; }
+  .majak-kyo-result-panel:is(.is-draw, .is-hora) .majak-kyo-result-body { display: block; overflow: hidden; }
   .majak-result-players { grid-template-columns: 1fr; gap: 3px; padding: 5px 8px; }
   .majak-kyo-result-panel.is-hora .majak-result-players { min-height: 0; overflow: hidden; }
   .majak-result-players__head, .majak-result-player { grid-template-columns: minmax(120px, 1.5fr) minmax(45px, .5fr) minmax(55px, .62fr) repeat(5, minmax(42px, .52fr)) minmax(38px, .42fr); gap: 3px; }
@@ -8332,6 +8562,27 @@ body:has(.majak-result-overlay) {
 .majak-invite-request__message p {
   font-size: var(--majak-popup-font-body);
   line-height: var(--majak-popup-leading-body);
+}
+
+/* Player profiles are information-dense; keep their type one step below generic popups. */
+.majak-player-profile__identity h2,
+.majak-player-profile__rating strong {
+  font-size: var(--majak-text-lg);
+}
+
+.majak-player-profile__tabs button,
+.majak-player-profile__summary strong,
+.majak-player-profile__metrics h3 {
+  font-size: var(--majak-text-sm);
+}
+
+.majak-player-profile__badges span,
+.majak-player-profile__rating small,
+.majak-player-profile__summary span,
+.majak-player-profile__metrics dl > div,
+.majak-player-profile__metrics dt,
+.majak-player-profile__footer p {
+  font-size: var(--majak-text-xs);
 }
 
 .majak-paifu-select-dialog {
@@ -8902,7 +9153,7 @@ body:has(.majak-result-overlay) {
 }
 
 /* Popup command buttons share one visual and sizing contract. */
-.majak-popup-panel:not(.responsive-shop):not(.majak-collection-dialog):not(.majak-receipt-dialog):not(.majak-mobile-tournament-regist):not(.majak-ending-popup):not(.majak-ask-end-dialog) button:not(.majak-popup-titlebar__close):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button) {
+.majak-popup-panel:not(.responsive-shop):not(.majak-collection-dialog):not(.majak-receipt-dialog):not(.majak-mobile-tournament-regist):not(.majak-ending-popup):not(.majak-ask-end-dialog) button:not(.majak-popup-titlebar__close):not(.majak-profile-edit__avatar):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button) {
   width: auto;
   min-width: 0;
   height: 34px;
@@ -8931,13 +9182,13 @@ body:has(.majak-result-overlay) {
   font-size: var(--majak-dialog-caption-font-size);
 }
 
-.majak-popup-panel:not(.responsive-shop):not(.majak-collection-dialog):not(.majak-receipt-dialog):not(.majak-mobile-tournament-regist):not(.majak-ending-popup):not(.majak-ask-end-dialog) button:not(.majak-popup-titlebar__close):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):hover:not(:disabled),
-.majak-popup-panel:not(.responsive-shop):not(.majak-collection-dialog):not(.majak-receipt-dialog):not(.majak-mobile-tournament-regist):not(.majak-ending-popup):not(.majak-ask-end-dialog) button:not(.majak-popup-titlebar__close):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):focus-visible:not(:disabled) {
+.majak-popup-panel:not(.responsive-shop):not(.majak-collection-dialog):not(.majak-receipt-dialog):not(.majak-mobile-tournament-regist):not(.majak-ending-popup):not(.majak-ask-end-dialog) button:not(.majak-popup-titlebar__close):not(.majak-profile-edit__avatar):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):hover:not(:disabled),
+.majak-popup-panel:not(.responsive-shop):not(.majak-collection-dialog):not(.majak-receipt-dialog):not(.majak-mobile-tournament-regist):not(.majak-ending-popup):not(.majak-ask-end-dialog) button:not(.majak-popup-titlebar__close):not(.majak-profile-edit__avatar):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):focus-visible:not(:disabled) {
   border-color: #16483d;
   background: #247c67;
 }
 
-.majak-popup-panel:not(.responsive-shop):not(.majak-collection-dialog):not(.majak-receipt-dialog):not(.majak-mobile-tournament-regist):not(.majak-ending-popup):not(.majak-ask-end-dialog) button:not(.majak-popup-titlebar__close):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):disabled {
+.majak-popup-panel:not(.responsive-shop):not(.majak-collection-dialog):not(.majak-receipt-dialog):not(.majak-mobile-tournament-regist):not(.majak-ending-popup):not(.majak-ask-end-dialog) button:not(.majak-popup-titlebar__close):not(.majak-profile-edit__avatar):not([role='tab']):not(.majak-player-profile__tabs button):not(.responsive-shop__tabs button):not(.custom-inventory__tabs button):not(.majak-collection-tabs button):not(.majak-mobile-config-tabs button):not(th button):disabled {
   color: #ffffff;
   background: #1c6b58;
   opacity: .45;
@@ -9472,6 +9723,45 @@ body :is(
   }
 }
 
+/* Game settings follows the shared popup type scale without inherited bold controls. */
+.majak-popup-panel.majak-mobile-config-dialog > .majak-mobile-dialog-titlebar,
+.majak-popup-panel.majak-mobile-config-dialog > .majak-mobile-dialog-titlebar > span {
+  font-size: var(--majak-popup-font-title) !important;
+  font-weight: 400 !important;
+}
+
+.majak-popup-panel.majak-mobile-config-dialog .majak-mobile-config-tabs button {
+  font-size: var(--majak-text-sm);
+  font-weight: 400;
+}
+
+.majak-popup-panel.majak-mobile-config-dialog .majak-mobile-config-section legend {
+  font-size: var(--majak-popup-font-emphasis);
+  font-weight: 400;
+}
+
+.majak-popup-panel.majak-mobile-config-dialog .majak-mobile-choice,
+.majak-popup-panel.majak-mobile-config-dialog .majak-mobile-config-assist-row span {
+  font-size: var(--majak-text-md);
+  font-weight: 400;
+}
+
+.majak-popup-panel.majak-mobile-config-dialog .majak-mobile-config-assist-row small {
+  font-size: var(--majak-text-sm);
+  font-weight: 400;
+}
+
+@media (min-width: 769px) {
+  .majak-mobile-config-dialog {
+    height: min(700px, calc(100dvh - 32px)) !important;
+    max-height: min(700px, calc(100dvh - 32px));
+  }
+
+  .majak-popup-panel > .majak-mobile-config-body.majak-popup-body {
+    overflow-y: auto;
+  }
+}
+
 @media (max-width: 768px), (pointer: coarse) {
   .majak-popup-panel.responsive-shop {
     display: flex;
@@ -9536,9 +9826,63 @@ body :is(
   line-height: inherit;
 }
 
+.majak-popup-panel > .majak-ranking-dialog__header {
+  font-weight: 400 !important;
+}
+
+.majak-popup-panel > .majak-ranking-dialog__header > h2 {
+  font-weight: 400 !important;
+}
+
+.majak-popup-panel > .majak-collection-header {
+  font-weight: 400 !important;
+}
+
+.majak-popup-panel > .majak-collection-header h2 {
+  font-size: var(--majak-popup-font-title) !important;
+  font-weight: 400 !important;
+  line-height: var(--majak-popup-leading-title) !important;
+}
+
+.majak-collection-item-copy strong,
+.majak-collection-item > button {
+  font-size: var(--majak-text-md);
+  font-weight: 400;
+}
+
+.majak-collection-item-copy span {
+  font-size: var(--majak-text-sm);
+  font-weight: 400;
+}
+
 @media (min-width: 769px) and (pointer: fine) {
   :root {
     --majak-unified-popup-header-height: 58px;
+  }
+
+  .majak-popup-panel.majak-player-profile > .majak-player-profile__titlebar,
+  .majak-player-profile__identity h2,
+  .majak-player-profile__rating strong {
+    font-size: calc(20px * var(--majak-type-scale));
+  }
+
+  .majak-player-profile__summary strong,
+  .majak-player-profile__metrics h3 {
+    font-size: var(--majak-text-md);
+  }
+
+  .majak-player-profile__tabs button {
+    font-size: 13px !important;
+  }
+
+  .majak-popup-panel.majak-player-profile .majak-player-profile__badges span,
+  .majak-popup-panel.majak-player-profile .majak-player-profile__rating span,
+  .majak-popup-panel.majak-player-profile .majak-player-profile__rating small,
+  .majak-popup-panel.majak-player-profile .majak-player-profile__summary span,
+  .majak-popup-panel.majak-player-profile .majak-player-profile__metrics dt,
+  .majak-popup-panel.majak-player-profile .majak-player-profile__metrics dd,
+  .majak-popup-panel.majak-player-profile .majak-player-profile__footer p {
+    font-size: var(--majak-text-sm);
   }
 }
 

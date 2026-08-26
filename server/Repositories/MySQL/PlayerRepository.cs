@@ -1034,25 +1034,30 @@ public class PlayerRepository
     public virtual async Task<List<GradeRankItem>> GetGradeRankListAsync(int rankDate, int rankKind, int maxCnt)
     {
         // Check the Redis cache with a five-minute TTL.
-        string cacheKey = MasterCacheService.KeyGradeRankList(rankDate, rankKind, maxCnt);
+        string cacheKey = $"{MasterCacheService.KeyGradeRankList(rankDate, rankKind, maxCnt)}:display-name-v2";
         var cached = await Redis.GetJsonAsync<List<GradeRankItem>>(cacheKey);
         if (cached is { Count: > 0 }) return cached;
 
         await using var db = await RequireGameDb().CreateAsync();
         var month = RankMonth(rankDate);
-        var query = FilterGradeRankQuery(db.PlayerGradeRanks.AsNoTracking(), month, rankKind);
-        var rows = await query.OrderByDescending(rank => rank.Rating)
-            .ThenBy(rank => rank.LastPlayedAt)
+        var rankQuery = FilterGradeRankQuery(db.PlayerGradeRanks.AsNoTracking(), month, rankKind);
+        var rows = await (
+            from rank in rankQuery
+            join account in db.PlayerAccounts.AsNoTracking() on rank.MemberNo equals account.MemberNo
+            select new { Rank = rank, NickName = account.DisplayName })
+            .OrderByDescending(item => item.Rank.Rating)
+            .ThenBy(item => item.Rank.LastPlayedAt)
             .Take(maxCnt)
             .ToListAsync();
-        var list = rows.Select((rank, index) => new GradeRankItem
+        var list = rows.Select((item, index) => new GradeRankItem
         {
-            MemberNo = MemberNoIds.Format(rank.MemberNo),
-            AvatarId = rank.AvatarId,
-            Rating = rank.Rating,
-            Grade = rank.GradeLevel,
-            LastDate = rank.LastPlayedAt?.ToString("yyyy/MM/dd HH:mm:ss") ?? "",
-            ExtraCount = checked((int)rank.ExtraCount),
+            MemberNo = MemberNoIds.Format(item.Rank.MemberNo),
+            NickName = item.NickName,
+            AvatarId = item.Rank.AvatarId,
+            Rating = item.Rank.Rating,
+            Grade = item.Rank.GradeLevel,
+            LastDate = item.Rank.LastPlayedAt?.ToString("yyyy/MM/dd HH:mm:ss") ?? "",
+            ExtraCount = checked((int)item.Rank.ExtraCount),
             Rank = index + 1,
         }).ToList();
 
@@ -2900,6 +2905,7 @@ public record ItemInfo
 public record GradeRankItem
 {
     public string MemberNo   { get; init; } = "";
+    public string NickName   { get; init; } = "";
     public string AvatarId   { get; init; } = "";
     public int    Rating     { get; init; }
     public int    Grade      { get; init; }

@@ -16,7 +16,7 @@ CREATE TABLE player_account (
     approved_at        DATETIME(3)  NULL,
     approved_by        BIGINT UNSIGNED NULL,
     reject_reason      VARCHAR(200) NULL,
-    account_status     TINYINT UNSIGNED NOT NULL DEFAULT 0,
+    account_status     TINYINT UNSIGNED NOT NULL DEFAULT 1,
     source_environment VARCHAR(16)  NOT NULL DEFAULT 'production',
     first_login_at     DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     last_login_at      DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

@@ -565,7 +565,7 @@ public class AutoEnterRoomCommandTests
     }
 
     [Fact]
-    public async Task Execute_ReconnectPlayingRoomWithoutHistory_StillSendsPaiInfo()
+    public async Task Execute_ReconnectPlayingRoom_DefersSnapshotUntilClientResync()
     {
         var (hub, _) = BuildHubMock();
         var player = new MajakPlayer { ConnectionId = "c1", MemberNo = "u1", ChannelId = "ch1", EngineOrder = 0 };
@@ -588,7 +588,7 @@ public class AutoEnterRoomCommandTests
         await cmd.ExecuteAsync(ctx);
 
         Assert.Contains(sent, s => s.method == Cmd.AutoEnterRoom);
-        Assert.Contains(sent, s => s.method == Cmd.PaiInfoList);
+        Assert.DoesNotContain(sent, s => s.method == Cmd.PaiInfoList);
         Assert.DoesNotContain(sent, s => s.method == Cmd.History);
     }
 
@@ -626,8 +626,8 @@ public class AutoEnterRoomCommandTests
         Assert.Contains(sent, s => s.method == Cmd.AutoEnterRoom);
         var autoEnterPacket = CommandTestHelper.ToDict(sent.First(s => s.method == Cmd.AutoEnterRoom).packet);
         Assert.Equal((int)GameRoomState.Playing, ((JsonElement)autoEnterPacket["state"]!).GetInt32());
-        Assert.Contains(sent, s => s.method == Cmd.PaiInfoList);
-        Assert.Contains(sent, s => s.method == Cmd.History);
+        Assert.DoesNotContain(sent, s => s.method == Cmd.PaiInfoList);
+        Assert.DoesNotContain(sent, s => s.method == Cmd.History);
         Assert.DoesNotContain(sent, s => s.method == Cmd.ConnectTypeError);
     }
 
@@ -660,7 +660,8 @@ public class AutoEnterRoomCommandTests
         Assert.False(room.Seats[0]!.IsOutPlayer);
         Assert.Equal(room.RoomId, reconnectPlayer.RoomId);
         Assert.Contains(sent, packet => packet.method == Cmd.AutoEnterRoom);
-        Assert.Contains(sent, packet => packet.method == Cmd.PaiInfoList);
+        Assert.DoesNotContain(sent, packet => packet.method == Cmd.PaiInfoList);
+        Assert.DoesNotContain(sent, packet => packet.method == Cmd.History);
         Assert.DoesNotContain(sent, packet => packet.method == Cmd.ConnectTypeError);
     }
 

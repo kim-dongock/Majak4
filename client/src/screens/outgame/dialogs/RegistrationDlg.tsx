@@ -280,11 +280,11 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
           {stepIndicator('3. プロフィール', true, false)}
         </div>
 
-        <div className="registration-heading">プロフィール設定</div>
-
-        <div style={{ flexShrink: 0, marginBottom: isMobile ? 6 : 10, fontSize: 'var(--majak-popup-font-body)', lineHeight: 'var(--majak-popup-leading-body)', color: '#444' }}>
-          ニックネーム: <b>{nickname}</b>
-        </div>
+        {!isMobile && (
+          <div className="registration-heading registration-profile-nickname">
+            ニックネーム: <strong>{nickname}</strong>
+          </div>
+        )}
 
         <div className="registration-profile-controls">
           <fieldset className="registration-profile-field" aria-label="性別">
@@ -360,7 +360,7 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
                 background: '#fff', cursor: 'pointer', overflow: 'hidden',
               }}>
               <img src={url} alt="" draggable={false}
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                style={{ width: isMobile ? '90%' : '100%', height: isMobile ? '90%' : '100%', objectFit: 'contain' }} />
             </button>
           ))}
         </div>

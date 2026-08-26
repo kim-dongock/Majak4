@@ -35,6 +35,33 @@ public class MajakConstTests
     [Fact] public void InvalidOrder_IsMinusOne()  => Assert.Equal(-1, MajakConst.InvalidOrder);
 }
 
+public class BipaiDeliveryTests
+{
+    [Fact]
+    public void GetPaiInfo_ArchiveDelivery_DoesNotConsumeViewerDelivery()
+    {
+        var bipai = new Bipai();
+        bipai.Init(0, 0);
+        bipai.Open(0);
+        int viewerMask = 1 << MajakConst.PlayerMaxCount;
+        int archiveMask = 1 << (MajakConst.PlayerMaxCount + 1);
+        int allOpenMask = (1 << (MajakConst.PlayerMaxCount + 1)) - 1;
+
+        var archive = BipaiInfo.Create();
+        bipai.GetPaiInfo(ref archive, allOpenMask, archiveMask);
+        var viewer = BipaiInfo.Create();
+        bipai.GetPaiInfo(ref viewer, viewerMask, viewerMask);
+
+        Assert.Equal(1, archive.PaiCnt);
+        Assert.Equal(1, viewer.PaiCnt);
+
+        bipai.GetPaiInfo(ref archive, allOpenMask, archiveMask);
+        bipai.GetPaiInfo(ref viewer, viewerMask, viewerMask);
+        Assert.Equal(0, archive.PaiCnt);
+        Assert.Equal(0, viewer.PaiCnt);
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PaiCode 追加テスト
 // 原典: CPaiCode.cpp — GetNextNumberPai / IsYaochupai / IsGreen etc.

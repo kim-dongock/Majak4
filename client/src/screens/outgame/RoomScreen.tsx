@@ -37,9 +37,9 @@ import { FORCED_HAN_RESULT, FORCE_HAN_RESULT_FOR_TEST } from '../ingame/forcedHa
 import KyoRes, { type KyoResData } from '../ingame/KyoRes'
 import { FORCED_KYO_RESULT, FORCE_KYO_RESULT_FOR_TEST } from '../ingame/forcedKyoResult'
 import MiniChannelWnd from './MiniChannelWnd'
-import { getDefaultAvatarUrl, getGameAvatarUrl } from '../../utils/resources'
+import { getDefaultAvatarUrl, getGameAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
 import { configureMajakSound, playMajakChat, playMajakSid, SID_EXIT, SID_JOIN } from '../../utils/majakSound'
-import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
+import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH, suspendGame } from '../../game/GameInstance'
 import { shouldRequestInitialGameResync } from '../../game/resyncState'
 import {
   GAME_AUTO_CONTROL_EVENT,
@@ -59,15 +59,19 @@ import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 const IMG = '/assets/images/game'
 const CUSTOM_BOARD_DEFAULT = 100000
 const CMD_USE_EMOTICON = 'mjkc24e'
+const CMD_YAKUMAN_BONUS = 'mjkc23e'
 const CMD_GAME_PLAY = 'playing'
 const ACT_PAS = 1
 const KEY_EMOTICON_ID = 'mjkk63e'
 const KEY_EMOTICON_AVATAR_ID = 'mjkk64e'
+const KEY_YAKU_NAME = 'mjkk62e'
 const EMOTICON_COUNT = 6
 const EMOTICON_FRAME_MS = 33
 const EMOTICON_LEGACY_IDS = [1, 3, 5, 7, 8, 11]
 const ABANDON_ROOM_STORAGE_KEY = 'majak:abandonRoomOnNextLobbyEnter'
 const GAME_STATUS_EVENT = 'majak:game-status'
+const GAME_EFFECT_WINDOW_EVENT = 'majak:game-effect-window'
+const GAME_EFFECT_SETTLE_MS = 80
 const GAME_FOCUS_CHAT_EVENT = 'majak:game-focus-chat'
 const GAME_SYNC_EVENT = 'majak:game-sync'
 const KYO_RESULT_ACTION_EVENT = 'majak:kyo-result-action'
@@ -737,6 +741,8 @@ export default function RoomScreen() {
   const [channelMembers, setChannelMembers] = useState<ChannelMemberEntry[]>([])
   const [showInviteList, setShowInviteList] = useState(false)
   const pendingInviteTargetRef = useRef<string | null>(null)
+  const pendingInviteTargetNameRef = useRef('')
+  const channelMembersRef = useRef<ChannelMemberEntry[]>([])
   const [selectedViewer, setSelectedViewer] = useState<PlayerInfoDialogData | null>(null)
   const [isReady,   setIsReady]   = useState(false)
   const [players,   setPlayers]   = useState<PlayerInfoType[]>([])
@@ -771,6 +777,7 @@ export default function RoomScreen() {
     waitStart: bgSkinSrc('mj_promptWaitStart'),
   }
   const [announceData, setAnnounceData] = useState<SlideAnnounceData | null>(null)
+  const [pendingAnnounces, setPendingAnnounces] = useState<SlideAnnounceData[]>([])
   const [inlineGame, setInlineGame] = useState(false)
   const [inlineGameLoading, setInlineGameLoading] = useState(false)
   const useResponsiveWaitingLayout = !inlineGame && layoutMode !== 'mobilePortrait'
@@ -836,6 +843,7 @@ export default function RoomScreen() {
   const gemGameGuideShownRef = useRef(false)
   const gemGameRef = useRef(0)
   const kyoResultTimerRef = useRef<number | null>(null)
+  const gameEffectUntilRef = useRef(0)
   const emoticonSeqRef = useRef(0)
   const beginGameLoad = (source: string, trigger = '') => {
     const current = gameLoadTimingRef.current
@@ -924,7 +932,7 @@ export default function RoomScreen() {
     gameNavigatedRef.current = false
     inlineGameLoadingVisibleRef.current = false
     logRejoinProbe('inline game ended', { reason })
-    destroyGame()
+    suspendGame()
     setInlineGameLoading(false)
     setInlineGame(false)
     setRoomActionPending(false)
@@ -991,6 +999,24 @@ export default function RoomScreen() {
       window.removeEventListener(GAME_LOAD_PROGRESS_EVENT, onLoadProgress)
     }
   }, [])
+
+  useEffect(() => {
+    const onGameEffectWindow = (event: Event) => {
+      const detail = (event as CustomEvent<{ durationMs?: number }>).detail ?? {}
+      const durationMs = Number(detail.durationMs ?? 0)
+      if (!Number.isFinite(durationMs) || durationMs <= 0) return
+      gameEffectUntilRef.current = Math.max(gameEffectUntilRef.current, performance.now() + durationMs)
+    }
+    window.addEventListener(GAME_EFFECT_WINDOW_EVENT, onGameEffectWindow)
+    return () => window.removeEventListener(GAME_EFFECT_WINDOW_EVENT, onGameEffectWindow)
+  }, [])
+
+  useEffect(() => {
+    if (announceData || pendingAnnounces.length === 0) return
+    const [next, ...remaining] = pendingAnnounces
+    setPendingAnnounces(remaining)
+    setAnnounceData(next)
+  }, [announceData, pendingAnnounces])
   useEffect(() => { viewersRef.current = viewers }, [viewers])
   useEffect(() => {
     if (!mobileIngameChatOpen) return
@@ -1091,8 +1117,10 @@ export default function RoomScreen() {
       skipInitialRoomEnter: true,
       requestInitialGameResync: gameReconnectActiveRef.current,
     })
-    return () => destroyGame()
+    return () => suspendGame()
   }, [inlineGame, roomId, customBoardId, customHaiId, ingameLayoutMode, locState.mode])
+
+  useEffect(() => () => destroyGame(), [])
 
   const nextMessageId = () => `${Date.now()}-${messageSeqRef.current++}`
 
@@ -1106,7 +1134,7 @@ export default function RoomScreen() {
     if (player?.name) return player.name
     const viewer = viewersRef.current.find(item => item.pix === pix)
     if (viewer?.name) return viewer.name
-    const member = channelMembers.find(item => item.pix === pix)
+    const member = channelMembersRef.current.find(item => item.pix === pix)
     return member?.name || pix
   }
 
@@ -1446,7 +1474,7 @@ export default function RoomScreen() {
         ? data.members as Array<Record<string, unknown>>
         : legacyList
       const myPix = useAuthStore.getState().player?.pix ?? ''
-      setChannelMembers(list
+      const availableMembers = list
         .map(m => ({
           pix: String(m.k3e ?? m.pix ?? m['member' + 'Id'] ?? ''),
           name:     String(m.k8e ?? m.nickname ?? m.name ?? ''),
@@ -1458,7 +1486,9 @@ export default function RoomScreen() {
           location: m.k12e != null || m.location != null ? String(m.k12e ?? m.location) : undefined,
           roomId:   m.k42e != null || m.roomId != null ? Number(m.k42e ?? m.roomId) : undefined,
         }))
-        .filter(m => m.pix && m.pix !== myPix && (m.roomId == null || m.roomId <= 0) && (!m.location || m.location === 'ロビー')))
+        .filter(m => m.pix && m.pix !== myPix && (m.roomId == null || m.roomId <= 0) && (!m.location || m.location === 'ロビー'))
+      channelMembersRef.current = availableMembers
+      setChannelMembers(availableMembers)
     }
     SignalR.on('c7e', onChannelMemberList)
 
@@ -1627,10 +1657,12 @@ export default function RoomScreen() {
         void exitRoomToLobby(seatPos)
         return
       }
+      const isViewerResult = locState.mode === 'view'
+        || !playersRef.current.some(player => player.playerId === myPix)
       setHanResFlags({
         hasTor: Boolean(data.hasTor),
         hasTip: Boolean(data.hasTip),
-        isViewer: !players.some(player => player.isMe),
+        isViewer: isViewerResult,
         isTournament: Boolean(data.isTournament),
       })
       gameEndStatusLines(data).forEach(line => {
@@ -1671,11 +1703,19 @@ export default function RoomScreen() {
           return { ...playerResult, trickTitle: player?.trickTitle }
         }),
       }
-      const delay = document.visibilityState === 'visible' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ? getLegacyKyoResultDelayMs(delayData)
-        : 0
-      if (delay > 0) kyoResultTimerRef.current = window.setTimeout(showKyoResult, delay)
-      else showKyoResult()
+      queueMicrotask(() => {
+        if (!mounted) return
+        const animationsEnabled = document.visibilityState === 'visible'
+          && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        const resultEffectDuration = animationsEnabled ? getLegacyKyoResultDelayMs(delayData) : 0
+        const activeEffectDuration = animationsEnabled
+          ? Math.max(0, gameEffectUntilRef.current - performance.now())
+          : 0
+        const effectDuration = Math.max(resultEffectDuration, activeEffectDuration)
+        const delay = effectDuration > 0 ? effectDuration + GAME_EFFECT_SETTLE_MS : 0
+        if (delay > 0) kyoResultTimerRef.current = window.setTimeout(showKyoResult, delay)
+        else showKyoResult()
+      })
     }
     SignalR.on(CMD_GAME_PLAY, onGamePlay)
 
@@ -1748,12 +1788,13 @@ export default function RoomScreen() {
       if (!pix || (pendingInviteTargetRef.current && pendingInviteTargetRef.current !== pix)) return
       pendingInviteTargetRef.current = null
       const yesNo = data.k64e
-      const displayName = displayNameForPix(pix)
+      const displayName = pendingInviteTargetNameRef.current || displayNameForPix(pix)
+      pendingInviteTargetNameRef.current = ''
       const text = yesNo === 'v7e'
-        ? `${displayName}さんがゲーム申し込みを承諾しました。`
+        ? `${displayName}さんがゲームへの招待を承諾しました。`
         : yesNo === 'v6e'
           ? `${displayName}さんから応答がありませんでした。`
-          : `${displayName}さんから応答がありませんでした。\n『また今 度誘ってね！』`
+          : `${displayName}さんがゲームへの招待を辞退しました。`
       const entry = { id: nextMessageId(), name: 'System', text, color: legacyPalette.notice }
       setChatLog(prev => appendRoomLog(prev, entry))
       setStatusLog(prev => appendRoomLog(prev, entry))
@@ -1913,16 +1954,18 @@ export default function RoomScreen() {
     const onGetTitle = (data: Record<string, unknown>) => {
       if (!mounted) return
       const count = asNumber(data[KEY_COUNT], 0)
+      const announcements: SlideAnnounceData[] = []
       for (let index = 0; index < count; index++) {
         const type = asNumber(data[`${KEY_TITLE_TYPE}${index}`], -1)
         const code = asNumber(data[`${KEY_TITLE_CODE}${index}`], 0)
         if (type !== 0 && type !== 1) continue
-        setAnnounceData({
+        announcements.push({
           type: type as 0 | 1,
           code,
           name: String(data[`${KEY_TITLE_NAME}${index}`] ?? ''),
         })
       }
+      if (announcements.length > 0) setPendingAnnounces(previous => [...previous, ...announcements])
     }
     SignalR.on('mjkc19e', onGetTitle)
 
@@ -1930,10 +1973,22 @@ export default function RoomScreen() {
     const onGetGem = (data: Record<string, unknown>) => {
       if (!mounted) return
       const count = asNumber(data[KEY_COUNT], 0)
-      setAnnounceData({ type: 2, code: count, name: '' })
+      setPendingAnnounces(previous => [...previous, { type: 2, code: count, name: '' }])
       setStatusLog(prev => appendRoomLog(prev, { id: nextMessageId(), name: '', text: `龍珠を${count}個獲得しました。`, color: legacyPalette.normal, bold: true }))
     }
     SignalR.on('mjkc22e', onGetGem)
+
+    const onYakumanBonus = (data: Record<string, unknown>) => {
+      if (!mounted) return
+      const pix = String(data.k3e ?? data.pix ?? '')
+      setPendingAnnounces(previous => [...previous, {
+        type: 3,
+        code: 0,
+        name: displayNameForPix(pix),
+        name2: String(data[KEY_YAKU_NAME] ?? data.yakuName ?? ''),
+      }])
+    }
+    SignalR.on(CMD_YAKUMAN_BONUS, onYakumanBonus)
 
     /**
      * smmc2e (Cmd.PushOkButton) — OKボタンプッシュ応答
@@ -2162,6 +2217,7 @@ export default function RoomScreen() {
         logRejoinProbe('send c18e view room', { roomActionKey, numericRoomId })
         startRoomActionPending('c18e', { roomActionKey, numericRoomId })
         await sendViewRoom()
+        await SignalR.send('c16e', {})
       } else {
         // 既存ルーム入室モード: c14e (G::commandEnterRoom)
         const numericRoomId = Number(roomId ?? 0)
@@ -2251,6 +2307,7 @@ export default function RoomScreen() {
       SignalR.off('mjkc6e',           onAutoEnterRoom)
       SignalR.off('mjkc19e',          onGetTitle)
       SignalR.off('mjkc22e',          onGetGem)
+      SignalR.off(CMD_YAKUMAN_BONUS,  onYakumanBonus)
       SignalR.off('smmc2e',           onOkResult)
       SignalR.off('c8e',             onRoomCreated)
       // WebSocket は LobbyScreen が管理する (同一サーバーなら切断しない)
@@ -2367,13 +2424,14 @@ export default function RoomScreen() {
   const onGameInvi = async (targetPix: string) => {
     setShowInviteList(false)
     pendingInviteTargetRef.current = targetPix
+    pendingInviteTargetNameRef.current = channelMembersRef.current.find(member => member.pix === targetPix)?.name ?? ''
     const pix = useAuthStore.getState().player?.pix ?? ''
     await SignalR.send('c22e', {
       k3e: pix,
       targetMemberNo: targetPix,
       targetPix,
       k42e: roomId ?? '',
-      k65e: '一緒に対戦しませんか？',
+      k65e: '一緒にプレイしませんか？',
       k64e: false,
     })
   }
@@ -2699,7 +2757,7 @@ export default function RoomScreen() {
           {responsivePromptText && <p className="majak-mobile-room-prompt-message" role="status">{responsivePromptText}</p>}
 
           <div className="majak-mobile-room-primary-actions">
-            <button type="button" onClick={() => { void exitRoomToLobby(me?.pos) }}>退室</button>
+            <button type="button" onClick={() => { void exitRoomToLobby(me?.pos, isViewerUser) }}>退室</button>
             {hasPlayerSeat && (
               <button
                 type="button"
@@ -2779,7 +2837,7 @@ export default function RoomScreen() {
           />
         )}
 
-        {displayedHanResData && (
+        {displayedHanResData && !announceData && pendingAnnounces.length === 0 && (
           <HanRes
             players={displayedHanResData}
             hasTor={hanResFlags.hasTor}
@@ -2803,10 +2861,11 @@ export default function RoomScreen() {
 
   if (inlineGame) {
     const displayedKyoResData = FORCE_KYO_RESULT_FOR_TEST ? FORCED_KYO_RESULT : kyoResData
-    const kyoResultOverlay = displayedKyoResData && !displayedHanResData ? (
+    const kyoResultOverlay = displayedKyoResData && !displayedHanResData && !announceData && pendingAnnounces.length === 0 ? (
       <KyoRes
         data={displayedKyoResData}
         myOdr={displayedKyoResData.players.find(player => player.pix === myPix)?.seatPos ?? 0}
+        isViewer={isViewerUser}
         canContinue={FORCE_KYO_RESULT_FOR_TEST || Boolean(kyoResultAction)}
         waitingForOtherPlayers={kyoResultSubmitted}
         playerProgress={kyoResultProgress}
@@ -2895,7 +2954,7 @@ export default function RoomScreen() {
           </div>
         )}
 
-        {selectedViewer && (
+        {selectedViewer && usesLegacyIngameSidebar && (
           <PlayerInfoWnd
             player={selectedViewer}
             onClose={() => setSelectedViewer(null)}
@@ -3008,7 +3067,7 @@ export default function RoomScreen() {
             src={bgSkinSrc('mj_btExitGame')}
             frameW={116} frameH={40}
             x={isViewerUser ? 558 : 435} y={647}
-            onClick={() => { void exitRoomToLobby(me?.pos) }}
+            onClick={() => { void exitRoomToLobby(undefined, true) }}
             title="退室"
             hidden={!usesLegacyIngameSidebar || !isViewerUser}
           />
@@ -3173,7 +3232,7 @@ export default function RoomScreen() {
                     <button type="button" onClick={() => onViewerRotate(3)}>回転3</button>
                     <button type="button" onClick={() => onViewerRotate(1)}>回転1</button>
                     <button type="button" disabled>捨て牌</button>
-                    <button type="button" onClick={() => { void exitRoomToLobby(me?.pos) }}>退室</button>
+                    <button type="button" onClick={() => { void exitRoomToLobby(undefined, true) }}>退室</button>
                     <button
                       type="button"
                       className={viewerHandHidden ? 'is-active' : undefined}
@@ -3261,8 +3320,41 @@ export default function RoomScreen() {
         {!inlineGameLoading && (
           <aside className={`majak-responsive-ingame-sidebar${tengokuBoardSkin ? ' is-tengoku-skin' : ''}`}>
             <div className="majak-responsive-ingame-sidebar__status" ref={statusLogRef}>
-              {statusLog.map(message => <div key={message.id} style={{ color: message.color ?? undefined, fontWeight: message.bold ? 'bold' : undefined }}>{message.text}</div>)}
+              {isViewerUser && statusLog.length === 0
+                ? <img className="majak-responsive-ingame-sidebar__brand" src="/assets/images/common/ico_big_majak2.jpg" alt="麻雀4" draggable={false} />
+                : statusLog.map(message => <div key={message.id} style={{ color: message.color ?? undefined, fontWeight: message.bold ? 'bold' : undefined }}>{message.text}</div>)}
             </div>
+            <section className="majak-responsive-ingame-sidebar__viewers" aria-label="観戦者一覧">
+              <header>
+                <span>観戦者</span>
+                <strong>{viewers.length}</strong>
+              </header>
+              <div className="majak-responsive-ingame-sidebar__viewer-list majak-mobile-lobby-members">
+                {viewers.length === 0
+                  ? <span className="majak-responsive-ingame-sidebar__viewer-empty">観戦者はいません</span>
+                  : viewers.map(viewer => {
+                    const fallback = getDefaultAvatarUrl(viewer.sex === 'F' || viewer.sex === 'female' ? 'female' : 'male')
+                    return (
+                      <div key={viewer.pix} className={`majak-mobile-lobby-member${selectedViewer?.pix === viewer.pix ? ' is-selected' : ''}`}>
+                        <div className="majak-mobile-lobby-member__row">
+                          <button type="button" className="majak-mobile-lobby-member__select" title={viewer.name || viewer.pix} onClick={() => setSelectedViewer(viewer)}>
+                            <img
+                              src={viewer.avatarId ? getShortAvatarUrl(viewer.avatarId) : fallback}
+                              alt=""
+                              onError={event => { event.currentTarget.src = fallback }}
+                            />
+                            <span className="majak-mobile-lobby-member__identity">
+                              <span className="majak-mobile-lobby-member__name">{viewer.name || viewer.pix}</span>
+                              <span className="majak-mobile-lobby-member__title">{viewer.slevel || viewer.dan || '庶民'}</span>
+                              <span className="majak-mobile-lobby-member__location">観戦中</span>
+                            </span>
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            </section>
             <div className="majak-responsive-ingame-sidebar__chat" ref={chatLogRef}>
               {chatLog.map(message => (
                 <div key={message.id} style={{ color: message.color ?? undefined, fontWeight: message.bold ? 'bold' : undefined }}>
@@ -3274,7 +3366,7 @@ export default function RoomScreen() {
               <input ref={chatInputRef} value={chatText} onChange={event => setChatText(event.target.value)} onKeyDown={onChatKeyDown} maxLength={80} disabled={chatInputDisabled} />
               <button type="button" onClick={() => { void sendChat() }} disabled={chatInputDisabled || !chatText.trim()}>送信</button>
             </div>
-            <div className="majak-responsive-ingame-sidebar__actions">
+            <div className={`majak-responsive-ingame-sidebar__actions${isViewerUser ? ' is-viewer' : ''}`}>
               {hasInlineGamePlayerControls && (
                 <>
                   <button type="button" onClick={openInviteList} disabled={autoMatchingChannel}>招待</button>
@@ -3284,9 +3376,18 @@ export default function RoomScreen() {
                   <button type="button" className={autoControl.prox ? 'is-active' : undefined} onClick={onSetProx} disabled={!autoControlEnabled}>代打ち</button>
                 </>
               )}
+              {isViewerUser && (
+                <>
+                  <button type="button" onClick={() => onViewerRotate(3)}>左回転</button>
+                  <button type="button" onClick={() => onViewerRotate(1)}>右回転</button>
+                  <button type="button" className={viewerHandHidden ? 'is-active' : undefined} onClick={onViewerHandToggle} disabled={!viewerHandOpenEnabled}>手牌</button>
+                  <button type="button" onClick={() => { void exitRoomToLobby(undefined, true) }}>退室</button>
+                </>
+              )}
             </div>
           </aside>
         )}
+        {selectedViewer && <PlayerInfoWnd player={selectedViewer} onClose={() => setSelectedViewer(null)} />}
         {kyoResultOverlay}
         {showInviteList && (
           <MiniChannelWnd
@@ -3645,7 +3746,7 @@ export default function RoomScreen() {
         src={bgSkinSrc('mj_btExitGame')}
         frameW={116} frameH={40}
         x={isViewerUser ? 558 : 435} y={647}
-        onClick={() => { void exitRoomToLobby(me?.pos) }}
+        onClick={() => { void exitRoomToLobby(me?.pos, isViewerUser) }}
         title="退室"
       />
       <SpriteButton
@@ -3775,7 +3876,7 @@ export default function RoomScreen() {
         />
       )}
 
-      {displayedHanResData && (
+      {displayedHanResData && !announceData && pendingAnnounces.length === 0 && (
         <HanRes
           players={displayedHanResData}
           hasTor={hanResFlags.hasTor}

@@ -150,6 +150,15 @@ export default function PaifWnd() {
   const [isGraphVisible, setIsGraphVisible] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileViewOpen, setMobileViewOpen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement))
+
+  useEffect(() => {
+    const syncFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement))
+    document.addEventListener('fullscreenchange', syncFullscreenState)
+    return () => {
+      document.removeEventListener('fullscreenchange', syncFullscreenState)
+    }
+  }, [])
 
   useEffect(() => {
     const syncGraphVisibility = (event: Event) => {
@@ -441,7 +450,7 @@ export default function PaifWnd() {
   )
 
   const desktopReplay = (
-    <div className="majak-responsive-desktop-frame majak-responsive-paifu__frame">
+    <div className={`majak-responsive-desktop-frame majak-responsive-paifu__frame${isFullscreen ? ' is-fullscreen' : ''}`}>
       <div className="majak-responsive-ingame-shell">
         <div className="majak-responsive-ingame-playfield">
           <div className="majak-responsive-ingame-world">

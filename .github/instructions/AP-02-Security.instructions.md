@@ -31,7 +31,7 @@ description: "Google認証、会員登録、ゲームJWT、Refresh Cookie、memb
 - ニックネームはtrim後4〜16文字で重複不可、性別は `M` / `F`、出生年は1900年から現在年、アバターは性別ごとの `AvatarCatalog` で検証する。
 - `GamePlayerRepository.RegisterGoogleAsync` が `player_account`、`player_wallet`、`player_profile` を同一登録フローで作成し、DBが新しい `member_no` を採番する。
 - 登録処理は同じGoogle `sub` に対して冪等に扱い、既存アカウントがあれば新しい会員を重複作成しない。
-- Web登録は規約同意済みとして作成するが、`account_status=0` の承認待ちは維持する。停止中 `account_status=2` を迂回させてはならない。
+- Web登録は規約同意済みかつ `account_status=1`（プレイ可能）として作成する。停止中 `account_status=2` を迂回させてはならない。
 - `GET /auth/check-nickname` は補助確認であり、登録時にも必ずサーバー側で再検証する。
 
 ### 1-3. レガシーhange互換
@@ -79,6 +79,7 @@ description: "Google認証、会員登録、ゲームJWT、Refresh Cookie、memb
 ### 3-3. 信頼境界
 
 - 自分自身を変更するREST APIはrequest body/queryの会員IDを使わず、JWTの `auth.MemberNo` を使う。
+- `PATCH /api/player/account-profile` はJWTの `auth.MemberNo` で本人を確定し、出生年と現在の性別に一致するアバターだけを変更できる。`member_no`、`pix`、性別、ニックネームはリクエストから受け取らない。
 - API互換上 `pix` / `memberNo` を受け取る場合も、JWTの `auth.Pix` または `auth.MemberNo`、`PlayerSessionService` の対応関係と一致することを確認する。不一致は403とする。
 - SignalRコマンドは `CommandContext.AuthMemberNo` / `AuthPix` を使い、ペイロードのIDだけから本人を確定しない。
 - `ResolveMemberNo` は既知の `pix` を内部IDへ解決する補助であり、未認証の任意文字列を本人証明に昇格させる関数ではない。

@@ -23,6 +23,10 @@ export function shouldRequestInitialGameResync(reconnectActive: boolean, receive
   return reconnectActive && !receivedFreshAutoStart
 }
 
+export function shouldUsePendingInitPaiInfo(hasHistoryInitPaiInfo: boolean, hasPendingInitPaiInfo: boolean): boolean {
+  return !hasHistoryInitPaiInfo && hasPendingInitPaiInfo
+}
+
 export function restoreVisiblePaiCodes(target: Map<number, number>, tiles: readonly VisiblePaiCode[]): void {
   tiles.forEach(tile => {
     if (tile.bipaiIndex !== undefined && tile.bipaiIndex >= 0) target.set(tile.bipaiIndex, tile.code)

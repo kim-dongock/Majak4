@@ -240,7 +240,7 @@ function MiniMemberList({
         })}
       </div>
 
-      <SpriteButton src={`${MAJAK_IMG}/mj_btn_vs.png`} frameW={85} frameH={29} x={vsButtonX} y={buttonY} onClick={() => selectedMember && onReqGame?.(selectedMember.pix)} disabled={!canUseSelected || !onReqGame} title="対戦申込" />
+      <SpriteButton src={`${MAJAK_IMG}/mj_btn_vs.png`} frameW={85} frameH={29} x={vsButtonX} y={buttonY} onClick={() => selectedMember && onReqGame?.(selectedMember.pix)} disabled={!canUseSelected || !onReqGame} title="ゲームに招待" />
       <SpriteButton src={`${MAJAK_IMG}/mj_btn_profile.png`} frameW={82} frameH={26} x={profileButtonX} y={buttonY} onClick={() => selectedMember && onViewProfile?.(selectedMember.pix)} disabled={!canUseSelected || !onViewProfile} title="プロフィール" />
       <SpriteButton src={`${MAJAK_IMG}/mj_btn_cancel.png`} frameW={85} frameH={29} x={closeButtonX} y={buttonY} onClick={onClose} title="閉じる" />
     </div>
@@ -265,11 +265,11 @@ function InviteMemberList({
   const selectedMember = members.find(member => member.pix === selectedPix)
 
   return (
-    <div className="majak-invite-dialog" role="dialog" aria-modal="true" aria-label="対戦を申し込む">
+    <div className="majak-invite-dialog" role="dialog" aria-modal="true" aria-label="一緒にプレイするメンバーを招待">
       <header className="majak-invite-dialog__header">
         <div>
-          <h2>対戦を申し込む</h2>
-          <p>ロビーにいるメンバーを選択</p>
+          <h2>一緒にプレイ</h2>
+          <p>招待するメンバーを選択</p>
         </div>
         <button type="button" className="majak-invite-dialog__close" onClick={onClose} aria-label="閉じる">×</button>
       </header>
@@ -297,7 +297,7 @@ function InviteMemberList({
       </div>
       <footer className="majak-invite-dialog__actions">
         <button type="button" onClick={() => selectedMember && onViewProfile?.(selectedMember.pix)} disabled={!selectedMember || !onViewProfile}>プロフィール</button>
-        <button type="button" className="majak-invite-dialog__submit" onClick={() => selectedMember && onReqGame?.(selectedMember.pix)} disabled={!selectedMember || !onReqGame}>対戦申込</button>
+        <button type="button" className="majak-invite-dialog__submit" onClick={() => selectedMember && onReqGame?.(selectedMember.pix)} disabled={!selectedMember || !onReqGame}>ゲームに招待</button>
         <button type="button" onClick={onClose}>閉じる</button>
       </footer>
     </div>

@@ -2289,6 +2289,17 @@ public class GameLogicService
 
     private async Task GameReportProcessCoreAsync(GameRoom room, CommandContext ctx)
     {
+        var reportTimer = Stopwatch.StartNew();
+        void LogReportStage(string stage) => _log?.LogInformation(
+            "[GameReportTiming] {Stage}. roomId={RoomId} elapsedMs={ElapsedMs}",
+            stage,
+            room.RoomId,
+            reportTimer.ElapsedMilliseconds);
+        void LogReportPhase(string phase, Stopwatch phaseTimer) => _log?.LogInformation(
+            "[GameReportTiming] {Phase}. roomId={RoomId} durationMs={DurationMs}",
+            phase,
+            room.RoomId,
+            phaseTimer.ElapsedMilliseconds);
 
         var report = await MakeGameReportAsync(room, ctx);
         if (report == null)
@@ -2296,6 +2307,7 @@ public class GameLogicService
             room.ResetGameReportProcess();
             return;
         }
+        LogReportStage("report-calculated");
 
 
         CalcMoney(room, report);
@@ -2332,11 +2344,13 @@ public class GameLogicService
         // ここで UserResult.GemCount に獲得量を保持し、結果ペイロードでは最終保有数を送る、E
         await SendGetGemAsync(room, report, ctx);
 
-        // プレイヤー状態を更新してメモリに反映
-        foreach (var u in report.Users.Where(u => u != null))
+        // Each player uses an independent DB context and transaction. Keep each player's
+        // update order, but do not make the other three players wait for it.
+        async Task<string?> PersistPlayerResultAsync(GameReport.UserResult u)
         {
-            var p = _session.GetByMember(u!.MemberNo);
-            if (p == null) continue;
+            var playerPersistenceTimer = Stopwatch.StartNew();
+            var p = _session.GetByMember(u.MemberNo);
+            if (p == null) return null;
             var resultUpdate = BuildResultUpdatePlayer(p, u, room);
             long moneyBeforeResult = p.GamMoney;
             long grossSettlement = checked(u.MoneyChange + u.DealerFee);
@@ -2427,19 +2441,33 @@ public class GameLogicService
                 if (room.IsGradeChannel)
                     await UpdateGradeResultSideEffectsAsync(p, u);
             }
+            LogReportPhase($"player-persistence rank={u.Ranking}", playerPersistenceTimer);
 
 
+            bool titleAwarded = false;
             if (!room.IsTrainingChannel)
             {
                 await AwardGameIconsAsync(p, u);
-                await CheckTitleClearAsync(p, ctx);
+                titleAwarded = await CheckTitleClearAsync(p, ctx);
             }
+            LogReportPhase($"player-awards rank={u.Ranking}", playerPersistenceTimer);
+            return titleAwarded ? p.Pix : null;
         }
+
+        var playerResultTasks = report.Users
+            .Where(u => u != null)
+            .Select(u => PersistPlayerResultAsync(u!))
+            .ToArray();
+        var titleAnnouncementPixes = (await Task.WhenAll(playerResultTasks))
+            .OfType<string>()
+            .ToArray();
+        LogReportStage("player-results-persisted");
 
 
 
         if (room.IsTournamentChannel && room.TournamentSeqNo > 0)
         {
+            var tournamentTimer = Stopwatch.StartNew();
             var gradePlayerMemberNos = report.Users
                 .OrderBy(u => u?.Ranking ?? 99)
                 .Where(u => u != null)
@@ -2459,28 +2487,11 @@ public class GameLogicService
             await _tournament.ReportMatchEndAsync(
                 room.TournamentSeqNo, room.TournamentSubId,
                 gradePlayerMemberNos, gradeMemberNos, gradePointSums);
+            LogReportPhase("tournament-result", tournamentTimer);
         }
-
-        if (!room.IsTrainingChannel)
-        {
-            try
-            {
-                await _historyRepo.InsertGameHistAsync(report);
-            }
-            catch (Exception ex)
-            {
-                _log?.LogWarning(ex, "MySQL game history insert failed but game report continues. roomId={RoomId}", room.RoomId);
-            }
-        }
-
-        await ApplyPlayParkMissionsAsync(report);
-        await ApplyMissionEventCmsAsync(room, report, DateTime.Now);
-        await ApplyResultMissionsAsync(room, report, DateTime.Now);
-        await ApplyUsedBadaiFreeItemsAsync(report);
-        await ApplyUsedChanceItemsAsync(report);
-
 
         var resultPayload = BuildGameResultPayload(room, report);
+        resultPayload["titleAnnouncementPixes"] = titleAnnouncementPixes;
 
         if (room.IsTournamentChannel && room.TournamentSeqNo > 0)
         {
@@ -2498,6 +2509,41 @@ public class GameLogicService
         await ctx.Clients.Group($"chanel_{room.ChannelId}")
             .SendAsync(Cmd.GameReport, resultPayload);
         room.LastGameReportPayload = resultPayload;
+        LogReportStage("game-report-sent");
+
+        // These writes do not affect the final result payload. Run them after the
+        // report is visible so history and mission persistence cannot delay the UI.
+        if (!room.IsTrainingChannel)
+        {
+            var historyTimer = Stopwatch.StartNew();
+            try
+            {
+                await _historyRepo.InsertGameHistAsync(report);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "MySQL game history insert failed but game report continues. roomId={RoomId}", room.RoomId);
+            }
+            LogReportPhase("game-history", historyTimer);
+        }
+
+        var playParkMissionTimer = Stopwatch.StartNew();
+        await ApplyPlayParkMissionsAsync(report);
+        LogReportPhase("play-park-missions", playParkMissionTimer);
+
+        var missionEventTimer = Stopwatch.StartNew();
+        await ApplyMissionEventCmsAsync(room, report, DateTime.Now);
+        LogReportPhase("mission-event", missionEventTimer);
+
+        var resultMissionTimer = Stopwatch.StartNew();
+        await ApplyResultMissionsAsync(room, report, DateTime.Now);
+        LogReportPhase("result-missions", resultMissionTimer);
+
+        var itemConsumptionTimer = Stopwatch.StartNew();
+        await ApplyUsedBadaiFreeItemsAsync(report);
+        await ApplyUsedChanceItemsAsync(report);
+        LogReportPhase("item-consumption", itemConsumptionTimer);
+        LogReportStage("history-and-missions-completed");
         if (!room.IsTrainingChannel && _paifuFiles != null)
         {
             try
@@ -2564,11 +2610,13 @@ public class GameLogicService
     private async Task ApplyPlayParkMissionsAsync(GameReport report)
     {
         var now = DateTime.Now;
-        foreach (var user in report.Users.Where(u => u != null))
+        var missionTasks = report.Users
+            .Where(user => user != null)
+            .Select(async user =>
         {
-            if (user!.MemberNo == TournamentConst.NpcMemberNo) continue;
+            if (user!.MemberNo == TournamentConst.NpcMemberNo) return;
             var player = _session.GetByMember(user.MemberNo);
-            if (player == null) continue;
+            if (player == null) return;
 
             if (player.PlayParkDailyMissionAt?.Date != now.Date)
             {
@@ -2593,7 +2641,8 @@ public class GameLogicService
                 if (attr.Ok)
                     player.PlayParkAttrMission = attr.RetCount;
             }
-        }
+            });
+            await Task.WhenAll(missionTasks);
     }
 
     private async Task UpdateGradeResultSideEffectsAsync(MajakPlayer player, GameReport.UserResult user)
@@ -2615,11 +2664,12 @@ public class GameLogicService
         if (!hanchan || now >= GameConst.MissionEventCmsEndTime)
             return;
 
-        foreach (var user in report.Users.Where(u => u != null))
+        var missionTasks = report.Users
+            .Where(user => user != null)
+            .Select(async user =>
         {
             var player = _session.GetByMember(user!.MemberNo);
-            if (player == null) continue;
-            if (player.MissionEventCmsClearAt?.Date == now.Date) continue;
+            if (player == null || player.MissionEventCmsClearAt?.Date == now.Date) return;
 
             if (await _playerRepo.CallPcMissionEventCmsAsync(
                     player.MemberNo,
@@ -2628,7 +2678,8 @@ public class GameLogicService
             {
                 player.MissionEventCmsClearAt = now;
             }
-        }
+        });
+        await Task.WhenAll(missionTasks);
     }
 
     private async Task ApplyResultMissionsAsync(GameRoom room, GameReport report, DateTime now)
@@ -2639,10 +2690,12 @@ public class GameLogicService
         int progressCount = tonpu ? 1 : 2;
         int casualCount = tonpu ? CasualPointTonpuRate : CasualPointHanchanRate;
 
-        foreach (var user in report.Users.Where(user => user != null))
+        var missionTasks = report.Users
+            .Where(user => user != null)
+            .Select(async user =>
         {
             var player = _session.GetByMember(user!.MemberNo);
-            if (player == null) continue;
+            if (player == null) return;
 
             await SafeSetDailyMissionAsync(player.MemberNo, DailyMissionConditionPlay, progressCount);
 
@@ -2659,7 +2712,8 @@ public class GameLogicService
                 casualSubType,
                 casualCount,
                 now);
-        }
+            });
+            await Task.WhenAll(missionTasks);
     }
 
     private async Task SafeSetDailyMissionAsync(string memberNo, int conditionType, int progressIncrement)
@@ -2681,31 +2735,37 @@ public class GameLogicService
 
     private async Task ApplyUsedBadaiFreeItemsAsync(GameReport report)
     {
-        foreach (var user in report.Users.Where(user => user != null))
+        var itemUpdateTasks = report.Users
+            .Where(user => user != null)
+            .Select(async user =>
         {
             var player = _session.GetByMember(user!.MemberNo);
-            if (player == null || string.IsNullOrEmpty(player.UsedBadaiFreeItem)) continue;
+            if (player == null || string.IsNullOrEmpty(player.UsedBadaiFreeItem)) return;
 
             var task = _playerRepo.UpdateItemQuantityAsync(player, player.MemberNo, player.UsedBadaiFreeItem, -1);
             if (task != null) await task;
-        }
+        });
+        await Task.WhenAll(itemUpdateTasks);
     }
 
     private async Task ApplyUsedChanceItemsAsync(GameReport report)
     {
-        foreach (var user in report.Users.Where(user => user != null))
+        var itemUpdateTasks = report.Users
+            .Where(user => user != null)
+            .Select(async user =>
         {
             var player = _session.GetByMember(user!.MemberNo);
-            if (player == null || !player.ReserveChanceItem) continue;
+            if (player == null || !player.ReserveChanceItem) return;
             if (!player.MajItems.Any(item => item.ItemCode == ChanceItemCode && item.IsValid && item.Qty > 0))
             {
                 player.ReserveChanceItem = false;
-                continue;
+                return;
             }
 
             var task = _playerRepo.UpdateItemQuantityAsync(player, player.MemberNo, ChanceItemCode, -1);
             if (task != null) await task;
-        }
+        });
+        await Task.WhenAll(itemUpdateTasks);
     }
 
     private void ClearReservedChanceItems(GameReport report)
@@ -4090,7 +4150,8 @@ public class GameLogicService
 
 
         var archiveBuf = Engine.BipaiInfo.Create();
-        room.Engine.GetBipai(ref archiveBuf, (1 << (MajakConst.PlayerMaxCount + 1)) - 1, 1 << MajakConst.PlayerMaxCount);
+        int archiveSkipMask = 1 << (MajakConst.PlayerMaxCount + 1);
+        room.Engine.GetBipai(ref archiveBuf, (1 << (MajakConst.PlayerMaxCount + 1)) - 1, archiveSkipMask);
         var archivePayload = archiveBuf.PaiCnt > 0
             ? new
             {
@@ -4467,7 +4528,7 @@ public class GameLogicService
 
 
     /// </summary>
-    private async Task CheckTitleClearAsync(MajakPlayer player, CommandContext ctx)
+    private async Task<bool> CheckTitleClearAsync(MajakPlayer player, CommandContext ctx)
     {
         var r  = player.RegularRecord;
         var hi = player.HiClassRecord;
@@ -4621,7 +4682,7 @@ public class GameLogicService
             }
         }
 
-        if (titlesToAdd.Count == 0) return;
+        if (titlesToAdd.Count == 0) return false;
 
         try
         {
@@ -4629,7 +4690,7 @@ public class GameLogicService
         }
         catch
         {
-            return;
+            return false;
         }
 
         foreach (var title in titlesToAdd)
@@ -4658,6 +4719,8 @@ public class GameLogicService
 
         await ctx.Clients.Client(player.ConnectionId)
             .SendAsync(Cmd.GetTitle, packet);
+
+        return true;
 
         void AddTrickTitle(int atr, int lev)
         {

@@ -66,6 +66,16 @@ describe('ResponsiveKyoResult', () => {
     expect(html).toContain('disabled=""')
   })
 
+  it('shows spectators a waiting message without a continuation button', () => {
+    const html = renderToStaticMarkup(
+      <ResponsiveKyoResult data={DRAW_RESULT} isViewer canContinue={false} onClose={vi.fn()} />,
+    )
+
+    expect(html).toContain('対局者の確認を待っています')
+    expect(html).not.toContain('<button')
+    expect(html).not.toContain('続ける')
+  })
+
   it('shows all players and marks only confirmed continuations as complete', () => {
     const html = renderToStaticMarkup(
       <ResponsiveKyoResult

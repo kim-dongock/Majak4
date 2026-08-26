@@ -61,6 +61,8 @@ let gameInstance: Phaser.Game | null = null
 /** リプレイモード設定 — Phaser シーンが参照できるよう module スコープで保持 */
 let _gameOptions: CreateGameOptions = {}
 let gameParent: HTMLElement | null = null
+let gameHost: HTMLDivElement | null = null
+let parkingHost: HTMLDivElement | null = null
 
 export function getGameOptions(): CreateGameOptions { return _gameOptions }
 
@@ -92,14 +94,48 @@ function sameGameOptions(a: CreateGameOptions, b: CreateGameOptions): boolean {
     a.paifu === b.paifu
 }
 
+function sameResourceOptions(a: CreateGameOptions, b: CreateGameOptions): boolean {
+  return a.layoutMode === b.layoutMode &&
+    a.customBgId === b.customBgId &&
+    a.customBoardType === b.customBoardType &&
+    a.customHaiId === b.customHaiId
+}
+
+function ensureGameHost(parent: HTMLElement): HTMLDivElement {
+  gameHost ??= document.createElement('div')
+  gameHost.style.width = '100%'
+  gameHost.style.height = '100%'
+  if (gameHost.parentElement !== parent) parent.appendChild(gameHost)
+  return gameHost
+}
+
+function parkGameHost(): void {
+  if (!gameHost || typeof document === 'undefined') return
+  parkingHost ??= document.createElement('div')
+  parkingHost.hidden = true
+  if (!parkingHost.parentElement) document.body.appendChild(parkingHost)
+  if (gameHost.parentElement !== parkingHost) parkingHost.appendChild(gameHost)
+  gameParent = null
+}
+
 export function createGame(parent: HTMLElement, options: CreateGameOptions = {}): Phaser.Game {
-  if (gameInstance && (gameParent !== parent || !sameGameOptions(_gameOptions, options))) {
+  if (gameInstance && !sameResourceOptions(_gameOptions, options)) {
     destroyGame()
   }
 
+  const optionsChanged = !sameGameOptions(_gameOptions, options)
   _gameOptions = options
   if (gameInstance) {
+    ensureGameHost(parent)
+    gameParent = parent
+    gameInstance.loop.wake()
+    gameInstance.scale.refresh()
     gameInstance.registry.set(GAME_OPTIONS_REGISTRY_KEY, _gameOptions)
+    if (optionsChanged || !gameInstance.scene.isActive('GameScene')) {
+      gameInstance.scene.stop('UIScene')
+      gameInstance.scene.stop('GameScene')
+      gameInstance.scene.start('GameScene', _gameOptions)
+    }
     return gameInstance
   }
 
@@ -107,11 +143,12 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
   const initialWidth = resizeToParent ? Math.max(1, parent.clientWidth) : GAME_WIDTH
   const initialHeight = resizeToParent ? Math.max(1, parent.clientHeight) : GAME_HEIGHT
 
+  const host = ensureGameHost(parent)
   gameInstance = new Phaser.Game({
     type: Phaser.AUTO,
     width: initialWidth,
     height: initialHeight,
-    parent,
+    parent: host,
     backgroundColor: options.layoutMode === 'desktop' ? '#000000' : 'rgba(0,0,0,0)',
     transparent: options.layoutMode !== 'desktop',
     disableContextMenu: true,
@@ -140,6 +177,15 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
   return gameInstance
 }
 
+export function suspendGame(): void {
+  if (!gameInstance) return
+  stopMajakBgm()
+  gameInstance.scene.stop('UIScene')
+  gameInstance.scene.stop('GameScene')
+  parkGameHost()
+  gameInstance.loop.sleep()
+}
+
 export function destroyGame(): void {
   if (gameInstance) {
     stopMajakBgm()
@@ -151,5 +197,9 @@ export function destroyGame(): void {
     gameInstance = null
     _gameOptions = {}
     gameParent = null
+    gameHost?.remove()
+    parkingHost?.remove()
+    gameHost = null
+    parkingHost = null
   }
 }

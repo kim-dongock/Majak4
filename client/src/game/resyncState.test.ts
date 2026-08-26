@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canCompleteGameResync, restoreVisiblePaiCodes, shouldRequestInitialGameResync, type GameResyncGate } from './resyncState'
+import { canCompleteGameResync, restoreVisiblePaiCodes, shouldRequestInitialGameResync, shouldUsePendingInitPaiInfo, type GameResyncGate } from './resyncState'
 
 const COMPLETE_GATE: GameResyncGate = {
   restorePending: true,
@@ -58,5 +58,15 @@ describe('shouldRequestInitialGameResync', () => {
 
   it('does not request a snapshot for a normal initial entry', () => {
     expect(shouldRequestInitialGameResync(false, true)).toBe(false)
+  })
+})
+
+describe('shouldUsePendingInitPaiInfo', () => {
+  it('prefers the historical initial PaiInfo over a current-state snapshot', () => {
+    expect(shouldUsePendingInitPaiInfo(true, true)).toBe(false)
+  })
+
+  it('uses a pending snapshot only when history has no initial PaiInfo', () => {
+    expect(shouldUsePendingInitPaiInfo(false, true)).toBe(true)
   })
 })

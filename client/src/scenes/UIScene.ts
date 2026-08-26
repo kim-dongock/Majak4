@@ -134,6 +134,19 @@ function measureHudTextWidth(text: string, fontSize: number): number {
   return context.measureText(text).width
 }
 
+function measureHudGlyphCenterOffset(text: string, fontSize: number): number {
+  if (!text || typeof document === 'undefined') return fontSize / 2
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d')
+  if (!context) return fontSize / 2
+  context.font = `bold ${fontSize}px ${getUiFontFamily()}`
+  const metrics = context.measureText(text)
+  const fontAscent = metrics.fontBoundingBoxAscent || fontSize * 0.8
+  const ascent = metrics.actualBoundingBoxAscent || fontAscent
+  const descent = metrics.actualBoundingBoxDescent || 0
+  return fontAscent - (ascent - descent) / 2
+}
+
 function boardLocalPoint(point: HudPoint): HudPoint {
   const offset = responsiveDesktopCenterOffset(UI_LAYOUT_MODE)
   return { x: BOARD_X + point.x + offset.x, y: BOARD_Y + point.y + offset.y }
@@ -194,8 +207,13 @@ const DESKTOP_HUD_METRICS: HudMetrics = {
 }
 
 const DESKTOP_PLAYER_AVATAR_SIZE = { width: 60, height: 112 } as const
-const RESPONSIVE_DESKTOP_TITLE_OFFSET_Y = -12
+const RESPONSIVE_DESKTOP_TITLE_OFFSET_Y = -28
 const RESPONSIVE_DESKTOP_PLAYER_INFO_OFFSET_Y = 12
+const DESKTOP_HUD_TEXTURE_SIZE = 128
+const DESKTOP_HUD_HEADER_INSET = 3
+const DESKTOP_HUD_HEADER_WIDTH = 122
+const DESKTOP_HUD_HEADER_HEIGHT = 22
+const RESPONSIVE_DESKTOP_INACTIVE_TURN_STRIP_ALPHA = 0.35
 const MOBILE_HUD_METRICS: HudMetrics = {
   avatar: { width: MOBILE_HUD_ICON_WIDTH, height: MOBILE_HUD_ICON_HEIGHT },
   nameWidth: 132,
@@ -207,7 +225,6 @@ const MOBILE_HUD_METRICS: HudMetrics = {
 }
 
 let HUD_METRICS: HudMetrics = DESKTOP_HUD_METRICS
-
 function avatarTextBounds(loc: number) {
   const pos = odrBoxPos(loc)
   if (isMobileIngameLayout(UI_LAYOUT_MODE)) {
@@ -455,6 +472,12 @@ export default class UIScene extends Phaser.Scene {
     this.isViewer = Boolean(data.isViewer)
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
+    this.activeTurnOdr = null
+    this.waremeOdr = null
+    this.lastMobileHudLayoutKey = ''
+    this.reachedOdr.clear()
+    this.replayGraphVisible = false
+    this.graphHiddenHudObjects = []
     applyUiLayout(this.layoutMode)
   }
 
@@ -620,7 +643,7 @@ export default class UIScene extends Phaser.Scene {
         if (data.dice && data.dice.length >= 2) this.updateDice(data.dice)
         if (data.waremeOdr !== undefined) this.updateWareme(data.waremeOdr)
       }
-    })
+    }, this)
 
     gs.events.on('viewOdrChange', (data: { viewOdr: number; players: PlayerHudState[] }) => {
       this.myOdr = data.viewOdr
@@ -628,47 +651,53 @@ export default class UIScene extends Phaser.Scene {
       if (this.activeTurnOdr !== null) this.updateTurnMarks(this.activeTurnOdr)
       if (this.waremeOdr !== null) this.updateWareme(this.waremeOdr)
       this.updateReachTexts()
-    })
+    }, this)
 
     /* ターン切り替え (IniTurn / 捨て牌後 相当) */
     gs.events.on('turnChange', (data: { odr: number; timeLimit?: number; viewOdr?: number }) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.traceUiFlow('turnChange event', data)
       this.updateTurnMarks(data.odr)
-    })
+    }, this)
 
     gs.events.on('actionPromptStart', (data: ActionPromptTimerData) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.traceUiFlow('actionPromptStart event', { ...data })
       if (Number.isFinite(data.timeLimit) && Number(data.timeLimit) > 0) this.startTimer(data)
-    })
+    }, this)
 
     gs.events.on('actionPromptEnd', (data: { viewOdr?: number }) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.traceUiFlow('actionPromptEnd event', data)
       this.stopTimer()
-    })
+    }, this)
 
     /* リーチ */
     gs.events.on('reach', (data: { odr: number; viewOdr?: number }) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.reachedOdr.add(data.odr)
       if (!this.playLegacyReachDeclaration(data.odr)) this.updateReachTexts()
-    })
+    }, this)
 
     gs.events.on('callAction', (data: { odr: number; frame: number; avatarUrl: string; fallbackAvatarUrl: string; costumeAction?: LegacyCostumeAction }) => {
       this.showCallAction(data)
-    })
+    }, this)
 
     gs.events.on('titleSkill', (data: { odr: number; element: string; level: 1 | 2; delays: number[]; delay?: number }) => {
       this.showTitleSkill(data)
-    })
+    }, this)
 
     this.time.addEvent({ delay: 100, loop: true, callback: () => this.advanceCostumeAnimations() })
 
     /* 局結果 → CMJKyoRes ダイアログへ (将来実装) */
     gs.events.on('kyoResult', (_data: Record<string, string>) => {
       this.stopTimer()
+    }, this)
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      for (const eventName of ['stateUpdate', 'viewOdrChange', 'turnChange', 'actionPromptStart', 'actionPromptEnd', 'reach', 'callAction', 'titleSkill', 'kyoResult']) {
+        gs.events.off(eventName, undefined, this)
+      }
     })
   }
 
@@ -754,6 +783,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private callActionPoint(loc: number): HudPoint {
+    if (this.layoutMode === 'responsiveDesktop') return this.responsiveDesktopCallActionPoint(loc)
     const point = isMobileIngameLayout(this.layoutMode) ? this.mobileCallActionPoint(loc) : seatEffectPoint(CALL_POS[loc], loc)
     if (!isMobileIngameLayout(this.layoutMode)) return point
     const bounds = mobileVisibleWorldBounds()
@@ -767,6 +797,28 @@ export default class UIScene extends Phaser.Scene {
     return {
       x: Phaser.Math.Clamp(point.x, minX, Math.max(minX, maxX)),
       y: Phaser.Math.Clamp(point.y, minY, Math.max(minY, maxY)),
+    }
+  }
+
+  private responsiveDesktopCallActionPoint(loc: number): HudPoint {
+    const fallback = seatEffectPoint(CALL_POS[loc], loc)
+    const avatar = this.avatarBounds[loc]
+    const bounds = responsiveDesktopVisibleWorldBounds()
+    const size = CALL_BALLOON_SIZE[loc]
+    if (!avatar || !bounds || !size) return fallback
+
+    const overlap = 30
+    let x = avatar.x + (avatar.width - size.w) / 2
+    let y = avatar.y + (avatar.height - size.h) / 2
+    if (loc === 0) y = avatar.y - size.h + overlap
+    else if (loc === 1) x = avatar.x - size.w + overlap
+    else if (loc === 2) y = avatar.y + avatar.height - overlap
+    else x = avatar.x + avatar.width - overlap
+
+    const inset = 8
+    return {
+      x: Phaser.Math.Clamp(x, bounds.left + inset, Math.max(bounds.left + inset, bounds.right - size.w - inset)),
+      y: Phaser.Math.Clamp(y, bounds.top + inset, Math.max(bounds.top + inset, bounds.bottom - size.h - inset)),
     }
   }
 
@@ -924,7 +976,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private desktopHudPanelTextureKey() {
-    return isTengokuBoardSkin(this.customBgId, this.customBoardType) ? 'desktopHudPanelTengoku' : 'desktopHudPanelDefault'
+    return isTengokuBoardSkin(this.customBgId, this.customBoardType) ? 'desktopHudPanelTengokuV2' : 'desktopHudPanelDefaultV2'
   }
 
   private desktopTurnStripTextureKey() {
@@ -939,8 +991,6 @@ export default class UIScene extends Phaser.Scene {
       const panel = this.make.graphics({ x: 0, y: 0 })
       panel.fillStyle(style.fill, 0.94)
       panel.fillRoundedRect(0, 0, 128, 128, 4)
-      panel.fillStyle(style.stroke, 0.18)
-      panel.fillRoundedRect(3, 3, 122, 22, 2)
       panel.lineStyle(2, style.stroke, 0.9)
       panel.strokeRoundedRect(1, 1, 126, 126, 4)
       panel.lineStyle(1, 0xffffff, 0.2)
@@ -1033,26 +1083,45 @@ export default class UIScene extends Phaser.Scene {
       .setTexture(this.desktopHudPanelTextureKey())
       .setDisplaySize(panelWidth, bottom - top)
       .setVisible(true)
-    this.desktopHudBounds[loc] = { left, top, width: panelWidth, height: bottom - top }
-    const stripWidth = panelWidth
-    const stripHeight = Math.max(HUD_METRICS.nameHeight, avatarSize.height * 0.16)
-    const stripX = left
-    const stripY = top
+    const originalPanelBounds = panel.getBounds()
+    panel.setOrigin(0, 0).setPosition(originalPanelBounds.left, originalPanelBounds.top)
+    const panelBounds = panel.getBounds()
+    const stripX = panelBounds.left + panelBounds.width * DESKTOP_HUD_HEADER_INSET / DESKTOP_HUD_TEXTURE_SIZE
+    const stripY = panelBounds.top + panelBounds.height * DESKTOP_HUD_HEADER_INSET / DESKTOP_HUD_TEXTURE_SIZE
+    const stripWidth = panelBounds.width * DESKTOP_HUD_HEADER_WIDTH / DESKTOP_HUD_TEXTURE_SIZE
+    const stripHeight = panelBounds.height * DESKTOP_HUD_HEADER_HEIGHT / DESKTOP_HUD_TEXTURE_SIZE
     const active = this.activeTurnOdr !== null && this.odrToLoc(this.activeTurnOdr) === loc
     if (turnStrip.getData('turnActive') !== active) {
       turnStrip.setData('turnActive', active)
       this.tweens.killTweensOf(turnStrip)
-      turnStrip.setAlpha(1).setVisible(active)
-      if (active) this.tweens.add({ targets: turnStrip, alpha: 0.25, duration: 650, ease: 'Sine.InOut', yoyo: true, repeat: -1 })
+      turnStrip.setVisible(true)
+      if (active) {
+        turnStrip.setAlpha(1)
+        this.tweens.add({ targets: turnStrip, alpha: 0.25, duration: 650, ease: 'Sine.InOut', yoyo: true, repeat: -1 })
+      } else {
+        turnStrip.setAlpha(RESPONSIVE_DESKTOP_INACTIVE_TURN_STRIP_ALPHA)
+      }
     }
     turnStrip
+      .setOrigin(0, 0)
       .setPosition(stripX, stripY)
       .setTexture(this.desktopTurnStripTextureKey())
       .setDisplaySize(stripWidth, stripHeight)
+    const stripBounds = turnStrip.getBounds()
+    this.desktopHudBounds[loc] = {
+      left: panelBounds.left,
+      top: panelBounds.top,
+      width: panelBounds.width,
+      height: panelBounds.height,
+    }
     return {
-      x: left + paddingX,
-      y: contentBottom - HUD_METRICS.nameHeight,
-      width: panelWidth - paddingX * 2,
+      x: stripBounds.left,
+      y: stripBounds.centerY,
+      width: stripBounds.width,
+      left: panelBounds.left,
+      top: panelBounds.top,
+      height: panelBounds.height,
+      stripHeight: stripBounds.height,
     }
   }
 
@@ -1069,17 +1138,20 @@ export default class UIScene extends Phaser.Scene {
       const trk = playerHudPoint(pos.trk, loc)
       const mobileInfoVisible = this.isMobileHudInfoVisible(loc)
       const nameVisible = isMobileIngameLayout(this.layoutMode) || mobileInfoVisible
-      const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(p)
-      const avt = isMobileIngameLayout(this.layoutMode)
+      let avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(p)
+      let avt = isMobileIngameLayout(this.layoutMode)
         ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
         : this.desktopAvatarPoint(baseAvt)
-      this.avatarBounds[loc] = { x: avt.x, y: avt.y, width: avatarSize.width, height: avatarSize.height }
       const mobileTextLeft = loc === 1 || loc === 2 ? avt.x - MOBILE_HUD_INFO_WIDTH - MOBILE_HUD_TEXT_GAP : avt.x + avatarSize.width + MOBILE_HUD_TEXT_GAP
       const mobileNameX = avt.x + (avatarSize.width - MOBILE_HUD_NAME_WIDTH) / 2
       const mobileNameY = avt.y + avatarSize.height + MOBILE_HUD_NAME_GAP
       const desktopInfoOffsetY = this.layoutMode === 'responsiveDesktop' ? RESPONSIVE_DESKTOP_PLAYER_INFO_OFFSET_Y : 0
-      const textY = isMobileIngameLayout(this.layoutMode) ? avt.y + MOBILE_HUD_INFO_TOP_OFFSET : txt.y + DESKTOP_HUD_INFO_Y_SHIFT + desktopInfoOffsetY
-      const textBounds = isMobileIngameLayout(this.layoutMode) ? { left: mobileTextLeft, width: MOBILE_HUD_INFO_WIDTH } : avatarTextBounds(loc)
+      let textY = isMobileIngameLayout(this.layoutMode)
+        ? avt.y + MOBILE_HUD_INFO_TOP_OFFSET
+        : this.layoutMode === 'responsiveDesktop'
+          ? Math.max(txt.y + DESKTOP_HUD_INFO_Y_SHIFT + desktopInfoOffsetY, avt.y + HUD_METRICS.nameHeight + 6)
+          : txt.y + DESKTOP_HUD_INFO_Y_SHIFT
+      let textBounds = isMobileIngameLayout(this.layoutMode) ? { left: mobileTextLeft, width: MOBILE_HUD_INFO_WIDTH } : avatarTextBounds(loc)
       const textAlign = isMobileIngameLayout(this.layoutMode)
         ? (loc === 1 || loc === 2 ? 'right' : 'left')
         : 'center'
@@ -1088,18 +1160,47 @@ export default class UIScene extends Phaser.Scene {
       const levelText = p.level || (isComputer ? '----' : '')
       const compactInfo = this.layoutMode === 'mobileLandscape' && levelText.trim() === ''
       const infoRowHeight = this.layoutMode === 'mobileLandscape' ? MOBILE_HUD_INFO_ROW_HEIGHT : 15
-      const desktopPanelName = this.updateDesktopHudPanel(loc, avt, avatarSize, textBounds.left, textY, textBounds.width, compactInfo ? 3 : 4, infoRowHeight)
+      const infoRows = compactInfo ? 3 : 4
+      const desktopPanelName = this.updateDesktopHudPanel(loc, avt, avatarSize, textBounds.left, textY, textBounds.width, infoRows, infoRowHeight)
+      if (desktopPanelName) {
+        const inset = 5
+        const contentTop = desktopPanelName.top + desktopPanelName.stripHeight + inset
+        const contentHeight = Math.max(0, desktopPanelName.height - desktopPanelName.stripHeight - inset * 2)
+        const avatarWidth = Math.min(56, Math.max(32, Math.floor((desktopPanelName.width - inset * 3) * 0.56)))
+        const avatarHeight = Math.min(88, contentHeight)
+        avatarSize = { width: avatarWidth, height: avatarHeight }
+        avt = {
+          x: desktopPanelName.left + inset,
+          y: contentTop + (contentHeight - avatarHeight) / 2,
+        }
+        textBounds = {
+          left: avt.x + avatarSize.width + inset,
+          width: Math.max(0, desktopPanelName.left + desktopPanelName.width - (avt.x + avatarSize.width + inset * 2)),
+        }
+        textY = contentTop + Math.max(0, (contentHeight - infoRows * infoRowHeight) / 2)
+      }
+      this.avatarBounds[loc] = { x: avt.x, y: avt.y, width: avatarSize.width, height: avatarSize.height }
       const nameAlign = desktopPanelName ? 'center' : isMobileIngameLayout(this.layoutMode) ? 'center' : textAlign
       const nameLayout = desktopPanelName
         ? { x: desktopPanelName.x, width: desktopPanelName.width, fontSize: this.fitNameText(loc, desktopPanelName.x, displayName).fontSize }
         : this.fitNameText(loc, isMobileIngameLayout(this.layoutMode) ? mobileNameX : name.x, displayName)
       const nameY = desktopPanelName?.y ?? (isMobileIngameLayout(this.layoutMode) ? mobileNameY : name.y)
-      this.nameTexts[loc].setColor(isComputer ? '#ff6060' : '#ffffff').setFontSize(nameLayout.fontSize).setPosition(nameLayout.x, nameY).setFixedSize(nameLayout.width, HUD_METRICS.nameHeight).setAlign(nameAlign).setText(displayName).setVisible(nameVisible && hudVisible)
+      const nameText = this.nameTexts[loc]
+      nameText.setColor(isComputer ? '#ff6060' : '#ffffff').setOrigin(0, 0).setFontSize(nameLayout.fontSize).setPosition(nameLayout.x, nameY).setFixedSize(nameLayout.width, HUD_METRICS.nameHeight).setAlign(nameAlign).setText(displayName).setVisible(nameVisible && hudVisible)
+      if (desktopPanelName) {
+        const stripBounds = this.desktopTurnStrips[loc].getBounds()
+        const textBounds = nameText.getBounds()
+        const glyphCenterOffset = measureHudGlyphCenterOffset(displayName, cssPx(String(nameLayout.fontSize)))
+        nameText.setPosition(
+          stripBounds.left + (stripBounds.width - textBounds.width) / 2,
+          stripBounds.centerY - glyphCenterOffset,
+        )
+      }
       this.levelTexts[loc].setPosition(textBounds.left, textY).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(levelText).setVisible(mobileInfoVisible && !compactInfo && hudVisible)
       this.scoreTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? 0 : infoRowHeight)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatPointText(p)).setVisible(mobileInfoVisible && hudVisible)
       this.rankTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight : infoRowHeight * 2)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatRankText(players, odr)).setVisible(mobileInfoVisible && hudVisible)
       this.diffTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight * 2 : infoRowHeight * 3)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatDiffText(players, odr)).setVisible(mobileInfoVisible && hudVisible)
-      this.updateMobileHudPanel(loc, avt, avatarSize, nameLayout.x, nameY, nameLayout.width, textBounds.left, textY, textBounds.width, compactInfo ? 3 : 4, infoRowHeight)
+      this.updateMobileHudPanel(loc, avt, avatarSize, nameLayout.x, nameY, nameLayout.width, textBounds.left, textY, textBounds.width, infoRows, infoRowHeight)
       const costumeFrame = this.costumeFrameResource(odr, p)
       const costumeUrl = this.costumeAvatarUrl(p)
       const avatarUrl = costumeFrame?.url || costumeUrl || p.avatarUrl || p.fallbackAvatarUrl || ''

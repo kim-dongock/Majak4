@@ -1,6 +1,5 @@
 using MajakServer.Repositories.MySQL.Entities;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage;
 using System.Globalization;
 
 namespace MajakServer.Repositories.MySQL;
@@ -26,7 +25,7 @@ public class GamePlayerRepository
             .SingleOrDefaultAsync();
     }
 
-    /// <summary>利用規約同意を記録する。account_status は変えない (管理者承認待ちのまま)。</summary>
+    /// <summary>利用規約同意を記録する。</summary>
     public virtual async Task AgreeToTermsAsync(string memberNo)
     {
         if (!TryParseMemberNo(memberNo, out var memberNoValue)) return;
@@ -54,6 +53,23 @@ public class GamePlayerRepository
                 .SetProperty(account => account.SourceEnvironment, isTestEnvironment ? "test" : "production")
                 .SetProperty(account => account.LastLoginAt, now)
                 .SetProperty(account => account.UpdatedAt, now));
+    }
+
+    public virtual async Task<bool> UpdateAccountProfileAsync(
+        string memberNo,
+        ushort birthYear,
+        string avatarId)
+    {
+        if (!TryParseMemberNo(memberNo, out var memberNoValue)) return false;
+        await using var db = await _db.CreateAsync();
+        var now = DateTime.UtcNow;
+        var updated = await db.PlayerAccounts
+            .Where(account => account.MemberNo == memberNoValue)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(account => account.BirthYear, birthYear)
+                .SetProperty(account => account.AvatarId, avatarId)
+                .SetProperty(account => account.UpdatedAt, now));
+        return updated == 1;
     }
 
     // ── Google 認証専用メソッド ───────────────────────────────────────
@@ -91,11 +107,13 @@ public class GamePlayerRepository
         {
             await using var db = await _db.CreateAsync();
             await using var tx = await db.Database.BeginTransactionAsync();
-            var memberNo = await InsertGoogleAccountAsync(db, displayName, sexCode, birthYear, avatarId, googleSub, email);
-            AddRelatedPlayerRows(db, memberNo);
+            var account = CreateGoogleAccount(displayName, sexCode, birthYear, avatarId, googleSub, email);
+            db.PlayerAccounts.Add(account);
+            await db.SaveChangesAsync();
+            AddRelatedPlayerRows(db, account.MemberNo);
             await db.SaveChangesAsync();
             await tx.CommitAsync();
-            return memberNo;
+            return account.MemberNo;
         });
     }
 
@@ -124,8 +142,7 @@ public class GamePlayerRepository
         await db.SaveChangesAsync();
     }
 
-    private static async Task<ulong> InsertGoogleAccountAsync(
-        GameDataContext db,
+    private static PlayerAccountEntity CreateGoogleAccount(
         string displayName,
         string sexCode,
         ushort birthYear,
@@ -133,34 +150,23 @@ public class GamePlayerRepository
         string googleSub,
         string? email)
     {
-        var connection = db.Database.GetDbConnection();
-        if (connection.State != System.Data.ConnectionState.Open)
-            await connection.OpenAsync();
-
         var now = DateTime.UtcNow;
-        await using var cmd = connection.CreateCommand();
-        cmd.Transaction = db.Database.CurrentTransaction?.GetDbTransaction();
-        cmd.CommandText = @"
-            INSERT INTO player_account
-                (display_name, email, google_sub, sex_code, birth_year, avatar_id,
-                 terms_agreed_at, account_status, source_environment,
-                 first_login_at, last_login_at, created_at, updated_at)
-            VALUES
-                (@displayName, @email, @googleSub, @sexCode, @birthYear, @avatarId,
-                 @now, 0, 'google', @now, @now, @now, @now)";
-        AddParameter(cmd, "@displayName", displayName ?? string.Empty);
-        AddParameter(cmd, "@email", email);
-        AddParameter(cmd, "@googleSub", googleSub);
-        AddParameter(cmd, "@sexCode", sexCode);
-        AddParameter(cmd, "@birthYear", birthYear);
-        AddParameter(cmd, "@avatarId", avatarId);
-        AddParameter(cmd, "@now", now);
-        await cmd.ExecuteNonQueryAsync();
-
-        cmd.Parameters.Clear();
-        cmd.CommandText = "SELECT LAST_INSERT_ID()";
-        var value = await cmd.ExecuteScalarAsync();
-        return Convert.ToUInt64(value, CultureInfo.InvariantCulture);
+        return new PlayerAccountEntity
+        {
+            DisplayName = displayName ?? string.Empty,
+            Email = email,
+            GoogleSub = googleSub,
+            SexCode = sexCode,
+            BirthYear = birthYear,
+            AvatarId = avatarId,
+            TermsAgreedAt = now,
+            AccountStatus = 1,
+            SourceEnvironment = "google",
+            FirstLoginAt = now,
+            LastLoginAt = now,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
     }
 
     private static void AddNewPlayer(
@@ -185,7 +191,7 @@ public class GamePlayerRepository
                 SexCode = sexCode,
                 AvatarId = avatarId,
                 TermsAgreedAt = termsAgreed ? now : null,
-                AccountStatus = 0,
+                AccountStatus = 1,
                 SourceEnvironment = sourceEnvironment,
                 FirstLoginAt = now,
                 LastLoginAt = now,

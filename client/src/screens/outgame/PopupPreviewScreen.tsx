@@ -28,6 +28,7 @@ import MissionDlg from './dialogs/MissionDlg'
 import MissionRewardGuideDlg from './dialogs/MissionRewardGuideDlg'
 import OptDlg, { DEFAULT_OPTION } from './dialogs/OptDlg'
 import PlayerInfoWnd from './dialogs/PlayerInfoWnd'
+import ProfileEditDlg from './dialogs/ProfileEditDlg'
 import PaifuSaveDlg from './dialogs/PaifuSaveDlg'
 import RankingDlg, { type RankingData } from './dialogs/RankingDlg'
 import RoomCreateDlg from './dialogs/RoomCreateDlg'
@@ -52,6 +53,7 @@ type PreviewId =
   | 'levelup' | 'coin' | 'lead' | 'item' | 'ending' | 'askEnd'
   | 'buyHanCoinItem' | 'buyExchangeItem' | 'buyCustomItem' | 'circleOptions' | 'confirmItem'
   | 'customInventory' | 'debugLogin' | 'eventDialogs' | 'legacyItemShop' | 'registration'
+  | 'profileEdit'
   | 'shopTransaction' | 'paifuSave' | 'serialCode'
   | 'gameSprites' | 'kyoResult' | 'hanResult'
 
@@ -100,6 +102,7 @@ const PREVIEWS: PreviewEntry[] = [
   { id: 'eventDialogs', title: 'EventDialogs', group: 'Missions and events', status: 'Complete', summary: 'Event introduction, point, and close dialog set.' },
   { id: 'legacyItemShop', title: 'ItemShopDlg', group: 'Shop', status: 'Complete', summary: 'Legacy fixed-layout item shop dialog.' },
   { id: 'registration', title: 'RegistrationDlg', group: 'Startup and account notices', status: 'Complete', summary: 'New member registration dialog.' },
+  { id: 'profileEdit', title: 'ProfileEditDlg', group: 'Lobby and players', status: 'Complete', summary: 'Birth year and avatar profile editor.' },
   { id: 'shopTransaction', title: 'ResponsiveShopTransactionDlg', group: 'Shop', status: 'Complete', summary: 'Responsive item purchase transaction dialog.' },
   { id: 'paifuSave', title: 'PaifuSaveDlg', group: 'Lobby and rooms', status: 'Complete', summary: 'Paifu save dialog.' },
   { id: 'serialCode', title: 'SerialCodeDlg', group: 'Startup and account notices', status: 'Complete', summary: 'Serial code entry dialog.' },
@@ -122,11 +125,11 @@ const PREVIEW_ANNOUNCEMENT: GameAnnouncement = {
 const PREVIEW_RANKING: RankingData = {
   rankDate: '202608',
   rankId: '段位戦',
-  gradeRankSelf: { pix: 'preview-user', rank: 12, rating: 1840, grade: 7, szIndex: '上位 5%' },
+  gradeRankSelf: { pix: 'preview-user', nickname: 'プレビュー雀士', rank: 12, rating: 1840, grade: 7, szIndex: '上位 5%' },
   gradeRankList: [
-    { pix: 'rank-1', rank: 1, rating: 2430, grade: 12 },
-    { pix: 'rank-2', rank: 2, rating: 2280, grade: 11 },
-    { pix: 'preview-user', rank: 12, rating: 1840, grade: 7, isSelf: 1 },
+    { pix: 'rank-1', nickname: '雀王', rank: 1, rating: 2430, grade: 12 },
+    { pix: 'rank-2', nickname: '東風の神', rank: 2, rating: 2280, grade: 11 },
+    { pix: 'preview-user', nickname: 'プレビュー雀士', rank: 12, rating: 1840, grade: 7, isSelf: 1 },
   ],
 }
 
@@ -143,7 +146,7 @@ function renderPreview(id: PreviewId, onClose: () => void) {
     case 'settings':
       return <CfgDlg initial={DEFAULT_CONFIG} onOK={onClose} onCancel={onClose} />
     case 'ranking':
-      return <RankingDlg data={PREVIEW_RANKING} memberNameByPix={new Map([['rank-1', '雀王'], ['rank-2', '東風の神'], ['preview-user', 'プレビュー雀士']])} onClose={onClose} />
+      return <RankingDlg data={PREVIEW_RANKING} onClose={onClose} />
     case 'playerInfo':
       return <PlayerInfoWnd player={{ pix: 'preview-user', name: 'プレビュー雀士', sex: 'M', rating: 1840, slevel: '七段', location: '東京', winCount: 38, loseCount: 21, drawCount: 4 }} onClose={onClose} />
     case 'inviteRequest':
@@ -204,6 +207,8 @@ function renderPreview(id: PreviewId, onClose: () => void) {
       return <ItemShopDlg cashCount={500} gemCount={24} gamMoney={1200} onClose={onClose} />
     case 'registration':
       return <RegistrationDlg idToken="popup-preview" googleInfo={{ pix: 'preview-user', name: 'プレビュー雀士', sex: 'M', birthYear: null, avatarId: '', password: '', isTestEnv: true, requiresRegistration: true }} onComplete={() => onClose()} onAuthExpired={onClose} />
+    case 'profileEdit':
+      return <ProfileEditDlg player={{ pix: 'preview-user', name: 'プレビュー雀士', sex: 'F', birthYear: 1994, avatarId: '/assets/images/characters/thumbnail_05f.png', password: '', isTestEnv: true, requiresRegistration: false }} onSave={async profile => profile} onComplete={onClose} onClose={onClose} />
     case 'shopTransaction':
       return <ResponsiveItemShopDlg cashCount={500} gemCount={24} gamMoney={1200} onClose={onClose} />
     case 'paifuSave':

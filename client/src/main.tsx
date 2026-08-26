@@ -10,6 +10,7 @@ let lastGlobalErrorAt = 0
 
 function shouldIgnoreGlobalError(message: string): boolean {
   return /Cannot (?:suspend|resume) a closed AudioContext/i.test(message)
+    || /Framebuffer status:\s*Incomplete Attachment/i.test(message)
 }
 
 function showGlobalError(message: string): void {

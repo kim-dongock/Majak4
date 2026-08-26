@@ -41,6 +41,7 @@ import {
   type AutoControlState,
 } from '../game/autoControl'
 import { emitGameLoadProgress } from '../game/gameLoadProgress'
+import { reorderHanchanPlayers } from '../game/hanchanOrder'
 import {
   getLegacyHoraPresentations,
   LEGACY_EFFECT_FRAME_MS,
@@ -70,7 +71,7 @@ import {
   responsiveDesktopSeatOffset,
   responsiveDesktopVisibleWorldBounds,
 } from '../game/mobileIngameViewport'
-import { canCompleteGameResync, restoreVisiblePaiCodes } from '../game/resyncState'
+import { canCompleteGameResync, restoreVisiblePaiCodes, shouldUsePendingInitPaiInfo } from '../game/resyncState'
 import {
   beginPaifuRecording,
   cancelPaifuRecording,
@@ -101,6 +102,7 @@ const KYO_RESULT_PROGRESS_EVENT = 'majak:kyo-result-progress'
 const KYO_RESULT_CONFIRMED_EVENT = 'majak:kyo-result-confirmed'
 const GAME_FOCUS_CHAT_EVENT = 'majak:game-focus-chat'
 const GAME_STATUS_EVENT = 'majak:game-status'
+const GAME_EFFECT_WINDOW_EVENT = 'majak:game-effect-window'
 const GAME_SYNC_EVENT = 'majak:game-sync'
 const GAME_FLOW_TRACE_PREFIX = '[GameFlow]'
 const DISCARD_PROBE_PREFIX = '[GameScene/DiscardProbe]'
@@ -160,6 +162,9 @@ const LEGACY_TSUMO_EFFECT_THICKNESS = 164
 const LEGACY_LEVEL1_EFFECT_SIZE = { width: 102, height: 124 }
 const MATCH_START_SEAT_REVEAL_DURATION_MS = 3100
 const LEGACY_WAREME_PRESENTATION_DURATION_MS = 3700
+const RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP = 64
+const RESPONSIVE_DESKTOP_HORIZONTAL_HAND_OUTER_RATIO = 0.68
+const RESPONSIVE_DESKTOP_BOTTOM_HAND_OUTER_RATIO = 0.66
 const MATCH_START_SEAT_POSITIONS = [
   { x: 379, y: 506 },
   { x: 627, y: 325 },
@@ -980,6 +985,7 @@ export default class GameScene extends Phaser.Scene {
   private currentRoundIsCarnival = false
   private mobileHandSummaryStateKey = ''
   private mobileCenterInfoLayoutKey = ''
+  private responsiveActionPanelOffsetY = 0
 
   constructor() {
     super({ key: 'GameScene' })
@@ -1021,6 +1027,9 @@ export default class GameScene extends Phaser.Scene {
   init(data: CreateGameOptions & { roomId?: string; myOdr?: number }) {
     this.layoutMode = data.layoutMode ?? 'desktop'
     applyIngameLayout(this.layoutMode)
+    this.mobileHandSummaryStateKey = ''
+    this.mobileCenterInfoLayoutKey = ''
+    this.responsiveActionPanelOffsetY = 0
     this.roomId = data.roomId ?? ''
     this.paifuRoomName = data.roomName ?? this.roomId
     this.myOdr  = data.myOdr  ?? 0
@@ -1121,7 +1130,7 @@ export default class GameScene extends Phaser.Scene {
       this.actionPanelSprite = this.clipToBoard(this.add.image(BOARD_X + X_PANEL + panelOffset.x + W_PANEL / 2, BOARD_Y + Y_PANEL + panelOffset.y + H_PANEL / 2, this.resolveSkinTextureKey(panelKey))
         .setDisplaySize(W_PANEL, H_PANEL)
         .setDepth(Z_PANEL)
-        .setVisible(this.layoutMode !== 'mobileLandscape'))
+        .setVisible(this.layoutMode !== 'mobileLandscape' && !(this.isViewer && this.layoutMode === 'responsiveDesktop')))
       if (!this.isViewer) this.createActionButtons()
     }
 
@@ -1138,7 +1147,7 @@ export default class GameScene extends Phaser.Scene {
       })
     }
     if (!this.isReplay) {
-      this.notifyGameClientReady()
+      if (!this.requestInitialGameResync) this.notifyGameClientReady()
       this.requestInitialRoomState()
     }
     this.setupReplayControlEvents()
@@ -1233,7 +1242,7 @@ export default class GameScene extends Phaser.Scene {
         : offset
       this.actionPanelSprite.setPosition(
         BOARD_X + X_PANEL + actionOffset.x + W_PANEL / 2,
-        BOARD_Y + Y_PANEL + actionOffset.y + H_PANEL / 2,
+        BOARD_Y + Y_PANEL + actionOffset.y + H_PANEL / 2 + this.responsiveActionPanelOffsetY,
       )
     }
     this.updateActionButtonPositions(new Set(this.currentActionOffers))
@@ -1839,7 +1848,11 @@ export default class GameScene extends Phaser.Scene {
           this.paifuNeedsReconnectSeed = false
         }
         replaceRecordedPaifuPackets(packets)
-        const pendingSeedInitPaiInfo = this.findPendingSeedInitPaiInfo()
+        const historyHasInitPaiInfo = packets.some(packet => this.isInitPaiInfoPacket(packet))
+        const pendingInitPaiInfo = this.findPendingSeedInitPaiInfo()
+        const pendingSeedInitPaiInfo = shouldUsePendingInitPaiInfo(historyHasInitPaiInfo, Boolean(pendingInitPaiInfo))
+          ? pendingInitPaiInfo
+          : undefined
         if (!this.canApplyLiveHistoryPackets(packets, pendingSeedInitPaiInfo)) {
           this.logResyncProbe('history ignored: incomplete init sequence', { packetCount: packets.length })
           return
@@ -2169,23 +2182,8 @@ export default class GameScene extends Phaser.Scene {
       return
     }
     if (this.requestInitialGameResync) {
-      this.logResyncProbe('request initial room state through c16e + RequestGameResync', { skipInitialRoomEnter: true })
-      console.info('[GameReconnect] c16e send start', { roomId: numericRoomId })
-      void SignalR.send('c16e', {})
-        .then(() => {
-          console.info('[GameReconnect] c16e send resolved', { roomId: numericRoomId })
-        })
-        .catch(error => {
-          console.error('[GameReconnect] c16e send failed', {
-            roomId: numericRoomId,
-            errorMessage: error instanceof Error ? error.message : String(error),
-          })
-          this.logResyncProbe('initial c16e failed before RequestGameResync', { errorMessage: error instanceof Error ? error.message : String(error) })
-        })
-        .finally(() => {
-          console.info('[GameReconnect] c16e finished; starting RequestGameResync', { roomId: numericRoomId })
-          this.requestGameResync('initial-room-state')
-        })
+      this.logResyncProbe('request initial room state through RequestGameResync', { skipInitialRoomEnter: true })
+      this.requestGameResync('initial-room-state')
       return
     }
     if (this.skipInitialRoomEnter) return
@@ -2507,17 +2505,20 @@ export default class GameScene extends Phaser.Scene {
 
   private applyHanchanOrder(data: Record<string, unknown>) {
     const wasInitialized = this.hanchanOrderInitialized
+    const previousRoomPosToOdr = [...this.roomPosToOdr]
     this.roomPosToOdr = Array.from({ length: this.players.length }, (_, index) => index)
     const engineToRoom = Array.isArray(data.players) ? data.players.map(Number) : []
-    const roomPositionPlayers = this.players
-    const engineOrderPlayers = Array.from({ length: this.players.length }, createEmptyPlayerState)
+    const engineOrderPlayers = reorderHanchanPlayers(
+      this.players,
+      wasInitialized ? previousRoomPosToOdr : this.roomPosToOdr,
+      engineToRoom,
+    ).map((player, odr) => player ?? createEmptyPlayerState(odr))
     engineToRoom.forEach((roomPos, odr) => {
       if (Number.isInteger(roomPos) && roomPos >= 0 && roomPos < this.players.length && odr >= 0 && odr < this.players.length) {
         this.roomPosToOdr[roomPos] = odr
-        if (!wasInitialized) engineOrderPlayers[odr] = roomPositionPlayers[roomPos]
       }
     })
-    if (!wasInitialized && engineToRoom.length > 0) this.players = engineOrderPlayers
+    if (engineToRoom.length > 0) this.players = engineOrderPlayers
 
     this.memberOdrById.clear()
     const memberInfo = Array.isArray(data.memberInfo) ? data.memberInfo : []
@@ -2694,6 +2695,11 @@ export default class GameScene extends Phaser.Scene {
     const delay = options.delay ?? 0
     const duration = frameDelays.reduce((sum, value) => sum + value, 0)
     if (keys.length === 0 || !this.textures.exists(keys[0])) return delay + duration
+    if (this.shouldPlayLegacyVisuals()) {
+      window.dispatchEvent(new CustomEvent(GAME_EFFECT_WINDOW_EVENT, {
+        detail: { durationMs: delay + duration },
+      }))
+    }
     const start = () => {
       if (!this.shouldPlayLegacyVisuals()) return
       const sprite = this.clipToBoard(this.add.image(x, y, keys[0]).setOrigin(0, 0).setDepth(options.depth ?? 10000))
@@ -3093,12 +3099,43 @@ export default class GameScene extends Phaser.Scene {
     if (!bounds || sprites.length === 0) return
     const left = Math.min(...sprites.map(sprite => sprite.getBounds().left))
     const right = Math.max(...sprites.map(sprite => sprite.getBounds().right))
+    const top = Math.min(...sprites.map(sprite => sprite.getBounds().top))
+    const bottom = Math.max(...sprites.map(sprite => sprite.getBounds().bottom))
     const shiftX = (bounds.left + bounds.right - left - right) / 2
-    sprites.forEach(sprite => { sprite.x += shiftX })
-    this.meldSprites[odr].filter(sprite => sprite.active).forEach(sprite => { sprite.x += shiftX })
+    const shiftY = this.isResponsiveDesktopFullscreen()
+      ? (() => {
+          const tableCenter = boardLocalPoint({
+            x: CENTER_INFO.x + CENTER_INFO.width / 2,
+            y: CENTER_INFO.y + CENTER_INFO.height / 2,
+          })
+          const handHeight = bottom - top
+          const targetTop = loc === 0
+            ? tableCenter.y + (bounds.bottom - tableCenter.y - handHeight) * RESPONSIVE_DESKTOP_BOTTOM_HAND_OUTER_RATIO
+            : bounds.top + (tableCenter.y - bounds.top - handHeight) * (1 - RESPONSIVE_DESKTOP_HORIZONTAL_HAND_OUTER_RATIO)
+          return targetTop - top
+        })()
+      : 0
+    if (loc === 0) {
+      const panelOffsetDelta = shiftY - this.responsiveActionPanelOffsetY
+      this.responsiveActionPanelOffsetY = shiftY
+      if (panelOffsetDelta !== 0) {
+        if (this.actionPanelSprite) this.actionPanelSprite.y += panelOffsetDelta
+        this.updateActionButtonPositions(new Set(this.currentActionOffers))
+      }
+    }
+    sprites.forEach(sprite => {
+      sprite.x += shiftX
+      sprite.y += shiftY
+    })
+    this.meldSprites[odr].filter(sprite => sprite.active).forEach(sprite => {
+      sprite.x += shiftX
+      sprite.y += shiftY
+    })
     if (odr !== this.myOdr) return
     if (this.selectedCursor) this.selectedCursor.x += shiftX
     if (this.drawnTileCursor) this.drawnTileCursor.x += shiftX
+    if (this.selectedCursor) this.selectedCursor.y += shiftY
+    if (this.drawnTileCursor) this.drawnTileCursor.y += shiftY
   }
 
   private alignResponsiveLocalHandAbovePanel(odr: number, loc: 0 | 1 | 2 | 3) {
@@ -3130,9 +3167,14 @@ export default class GameScene extends Phaser.Scene {
     if (loc === 0) return
     const scale = this.handTileScale(odr, loc)
     const isDrawTile = !state.isTedashi
-    let position = isMobileIngameLayout(this.layoutMode)
-      ? mobileOuterHandPos(loc, state.displayIdx, state.handCount, isDrawTile, scale) ?? handPos(loc, state.displayIdx, isDrawTile, true)
-      : handPos(loc, state.displayIdx, isDrawTile, true)
+    const renderedHandTile = this.layoutMode === 'responsiveDesktop'
+      ? this.handSprites[odr][state.displayIdx]
+      : undefined
+    let position = renderedHandTile?.active
+      ? { x: renderedHandTile.x, y: renderedHandTile.y }
+      : isMobileIngameLayout(this.layoutMode)
+        ? mobileOuterHandPos(loc, state.displayIdx, state.handCount, isDrawTile, scale) ?? handPos(loc, state.displayIdx, isDrawTile, true)
+        : handPos(loc, state.displayIdx, isDrawTile, true)
     if (isMobileIngameLayout(this.layoutMode)) {
       position = offsetDiscardSourceMarker(position, OPN_OFS[loc], scale)
     }
@@ -3380,7 +3422,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private alignResponsiveMeldsWithHand(odr: number, loc: 0 | 1 | 2 | 3) {
-    if (this.layoutMode !== 'responsiveDesktop') return
+    if (this.layoutMode !== 'responsiveDesktop' && !isMobileIngameLayout(this.layoutMode)) return
     const handSprites = this.handSprites[odr].filter(sprite => sprite.active)
     const meldSprites = this.meldSprites[odr].filter(sprite => sprite.active)
     if (handSprites.length === 0 || meldSprites.length === 0) return
@@ -3415,6 +3457,26 @@ export default class GameScene extends Phaser.Scene {
     this.deadWallSprites = []
   }
 
+  private responsiveDesktopMatchStartSeatPoint(loc: 0 | 1 | 2 | 3) {
+    const playBox = boardLocalPoint({ x: CENTER_INFO.x, y: CENTER_INFO.y })
+    const left = playBox.x
+    const top = playBox.y
+    const right = left + CENTER_INFO.width
+    const bottom = top + CENTER_INFO.height
+    const centerX = (left + right) / 2
+    const centerY = (top + bottom) / 2
+    const tileSize = loc % 2 === 0 ? { width: 37, height: 63 } : { width: 63, height: 37 }
+
+    if (loc === 0) return { x: centerX - tileSize.width / 2, y: bottom + RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP }
+    if (loc === 1) return { x: right + RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP, y: centerY - tileSize.height / 2 }
+    if (loc === 2) return { x: centerX - tileSize.width / 2, y: top - RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP - tileSize.height }
+    return { x: left - RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP - tileSize.width, y: centerY - tileSize.height / 2 }
+  }
+
+  private isResponsiveDesktopFullscreen() {
+    return this.layoutMode === 'responsiveDesktop' && typeof document !== 'undefined' && Boolean(document.fullscreenElement)
+  }
+
   private animateMatchStartSeatReveal() {
     const shouldReveal = this.pendingMatchStartSeatReveal && this.shouldPlayLegacyVisuals()
     this.pendingMatchStartSeatReveal = false
@@ -3422,6 +3484,7 @@ export default class GameScene extends Phaser.Scene {
 
     const scale = this.tileScale()
     const seatPoint = (loc: 0 | 1 | 2 | 3, offset = { x: 0, y: 0 }) => {
+      if (this.isResponsiveDesktopFullscreen()) return this.responsiveDesktopMatchStartSeatPoint(loc)
       if (isMobileIngameLayout(this.layoutMode)) {
         const point = mobileOuterHandPos(loc, 6, MOBILE_OTHER_HAND_FIXED_COUNT, false, scale)
         if (point) return { x: point.x + offset.x, y: point.y + offset.y }
@@ -3942,9 +4005,17 @@ export default class GameScene extends Phaser.Scene {
     }
     const width = wL + wR + wM * entries.length
     const tileSprite = this.handSprites[this.myOdr][idx]
-    const rawX = (tileSprite?.x ?? BOARD_X) - BOARD_X + 37 / 2 - width / 2
-    const localX = Math.min(Math.max(0, rawX), BOARD_W - width)
-    const point = boardLocalPoint({ x: localX, y: yPos })
+    const responsiveBounds = this.layoutMode === 'responsiveDesktop' ? responsiveDesktopVisibleWorldBounds() : null
+    const point = responsiveBounds && tileSprite?.active
+      ? {
+          x: Phaser.Math.Clamp(tileSprite.x + 37 / 2 - width / 2, responsiveBounds.left, Math.max(responsiveBounds.left, responsiveBounds.right - width)),
+          y: waitGuideWorldY(tileSprite.y, responsiveBounds.top, responsiveBounds.bottom, guideHeight),
+        }
+      : (() => {
+          const rawX = (tileSprite?.x ?? BOARD_X) - BOARD_X + 37 / 2 - width / 2
+          const localX = Math.min(Math.max(0, rawX), BOARD_W - width)
+          return boardLocalPoint({ x: localX, y: yPos })
+        })()
     const guide = this.clipToBoard(this.add.container(point.x, point.y).setDepth(2000))
 
     guide.add(this.add.image(0, 0, this.resolveSkinTextureKey('mj_machihai_base01')).setOrigin(0, 0).setAlpha(0.5))
@@ -4290,7 +4361,7 @@ export default class GameScene extends Phaser.Scene {
     if (isTouchPointer(pointer)) {
       const decision = decideTouchTileAction(this.selectedIdx, idx)
       this.touchConfirmDiscardIdx = decision.confirmDiscard ? idx : -1
-      if (this.selectedIdx >= 0) hand[this.selectedIdx].isSelected = false
+      if (this.selectedIdx >= 0 && this.selectedIdx < hand.length) hand[this.selectedIdx].isSelected = false
       this.selectedIdx = decision.selectedIdx
       this.selectedDiscardBipaiIndex = hand[idx].bipaiIndex
       hand[idx].isSelected = true
@@ -4302,7 +4373,7 @@ export default class GameScene extends Phaser.Scene {
       return
     }
 
-    if (this.selectedIdx >= 0) hand[this.selectedIdx].isSelected = false
+    if (this.selectedIdx >= 0 && this.selectedIdx < hand.length) hand[this.selectedIdx].isSelected = false
     this.selectedIdx = idx
     this.selectedDiscardBipaiIndex = hand[idx].bipaiIndex
     hand[idx].isSelected = true
@@ -4347,7 +4418,7 @@ export default class GameScene extends Phaser.Scene {
   private onScenePointerDown(pointer: Phaser.Input.Pointer, currentlyOver: Phaser.GameObjects.GameObject[]) {
     if (!isTouchPointer(pointer) || currentlyOver.length > 0 || (this.selectedIdx < 0 && this.activeAssistHandIdx < 0)) return
     const hand = this.players[this.myOdr].hand
-    if (this.selectedIdx < hand.length) hand[this.selectedIdx].isSelected = false
+    if (this.selectedIdx >= 0 && this.selectedIdx < hand.length) hand[this.selectedIdx].isSelected = false
     this.selectedIdx = -1
     this.selectedDiscardBipaiIndex = undefined
     this.touchConfirmDiscardIdx = -1
@@ -4496,7 +4567,7 @@ export default class GameScene extends Phaser.Scene {
       return
     }
 
-    if (this.selectedIdx >= 0) hand[this.selectedIdx].isSelected = false
+    if (this.selectedIdx >= 0 && this.selectedIdx < hand.length) hand[this.selectedIdx].isSelected = false
     this.selectedIdx = idx
     tile.isSelected = true
     this.redrawHand(this.myOdr)
@@ -4882,7 +4953,7 @@ export default class GameScene extends Phaser.Scene {
   private updateActionButtonPositions(visibleActs: Set<string>) {
     if (this.layoutMode !== 'mobileLandscape') {
       const offset = this.layoutMode === 'responsiveDesktop'
-        ? { x: 0, y: 0 }
+        ? { x: 0, y: this.responsiveActionPanelOffsetY }
         : mobileCenterHudOffset(this.layoutMode)
       for (const def of this.ACT_BTNS) {
         const btn = this.actionButtonSprites.get(def.act)
@@ -4966,7 +5037,7 @@ export default class GameScene extends Phaser.Scene {
           await this.sendAction(def, [...visibleActs])
         })
     }
-      this.actionPanelSprite?.setVisible(this.layoutMode !== 'mobileLandscape')
+      this.actionPanelSprite?.setVisible(this.layoutMode !== 'mobileLandscape' && !(this.isViewer && this.layoutMode === 'responsiveDesktop'))
       this.mobileActionButtonsVisible = replaceMobileHand
       this.updateMobileActionHandVisibility()
   }

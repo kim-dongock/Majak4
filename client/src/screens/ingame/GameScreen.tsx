@@ -764,11 +764,22 @@ export default function GameScreen() {
     players: HanResPlayer[]
     flags: { hasTor: boolean; hasTip: boolean; isViewer: boolean; isTournament: boolean }
   } | null>(null)
+  const [pendingResultBeforeOverlays, setPendingResultBeforeOverlays] = useState<{
+    players: HanResPlayer[]
+    flags: { hasTor: boolean; hasTip: boolean; isViewer: boolean; isTournament: boolean }
+    levelUp: { level: number; lentMoney: number } | null
+  } | null>(null)
   /** CMJKyoRes 表示状態 */
   const [kyoResData, setKyoResData] = useState<KyoResData | null>(null)
   const displayedKyoResData = FORCE_KYO_RESULT_FOR_TEST ? FORCED_KYO_RESULT : kyoResData
   /** CMJSlideAnnounce 表示状態 */
   const [announceData, setAnnounceData] = useState<SlideAnnounceData | null>(null)
+  const [pendingTitleAnnounces, setPendingTitleAnnounces] = useState<SlideAnnounceData[]>([])
+  const announceDataRef = useRef<SlideAnnounceData | null>(null)
+  const pendingTitleAnnouncesRef = useRef<SlideAnnounceData[]>([])
+  const [awaitingTitleAnnouncement, setAwaitingTitleAnnouncement] = useState(false)
+  const awaitingTitleAnnouncementRef = useRef(false)
+  const titleAnnouncementWaitTimerRef = useRef<number | null>(null)
   /** CMJAskEndDlg 表示状態 */
   const [askEndSet, setAskEndSet] = useState<{ roomId: string; seatOrder: number; actionSeq?: number; localDeadlineAt?: number } | null>(null)
   /** CMJKyoRes 継続アクション送信用状態 */
@@ -799,6 +810,41 @@ export default function GameScreen() {
   const [autoHora, setAutoHora] = useState(false)
   const [proxyPlay, setProxyPlay] = useState(false)
   const [viewerHandHidden, setViewerHandHidden] = useState(false)
+
+  useEffect(() => {
+    announceDataRef.current = announceData
+  }, [announceData])
+
+  useEffect(() => {
+    pendingTitleAnnouncesRef.current = pendingTitleAnnounces
+  }, [pendingTitleAnnounces])
+
+  useEffect(() => {
+    awaitingTitleAnnouncementRef.current = awaitingTitleAnnouncement
+  }, [awaitingTitleAnnouncement])
+
+  useEffect(() => {
+    if (displayedHanResData || levelUp || announceData || pendingTitleAnnounces.length === 0) return
+    const [next, ...remaining] = pendingTitleAnnounces
+    pendingTitleAnnouncesRef.current = remaining
+    announceDataRef.current = next
+    setPendingTitleAnnounces(remaining)
+    setAnnounceData(next)
+  }, [announceData, displayedHanResData, levelUp, pendingTitleAnnounces])
+
+  useEffect(() => {
+    if (awaitingTitleAnnouncement || announceData || pendingTitleAnnounces.length > 0 || !pendingResultBeforeOverlays) return
+    const nextResult = pendingResultBeforeOverlays
+    setPendingResultBeforeOverlays(null)
+    if (nextResult.levelUp) {
+      setPendingHanResult({ players: nextResult.players, flags: nextResult.flags })
+      setLevelUp(nextResult.levelUp)
+      return
+    }
+    setHanResFlags(nextResult.flags)
+    setHanResData(nextResult.players)
+  }, [announceData, awaitingTitleAnnouncement, pendingResultBeforeOverlays, pendingTitleAnnounces.length])
+
   useEffect(() => {
     window.dispatchEvent(new CustomEvent(GAME_AUTO_CONTROL_EVENT, {
       detail: {
@@ -1103,7 +1149,7 @@ export default function GameScreen() {
       requestInitialGameResync: Boolean(gameState?.skipInitialRoomEnter),
     })
     return () => destroyGame()
-  }, [customBgId, customHaiId, initialMyOdr, roomId, signalReady])
+  }, [customBgId, customHaiId, roomId, signalReady])
 
   useEffect(() => {
     if (!signalReady) return
@@ -1297,6 +1343,26 @@ export default function GameScreen() {
      *   horaCnt, hojuCnt, richiCnt, furoCnt, ...
      * }
      */
+    const clearTitleAnnouncementWait = () => {
+      if (titleAnnouncementWaitTimerRef.current !== null) {
+        window.clearTimeout(titleAnnouncementWaitTimerRef.current)
+        titleAnnouncementWaitTimerRef.current = null
+      }
+      awaitingTitleAnnouncementRef.current = false
+      setAwaitingTitleAnnouncement(false)
+    }
+
+    const waitForTitleAnnouncement = () => {
+      if (awaitingTitleAnnouncementRef.current) return
+      awaitingTitleAnnouncementRef.current = true
+      setAwaitingTitleAnnouncement(true)
+      titleAnnouncementWaitTimerRef.current = window.setTimeout(() => {
+        titleAnnouncementWaitTimerRef.current = null
+        awaitingTitleAnnouncementRef.current = false
+        setAwaitingTitleAnnouncement(false)
+      }, 1000)
+    }
+
     const onGameReport = (data: Record<string, unknown>) => {
       const tournamentTotalReportCnt = Number(data.tournamentTotalReportCnt ?? data.mjkk98e ?? 0)
       const users = Array.isArray(data.users)
@@ -1380,10 +1446,25 @@ export default function GameScreen() {
         && myResult?.nlevel !== undefined
         && myResult.prevNlevel !== undefined
         && myResult.nlevel > myResult.prevNlevel
+      const nextLevelUp = shouldShowLevelUp && myResult
+        ? { level: myResult.nlevel, lentMoney: myResult.lentMoney ?? 0 }
+        : null
+
+      const titleAnnouncementPixes = Array.isArray(data.titleAnnouncementPixes)
+        ? data.titleAnnouncementPixes.map(String)
+        : []
+      const titleAnnouncementIsQueued = announceDataRef.current !== null || pendingTitleAnnouncesRef.current.length > 0
+      const myTitleAnnouncementIsPending = titleAnnouncementPixes.includes(myPix) && !titleAnnouncementIsQueued
+      if (myTitleAnnouncementIsPending) waitForTitleAnnouncement()
+
+      if (myTitleAnnouncementIsPending || awaitingTitleAnnouncementRef.current || titleAnnouncementIsQueued) {
+        setPendingResultBeforeOverlays({ players, flags: nextHanResFlags, levelUp: nextLevelUp })
+        return
+      }
 
       if (shouldShowLevelUp && myResult) {
         setPendingHanResult({ players, flags: nextHanResFlags })
-        setLevelUp({ level: myResult.nlevel, lentMoney: myResult.lentMoney ?? 0 })
+        setLevelUp(nextLevelUp)
         return
       }
 
@@ -1555,16 +1636,21 @@ export default function GameScreen() {
     const onGetTitle = (data: Record<string, unknown>) => {
       if (!mounted) return
       const count = asNumber(data[KEY_COUNT], 0)
+      let receivedTitleAnnouncement = false
       for (let i = 0; i < count; i++) {
         const type = asNumber(data[`${KEY_TITLE_TYPE}${i}`], -1)
         const code = asNumber(data[`${KEY_TITLE_CODE}${i}`], 0)
         if (type !== 0 && type !== 1) continue
-        setAnnounceData({
+        const nextAnnounce = {
           type: type as 0 | 1,
           code,
           name: String(data[`${KEY_TITLE_NAME}${i}`] ?? ''),
-        })
+        }
+        pendingTitleAnnouncesRef.current = [...pendingTitleAnnouncesRef.current, nextAnnounce]
+        setPendingTitleAnnounces(previous => [...previous, nextAnnounce])
+        receivedTitleAnnouncement = true
       }
+      if (receivedTitleAnnouncement) clearTitleAnnouncementWait()
     }
     SignalR.on(CMD_GET_TITLE, onGetTitle)
 
@@ -1599,6 +1685,8 @@ export default function GameScreen() {
       mounted = false
       if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
       kyoResultTimerRef.current = null
+      if (titleAnnouncementWaitTimerRef.current !== null) window.clearTimeout(titleAnnouncementWaitTimerRef.current)
+      titleAnnouncementWaitTimerRef.current = null
       SignalR.off('c16e',                onMemberList)
       SignalR.off('c7e',                 onChannelMemberList)
       SignalR.off('c14e',                onRoomEnter)
@@ -2151,6 +2239,7 @@ export default function GameScreen() {
         <KyoRes
           data={displayedKyoResData}
           myOdr={effectiveMyOdr ?? 0}
+          isViewer={isViewerUser}
           canContinue={FORCE_KYO_RESULT_FOR_TEST || Boolean(kyoResultAction)}
           waitingForOtherPlayers={kyoResultSubmitted}
           playerProgress={kyoResultProgress}

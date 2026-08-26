@@ -83,7 +83,8 @@ export default function ResponsiveShopTransactionDlg({
       </section>
       <style>{`
         .shop-transaction-overlay { position: absolute; inset: 0; z-index: 400; display: grid; place-items: center; padding: 16px; overflow: hidden; background: rgba(8,16,20,.76); font-family: var(--majak-font-family-ui); box-sizing: border-box; }
-        .shop-transaction { width: min(560px, 100%); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; overflow: hidden; color: #18312b; background: var(--majak-popup-panel-color); border: 1px solid #829287; box-shadow: 0 18px 54px rgba(0,0,0,.42); }
+        .shop-transaction { width: min(560px, 100%); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; overflow: hidden; color: #18312b; background: var(--majak-popup-panel-color); border: 1px solid #829287; box-shadow: 0 18px 54px rgba(0,0,0,.42); font-family: var(--majak-font-family-ui); }
+        .shop-transaction :is(button, input, select, textarea, option) { font-family: inherit; }
         .shop-transaction header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; color: #fff; background: #174b43; }
         .shop-transaction header h2 { margin: 0; font-size: var(--majak-popup-font-title); font-weight: 700; line-height: var(--majak-popup-leading-title); letter-spacing: 0; }
         .shop-transaction__body { min-height: 0; flex: 1 1 auto; padding: 18px; overflow: auto; }

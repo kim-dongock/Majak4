@@ -28,16 +28,18 @@ import { useOutgameLayoutMode } from '../hooks/useOutgameLayoutMode'
 import { useDesktopScreenScale } from '../hooks/useDesktopScreenScale'
 import { showMessage } from '../utils/msgbox'
 import { saveLargestCanvasScreenshot } from '../utils/screenshot'
-import { logout } from '../api/auth'
+import { logout, saveRegisteredPlayerCache } from '../api/auth'
 import * as SignalR from '../api/signalr'
 import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
 import EndingPopupWnd from '../screens/outgame/dialogs/EndingPopupWnd'
+import ProfileEditDlg from '../screens/outgame/dialogs/ProfileEditDlg'
 import MobileUserSummary from './MobileUserSummary'
 
 const MAJAK3 = '/assets/images/game'
 export const MAJAK_ACCUSE_EVENT = 'majak:accuse-click'
 export const MAJAK_EXIT_REQUEST_EVENT = 'majak:exit-request'
+export const MAJAK_LOBBY_CHANGE_REQUEST_EVENT = 'majak:lobby-change-request'
 const IS_NATIVE_APP = Capacitor.isNativePlatform()
 
 type LockableScreenOrientation = ScreenOrientation & {
@@ -93,11 +95,16 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
   /** CMJCfgDlg 内部管理 — onOpenSettings 未指定時に使用 */
   const [showCfg, setShowCfg] = useState(false)
   const [cfg, setCfg]         = useState<MJConfig>(() => loadMajakConfig())
-  const [isFullScreen, setIsFullScreen] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(() => Boolean(document.fullscreenElement))
   const [showExitConfirm, setShowExitConfirm] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
+  const player = useAuthStore(state => state.player)
+  const setPlayer = useAuthStore(state => state.setPlayer)
+  const isTitleScreen = location.pathname === '/channel'
   const isAnnouncementScreen = location.pathname === '/announcements'
   const isLobbySelectScreen = location.pathname.startsWith('/channel/select/')
     || /^\/channel\/[^/]+$/.test(location.pathname)
+  const isLobbyListScreen = /\/channel\/[^/]+\/lobby$/.test(location.pathname)
   const isPaifuArchiveScreen = location.pathname === '/paifu'
   const screenTitle = isAnnouncementScreen
     ? 'お知らせ'
@@ -115,7 +122,9 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
     || location.pathname.startsWith('/channel/select/')
     || /\/channel\/[^/]+\/lobby$/.test(location.pathname)
     || /\/channel\/[^/]+\/lobby\/room\/[^/]+$/.test(location.pathname)
-  const desktopFrameWidth = isResponsiveDesktopScreen ? 'min(1320px, calc(100vw - 48px))' : frameWidth
+  const desktopFrameWidth = isResponsiveDesktopScreen
+    ? (isFullScreen ? '100vw' : 'min(1320px, calc(100vw - 48px))')
+    : frameWidth
   const desktopFrameHeight = isResponsiveDesktopScreen
     ? '100dvh'
     : frameHeight
@@ -184,6 +193,10 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
     setShowExitConfirm(true)
   }
 
+  const handleChangeLobby = () => {
+    window.dispatchEvent(new Event(MAJAK_LOBBY_CHANGE_REQUEST_EVENT))
+  }
+
   const handleExitConfirm = async () => {
     setShowExitConfirm(false)
     await logout()
@@ -203,6 +216,18 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
       void showMessage('保存できるゲーム画面がありません。', '画面')
     })
   }
+
+  const profileDialog = showProfile && player ? (
+    <ProfileEditDlg
+      player={player}
+      onClose={() => setShowProfile(false)}
+      onComplete={updatedPlayer => {
+        setPlayer(updatedPlayer)
+        saveRegisteredPlayerCache(updatedPlayer)
+        setShowProfile(false)
+      }}
+    />
+  ) : null
 
   if (layoutMode !== 'desktop') {
     const isLobbyScreen = /\/channel\/[^/]+\/lobby$/.test(location.pathname)
@@ -237,6 +262,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
             <div className="majak-mobile-frame__brand">{screenTitle}</div>
             <MobileUserSummary />
             <div className="majak-mobile-frame__tools">
+              {isTitleScreen && <button type="button" onClick={() => setShowProfile(true)}>プロフィール</button>}
               {usesScreenHeader ? (
                 frameBack && <button type="button" onClick={frameBack}>{isAnnouncementScreen ? '閉じる' : '戻る'}</button>
               ) : <>
@@ -255,12 +281,13 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
         </main>
         {showCfg && <CfgDlg initial={cfg} onOK={value => { setCfg(value); saveMajakConfig(value); setShowCfg(false) }} onCancel={() => setShowCfg(false)} />}
         {showExitConfirm && <EndingPopupWnd onOK={() => { void handleExitConfirm() }} onCancel={() => setShowExitConfirm(false)} />}
+        {profileDialog}
       </div>
     )
   }
 
   return (
-    <div className={isResponsiveDesktopScreen ? 'majak-responsive-desktop-frame' : undefined} style={{
+    <div className={isResponsiveDesktopScreen ? `majak-responsive-desktop-frame${isFullScreen ? ' is-fullscreen' : ''}` : undefined} style={{
       position: 'relative',
       width: desktopFrameWidth,
       height: desktopFrameHeight,
@@ -281,6 +308,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
         <header className="majak-responsive-desktop-frame__bar">
           <strong className="majak-type-lg">{screenTitle}</strong>
           <div>
+            {isTitleScreen && <button type="button" className="majak-responsive-control-button" onClick={() => setShowProfile(true)}>プロフィール</button>}
             {isAnnouncementScreen ? (
               onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>閉じる</button>
             ) : isLobbySelectScreen || isPaifuArchiveScreen ? (
@@ -289,11 +317,9 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
               {onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>閉じる</button>}
               {onOpenAnnouncements && <button type="button" className="majak-responsive-control-button" onClick={onOpenAnnouncements}>お知らせ</button>}
               <button type="button" className="majak-responsive-control-button" onClick={handleOpenSettings}>設定</button>
-              {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleAccuse}>通報</button>}
-              {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleCapture}>キャプチャ</button>}
-              {accBox === 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleBanish}>追放</button>}
-              {!IS_NATIVE_APP && <button type="button" className="majak-responsive-control-button" onClick={handleMaximize}>{isFullScreen ? '元に戻す' : '全画面'}</button>}
-              <button type="button" className="majak-responsive-control-button" onClick={handleClose}>終了</button>
+              {isLobbyListScreen && <button type="button" className="majak-responsive-control-button" onClick={handleChangeLobby}>ロビー変更</button>}
+              {!isLobbyListScreen && accBox !== 'room' && !IS_NATIVE_APP && <button type="button" className="majak-responsive-control-button" onClick={handleMaximize}>{isFullScreen ? '元に戻す' : '全画面'}</button>}
+              {!isLobbyListScreen && accBox !== 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleClose}>終了</button>}
             </>}
           </div>
         </header>
@@ -419,6 +445,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
         />
       )}
       {showExitConfirm && <EndingPopupWnd onOK={() => { void handleExitConfirm() }} onCancel={() => setShowExitConfirm(false)} />}
+      {profileDialog}
     </div>
   )
 }

@@ -147,6 +147,13 @@ description: "麻雀4のSignalR・RESTプロトコル、レガシー互換キー
 - 麻雀称号と技はそれぞれ最大1つを装着でき、変更時はDBと接続中の `MajakPlayer` を同時に更新する。
 - `mjkc19e` は対局中の新規獲得通知専用であり、コレクションの参照・装着変更には使用しない。
 
+#### アカウントプロフィール更新 REST API
+
+- `PATCH /api/player/account-profile` はゲームJWTで認証した本人の出生年とアバターを更新する。
+- リクエストは `{ birthYear, avatarId }`。出生年は1900年から現在年、アバターはDBに保存された現在の性別に対応する `AvatarCatalog` の画像に限る。
+- 会員ID、`pix`、性別、ニックネームは受け取らず、本人はJWTの `member_no` から確定する。
+- 応答は `{ birthYear, avatarId }`。接続中の `MajakPlayer` があればアバターと算出年齢も同時に更新する。
+
 #### 通貨の獲得・使用履歴 REST API
 
 - `GET /api/player/currency-history` はゲームJWTの本人について、GP・MP・龍珠の獲得・使用履歴を時刻降順で返す。

@@ -58,7 +58,6 @@ export default function ChannelGroupScreen() {
           </div>
         ))}
       </main>
-
     </div>
   )
 }

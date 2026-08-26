@@ -35,7 +35,7 @@ import CurrencyHistoryDlg from './dialogs/CurrencyHistoryDlg'
 import RankingDlg, { type RankingData } from './dialogs/RankingDlg'
 import TournamentRegistDlg, { type TournamentRegistPayload } from './dialogs/TournamentRegistDlg'
 import AccuseDlg from './dialogs/AccuseDlg'
-import { MAJAK_ACCUSE_EVENT, MAJAK_EXIT_REQUEST_EVENT } from '../../components/MajakFrame'
+import { MAJAK_ACCUSE_EVENT, MAJAK_EXIT_REQUEST_EVENT, MAJAK_LOBBY_CHANGE_REQUEST_EVENT } from '../../components/MajakFrame'
 import MobileUserSummary from '../../components/MobileUserSummary'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 import { DEFAULT_MEMBER_FILTER, isMemberFilterActive, matchesMemberFilter, type MemberFilterValue } from './memberFilter'
@@ -2005,6 +2005,7 @@ export default function LobbyScreen() {
   const [showPlayerInfo, setShowPlayerInfo] = useState<DlgPlayerInfo | null>(null)
   const [oneToOneChat, setOneToOneChat] = useState<{ target: string; partnerName: string; partnerOnline: boolean; messages: Array<{ sender: string; text: string; system?: boolean }> } | null>(null)
   const [oneToOneChatText, setOneToOneChatText] = useState('')
+  const [showOneToOneAccuse, setShowOneToOneAccuse] = useState(false)
   const [oneToOneChatViewport, setOneToOneChatViewport] = useState(() => ({
     top: 0,
     left: 0,
@@ -3014,6 +3015,10 @@ export default function LobbyScreen() {
   const accuseSpeakers = [...new Set(accuseChatMessages.map(msg => msg.pix ?? msg.name).filter(pix => pix !== myPix))]
   const accuseSpeakerNameById = new Map(accuseSpeakers.map(pix => [pix, displayNameForPix(pix)]))
   const accuseSpeakerKey = accuseSpeakers.join('\0')
+  const oneToOneAccuseContent = oneToOneChat?.messages
+    .filter(message => !message.system)
+    .map(message => `[${message.sender === myPix ? '自分' : oneToOneChat.partnerName}] ${message.text}`)
+    .join('\n') ?? ''
 
   useEffect(() => {
     const onAccuse = () => {
@@ -3133,6 +3138,12 @@ export default function LobbyScreen() {
     await SignalR.disconnect().catch(() => {})
     navigate(group ? `/channel/select/${group}` : '/channel')
   }
+
+  useEffect(() => {
+    const requestLobbyChange = () => { void onChangeLobby() }
+    window.addEventListener(MAJAK_LOBBY_CHANGE_REQUEST_EVENT, requestLobbyChange)
+    return () => window.removeEventListener(MAJAK_LOBBY_CHANGE_REQUEST_EVENT, requestLobbyChange)
+  }, [onChangeLobby])
 
   /** 終了 (IDC_SETTING_BTN_EXT 相当) */
   const onExit = () => window.dispatchEvent(new Event(MAJAK_EXIT_REQUEST_EVENT))
@@ -3254,6 +3265,7 @@ export default function LobbyScreen() {
   const endOneToOneChat = () => {
     if (!oneToOneChat) return
     SignalR.send('hc8e', { target: oneToOneChat.target, k38e: oneToOneChat.target }).catch(() => {})
+    setShowOneToOneAccuse(false)
     setOneToOneChat(null)
   }
 
@@ -3537,9 +3549,24 @@ export default function LobbyScreen() {
               {oneToOneChat.messages.length === 0 && <p className="majak-one-to-one-chat__empty">チャットを開始しました。</p>}
               {oneToOneChat.messages.map((message, index) => <p key={`${message.sender}-${index}`} className={`${message.system ? 'is-system' : ''}${message.sender === player?.pix ? ' is-mine' : ''}`}><span>{message.text}</span></p>)}
             </div>
-            <div className="majak-one-to-one-chat__input"><input value={oneToOneChatText} maxLength={80} disabled={!oneToOneChat.partnerOnline} onChange={event => setOneToOneChatText(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); sendOneToOneChat() } }} autoFocus /><button type="button" disabled={!oneToOneChat.partnerOnline} onClick={sendOneToOneChat}>送信</button></div>
+            <div className="majak-one-to-one-chat__input"><input value={oneToOneChatText} maxLength={80} disabled={!oneToOneChat.partnerOnline} onChange={event => setOneToOneChatText(event.currentTarget.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); sendOneToOneChat() } }} autoFocus /><button type="button" disabled={!oneToOneAccuseContent} onClick={() => setShowOneToOneAccuse(true)}>通報</button><button type="button" disabled={!oneToOneChat.partnerOnline} onClick={sendOneToOneChat}>送信</button></div>
           </section>
         </div>
+      )}
+
+      {showOneToOneAccuse && oneToOneChat && (
+        <AccuseDlg
+          myPix={myPix}
+          myMemberName={displayNameForPix(myPix)}
+          speakers={[oneToOneChat.target]}
+          speakerNameById={new Map([[oneToOneChat.target, oneToOneChat.partnerName]])}
+          chatContent={oneToOneAccuseContent}
+          onOK={async payload => {
+            await sendAccuseComplaint({ pix: myPix, channelId, ...payload })
+            void showMessage('通報を受け付けました。', 'お知らせ')
+          }}
+          onClose={() => setShowOneToOneAccuse(false)}
+        />
       )}
 
       {showRoomCreate && (
@@ -3580,7 +3607,7 @@ export default function LobbyScreen() {
       {shopDialogs}
 
       {rankingData && (
-        <RankingDlg data={rankingData} memberNameByPix={memberNameByPix} onClose={() => setRankingData(null)} />
+        <RankingDlg data={rankingData} onClose={() => setRankingData(null)} />
       )}
 
       {showCfg && (
@@ -3940,7 +3967,6 @@ export default function LobbyScreen() {
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCollection(true)}>コレクション</button>
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
             {showFreeChargeButton && <button type="button" className={`majak-responsive-control-button majak-type-md${isFreeGpReplenishmentAvailable ? ' is-free-gp-available' : ''}`} disabled={freeGpReplenishmentPending} onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
-            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onChangeLobby}>ロビー変更</button>
           </nav>
         )}
         {lobbyDialogs}

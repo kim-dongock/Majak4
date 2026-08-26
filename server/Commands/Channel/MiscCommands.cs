@@ -391,6 +391,8 @@ public class RatingRankInfoCommand : ICommand
         {
             memberNo   = player.Pix,
             pix        = player.Pix,
+            nickname   = player.NickName,
+            name       = player.NickName,
             avatarId   = selfItem.AvatarId,
             rating     = selfItem.Rating,
             grade      = selfItem.Grade,
@@ -410,6 +412,8 @@ public class RatingRankInfoCommand : ICommand
         {
             memberNo   = r.MemberNo == player.MemberNo ? player.Pix : (_session.GetPixByMemberNo(r.MemberNo) ?? ""),
             pix        = r.MemberNo == player.MemberNo ? player.Pix : (_session.GetPixByMemberNo(r.MemberNo) ?? ""),
+            nickname   = r.NickName,
+            name       = r.NickName,
             avatarId   = r.AvatarId,
             dispRange  = 0,
             rank       = r.Rank,

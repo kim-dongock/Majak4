@@ -6,6 +6,7 @@ import type { KyoPlayer, KyoResData, KyoYaku } from './KyoRes'
 type KyoProps = {
   data: KyoResData
   myOdr?: number
+  isViewer?: boolean
   canContinue: boolean
   waitingForOtherPlayers?: boolean
   playerProgress?: Record<number, { durationMs: number; localDeadlineAt: number; submitted: boolean }>
@@ -141,7 +142,7 @@ function HandSettlementCells({ player, delay }: { player: KyoPlayer; delay: numb
   )
 }
 
-export function ResponsiveKyoResult({ data, myOdr, canContinue, waitingForOtherPlayers = false, playerProgress = {}, onClose }: KyoProps) {
+export function ResponsiveKyoResult({ data, myOdr, isViewer = false, canContinue, waitingForOtherPlayers = false, playerProgress = {}, onClose }: KyoProps) {
   const winners = data.players
     .map((player, index) => ({ player, index }))
     .filter(({ player }) => player.isHora)
@@ -267,10 +268,12 @@ export function ResponsiveKyoResult({ data, myOdr, canContinue, waitingForOtherP
         )}
 
         <footer className="majak-result-actions">
-          <span>{waitingForOtherPlayers
+          <span>{isViewer
+            ? '対局者の確認を待っています'
+            : waitingForOtherPlayers
             ? '他のプレイヤーの確認を待っています'
             : `本場 ${data.renCnt ?? 0} / 供託 ${data.ribCnt ?? 0}${(totals?.tipBal ?? data.tipBal) ? ` / チップ ${totals?.tipBal ?? data.tipBal}` : ''}`}</span>
-          <button type="button" onClick={advance} disabled={!canContinue || waitingForOtherPlayers}>{waitingForOtherPlayers ? '確認済み' : winners.length > 1 && selectedIndex !== winners[winners.length - 1]?.index ? '次の和了者' : '続ける'}</button>
+          {!isViewer && <button type="button" onClick={advance} disabled={!canContinue || waitingForOtherPlayers}>{waitingForOtherPlayers ? '確認済み' : winners.length > 1 && selectedIndex !== winners[winners.length - 1]?.index ? '次の和了者' : '続ける'}</button>}
         </footer>
       </section>
     </div>

@@ -5,6 +5,7 @@
  */
 export type RankingItem = {
   pix: string
+  nickname: string
   rank: number
   rating: number
   grade: number
@@ -22,11 +23,9 @@ export type RankingData = {
 type Props = {
   data: RankingData
   onClose: () => void
-  memberNameByPix?: Map<string, string>
 }
 
-export default function RankingDlg({ data, onClose, memberNameByPix = new Map<string, string>() }: Props) {
-  const displayName = (pix: string) => memberNameByPix.get(pix) || pix
+export default function RankingDlg({ data, onClose }: Props) {
   const rankDate = String(data.rankDate ?? '')
   const rankDateLabel = /^\d{6}$/.test(rankDate)
     ? `${rankDate.slice(0, 4)}年${rankDate.slice(4)}月`
@@ -47,7 +46,7 @@ export default function RankingDlg({ data, onClose, memberNameByPix = new Map<st
               <span>自分の順位</span>
               <strong>{data.gradeRankSelf.rank || '-'}<small>位</small></strong>
               <div>
-                <b>{displayName(data.gradeRankSelf.pix)}</b>
+                <b>{data.gradeRankSelf.nickname}</b>
                 <span>R {data.gradeRankSelf.rating} / 段位 {data.gradeRankSelf.grade}</span>
               </div>
               {data.gradeRankSelf.szIndex && <em>{data.gradeRankSelf.szIndex}</em>}
@@ -64,7 +63,7 @@ export default function RankingDlg({ data, onClose, memberNameByPix = new Map<st
               ) : data.gradeRankList.map(item => (
                 <div className={`majak-ranking-dialog__row${item.isSelf ? ' is-self' : ''}`} key={`${item.rank}-${item.pix}`}>
                   <strong className={`majak-ranking-dialog__place rank-${Math.min(Math.max(item.rank, 1), 4)}`}>{item.rank}<small>位</small></strong>
-                  <b className="majak-ranking-dialog__name">{displayName(item.pix)}</b>
+                  <b className="majak-ranking-dialog__name">{item.nickname}</b>
                   <span className="majak-ranking-dialog__rating">R {item.rating}</span>
                   <span className="majak-ranking-dialog__grade">段位 {item.grade}</span>
                 </div>

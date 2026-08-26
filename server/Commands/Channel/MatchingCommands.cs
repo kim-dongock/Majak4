@@ -435,28 +435,7 @@ public class AutoEnterRoomCommand : ICommand
             state = (int)room.State,
         });
 
-
-
-
-        bool isReconnect = room.State == GameRoomState.Playing && !isViewer;
-        if (isReconnect)
-        {
-            await _gameLogic.SendPaiInfoAsync(room, ctx, player, isInit: true, includeAll: true);
-            if (room.PlayHistory.Count > 0)
-            {
-                await ctx.Caller.SendAsync(Cmd.History, new
-                {
-                    result       = 1,
-                    historyCount = room.PlayHistory.Count,
-                    history      = room.PlayHistory,
-                });
-            }
-            await _gameLogic.SendCurrentActionPromptAsync(room, ctx, player);
-            return;
-        }
-
-
-
+        if (room.State == GameRoomState.Playing && !isViewer) return;
         if (isViewer) return;
 
         var (allEntered, match) = _session.ConfirmAutoEntry(roomId, player.MemberNo);
