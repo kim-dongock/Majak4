@@ -16,7 +16,9 @@ exception is documented.
 ### Contract
 
 - Empty seats are represented and played by training NPCs.
-- Training NPCs use the configured legacy or advanced AI policy.
+- Training NPCs use the room-selected legacy or advanced AI policy; new rooms default to advanced.
+- Advanced NPCs may chi or pon only when one-step discard lookahead strictly improves shanten.
+- Human players receive a prompt-scoped blinking discard recommendation in training games.
 - Training matches do not change GP, dragon gems, rating, rank, ordinary match records, titles, or result missions.
 - Training matches do not create normal history, training history, or replay-paifu archive records.
 - Training matches still send valid game-start, action, and game-result packets to connected human players.
@@ -28,7 +30,7 @@ exception is documented.
 | TRN-01 | Channel classification | `00T5A` sets `IsTrainingChannel`. | `GameRoom` channel predicate | Planned |
 | TRN-02 | Solo/two-player start | Game starts with empty seats after the client-ready sequence. | `StartGameLogic_*Training*` | Planned |
 | TRN-03 | NPC turn | Empty-seat NPC makes a legal discard and the next turn continues. | `ProxyEmptySeats_TrainingEmptyDealer_AutoDiscardsAndAdvancesTurn` | Planned |
-| TRN-04 | NPC policy | Legacy/advanced configuration changes NPC behavior only as configured. | `ProxyPlay_TrainingAi*` | Planned |
+| TRN-04 | NPC policy | Room-selected Legacy/Advanced changes NPC behavior only for that training room. | `TrainingRoomAiLevelPayloadTests`, `AdvancedTrainingAiEvaluatorTests` | Implemented; test execution blocked by existing test-project compile errors |
 | TRN-05 | Result payload | Empty engine seats appear as NPC result rows, without player payouts. | `MakeGameReport_TrainingEmptyEngineSeats_AddsNpcRows` | Planned |
 | TRN-06 | Economy/rating | GP, gems, rating, rank, ordinary records, titles, and result missions remain unchanged. | Result-mission coverage exists; remaining assertions required | Planned |
 | TRN-07 | Persistence | No normal history, training history, or replay-paifu archive is written. | Paifu path guarded; existing training-history expectation conflicts | Planned |

@@ -66,15 +66,15 @@ export default function MobileUserSummary({
   return (
     <div className={`majak-mobile-user-summary${className ? ` ${className}` : ''}`} aria-label="ユーザー情報">
       <span className="majak-mobile-user-summary__name">
-        <b className="majak-mobile-user-summary__name-label majak-type-xs">ニックネーム</b>
-        <strong className="majak-mobile-user-summary__name-value majak-type-lg" title={player.name}>{player.name}</strong>
+        <b className="majak-mobile-user-summary__name-label">ニックネーム</b>
+        <strong className="majak-mobile-user-summary__name-value" title={player.name}>{player.name}</strong>
       </span>
       <div className="majak-mobile-user-summary__fields">
-        <span><b className="majak-type-xs">GP</b><em className="majak-type-md">{currentGameMoney?.toLocaleString('ja-JP') ?? '-'}</em></span>
-        <span><b className="majak-type-xs">資産</b><em className="majak-type-md">{currentAssetTitle || '-'}</em></span>
-        {showGrade && <span><b className="majak-type-xs">段位</b><em className="majak-type-md">{gradeLevelName(profile?.gradeLevel)}</em></span>}
-        <span><b className="majak-type-xs">実績</b><em className="majak-type-md">{currentAchievementTitle || '-'}</em></span>
-        <span><b className="majak-type-xs">技</b><em className="majak-type-md">{currentTrickTitle || '-'}</em></span>
+        <span><b>GP</b><em>{currentGameMoney?.toLocaleString('ja-JP') ?? '-'}</em></span>
+        <span><b>資産</b><em>{currentAssetTitle || '-'}</em></span>
+        {showGrade && <span><b>段位</b><em>{gradeLevelName(profile?.gradeLevel)}</em></span>}
+        <span><b>実績</b><em>{currentAchievementTitle || '-'}</em></span>
+        <span><b>技</b><em>{currentTrickTitle || '-'}</em></span>
       </div>
     </div>
   )

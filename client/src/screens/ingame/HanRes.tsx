@@ -239,8 +239,7 @@ function AnimatedSpriteNumber({ value, delay = 0, duration = RESULT_COUNT_DURATI
   const [displayValue, setDisplayValue] = useState(0)
 
   useEffect(() => {
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-    if (reduceMotion || duration <= 0) {
+    if (duration <= 0) {
       setDisplayValue(value)
       return
     }

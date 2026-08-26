@@ -2,6 +2,7 @@ using Moq;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using MajakServer.Engine;
 using MajakServer.Commands;
 using MajakServer.Commands.Room;
 using MajakServer.Commands.Channel;
@@ -13,6 +14,50 @@ using MajakServer.Services;
 using System.Text.Json;
 
 namespace MajakServer.Tests;
+
+public class TrainingRoomAiLevelPayloadTests
+{
+    [Fact]
+    public void Build_PreservesSelectedTrainingAiLevel()
+    {
+        var room = new GameRoom
+        {
+            RoomId = 7,
+            ChannelId = "MAJAK200T5A001",
+            SubId = "00T5A",
+            TrainingAiLevel = TrainingAiLevel.Legacy,
+        };
+
+        var packet = RoomStatePayload.Build(room);
+
+        Assert.Equal("Legacy", packet["trainingAiLevel"]);
+    }
+}
+
+public class RoomRegistryChannelIsolationTests
+{
+    [Fact]
+    public async Task SameRoomId_InDifferentChannels_RemainsIsolated()
+    {
+        var registry = new RoomRegistryService(TestMasterCacheFactory.CreateRedisService());
+
+        await registry.RegisterRoomAsync(2, "grade-lobby", "段位戦", false, 1, 4, "server-a", "", roomState: 0, roomPlaying: 0);
+        await registry.RegisterRoomAsync(2, "normal-lobby", "通常戦", false, 4, 4, "server-b", "", roomState: 2, roomPlaying: 1);
+
+        var gradeRooms = await registry.GetChannelRoomsAsync("grade-lobby");
+        var normalRooms = await registry.GetChannelRoomsAsync("normal-lobby");
+
+        var gradeRoom = Assert.Single(gradeRooms);
+        Assert.Equal("段位戦", gradeRoom.Title);
+        Assert.Equal(1, gradeRoom.MemberCnt);
+        Assert.Equal(0, gradeRoom.RoomPlaying);
+
+        var normalRoom = Assert.Single(normalRooms);
+        Assert.Equal("通常戦", normalRoom.Title);
+        Assert.Equal(4, normalRoom.MemberCnt);
+        Assert.Equal(1, normalRoom.RoomPlaying);
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RoomEmoticonCommand テスト (room:emoticon)

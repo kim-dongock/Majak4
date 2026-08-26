@@ -171,6 +171,13 @@ description: "麻雀4のSignalR・RESTプロトコル、レガシー互換キー
 
 ### ゲーム進行系 (ルーム内)
 
+#### 練習卓 Web 拡張
+
+- C→S `c8e` の構造化payloadは任意の `trainingAiLevel: "Legacy" | "Advanced"` を受け取る。サーバーは練習チャンネルでだけ採用し、欠落・不正値は `Advanced` とする。
+- `mjkroom` / `c8e` の構造化応答は `trainingAiLevel` を含む。レガシー互換キー文字列には追加しない。
+- Hub `GetTrainingDiscardRecommendation(roomId, actionSeq)` はJWT接続本人、練習卓、対局中、非観戦、現在の本人Turn/Tap promptを検証し、`{ actionSeq, bipaiIndex, shouldRiichi }` または `null` を返す。
+- クライアントは同じ `actionSeq` が有効な間だけ推奨を表示し、入力送信・期限切れ・局終了・再同期で即時破棄する。
+
 | コマンド | 主処理 |
 |---|---|
 | `smmc1e` SendOkButton | ゲーム開始前のOK合意状態通知。OK 押下後に全員へ現在の OK 状態を送る |

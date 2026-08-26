@@ -12,6 +12,8 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 - シリアライズは `System.Text.Json` (JSON 形式)。
 - キー定数は `MasterCacheService` (static フィールド) と各サービスの `private const` で管理する。
 - Redisキーの `{memberNo}` はサーバー内部の永続 `player_account.member_no` を表す。クライアントへその値を公開せず、wire上のプレイヤー識別には `pix` を使う。
+- `ChannelServerSettings.ServerUrl` はゲームサーバー負荷・チャンネルリースのサーバー識別子でもあるため、同じ Redis DB を共有する別ゲームサーバープロセスに同じ値を設定してはならない。
+- development / alpha / production は異なる Redis 接続先または Redis DB を使用する。同じ DB を共有する場合は全キーが環境間で衝突するため禁止する。
 
 ---
 
@@ -19,7 +21,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キー | 型 | TTL | 用途 |
 |------|----|-----|------|
-| `majak2:primary-leader` | STRING | **30 秒** | プライマリリーダーのサーバー URL を保持する |
+| `majak2:primary-leader` | STRING | **30 秒** | URL・ホスト・PID・起動nonceを含むプロセス固有IDを保持する |
 
 ### 書き込み / 更新タイミング
 
@@ -79,6 +81,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 | キーパターン | 型 | TTL | DB テーブル | 用途 |
 |-------------|----|-----|-------------|------|
 | `majak2:ranking:grade:{rankDate}:{rankKind}:{maxCnt}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | グレードランキングリスト (最大 maxCnt 件) |
+| `majak2:ranking:grade:{rankDate}:{rankKind}:{maxCnt}:display-name-v2` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | 表示名を含むグレードランキングリスト。末尾はキャッシュスキーマ版 |
 | `majak2:ranking:grade:self:{rankDate}:{memberNo}:{grade}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | プレイヤー自身のランキング情報 |
 | `majak2:graderank:counts:{rankDate}` | STRING (JSON) | **5 分** | `MJK_GRADERANK` | グレード別プレイヤー数 (全サーバー共有) |
 | `majak2:mast:proplayers` | STRING (JSON) | **1 時間** | `EVTUSERMAST` (EVTCODE='5333') | プロプレイヤーリスト (全サーバー共有) |
@@ -101,7 +104,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キーパターン | 型 | TTL | 用途 |
 |-------------|----|-----|------|
-| `room:{roomId}` | STRING (JSON) | **30 秒** | ルーム情報 (RoomId, ChanelId, Title, IsPrivate, MemberCnt, MemberMax, ServerUrl, RoomOption) |
+| `room:{chanelId}:{roomId}` | STRING (JSON) | **30 秒** | チャンネルごとのルーム情報 (RoomId, ChanelId, Title, IsPrivate, MemberCnt, MemberMax, ServerUrl, RoomOption)。roomIdはチャンネル間で重複するため単独キーにしない |
 | `channel:{chanelId}:rooms` | SET | **90 秒** | チャンネル内のルーム ID セット |
 | `continue:{memberNo}:room` | STRING (JSON) | **30 秒** | 対局中切断プレイヤーの続行先ルーム。キーと内部値の会員IDは `member_no` |
 
@@ -109,18 +112,18 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | タイミング | 処理 | クラス |
 |----------|------|--------|
-| ルーム作成時 | `room:{roomId}` SET + `channel:{chanelId}:rooms` SADD | `RoomRegistryService.RegisterRoomAsync()` |
-| プレイヤー入退室時 | `room:{roomId}` の MemberCnt を更新 (TTL リセット) | `RoomRegistryService.UpdateMemberCountAsync()` |
-| 対局中プレイヤーのネットワーク切断時 | `continue:{memberNo}:room` SET。値は `room:{roomId}` の ServerUrl / RoomOption を参照する。明示退室では作成しない | `MajakGameHub.HandleRoomDisconnectAsync()` |
+| ルーム作成時 | `room:{chanelId}:{roomId}` SET + `channel:{chanelId}:rooms` SADD | `RoomRegistryService.RegisterRoomAsync()` |
+| プレイヤー入退室時 | `room:{chanelId}:{roomId}` の MemberCnt を更新 (TTL リセット) | `RoomRegistryService.UpdateMemberCountAsync()` |
+| 対局中プレイヤーのネットワーク切断時 | `continue:{memberNo}:room` SET。値は `room:{chanelId}:{roomId}` の ServerUrl / RoomOption を参照する。明示退室では作成しない | `MajakGameHub.HandleRoomDisconnectAsync()` |
 | 続行プレイヤー復帰時 | `continue:{memberNo}:room` DEL | `AutoEnterRoomCommand` / `RoomEnterRoomCommand` |
 | ゲーム終了・無人対局ルーム即時削除 | 対象席の `continue:{memberNo}:room` DEL | `GameLogicService` / `RoomRegistryService` / `MajakGameHub` / `ServerStatusBackgroundService` |
-| **8 秒ごと** | 全アクティブルームの TTL を 30 秒にリセット、アクティブチャンネルの room-index SET TTL を 90 秒にリセット (ハートビート) | `ServerStatusBackgroundService` → `RoomRegistryService.RefreshTtlBatchAsync()` / `RefreshChannelSetTtlBatchAsync()` |
+| **8 秒ごと** | 全アクティブルームを現在の MemberCnt / State / RoomPlaying で再登録して TTL を 30 秒にリセットし、アクティブチャンネルの room-index SET TTL を 90 秒にリセット (ハートビート) | `ServerStatusBackgroundService` → `RoomRegistryService.RegisterRoomAsync()` / `RefreshChannelSetTtlBatchAsync()` |
 | **8 秒ごと** | 対局中 `IsOutPlayer=true` の座席について、ゲーム終了まで `continue:{memberNo}:room` の TTL を 30 秒へ更新する | `ServerStatusBackgroundService` → `RoomRegistryService.RefreshContinueRoomsAsync()` |
-| ルーム解散時 | `room:{roomId}` DEL + `channel:{chanelId}:rooms` SREM | `RoomRegistryService.RemoveRoomAsync()` |
+| ルーム解散時 | `room:{chanelId}:{roomId}` DEL + `channel:{chanelId}:rooms` SREM | `RoomRegistryService.RemoveRoomAsync()` |
 | グレースフルシャットダウン | 担当全ルームを即削除 | `ServerStatusBackgroundService` → `RoomRegistryService.RemoveAllRoomsAsync()` |
 
-> **ゴーストルーム防止**: サーバーがクラッシュすると TTL 更新が止まり、最大 30 秒後に `room:{roomId}` が自動消滅する。
-> **続行先の整合性**: `/api/player/continue-room` はJWTの `member_no` を正本に検索する。対応する `room:{roomId}` が存在しない場合は `continue:{memberNo}:room` を削除して未検出として返す。
+> **ゴーストルーム防止**: サーバーがクラッシュすると TTL 更新が止まり、最大 30 秒後に `room:{chanelId}:{roomId}` が自動消滅する。
+> **続行先の整合性**: `/api/player/continue-room` はJWTの `member_no` を正本に検索する。対応する `room:{chanelId}:{roomId}` が存在しない場合は `continue:{memberNo}:room` を削除して未検出として返す。
 
 ---
 
@@ -128,7 +131,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キーパターン | 型 | TTL | 用途 |
 |-------------|----|-----|------|
-| `channel:{chanelId}:members` | HASH | **90 秒** | サーバー管理のfield → JSON `{memberNo: pix, pix, nickname, rating, sex, avatarId}`。GET応答は内部fieldを公開しない |
+| `channel:{chanelId}:members` | HASH | **90 秒** | field=`member_no` → JSON `{memberNo, pix, nickname, rating, sex, avatarId}`。GET応答は内部field / memberNoを公開しない |
 
 ### 書き込み / 削除タイミング
 
@@ -136,7 +139,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 |----------|------|--------|
 | チャンネル入室時 | `HSET` + `EXPIRE 90s` | `ChannelMemberService.EnterAsync()` |
 | チャンネル退室時 | `HDEL`。空 HASH なら `DEL`、残メンバーありなら `EXPIRE 90s` 更新 | `ChannelMemberService.LeaveAsync()` |
-| **8 秒ごと** | アクティブチャンネルの HASH TTL を 90 秒にリセット | `ServerStatusBackgroundService` → `ChannelMemberService.RefreshTtlBatchAsync()` |
+| **8 秒ごと** | 自サーバーがリースを所有するチャンネルだけ、現在のローカルメンバーで HASH を同期して TTL を 90 秒にリセット | `ServerStatusBackgroundService` → `ChannelMemberService.SyncChannelAsync()` |
 
 > **ゴーストメンバー防止**: 正常退室/切断時は `HDEL` する。サーバーがクラッシュして退室処理が走らない場合でも、TTL 更新が止まり最大 90 秒後にチャンネルメンバー HASH が自動消滅する。
 
@@ -159,9 +162,9 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 | `game:server:roomcounts` | **8 秒ごと** | `HSET` でルーム数を更新 | 同上 |
 | `game:server:roomcounts` / `game:server:channelcounts` | **8 秒ごと** | `game:servers` から生存期限切れサーバーを削除する際、同じ serverUrl フィールドを `HDEL` | `ServerLoadService.RegisterSelfAsync()` |
 | `game:servers` / `roomcounts` | グレースフルシャットダウン | `ZREM` / `HDEL` で即削除 | `ServerLoadService.UnregisterSelfAsync()` |
-| `channel:{chanelId}:server` | チャンネル入室時 | `SET NX EX 60` で書き込み (競合は NX 失敗側が GET し直す) | `ServerLoadService.ClaimChannelAsync()` |
-| `channel:{chanelId}:server` | **8 秒ごと** | 自サーバー担当分の TTL を 60 秒にリセット | `ServerStatusBackgroundService` → `ServerLoadService.RefreshChannelLeasesBatchAsync()` |
-| `channel:{chanelId}:server` / `channelcounts` | グレースフルシャットダウン | 担当チャンネルの Redis キーを即削除 + HASH デクリメント | `ServerLoadService.ReleaseChannelsAsync()` |
+| `channel:{chanelId}:server` | チャンネル入室時 | Luaで未登録時の取得と channelcounts 加算を原子的に実行。別サーバー所有中なら入室を拒否 | `ServerLoadService.ClaimChannelAsync()` |
+| `channel:{chanelId}:server` | **8 秒ごと** | Luaで現在値が自サーバーの場合だけ TTL を更新し、期限切れなら原子的に再取得。実所有数で channelcounts を再計算 | `ServerStatusBackgroundService` → `ServerLoadService.RefreshChannelLeasesBatchAsync()` |
+| `channel:{chanelId}:server` / `channelcounts` | グレースフルシャットダウン | Luaで現在値が自サーバーの場合だけキー削除と HASH デクリメントを原子的に実行 | `ServerLoadService.ReleaseChannelsAsync()` |
 
 ### 6-1. グローバルロビー接続リース
 
@@ -201,7 +204,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 ]
 ```
 
-### `room:{roomId}` の値 (例)
+### `room:{chanelId}:{roomId}` の値 (例)
 ```json
 { "roomId": 101, "chanelId": "MAJAK20090A001", "title": "東風戦",
   "isPrivate": false, "memberCnt": 2, "memberMax": 4,
@@ -211,6 +214,8 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 ---
 
 ## 8. Google モバイル認証コード
+
+> 現在のサーバーコードには本キーの発行・消費実装がない。実装追加時にのみ下記規約を有効化する。
 
 | キーパターン | 型 | TTL | 用途 |
 |-------------|----|-----|------|
@@ -231,6 +236,18 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 | `majak2:player:{memberNo}:daily:{yyyyMMdd}` | STRING (JSON) | **当日終了まで** | `MJK_DAILYMISSIONLIST` | 当日のデイリーミッション達成状態 (missionId → state) |
 | `majak2:player:{memberNo}:weekly:{monDate}` | STRING (JSON) | **次の月曜日まで** | `MJK_WEEKLYREWARDLIST` | 今週の週間報酬受取状態 (rewardId → status) |
 | `majak2:player:{memberNo}:weeklypoint:{monDate}` | STRING (JSON) | **次の月曜日まで** | `MJK_DAILYMISSIONLIST` + `MJK_DAILYMISSIONMAST` | 今週の累積ポイント (int) |
+| `majak2:player:{memberNo}:dailypoint:{yyyyMMdd}` | STRING (JSON) | **当日終了まで** | `MJK_DAILYMISSIONLIST` + `MJK_DAILYMISSIONMAST` | 当日ポイントと上限 (`[own, max]`) |
+
+---
+
+## 10. Refresh Cookie セッション
+
+| キーパターン | 型 | TTL | 用途 |
+|-------------|----|-----|------|
+| `auth:refresh:{sha256(token)}` | STRING (JSON) | **1～365日 (設定値)** | Refresh Cookie のサーバー側セッション。ランダムtokenのSHA-256をキーにするため会員間で共有しない |
+
+- 発行は `SET NX` を使用し、暗号学的乱数tokenの衝突時は上書きしない。
+- ログアウト時は同じtoken hashのキーだけを削除する。
 
 > `{monDate}` は対象週の月曜日を `yyyyMMdd` で表した値 (例: `20260622`)。
 

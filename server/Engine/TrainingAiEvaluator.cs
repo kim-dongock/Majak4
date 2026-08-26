@@ -11,6 +11,8 @@ public readonly record struct TrainingAiDecision(
     bool ShouldRiichi,
     int? DiscardBipaiIndex = null);
 
+public readonly record struct TrainingAiCallDecision(Act Action, int[] BipaiIndex);
+
 public interface ITrainingAiEvaluator
 {
     TrainingAiDecision Evaluate(MajakGameLogic game, int engineOrder, int aiType = 0);

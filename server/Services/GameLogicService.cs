@@ -63,8 +63,9 @@ public class GameLogicService
     private readonly RoomRegistryService? _roomRegistry;
     private readonly PaifuFileService? _paifuFiles;
     private readonly PaifuArchiveUploadQueue? _paifuUploadQueue;
-    private readonly ITrainingAiEvaluator _trainingAiEvaluator;
-    private readonly TrainingAiLevel      _trainingAiLevel;
+    private readonly ITrainingAiEvaluator _legacyTrainingAiEvaluator = new LegacyTrainingAiEvaluator();
+    private readonly AdvancedTrainingAiEvaluator _advancedTrainingAiEvaluator = new();
+    private readonly TrainingAiLevel      _defaultTrainingAiLevel;
     private readonly bool                 _testEnvironment;
     private readonly bool                 _debugEndAfterEast1;
     private readonly int                  _gameClientReadyTimeoutMs;
@@ -99,13 +100,8 @@ public class GameLogicService
         _roomRegistry  = roomRegistry;
         _paifuFiles    = paifuFiles;
         _paifuUploadQueue = paifuUploadQueue;
-        if (!Enum.TryParse(config["GameSettings:TrainingAiLevel"], ignoreCase: true, out _trainingAiLevel))
-            _trainingAiLevel = TrainingAiLevel.Legacy;
-        _trainingAiEvaluator = _trainingAiLevel switch
-        {
-            TrainingAiLevel.Advanced => new AdvancedTrainingAiEvaluator(),
-            _ => new LegacyTrainingAiEvaluator(),
-        };
+        if (!Enum.TryParse(config["GameSettings:TrainingAiLevel"], ignoreCase: true, out _defaultTrainingAiLevel))
+            _defaultTrainingAiLevel = TrainingAiLevel.Advanced;
         _testEnvironment = config.GetValue<bool>("GameSettings:TestEnvironment", false);
         _debugEndAfterEast1 = config.GetValue<bool>("RuntimeFlag:DebugEndAfterEast1", false);
         _gameClientReadyTimeoutMs = Math.Max(0, config.GetValue("GameSettings:GameClientReadyTimeoutMs", DefaultGameClientReadyTimeoutMs));
@@ -743,7 +739,11 @@ public class GameLogicService
                     && ep.Tehai.Count % 3 == 2)
                 {
                     int aiType = room.Engine.HanchanInfo.Player[order];
-                    var decision = _trainingAiEvaluator.Evaluate(room.Engine, order, aiType);
+                    var trainingAiLevel = room.TrainingAiLevel ?? _defaultTrainingAiLevel;
+                    var evaluator = trainingAiLevel == TrainingAiLevel.Legacy
+                        ? _legacyTrainingAiEvaluator
+                        : _advancedTrainingAiEvaluator;
+                    var decision = evaluator.Evaluate(room.Engine, order, aiType);
                     var discard = decision.DiscardBipaiIndex.HasValue
                         ? ep.Tehai.First(tile => tile.BipaiIndex == decision.DiscardBipaiIndex.Value)
                         : ep.Tehai.First(tile => tile.GetSerial() == decision.DiscardSerial);
@@ -761,7 +761,21 @@ public class GameLogicService
 
             case Engine.PlayerMode.Furo:
             case Engine.PlayerMode.Chan:
-                eAct = useTrainingAi && actions.CanRon ? Engine.Act.Ron : Engine.Act.Pas;
+                if (useTrainingAi && actions.CanRon)
+                {
+                    eAct = Engine.Act.Ron;
+                }
+                else if (useTrainingAi
+                    && (room.TrainingAiLevel ?? _defaultTrainingAiLevel) == TrainingAiLevel.Advanced
+                    && _advancedTrainingAiEvaluator.EvaluateCall(room.Engine, order, actions) is { } call)
+                {
+                    eAct = call.Action;
+                    bipaiIdx = call.BipaiIndex;
+                }
+                else
+                {
+                    eAct = Engine.Act.Pas;
+                }
                 break;
 
             default:
@@ -770,7 +784,7 @@ public class GameLogicService
         }
 
         _log?.LogInformation("Proxy action selected. roomId={RoomId} order={Order} mode={Mode} action={Action} trainingAi={TrainingAi} trainingAiLevel={TrainingAiLevel} bipaiIndex={BipaiIndex}",
-            room.RoomId, order, ep.Mode, eAct, useTrainingAi, _trainingAiLevel, string.Join(',', bipaiIdx));
+            room.RoomId, order, ep.Mode, eAct, useTrainingAi, room.TrainingAiLevel ?? _defaultTrainingAiLevel, string.Join(',', bipaiIdx));
         var res = room.Engine.ProcessAction(order, eAct, bipaiIdx, bipaiIdx.Length);
         if (res != Engine.ActionResult.Ok && eAct == Engine.Act.Ron && actions.CanPass)
         {
@@ -831,6 +845,17 @@ public class GameLogicService
             room.ViewerCount,
             room.NoActiveMembersSince);
         return true;
+    }
+
+    public TrainingAiDecision EvaluateTrainingRecommendation(GameRoom room, int order)
+    {
+        if (!room.IsTrainingChannel)
+            throw new InvalidOperationException("Training recommendations are available only in training rooms.");
+
+        return _advancedTrainingAiEvaluator.Evaluate(
+            room.Engine,
+            order,
+            room.Engine.HanchanInfo.Player[order]);
     }
 
     private long LogAuthoritativeDiscardAudit(GameRoom room, int seatOrder, Engine.Act action, long actionSeq, string trigger)
@@ -2596,6 +2621,15 @@ public class GameLogicService
         room.ClearOk();
         for (int i = 0; i < GameConst.PlayerMaxCount; i++)
             room.OkButtonStates[i] = false;
+
+        if (_roomRegistry != null)
+        {
+            await _roomRegistry.RegisterRoomAsync(
+                room.RoomId, room.ChannelId, room.RoomTitle,
+                room.IsPrivate, room.ActivePlayerCount, room.LimitCnt,
+                room.ServerUrl, room.RoomOption, room.MaxViewer,
+                RoomStatePayload.GetLegacyRoomState(room), 0);
+        }
 
         // チャンネルへルーム状態変更通知
         await ctx.Clients.Group($"chanel_{room.ChannelId}")

@@ -195,6 +195,7 @@ type CreateRoomPayloadState = {
   isPrivate?: boolean
   roomTitle?: string
   roomPassword?: string
+  trainingAiLevel?: 'Legacy' | 'Advanced'
 }
 
 function buildCreateRoomPayload(
@@ -239,6 +240,7 @@ function buildCreateRoomPayload(
     moneyRate: Number(state.moneyRate ?? 500),
     minMoney: Number(state.minMoney ?? 0),
     maxMoney: Number(state.maxMoney ?? 0),
+    trainingAiLevel: state.trainingAiLevel ?? 'Advanced',
   }
 }
 
@@ -719,6 +721,7 @@ export default function RoomScreen() {
     isPrivate?:   boolean
     roomTitle?:   string
     roomPassword?: string
+    trainingAiLevel?: 'Legacy' | 'Advanced'
     customBgId?: number
     customHaiId?: number
     customBoardType?: number
@@ -1110,6 +1113,7 @@ export default function RoomScreen() {
         bChkTnp: roomCfg.bChkTnp,
         bChkHor: roomCfg.bChkHor,
       },
+      trainingRecommendations: trainingChannel && !isViewer,
       customBgId: customBoardId,
       customBoardType,
       customHaiId,
@@ -1706,7 +1710,6 @@ export default function RoomScreen() {
       queueMicrotask(() => {
         if (!mounted) return
         const animationsEnabled = document.visibilityState === 'visible'
-          && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
         const resultEffectDuration = animationsEnabled ? getLegacyKyoResultDelayMs(delayData) : 0
         const activeEffectDuration = animationsEnabled
           ? Math.max(0, gameEffectUntilRef.current - performance.now())
@@ -2874,7 +2877,7 @@ export default function RoomScreen() {
     ) : null
 
     const inlineGameStage = (
-      <div className="majak-inline-game-stage" style={{ position: 'relative', width: ingameLayoutMode === 'responsiveDesktop' ? '100%' : ROOM_W, height: ingameLayoutMode === 'responsiveDesktop' ? '100%' : ROOM_H, overflow: 'hidden', background: isMobileIngame || ingameLayoutMode === 'responsiveDesktop' ? 'transparent' : '#000' }}>
+      <div className="majak-inline-game-stage" style={{ width: ingameLayoutMode === 'responsiveDesktop' ? '100%' : ROOM_W, height: ingameLayoutMode === 'responsiveDesktop' ? '100%' : ROOM_H, overflow: 'hidden', background: isMobileIngame || ingameLayoutMode === 'responsiveDesktop' ? 'transparent' : '#000' }}>
         <div ref={inlineGameRef} style={{ position: 'absolute', left: 0, top: ingameLayoutMode === 'responsiveDesktop' ? 0 : -31, width: ingameLayoutMode === 'responsiveDesktop' ? '100%' : GAME_WIDTH, height: ingameLayoutMode === 'responsiveDesktop' ? '100%' : GAME_HEIGHT }} />
 
         <div style={{ position: 'absolute', left: 0, top: 0, width: ROOM_W, height: ROOM_H, zIndex: 24, pointerEvents: 'none' }}>

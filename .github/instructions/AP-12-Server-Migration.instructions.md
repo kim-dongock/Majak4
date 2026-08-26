@@ -56,7 +56,7 @@ description: "C++レガシーサーバーをASP.NET Core/.NET 8へ移植する�
   - `room.State != Playing && room.HasNoActiveMembers == true` は対局外の無人ルームとして削除/非表示対象である。
   - `room.State == Playing && room.HasNoActivePlayers == true` は即時削除する。接続中の観戦者には `commandMajAutoExitRoom` を送り、session / Redis room / continue key をまとめて削除する。
   - `room.State == Playing` で一部 seat だけ `IsOutPlayer=true` の場合は正常進行中ルームであり、座席を削除してはならない。切断者は対局終了まで continue player として元ルームへの復帰だけを許可し、別ルームの作成・入室・観戦を拒否する。エンジン用座席と continue key はゲーム終了まで保持する。
-- Redis の `room:{roomId}` TTL は「担当ゲームサーバーが生存しているか」の判定であり、サーバーメモリ内の Playing 続行猶予を短絡して削除する根拠ではない。
+- Redis の `room:{chanelId}:{roomId}` TTL は「担当ゲームサーバーが生存しているか」の判定であり、サーバーメモリ内の Playing 続行猶予を短絡して削除する根拠ではない。`roomId` はチャンネル間で重複するため、チャンネルIDを省略したグローバルキーを作ってはならない。
 - `continue:{memberNo}:room` が生存しているユーザーは、必ずそのroomへ復帰させる。`memberNo` はJWTから確定した内部 `member_no` である。`CreateRoomCommand`、`RoomEnterRoomCommand`、`AutoEnterRoomCommand` は別roomIdの作成・入室・観戦を拒否し、続行対象roomIdへの復帰だけを許可する。
 
 ---

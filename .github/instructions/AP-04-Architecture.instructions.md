@@ -77,7 +77,7 @@ GameId (SVCID):  MAJAK4
 },
 "GameSettings": {
   "TestEnvironment":    false,
-  "TrainingAiLevel":    "Legacy", // Legacy / Advanced (練習場の空席 NPC のみ)
+  "TrainingAiLevel":    "Advanced", // 旧クライアント用fallback。新規練習ルームは作成時の選択を優先
   "DefaultRoomRate":    1,
   "RoomChargeDefault":  200,   // 通常チャンネルの室料
   "RoomChargeGrade":    100    // 段位チャンネルの室料
@@ -98,6 +98,13 @@ GameId (SVCID):  MAJAK4
   "NetCafeIpCheck":  true
 }
 ```
+
+### 練習卓 NPC / 推奨打牌 (Web 拡張)
+
+- 練習卓の作成時に `trainingAiLevel=Legacy|Advanced` を選択し、`GameRoom.TrainingAiLevel` に保持する。通常卓ではこの値を無視する。
+- `Advanced` はシャンテン、受け入れ、牌価値、対リーチ危険度で打牌し、チー／ポンは次の必須打牌まで評価してシャンテンが厳密に改善する場合だけ行う。
+- 未指定時は `GameSettings:TrainingAiLevel` をfallbackとして使い、既定は `Advanced` とする。
+- 練習卓の人間プレイヤーには、現在の `actionSeq` に対応する高性能評価の推奨打牌を点滅表示する。推奨は操作を強制せず、通常の有効打牌検証を変更しない。
 
 ---
 
@@ -228,7 +235,7 @@ ws://{host}:{port}/hubs/majak
 | **ロビー (チャンネル画面)** | **SignalR接続あり** (レガシー設計準拠)。`GET /api/channel/{id}/server` → Redisリースから担当サーバー取得 → SignalR接続 |
 | **ルーム入室/作成** | ロビーのSignalR接続を再利用 (同一サーバーなら再接続不要) |
 | **チャンネルユーザーリスト** | Redis HASH (`channel:{chanelId}:members`) で管理。複数サーバー間で共有 |
-| **ルームリスト** | Redis TTL (30秒) で管理。ゲームサーバーが書き込み、8秒ごとにリフレッシュ |
+| **ルームリスト** | Redis TTL (30秒) で管理。ゲームサーバーが書き込み、8秒ごとに現在状態を再登録 |
 | **ルーム作成時サーバー選択** | Redis のルーム数カウントを参照し、最小ルーム数のサーバーに動的に振り分ける |
 | **自動スケールアウト** | 新サーバーが起動すると 8秒後に Redis に自動登録 → 即座に選択対象に追加 |
 
@@ -239,7 +246,7 @@ ws://{host}:{port}/hubs/majak
 | `channel:{chanelId}:members` | HASH | **90s** | REST / SignalR同期 | HASH fieldはサーバー内部識別子、公開JSONの `memberNo` / `pix` は `pix` |
 | `channel:{chanelId}:server` | STRING | **60s** | `ServerLoadService.ClaimChannelAsync()` | このチャンネルを担当するサーバー URL (動的リース) |
 | `game:server:channelcounts` | HASH | なし | `ServerLoadService` | serverUrl → 担当チャンネル数 |
-| `room:{roomId}` | STRING | **30s** | `MajakGameHub` + `ServerStatusBackgroundService` | JSON ルーム情報 (serverUrl 含む) |
+| `room:{chanelId}:{roomId}` | STRING | **30s** | `MajakGameHub` + `ServerStatusBackgroundService` | チャンネルごとのJSONルーム情報 (serverUrl 含む)。roomIdはチャンネル間で重複するため単独キーにしない |
 | `channel:{chanelId}:rooms` | SET | なし | `MajakGameHub` | roomId の集合 (TTL 切れ roomId は自動掃除) |
 | `game:servers` | ZSET | なし | `ServerStatusBackgroundService` (8秒ごと) | score = lastSeenUnixTime |
 | `game:server:roomcounts` | HASH | なし | `ServerStatusBackgroundService` (8秒ごと) | serverUrl → roomCount |
@@ -249,14 +256,14 @@ ws://{host}:{port}/hubs/majak
 ```
 通常時 (8秒ごと):
   ServerStatusBackgroundService
-    → EXPIRE room:{roomId} 30   ← 全アクティブルームの TTL をリフレッシュ
+    → SET room:{chanelId}:{roomId} EX 30   ← 全アクティブルームの現在状態と TTL を同期
 
 サーバークラッシュ時:
   TTL 更新が止まる → 最大 30 秒後にルームエントリが自動消滅
 
 グレースフルシャットダウン時 (即座):
   ApplicationStopping フック
-    → KeyDelete room:{roomId}      (全ルームを即削除)
+    → KeyDelete room:{chanelId}:{roomId} (全ルームを即削除)
     → SortedSetRemove game:servers (このサーバーを即除外)
     → HashDelete game:server:roomcounts
 
@@ -461,7 +468,7 @@ Redis に接続できない場合 (開発環境など) は
 ```
 ApplicationStopping フック (同期):
   1. UnregisterSelfAsync(serverUrl)           → game:servers / game:server:roomcounts から削除
-  2. RemoveAllRoomsAsync([(roomId, chanelId)]) → 全 room:{roomId} キーを削除 (ゴーストルーム防止)
+  2. RemoveAllRoomsAsync([(roomId, chanelId)]) → 全 room:{chanelId}:{roomId} キーを削除 (ゴーストルーム防止)
 ```
 
 サーバークラッシュ時は TTL 更新が止まり、最大 30 秒後にルームエントリが自動消滅する。

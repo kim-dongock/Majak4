@@ -30,12 +30,6 @@ function AnimatedNumber({ value, signed = false, delay = 0, suffix }: { value: n
   const [displayValue, setDisplayValue] = useState(0)
 
   useEffect(() => {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    if (reduceMotion) {
-      setDisplayValue(value)
-      return
-    }
-
     let frameId = 0
     let startTime: number | undefined
     const timerId = window.setTimeout(() => {
@@ -87,7 +81,6 @@ function AnimatedLegacyStatus({ status }: { status: 'tsumo' | 'ron' | 'hoju' }) 
   const [frame, setFrame] = useState(0)
 
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const timer = window.setInterval(() => setFrame(current => (current + 1) % frameCount), 200)
     return () => window.clearInterval(timer)
   }, [frameCount])

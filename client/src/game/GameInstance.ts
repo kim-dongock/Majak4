@@ -41,6 +41,8 @@ export interface CreateGameOptions {
   recordPaifuMode?: number
   /** アシスト設定 (CMJConfig::m_bChkTap/Pai/Tnp/Hor) */
   assistConfig?: Partial<GameAssistConfig>
+  /** 練習卓でサーバー評価の推奨打牌を表示する */
+  trainingRecommendations?: boolean
   /** 装備中カスタム背景 (CUSTOMITEM_BOARD_*) */
   customBgId?: number
   /** 装備中カスタム背景タイプ (CUSTOM_ITEM_TYPE_BG_*) */
@@ -85,6 +87,7 @@ function sameGameOptions(a: CreateGameOptions, b: CreateGameOptions): boolean {
     a.assistConfig?.bChkPai === b.assistConfig?.bChkPai &&
     a.assistConfig?.bChkTnp === b.assistConfig?.bChkTnp &&
     a.assistConfig?.bChkHor === b.assistConfig?.bChkHor &&
+    a.trainingRecommendations === b.trainingRecommendations &&
     a.customBgId === b.customBgId &&
     a.customBoardType === b.customBoardType &&
     a.customHaiId === b.customHaiId &&

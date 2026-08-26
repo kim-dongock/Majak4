@@ -92,7 +92,7 @@ export default function GameSpritePreviewDlg({ onClose }: { onClose: () => void 
           <small>Phaser gameplay resources</small>
           <h2>ゲームスプライト</h2>
         </div>
-        <button type="button" onClick={onClose} aria-label="閉じる">×</button>
+        <button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
       </header>
       <div className="majak-game-effect-preview__body">
         <nav aria-label="ゲームエフェクト一覧">

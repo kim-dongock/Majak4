@@ -759,7 +759,7 @@ export default class UIScene extends Phaser.Scene {
     const duration = frameDelays.reduce((sum, value) => sum + value, 0)
     if (keys.length === 0 || !this.textures.exists(keys[0])) return delay + duration
     const start = () => {
-      if (document.visibilityState !== 'visible' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+      if (document.visibilityState !== 'visible') return
       const sprite = this.add.image(x, y, keys[0])
         .setOrigin(0, 0)
         .setDepth(10000)
@@ -1576,7 +1576,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private playLegacyReachDeclaration(odr: number) {
-    if (document.visibilityState !== 'visible' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return false
+    if (document.visibilityState !== 'visible') return false
     const effect = Number(this.players[odr]?.richiEffect ?? 0)
     if (effect < 1 || effect > 3) return false
     const loc = this.odrToLoc(odr)

@@ -15,7 +15,7 @@ namespace MajakServer.Services;
 ///   グレースフルシャットダウン時は即座に Redis から削除する。
 ///
 /// Redis キー:
-///   room:{roomId}              STRING  JSON  TTL=30s
+///   room:{chanelId}:{roomId}   STRING  JSON  TTL=30s
 ///   channel:{chanelId}:rooms   SET     roomId の集合
 /// </summary>
 public class RoomRegistryService
@@ -34,7 +34,7 @@ public class RoomRegistryService
     public RoomRegistryService(RedisService redis) => _redis = redis;
 
     // ── キー生成 ─────────────────────────────────────────────
-    private static string RoomKey(int roomId)     => $"room:{roomId}";
+    private static string RoomKey(int roomId, string chanelId) => $"room:{chanelId}:{roomId}";
     private static string ChannelKey(string cid)  => $"channel:{cid}:rooms";
     private static string ContinueRoomKey(string memberNo) => $"continue:{memberNo}:room";
 
@@ -57,7 +57,7 @@ public class RoomRegistryService
         if (_redis.IsAvailable)
         {
             var db = _redis.Db!;
-            await db.StringSetAsync(RoomKey(roomId), json, RoomTtl);
+            await db.StringSetAsync(RoomKey(roomId, chanelId), json, RoomTtl);
             await db.SetAddAsync(ChannelKey(chanelId), roomId.ToString());
             await db.KeyExpireAsync(ChannelKey(chanelId), ChannelRoomsTtl);
         }
@@ -74,13 +74,13 @@ public class RoomRegistryService
     {
         if (_redis.IsAvailable)
         {
-            var raw = await _redis.Db!.StringGetAsync(RoomKey(roomId));
+            var raw = await _redis.Db!.StringGetAsync(RoomKey(roomId, chanelId));
             if (!raw.HasValue) return;
             try
             {
                 var entry = JsonSerializer.Deserialize<RoomRedisEntry>(raw.ToString())!;
                 entry.MemberCnt = memberCnt;
-                await _redis.Db!.StringSetAsync(RoomKey(roomId),
+                await _redis.Db!.StringSetAsync(RoomKey(roomId, chanelId),
                     JsonSerializer.Serialize(entry), RoomTtl);
             }
             catch { /* 壊れたエントリはスキップ */ }
@@ -107,7 +107,7 @@ public class RoomRegistryService
         if (_redis.IsAvailable)
         {
             var db = _redis.Db!;
-            await db.KeyDeleteAsync(RoomKey(roomId));
+            await db.KeyDeleteAsync(RoomKey(roomId, chanelId));
             await db.SetRemoveAsync(ChannelKey(chanelId), roomId.ToString());
             if (await db.SetLengthAsync(ChannelKey(chanelId)) == 0)
                 await db.KeyDeleteAsync(ChannelKey(chanelId));
@@ -234,21 +234,21 @@ public class RoomRegistryService
     }
 
     // ── TTL リフレッシュ (ServerStatusBackgroundService が定期呼び出し) ─
-    public async Task RefreshTtlAsync(int roomId)
+    public async Task RefreshTtlAsync(int roomId, string chanelId)
     {
         if (!_redis.IsAvailable) return;
-        await _redis.Db!.KeyExpireAsync(RoomKey(roomId), RoomTtl);
+        await _redis.Db!.KeyExpireAsync(RoomKey(roomId, chanelId), RoomTtl);
     }
 
     // ── TTL パイプライン一括リフレッシュ (PerformanceAnalysis §2-2)
     // N ルーム分の EXPIRE を 1 往復で送信する。
     // ServerStatusBackgroundService の foreach ループから置き換えて使用する。
-    public async Task RefreshTtlBatchAsync(IEnumerable<int> roomIds)
+    public async Task RefreshTtlBatchAsync(IEnumerable<(int roomId, string chanelId)> rooms)
     {
         if (!_redis.IsAvailable) return;
         var db = _redis.Db!;
         var batch = db.CreateBatch();
-        var tasks = roomIds.Select(id => batch.KeyExpireAsync(RoomKey(id), RoomTtl)).ToList();
+        var tasks = rooms.Select(room => batch.KeyExpireAsync(RoomKey(room.roomId, room.chanelId), RoomTtl)).ToList();
         batch.Execute();
         await Task.WhenAll(tasks);
     }
@@ -273,7 +273,7 @@ public class RoomRegistryService
         var db = _redis.Db!;
         foreach (var (roomId, chanelId) in rooms)
         {
-            await db.KeyDeleteAsync(RoomKey(roomId));
+            await db.KeyDeleteAsync(RoomKey(roomId, chanelId));
             await db.SetRemoveAsync(ChannelKey(chanelId), roomId.ToString());
             if (await db.SetLengthAsync(ChannelKey(chanelId)) == 0)
                 await db.KeyDeleteAsync(ChannelKey(chanelId));
@@ -294,7 +294,7 @@ public class RoomRegistryService
         var roomIds = await db.SetMembersAsync(ChannelKey(chanelId));
         if (roomIds.Length == 0) return Array.Empty<RoomRedisEntry>();
 
-        var keys   = roomIds.Select(id => (RedisKey)RoomKey((int)(long)id)).ToArray();
+        var keys   = roomIds.Select(id => (RedisKey)RoomKey((int)(long)id, chanelId)).ToArray();
         var values = await db.StringGetAsync(keys);
 
         // TTL 切れで消えた roomId は SET から掃除する
@@ -333,7 +333,7 @@ public class RoomRegistryService
     {
         if (_redis.IsAvailable)
         {
-            var raw = await _redis.Db!.StringGetAsync(RoomKey(roomId));
+            var raw = await _redis.Db!.StringGetAsync(RoomKey(roomId, chanelId));
             if (!raw.HasValue) return null;
             try { return JsonSerializer.Deserialize<RoomRedisEntry>(raw.ToString()); }
             catch { return null; }

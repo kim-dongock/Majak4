@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.SignalR;
+using MajakServer.Engine;
 using MajakServer.Models.Protocol;
 using MajakServer.Models.Game;
 using MajakServer.Models.Player;
@@ -560,6 +561,16 @@ public class CreateRoomCommand : ICommand
         int minCnt = ctx.GetInt(GKey.RoomMinCnt, ctx.GetInt("roomMinCnt"));
         int maxViewer = ctx.GetInt(GKey.MaxViewer, ctx.GetInt("maxViewer", 12));
         int requestRoomId = ctx.GetInt(GKey.RoomId, ctx.GetInt("roomId"));
+        TrainingAiLevel? trainingAiLevel = null;
+        if (subId.Length > 2 && subId[2] == 'T')
+        {
+            trainingAiLevel = Enum.TryParse(
+                ctx.GetString("trainingAiLevel"),
+                ignoreCase: true,
+                out TrainingAiLevel requestedTrainingAiLevel)
+                ? requestedTrainingAiLevel
+                : TrainingAiLevel.Advanced;
+        }
         bool isPrivate = ctx.GetBool("isPrivate")
             || IsTruthy(ctx.GetString(GKey.PrivateYn))
             || IsTruthy(ctx.GetString("roomType"));
@@ -656,6 +667,7 @@ public class CreateRoomCommand : ICommand
             unitMoney:        unitMoney,
             minCnt:           minCnt,
             roomId:           requestRoomId);
+        room.TrainingAiLevel = trainingAiLevel;
         room.ServerUrl = _channelSettings.Value.ResolveUrl(channelId);
 
         if (requiredCircles is { Count: > 0 })

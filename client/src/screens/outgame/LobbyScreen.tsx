@@ -3197,6 +3197,7 @@ export default function LobbyScreen() {
             isPrivate: roomInfo.isPrivate,
             roomTitle: roomInfo.title,
             roomPassword: roomInfo.password,
+            trainingAiLevel: roomInfo.trainingAiLevel,
             ...customEquipRouteState(),
           },
         },
@@ -3572,6 +3573,7 @@ export default function LobbyScreen() {
       {showRoomCreate && (
         <RoomCreateDlg
           initialTitle=""
+          trainingMode={trainingChannel}
           onOK={(info) => {
             setShowRoomCreate(false)
             setPendingRoomCreate(info)
@@ -3825,13 +3827,13 @@ export default function LobbyScreen() {
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCollection(true)}>コレクション</button>
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
-            <button
-              type="button"
-              className="majak-responsive-control-button majak-type-md"
-              onClick={tournamentPage === 'match' ? onTournamentBack : onChangeLobby}
-            >
-              {tournamentPage === 'match' ? '一覧に戻る' : 'ロビー変更'}
-            </button>
+            {tournamentPage === 'match' && (
+              <button
+                type="button"
+                className="majak-responsive-control-button majak-type-md"
+                onClick={onTournamentBack}
+              >一覧に戻る</button>
+            )}
           </nav>
         )}
         {lobbyDialogs}

@@ -662,6 +662,12 @@ interface WaitGuidePreviewResponse {
   }>
 }
 
+interface TrainingDiscardRecommendationResponse {
+  actionSeq: number
+  bipaiIndex: number
+  shouldRiichi: boolean
+}
+
 interface DiscardState {
   code: number
   bipaiIndex?: number
@@ -854,6 +860,9 @@ function asBoolean(value: unknown): boolean | undefined {
 export default class GameScene extends Phaser.Scene {
   /* Phaser オブジェクト */
   private handSprites: Phaser.GameObjects.Image[][] = [[], [], [], []]
+  private initialDealInProgress = false
+  private initialDealVisibleCounts = [0, 0, 0, 0]
+  private initialDealSerial = 0
   private mobileOpponentHandCountTexts: Array<Phaser.GameObjects.Text | undefined> = [undefined, undefined, undefined, undefined]
   private responsiveLocalHandOffsetY = 0
   private suteSprites: Phaser.GameObjects.Image[][] = [[], [], [], []]
@@ -871,6 +880,8 @@ export default class GameScene extends Phaser.Scene {
   private selectedCursor?: Phaser.GameObjects.Image | Phaser.GameObjects.Graphics
   private drawnTileCursor?: Phaser.GameObjects.Image
   private tenpaiMarkerSprites: Phaser.GameObjects.Image[] = []
+  private trainingRecommendationMarker?: Phaser.GameObjects.Image
+  private trainingRecommendationTween?: Phaser.Tweens.Tween
   private assistHighlightSprites: Phaser.GameObjects.Image[] = []
   private discardSourceMarkerSprites: Array<Phaser.GameObjects.Image | undefined> = [undefined, undefined, undefined, undefined]
   private latestDiscardFrame?: Phaser.GameObjects.Image
@@ -937,6 +948,7 @@ export default class GameScene extends Phaser.Scene {
   private discardAfterCall = [false, false, false, false]
   private claimedDiscardCounts = [0, 0, 0, 0]
   private waitGuideRequestSerial = 0
+  private trainingRecommendationRequestSerial = 0
   private readonly waitGuidePreviewCache = new Map<string, Promise<WaitGuidePreviewResponse | null>>()
   private currentActionOffers: string[] = []
 
@@ -959,6 +971,7 @@ export default class GameScene extends Phaser.Scene {
   private isReplayApplyingHistory = false
   private skipInitialRoomEnter = false
   private requestInitialGameResync = false
+  private trainingRecommendations = false
   private replayHandOpen = false
   private signalRHandlers: Array<{ cmd: string; handler: SignalR.MessageHandler }> = []
   private acceptingSignalR = false
@@ -1049,6 +1062,7 @@ export default class GameScene extends Phaser.Scene {
     this.pendingResyncHandSnapshot = undefined
     this.skipInitialRoomEnter = Boolean(data.skipInitialRoomEnter)
     this.requestInitialGameResync = Boolean(data.requestInitialGameResync)
+    this.trainingRecommendations = Boolean(data.trainingRecommendations)
     this.gameResyncInFlight = false
     this.gameRestorePending = this.requestInitialGameResync && !this.isReplay
     this.gameResyncInvokeResolved = false
@@ -1175,6 +1189,7 @@ export default class GameScene extends Phaser.Scene {
     this.teardownContextMenuEvents()
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.onScenePointerDown, this)
     this.clearAssistHighlights()
+    this.clearTrainingRecommendation()
     this.boardMaskGraphics?.destroy()
     this.boardMaskGraphics = undefined
     this.boardMask = undefined
@@ -1505,6 +1520,9 @@ export default class GameScene extends Phaser.Scene {
         const skillDelay = this.playLegacyLevel1Skills(seatRevealDelay)
         const gemDelay = this.playLegacyGemGame(skillDelay)
         const waremeStartDelay = skillDelay + gemDelay
+        const dealStartDelay = shouldAnimateRoundStart
+          ? waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS
+          : 0
         console.info('[GameStartTiming] initial presentation scheduled', {
           roomId: this.roomId,
           presentationId: data.presentationId,
@@ -1513,7 +1531,7 @@ export default class GameScene extends Phaser.Scene {
           gemDelayMs: gemDelay,
           waremeDelayMs: LEGACY_WAREME_PRESENTATION_DURATION_MS,
           dealDelayMs: 1600,
-          estimatedTotalMs: waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS + 1600,
+          estimatedTotalMs: dealStartDelay + 1600,
         })
         this.emitToUiScene('stateUpdate', {
           players: this.players,
@@ -1536,7 +1554,7 @@ export default class GameScene extends Phaser.Scene {
           this.time.delayedCall(waremeStartDelay + 2000, () => this.redrawDeadWall(false))
           this.time.delayedCall(waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS, () => this.redrawDeadWall())
         }
-        this.animateInitialDeal(oyaOrder, waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS, () => {
+        this.animateInitialDeal(oyaOrder, dealStartDelay, () => {
           if (!this.shouldSuppressLivePlayback()) this.playRoundBgm(data, kyokuCnt)
           if (!this.isReplay) {
             this.emitToUiScene('turnChange', {
@@ -1550,6 +1568,7 @@ export default class GameScene extends Phaser.Scene {
         return
       }
       if (playType === 'MJPID_ENDKYO') {
+        this.clearTrainingRecommendation()
         this.canDiscardOnTileClick = false
         this.currentActionSeatOrder = null
         this.currentActionPrompt = null
@@ -1667,6 +1686,8 @@ export default class GameScene extends Phaser.Scene {
         this.canDiscardOnTileClick = isForLocalPlayer && isTurnMode && actionOffers.includes('Tap')
         if (this.canDiscardOnTileClick) this.reconcileTapCandidates(seatOrder)
         if (isForLocalPlayer) this.redrawHand(this.myOdr)
+        if (this.canDiscardOnTileClick) void this.showTrainingRecommendation(actionSeq, actionPromptSerial)
+        else this.clearTrainingRecommendation()
         this.clearActionResponseTimer()
         if (isForLocalPlayer && !this.canSendCurrentPrompt('expired on receive')) return
         this.traceGameFlow('resolve ACTIONS', {
@@ -2682,7 +2703,13 @@ export default class GameScene extends Phaser.Scene {
       && !this.shouldSuppressLivePlayback()
       && !this.gameResyncInFlight
       && document.visibilityState === 'visible'
-      && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  }
+
+  private shouldPlayInitialDeal() {
+    return !this.isReplay
+      && !this.shouldSuppressLivePlayback()
+      && !this.gameResyncInFlight
+      && document.visibilityState === 'visible'
   }
 
   private playLegacyFrameSequence(
@@ -3018,6 +3045,8 @@ export default class GameScene extends Phaser.Scene {
     }
 
     if (!this.isViewer && odr === this.myOdr) {
+      this.hoverCursor?.destroy()
+      this.hoverCursor = undefined
       this.selectedCursor?.destroy()
       this.selectedCursor = undefined
       this.drawnTileCursor?.destroy()
@@ -3087,6 +3116,7 @@ export default class GameScene extends Phaser.Scene {
     this.alignResponsiveLocalHandAbovePanel(odr, loc)
     this.alignResponsiveMeldsWithHand(odr, loc)
     this.updateMobileActionHandVisibility()
+    this.applyInitialDealVisibility(odr)
     if (!this.isViewer && odr === this.myOdr) this.redrawTenpaiMarkers()
     this.redrawDiscardSourceMarker(odr)
     this.redrawPaifuGraphContent()
@@ -3242,6 +3272,51 @@ export default class GameScene extends Phaser.Scene {
     this.tenpaiMarkerSprites = []
   }
 
+  private clearTrainingRecommendation() {
+    this.trainingRecommendationRequestSerial++
+    this.trainingRecommendationTween?.stop()
+    this.trainingRecommendationTween = undefined
+    this.trainingRecommendationMarker?.destroy()
+    this.trainingRecommendationMarker = undefined
+  }
+
+  private async showTrainingRecommendation(actionSeq: number, promptSerial: number) {
+    this.clearTrainingRecommendation()
+    if (!this.trainingRecommendations || !this.roomId || !this.canDiscardOnTileClick) return
+    const requestSerial = this.trainingRecommendationRequestSerial
+    const recommendation = await SignalR.invoke<TrainingDiscardRecommendationResponse | null>(
+      'GetTrainingDiscardRecommendation',
+      Number(this.roomId),
+      actionSeq,
+    ).catch(() => null)
+    if (!recommendation
+      || requestSerial !== this.trainingRecommendationRequestSerial
+      || promptSerial !== this.actionPromptSerial
+      || recommendation.actionSeq !== this.currentActionPrompt?.actionSeq
+      || !this.canDiscardOnTileClick)
+      return
+
+    const handIdx = this.players[this.myOdr].hand.findIndex(tile => tile.bipaiIndex === recommendation.bipaiIndex)
+    const tile = this.handSprites[this.myOdr][handIdx]
+    if (handIdx < 0 || !tile?.active) return
+
+    const marker = this.clipToBoard(this.add.image(
+      tile.x + tile.displayWidth / 2,
+      tile.y - 2 * tile.scaleY,
+      this.resolveSkinTextureKey('mj_tenpaiicon'),
+    )
+      .setOrigin(0.5, 1)
+      .setDepth(1002))
+    this.trainingRecommendationMarker = marker
+    this.trainingRecommendationTween = this.tweens.add({
+      targets: marker,
+      alpha: 0.2,
+      duration: 350,
+      yoyo: true,
+      repeat: -1,
+    })
+  }
+
   private redrawTenpaiMarkers() {
     this.clearTenpaiMarkers()
     if (!this.assistConfig.bChkTnp || this.isReplay || !this.canDiscardOnTileClick || this.players[this.myOdr].isReach) return
@@ -3304,7 +3379,6 @@ export default class GameScene extends Phaser.Scene {
       && !this.shouldSuppressLivePlayback()
       && !this.gameResyncInFlight
       && document.visibilityState === 'visible'
-      && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
   }
 
   private captureDiscardFlightOrigin(odr: number, handIdx: number): DiscardFlightOrigin | undefined {
@@ -3566,21 +3640,24 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private animateInitialDeal(oyaOrder: number, startDelay = 0, onComplete?: () => void) {
-    if (!this.shouldPlayLegacyVisuals()) {
+    if (!this.shouldPlayInitialDeal()) {
       onComplete?.()
       return 0
     }
-    this.handSprites.forEach(sprites => sprites.forEach(sprite => sprite.setVisible(false)))
+    const serial = ++this.initialDealSerial
+    this.initialDealInProgress = true
+    this.initialDealVisibleCounts = [0, 0, 0, 0]
+    this.handSprites.forEach((_, odr) => this.applyInitialDealVisibility(odr))
     let step = 0
     let odr = oyaOrder
     for (let round = 0; round < 3; round++) {
       for (let player = 0; player < this.players.length; player++) {
         const revealOdr = odr
-        const start = round * 4
+        const visibleCount = (round + 1) * 4
         this.time.delayedCall(startDelay + step++ * 100, () => {
-          this.handSprites[revealOdr].slice(start, start + 4).forEach(sprite => {
-            if (sprite.active) sprite.setVisible(true)
-          })
+          if (!this.initialDealInProgress || serial !== this.initialDealSerial) return
+          this.initialDealVisibleCounts[revealOdr] = visibleCount
+          this.applyInitialDealVisibility(revealOdr)
         })
         odr = (odr + 1) % this.players.length
       }
@@ -3588,15 +3665,26 @@ export default class GameScene extends Phaser.Scene {
     for (let player = 0; player < this.players.length; player++) {
       const revealOdr = odr
       this.time.delayedCall(startDelay + step++ * 100, () => {
-        const sprites = this.handSprites[revealOdr]
-        if (sprites[12]?.active) sprites[12].setVisible(true)
+        if (!this.initialDealInProgress || serial !== this.initialDealSerial) return
+        this.initialDealVisibleCounts[revealOdr] = 13
+        this.applyInitialDealVisibility(revealOdr)
       })
       odr = (odr + 1) % this.players.length
     }
     this.time.delayedCall(startDelay + step * 100, () => {
+      if (!this.initialDealInProgress || serial !== this.initialDealSerial) return
+      this.initialDealInProgress = false
       onComplete?.()
     })
     return startDelay + step * 100
+  }
+
+  private applyInitialDealVisibility(odr: number) {
+    if (!this.initialDealInProgress) return
+    const visibleCount = this.initialDealVisibleCounts[odr] ?? 0
+    this.handSprites[odr].forEach((sprite, idx) => {
+      if (sprite.active) sprite.setVisible(idx < visibleCount)
+    })
   }
 
   private animateDoraReveal(doraIndexes: number[]) {
@@ -3855,7 +3943,7 @@ export default class GameScene extends Phaser.Scene {
     this.showAssistHighlights(hand[idx].code)
     const tileSprite = this.handSprites[this.myOdr][idx]
     this.hoverCursor?.destroy()
-    if (tileSprite) this.hoverCursor = this.createLegacyHoverCursor(tileSprite)
+    if (tileSprite && this.canDiscardOnTileClick) this.hoverCursor = this.createLegacyHoverCursor(tileSprite)
     if (this.canDiscardOnTileClick) this.showWaitTileGuide(idx)
   }
 
@@ -4470,6 +4558,7 @@ export default class GameScene extends Phaser.Scene {
     this.hoverCursor?.destroy()
     this.hoverCursor = undefined
     this.clearTenpaiMarkers()
+    this.clearTrainingRecommendation()
     this.clearWaitTileGuide()
     this.actionOfferByName.clear()
     this.currentActionOffers = []
@@ -4586,6 +4675,7 @@ export default class GameScene extends Phaser.Scene {
     this.hoverCursor?.destroy()
     this.hoverCursor = undefined
     this.clearTenpaiMarkers()
+    this.clearTrainingRecommendation()
     this.clearWaitTileGuide()
     this.actionOfferByName.clear()
     this.actionChoicesByName.clear()
@@ -4805,6 +4895,7 @@ export default class GameScene extends Phaser.Scene {
     this.selectedDiscardBipaiIndex = undefined
     this.selectedDiscardBipaiIndex = undefined
     this.clearTenpaiMarkers()
+    this.clearTrainingRecommendation()
     this.clearWaitTileGuide()
     this.emitToUiScene('actionPromptEnd', { viewOdr: this.myOdr })
   }
@@ -4877,6 +4968,7 @@ export default class GameScene extends Phaser.Scene {
     this.clearTimeWarningTimers()
     this.clearActionButtons()
     this.clearTenpaiMarkers()
+    this.clearTrainingRecommendation()
     this.clearWaitTileGuide()
     this.emitToUiScene('actionPromptEnd', { viewOdr: this.myOdr })
   }
@@ -6000,6 +6092,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private resetRoundState(preserveHands = false) {
+    this.initialDealSerial++
+    this.initialDealInProgress = false
+    this.initialDealVisibleCounts = [0, 0, 0, 0]
     this.clearAllDiscardFlights()
     this.legacyEffectSprites.forEach(sprite => sprite.destroy())
     this.legacyEffectSprites = []
@@ -6027,6 +6122,7 @@ export default class GameScene extends Phaser.Scene {
     this.selectedCursor?.destroy()
     this.selectedCursor = undefined
     this.clearTenpaiMarkers()
+    this.clearTrainingRecommendation()
     this.clearWaitTileGuide()
     for (let odr = 0; odr < this.players.length; odr++) {
       this.clearDiscardSourceMarker(odr)

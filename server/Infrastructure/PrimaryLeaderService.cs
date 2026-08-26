@@ -29,7 +29,7 @@ public class PrimaryLeaderService
     public PrimaryLeaderService(RedisService redis, ChannelServerSettings settings)
     {
         _redis    = redis;
-        _serverId = settings.ServerUrl;
+        _serverId = $"{settings.ServerUrl}|{Environment.MachineName}|{Environment.ProcessId}|{Guid.NewGuid():N}";
         _fallback = settings.IsPrimaryServer;
         _isLeader = _fallback; // 初期値: Redis 接続確認前はフォールバック
     }

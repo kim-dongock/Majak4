@@ -407,7 +407,7 @@ export default function MeldLayoutFixtureScreen() {
             transformOrigin: 'top left',
           }}
         >
-          <div className="majak-inline-game-stage" style={{ position: 'relative', width: GAME_WIDTH, height: GAME_HEIGHT, overflow: 'hidden' }}>
+          <div className="majak-inline-game-stage" style={{ width: GAME_WIDTH, height: GAME_HEIGHT, overflow: 'hidden' }}>
             <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: GAME_WIDTH, height: GAME_HEIGHT }} />
           </div>
         </div>

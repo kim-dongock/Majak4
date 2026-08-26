@@ -84,7 +84,7 @@ export default function GameInviteDialog({
           <>
             <header className="majak-game-invite-dialog__header">
               <h2>ゲームの申し込み</h2>
-              <button type="button" className="majak-game-invite-dialog__icon-button" aria-label="閉じる" onClick={onClose}>×</button>
+              <button type="button" className="majak-popup-titlebar__close majak-game-invite-dialog__icon-button" aria-label="閉じる" onClick={onClose}>×</button>
             </header>
             <div className="majak-game-invite-dialog__body">
               <p className="majak-game-invite-dialog__lead">招待するメンバーを選択してください。</p>

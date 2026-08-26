@@ -313,7 +313,7 @@ export default function ResponsiveItemShopDlg({
         .responsive-shop__balance > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
         .responsive-shop__balance strong { color: #1f4d42; font: 700 var(--shop-font-card-title)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); }
         .responsive-shop__tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #a5afa5; background: #dbe0d7; }
-        .responsive-shop__tabs button { height: var(--majak-popup-tab-height); box-sizing: border-box; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 var(--shop-font-label)/1 var(--majak-font-family-ui); cursor: pointer; }
+        .responsive-shop__tabs button { height: var(--majak-popup-tab-height); box-sizing: border-box; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 var(--majak-popup-tab-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
         .responsive-shop__tabs button.is-active { color: #fff; background: #b84228; }
         .responsive-shop__content { min-height: 0; flex: 1; padding: 24px; overflow: auto; overscroll-behavior: contain; }
         .responsive-shop__grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; }
@@ -334,7 +334,7 @@ export default function ResponsiveItemShopDlg({
         .shop-card:has(.shop-card__cost) .shop-card__footer button { align-self: flex-end; }
         .shop-card__footer strong { min-width: 0; color: #b84228; font: 700 var(--shop-font-price)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); white-space: nowrap; }
         .shop-card__footer span { color: #65736d; font: var(--shop-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
-        .shop-card button, .responsive-shop__footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); box-sizing: border-box; border: 0; border-radius: 3px; padding: 0 13px; color: #fff; background: #1c5a4d; font: 700 var(--shop-font-command)/1 var(--majak-font-family-ui); font-size: var(--shop-font-command) !important; cursor: pointer; white-space: nowrap; }
+        .shop-card button, .responsive-shop__footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); box-sizing: border-box; border: 0; border-radius: 3px; padding: 0 13px; color: #fff; background: #1c5a4d; font: 700 var(--shop-font-command)/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
         .shop-card__footer button { flex: none; max-width: 100%; }
         .shop-card button:hover, .responsive-shop__footer button:hover { background: #123f36; }
         .shop-card button:disabled { color: #87918c; background: #d7ddd5; cursor: not-allowed; }

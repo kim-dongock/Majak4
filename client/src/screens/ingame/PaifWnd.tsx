@@ -444,7 +444,7 @@ export default function PaifWnd() {
   )
 
   const replayStage = (
-    <div className="majak-inline-game-stage" style={{ position: 'relative', width: isMobileIngame ? GAME_WIDTH : '100%', height: isMobileIngame ? ROOM_HEIGHT : '100%', overflow: 'hidden', background: 'transparent' }}>
+    <div className="majak-inline-game-stage" style={{ width: isMobileIngame ? GAME_WIDTH : '100%', height: isMobileIngame ? ROOM_HEIGHT : '100%', overflow: 'hidden', background: 'transparent' }}>
       <div ref={containerRef} style={{ position: 'absolute', left: 0, top: isMobileIngame ? -31 : 0, width: isMobileIngame ? GAME_WIDTH : '100%', height: isMobileIngame ? GAME_HEIGHT : '100%' }} />
     </div>
   )

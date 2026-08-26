@@ -30,6 +30,7 @@ public class GameRoom
     public int    LimitCnt    { get; set; } = 4;    // 参加上限人数 (原典: m_pRoomInfo->m_nLimitCnt)
     public int    MaxViewer   { get; set; } = 12;   // 観戦者上限 (原典: m_pRoomInfo->m_nMaxViewer)
     public string SubId       { get; set; } = "";   // チャンネル SubId (例: "00R5A") チャンネル種別判定用
+    public TrainingAiLevel? TrainingAiLevel { get; set; }
     public int    GameRate    { get; set; } = 1;    // ゲームレート倍率 (原典: GetRoomInfo()->GetGameRate())
     public int    RatingRuleType { get; set; } = 1; // m_stFactor.m_nRatingRuleType
     public float  RatingK     { get; set; } = 20f;  // m_stFactor.K

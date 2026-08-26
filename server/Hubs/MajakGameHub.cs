@@ -443,6 +443,51 @@ public class MajakGameHub : Hub
         }
     }
 
+    public async Task<object?> GetTrainingDiscardRecommendation(int roomId, long actionSeq)
+    {
+        var player = _session.GetByConn(Context.ConnectionId);
+        if (player == null
+            || !_session.IsCurrentConnection(player.MemberNo, Context.ConnectionId)
+            || player.RoomId != roomId
+            || player.IsViewer
+            || player.IsOutPlayer
+            || player.EngineOrder < 0
+            || player.EngineOrder >= GameConst.PlayerMaxCount)
+            return null;
+
+        var room = _session.GetRoom(roomId);
+        if (room?.State != GameRoomState.Playing || !room.IsTrainingChannel) return null;
+        if (!await room.EngineLock.WaitAsync(TimeSpan.FromMilliseconds(500))) return null;
+        try
+        {
+            var prompt = room.PendingActions[player.EngineOrder];
+            var actions = room.Engine.GetValidActions(player.EngineOrder);
+            if (prompt?.ActionSeq != actionSeq
+                || room.Engine.Player[player.EngineOrder].Mode != Engine.PlayerMode.Turn
+                || actions.TapCandidates.Count == 0)
+                return null;
+
+            var decision = _sp.GetRequiredService<GameLogicService>()
+                .EvaluateTrainingRecommendation(room, player.EngineOrder);
+            int bipaiIndex = decision.DiscardBipaiIndex
+                ?? room.Engine.Player[player.EngineOrder].Tehai
+                    .First(tile => tile.GetSerial() == decision.DiscardSerial)
+                    .BipaiIndex;
+            if (!actions.TapCandidates.Contains(bipaiIndex)) return null;
+
+            return new
+            {
+                actionSeq,
+                bipaiIndex,
+                shouldRiichi = decision.ShouldRiichi,
+            };
+        }
+        finally
+        {
+            room.EngineLock.Release();
+        }
+    }
+
     public async Task<object> GetGameStateFingerprint(int roomId)
     {
         var player = _session.GetByConn(Context.ConnectionId);

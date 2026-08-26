@@ -59,6 +59,78 @@ public sealed class AdvancedTrainingAiEvaluator : ITrainingAiEvaluator
             best.Value.BipaiIndex);
     }
 
+    public TrainingAiCallDecision? EvaluateCall(
+        MajakGameLogic game,
+        int engineOrder,
+        ValidActions actions)
+    {
+        ArgumentNullException.ThrowIfNull(game);
+        ArgumentNullException.ThrowIfNull(actions);
+        if ((uint)engineOrder >= MajakConst.PlayerMaxCount)
+            throw new ArgumentOutOfRangeException(nameof(engineOrder));
+
+        EnginePlayer player = game.Player[engineOrder];
+        int[] currentHand = BuildCounts(player.Tehai);
+        int currentShanten = CalculateShanten(currentHand, player.Furo.Count);
+        int[] remaining = BuildRemainingCounts(game, player);
+        TrainingAiCallDecision? best = null;
+        int bestShanten = currentShanten;
+        int bestUkeire = -1;
+
+        IEnumerable<TrainingAiCallDecision> candidates =
+            actions.PonCandidates.Select(indices => new TrainingAiCallDecision(Act.Pon, indices))
+                .Concat(actions.ChiCandidates.Select(indices => new TrainingAiCallDecision(Act.Chi, indices)));
+
+        foreach (TrainingAiCallDecision candidate in candidates)
+        {
+            int[] afterCall = (int[])currentHand.Clone();
+            bool valid = true;
+            foreach (int bipaiIndex in candidate.BipaiIndex)
+            {
+                PaiCode tile = player.Tehai.FirstOrDefault(item => item.BipaiIndex == bipaiIndex);
+                if (!tile.IsValid || afterCall[tile.GetSerial()] <= 0)
+                {
+                    valid = false;
+                    break;
+                }
+                afterCall[tile.GetSerial()]--;
+            }
+            if (!valid) continue;
+
+            int shanten = int.MaxValue;
+            int liveTileCount = -1;
+            for (int discardSerial = 0; discardSerial < afterCall.Length; discardSerial++)
+            {
+                if (afterCall[discardSerial] <= 0) continue;
+                afterCall[discardSerial]--;
+                int candidateShanten = CalculateShanten(afterCall, player.Furo.Count + 1);
+                UkeireResult candidateUkeire = CalculateUkeire(
+                    afterCall,
+                    remaining,
+                    player.Furo.Count + 1,
+                    candidateShanten);
+                afterCall[discardSerial]++;
+                if (candidateShanten < shanten
+                    || (candidateShanten == shanten && candidateUkeire.LiveTileCount > liveTileCount))
+                {
+                    shanten = candidateShanten;
+                    liveTileCount = candidateUkeire.LiveTileCount;
+                }
+            }
+            if (shanten >= currentShanten) continue;
+            if (best == null
+                || shanten < bestShanten
+                || (shanten == bestShanten && liveTileCount > bestUkeire))
+            {
+                best = candidate;
+                bestShanten = shanten;
+                bestUkeire = liveTileCount;
+            }
+        }
+
+        return best;
+    }
+
     private static bool IsBetter(Candidate candidate, Candidate current)
     {
         const double epsilon = 0.000001;

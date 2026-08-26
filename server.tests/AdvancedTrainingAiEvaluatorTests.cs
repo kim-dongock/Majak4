@@ -133,6 +133,26 @@ public class AdvancedTrainingAiEvaluatorTests
             .ToArray());
     }
 
+    [Fact]
+    public void EvaluateCall_ChiWithFollowingDiscardImprovesShanten()
+    {
+        int[] hand = { 0, 1, 3, 4, 5, 9, 10, 11, 18, 19, 27, 27, 26 };
+        MajakGameLogic game = CreateGame(hand);
+        var actions = new ValidActions { Order = 0, CanPass = true };
+        actions.ChiCandidates.Add(new[]
+        {
+            game.Player[0].Tehai[0].BipaiIndex,
+            game.Player[0].Tehai[1].BipaiIndex,
+        });
+
+        TrainingAiCallDecision? decision = new AdvancedTrainingAiEvaluator()
+            .EvaluateCall(game, 0, actions);
+
+        Assert.NotNull(decision);
+        Assert.Equal(Act.Chi, decision.Value.Action);
+        Assert.Equal(actions.ChiCandidates[0], decision.Value.BipaiIndex);
+    }
+
     private static MajakGameLogic CreateGame(IEnumerable<int> serials)
     {
         var game = new MajakGameLogic();

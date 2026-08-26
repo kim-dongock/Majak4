@@ -140,7 +140,7 @@ function renderPreview(id: PreviewId, onClose: () => void) {
     case 'welcome':
       return <WelcomeDlg onClose={onClose} />
     case 'roomCreate':
-      return <RoomCreateDlg initialTitle="気軽にどうぞ～" onOK={onClose} onCancel={onClose} />
+      return <RoomCreateDlg initialTitle="気軽にどうぞ～" trainingMode onOK={onClose} onCancel={onClose} />
     case 'roomOptions':
       return <OptDlg initial={DEFAULT_OPTION} onOK={onClose} onCancel={onClose} />
     case 'settings':

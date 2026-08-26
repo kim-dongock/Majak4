@@ -188,7 +188,7 @@ export default function LobbySelectScreen() {
               className={`majak-responsive-control-button majak-desktop-lobby-select__rule-tab${selectedDaniMatch === match ? ' is-active' : ''}`}
               onClick={() => setSelectedDaniMatch(match)}
             >
-              <span className="majak-type-xl">{match}</span>
+              <span>{match}</span>
             </button>
           ))}
         </div>
@@ -200,7 +200,7 @@ export default function LobbySelectScreen() {
         {visibleLobbyItems.map(item => (
           <div key={`${item.title}-${item.match ?? ''}`} className="majak-desktop-lobby-select__entry">
             <button type="button" className="majak-responsive-control-button majak-responsive-menu-button majak-desktop-lobby-select__card" onClick={item.onClick}>
-              <span className="majak-desktop-lobby-select__card-title majak-type-xl">{item.title}</span>
+              <span className="majak-desktop-lobby-select__card-title">{item.title}</span>
             </button>
             <dl className="majak-desktop-lobby-select__stats" aria-label={`${item.title} 条件`}>
               <div><dt>接続</dt><dd>{item.count}</dd></div>

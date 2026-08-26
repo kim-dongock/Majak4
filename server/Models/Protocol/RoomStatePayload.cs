@@ -67,6 +67,7 @@ public static class RoomStatePayload
             [GKey.RoomLimitCnt] = room.LimitCnt,
             ["maxViewer"] = room.MaxViewer,
             [GKey.MaxViewer] = room.MaxViewer,
+            ["trainingAiLevel"] = room.TrainingAiLevel?.ToString(),
             ["roomInfo"] = roomInfo,
             [$"{GKey.RoomId}{room.RoomId}"] = roomInfo,
         };

@@ -415,15 +415,20 @@ public class EnterChannelCommand : ICommand
         }
 
         _ratingService.UpdatePlayerLevel(player);
+        if (!await _loadService.ClaimChannelAsync(channelId, _channelSettings.Value.ServerUrl))
+        {
+            await ctx.Caller.SendAsync(Cmd.EnterChannel,
+                FailPayload("CHANNEL_SERVER_MISMATCH", "ロビーの接続先が変更されました。ロビーを選び直してください。", channelId, memberNo));
+            return;
+        }
         _session.Register(player);
         lobbyLease?.Commit();
 
         await _playerRepo.SetDailyMissionAsync(memberNo, conditionType: 1, progressIncrement: 1);
         await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, $"chanel_{channelId}");
 
-        _ = _loadService.ClaimChannelAsync(channelId, _channelSettings.Value.ServerUrl);
-        _ = _channelMemberSvc.EnterAsync(
-            channelId, memberNo, nickname,
+        await _channelMemberSvc.EnterAsync(
+            channelId, memberNo, player.Pix, nickname,
             player.ActiveRecord.Rating, player.Sex, avatarId);
         _logger.LogInformation(
             "EnterChannel member registered. channelId={ChannelId} subId={SubId} memberNo={MemberNo}",

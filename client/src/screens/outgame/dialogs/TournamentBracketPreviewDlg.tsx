@@ -62,7 +62,7 @@ export default function TournamentBracketPreviewDlg({
               </select>
             ) : <p>{selectedFormat.label}</p>}
           </div>
-          <button type="button" onClick={onClose} aria-label="閉じる">×</button>
+          <button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
         </header>
         <div className="majak-tournament-bracket-preview__image">
           <div className="majak-tournament-bracket-preview__canvas" style={{ aspectRatio: `633 / ${selectedFormat.imageHeight}` }}>

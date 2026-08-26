@@ -17,6 +17,37 @@ namespace MajakServer.Services;
 /// </summary>
 public class ServerLoadService
 {
+    private const string ClaimChannelLeaseScript = """
+        local current = redis.call('GET', KEYS[1])
+        if not current then
+            redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
+            redis.call('HINCRBY', KEYS[2], ARGV[1], 1)
+            return 1
+        end
+        if current == ARGV[1] then
+            redis.call('PEXPIRE', KEYS[1], ARGV[2])
+            return 1
+        end
+        return 0
+        """;
+
+    private const string RenewChannelLeaseScript = """
+        if redis.call('GET', KEYS[1]) == ARGV[1] then
+            redis.call('PEXPIRE', KEYS[1], ARGV[2])
+            return 1
+        end
+        return 0
+        """;
+
+    private const string ReleaseChannelLeaseScript = """
+        if redis.call('GET', KEYS[1]) == ARGV[1] then
+            redis.call('DEL', KEYS[1])
+            redis.call('HINCRBY', KEYS[2], ARGV[1], -1)
+            return 1
+        end
+        return 0
+        """;
+
     private const string ServersKey   = "game:servers";
     private const string RoomCountKey = "game:server:roomcounts";
 
@@ -176,9 +207,8 @@ public class ServerLoadService
             }
         }
 
-        // 4. SET NX EX 60 (アトミック書き込み)
-        bool claimed = await db.StringSetAsync(
-            key, selectedUrl, ChannelLeaseTtl, When.NotExists);
+        // 4. リース取得と担当数加算を Lua で原子的に実行
+        bool claimed = await ClaimChannelLeaseAsync(db, key, selectedUrl);
 
         if (!claimed)
         {
@@ -187,8 +217,6 @@ public class ServerLoadService
             return winner.HasValue ? (string)winner! : selectedUrl;
         }
 
-        // 5. 担当チャンネル数をインクリメント
-        await db.HashIncrementAsync(ChannelCountKey, selectedUrl, 1);
         return selectedUrl;
     }
 
@@ -197,51 +225,49 @@ public class ServerLoadService
     /// EnterChannelCommand (c1e) から呼ばれる。
     /// 既に自サーバーが登録済みなら TTL を更新するだけ。
     /// </summary>
-    public async Task ClaimChannelAsync(string chanelId, string serverUrl)
+    public async Task<bool> ClaimChannelAsync(string chanelId, string serverUrl)
     {
-        if (!_redis.IsAvailable) return;
+        if (!_redis.IsAvailable) return true;
 
         var db  = _redis.Db!;
         var key = string.Format(ChannelServerKey, chanelId);
 
-        // SET NX (未登録なら登録)
-        bool claimed = await db.StringSetAsync(key, serverUrl, ChannelLeaseTtl, When.NotExists);
-        if (claimed)
-        {
-            await db.HashIncrementAsync(ChannelCountKey, serverUrl, 1);
-        }
-        else
-        {
-            // 自サーバー担当なら TTL だけ更新
-            var current = await db.StringGetAsync(key);
-            if ((string?)current == serverUrl)
-            {
-                await db.KeyExpireAsync(key, ChannelLeaseTtl);
-            }
-        }
+        return await ClaimChannelLeaseAsync(db, key, serverUrl);
     }
 
     /// <summary>
     /// このサーバーが担当するチャンネルの TTL を一括更新する (heartbeat)。
     /// ServerStatusBackgroundService から 8 秒ごとに呼ばれる。
     /// </summary>
-    public async Task RefreshChannelLeasesBatchAsync(
+    public async Task<IReadOnlySet<string>> RefreshChannelLeasesBatchAsync(
         IEnumerable<string> chanelIds, string serverUrl)
     {
-        if (!_redis.IsAvailable) return;
+        var ids = chanelIds.Distinct(StringComparer.Ordinal).ToArray();
+        if (!_redis.IsAvailable) return ids.ToHashSet(StringComparer.Ordinal);
 
-        var db   = _redis.Db!;
-        var pipe = db.CreateBatch();
-        var tasks = new List<Task>();
-
-        foreach (var id in chanelIds)
+        var db = _redis.Db!;
+        var renewals = await Task.WhenAll(ids.Select(async id => new
         {
-            var key = string.Format(ChannelServerKey, id);
-            tasks.Add(pipe.KeyExpireAsync(key, ChannelLeaseTtl));
-        }
+            Id = id,
+            Renewed = await ClaimChannelLeaseAsync(
+                db, string.Format(ChannelServerKey, id), serverUrl),
+        }));
+        var owned = renewals
+            .Where(result => result.Renewed)
+            .Select(result => result.Id)
+            .ToHashSet(StringComparer.Ordinal);
+        await db.HashSetAsync(ChannelCountKey, serverUrl, owned.Count);
+        return owned;
+    }
 
-        pipe.Execute();
-        await Task.WhenAll(tasks);
+    private static async Task<bool> RenewChannelLeaseIfOwnedAsync(
+        IDatabase db, string key, string serverUrl)
+    {
+        long renewed = (long)await db.ScriptEvaluateAsync(
+            RenewChannelLeaseScript,
+            new RedisKey[] { key },
+            new RedisValue[] { serverUrl, (long)ChannelLeaseTtl.TotalMilliseconds });
+        return renewed == 1;
     }
 
     /// <summary>
@@ -252,22 +278,23 @@ public class ServerLoadService
         if (!_redis.IsAvailable) return;
 
         var db         = _redis.Db!;
-        var idList     = chanelIds.ToList();
-        int released   = 0;
-
-        foreach (var id in idList)
+        foreach (var id in chanelIds.Distinct(StringComparer.Ordinal))
         {
-            var key     = string.Format(ChannelServerKey, id);
-            var current = await db.StringGetAsync(key);
-            if ((string?)current == serverUrl)
-            {
-                await db.KeyDeleteAsync(key);
-                released++;
-            }
+            await db.ScriptEvaluateAsync(
+                ReleaseChannelLeaseScript,
+                new RedisKey[] { string.Format(ChannelServerKey, id), ChannelCountKey },
+                new RedisValue[] { serverUrl });
         }
+    }
 
-        if (released > 0)
-            await db.HashDecrementAsync(ChannelCountKey, serverUrl, released);
+    private static async Task<bool> ClaimChannelLeaseAsync(
+        IDatabase db, string key, string serverUrl)
+    {
+        long claimed = (long)await db.ScriptEvaluateAsync(
+            ClaimChannelLeaseScript,
+            new RedisKey[] { key, ChannelCountKey },
+            new RedisValue[] { serverUrl, (long)ChannelLeaseTtl.TotalMilliseconds });
+        return claimed == 1;
     }
 }
 

@@ -25,7 +25,7 @@ internal static class ChannelEndpoints
                     && sessions.ResolveMemberNo(requestPix) != auth.MemberNo)
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-                await service.EnterAsync(chanelId, auth.Pix, request.Nickname ?? "",
+                await service.EnterAsync(chanelId, auth.MemberNo, auth.Pix, request.Nickname ?? "",
                     request.Rating, request.Sex ?? "male", request.AvatarId ?? "");
                 return Results.Ok();
             });
@@ -41,7 +41,7 @@ internal static class ChannelEndpoints
                     && sessions.ResolveMemberNo(requestPix) != auth.MemberNo)
                     return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-                await service.LeaveAsync(chanelId, auth.Pix);
+                await service.LeaveAsync(chanelId, auth.MemberNo);
                 return Results.Ok();
             });
 
@@ -51,7 +51,7 @@ internal static class ChannelEndpoints
                 var members = await service.GetMembersAsync(chanelId);
                 return Results.Ok(members.Select(member => new
                 {
-                    pix = member.MemberNo,
+                    pix = member.Pix,
                     nickname = member.Nickname,
                     rating = member.Rating,
                     sex = member.Sex,

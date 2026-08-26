@@ -19,11 +19,13 @@ export interface RoomCreateInfo {
   password: string
   isPrivate: boolean
   viewerEnable: boolean
+  trainingAiLevel: 'Legacy' | 'Advanced'
 }
 
 interface Props {
   initialTitle: string
   viewerEnable?: boolean
+  trainingMode?: boolean
   onOK: (info: RoomCreateInfo) => void
   onCancel: () => void
 }
@@ -49,12 +51,13 @@ const ROOM_TITLES = [
   '■無言部屋■',
 ]
 
-export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK, onCancel }: Props) {
+export default function RoomCreateDlg({ initialTitle, viewerEnable = true, trainingMode = false, onOK, onCancel }: Props) {
   const layoutMode = useOutgameLayoutMode()
   const [title, setTitle] = useState(() => initialTitle || RANDOM_ROOM_TITLES[Math.floor(Math.random() * RANDOM_ROOM_TITLES.length)])
   const [isPrivate, setIsPrivate] = useState(false)
   const [password, setPassword] = useState('')
   const [allowViewer, setAllowViewer] = useState(viewerEnable)
+  const [trainingAiLevel, setTrainingAiLevel] = useState<'Legacy' | 'Advanced'>('Advanced')
   const [titleListOpen, setTitleListOpen] = useState(false)
   const titleInputRef = useRef<HTMLInputElement>(null)
   const titleComboRef = useRef<HTMLDivElement>(null)
@@ -81,7 +84,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
       showError('パスワードを入力してください。')
       return
     }
-    onOK({ title: roomTitle, password: roomPassword, isPrivate, viewerEnable: allowViewer })
+    onOK({ title: roomTitle, password: roomPassword, isPrivate, viewerEnable: allowViewer, trainingAiLevel })
   }
 
   {
@@ -130,6 +133,16 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, onOK,
                 <div className="majak-mobile-choice-grid majak-mobile-choice-grid--two">
                   <label className="majak-mobile-choice"><input type="radio" name="room-create-viewer-mobile" checked={allowViewer} onChange={() => setAllowViewer(true)} />観戦者可</label>
                   <label className="majak-mobile-choice"><input type="radio" name="room-create-viewer-mobile" checked={!allowViewer} onChange={() => setAllowViewer(false)} />観戦不可</label>
+                </div>
+              </fieldset>
+            )}
+
+            {trainingMode && (
+              <fieldset className="majak-mobile-dialog-section">
+                <legend>NPCの強さ</legend>
+                <div className="majak-mobile-choice-grid majak-mobile-choice-grid--two">
+                  <label className="majak-mobile-choice"><input type="radio" name="room-create-training-ai" checked={trainingAiLevel === 'Legacy'} onChange={() => setTrainingAiLevel('Legacy')} />標準</label>
+                  <label className="majak-mobile-choice"><input type="radio" name="room-create-training-ai" checked={trainingAiLevel === 'Advanced'} onChange={() => setTrainingAiLevel('Advanced')} />上級</label>
                 </div>
               </fieldset>
             )}

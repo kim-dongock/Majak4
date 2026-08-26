@@ -2,6 +2,7 @@ using System.Text.Json;
 using MajakServer.Infrastructure;
 using MajakServer.Models.Player;
 using StackExchange.Redis;
+using System.Text.Json.Serialization;
 
 namespace MajakServer.Services;
 
@@ -30,12 +31,12 @@ public class ChannelMemberService
 
     // Enter
     public async Task EnterAsync(
-        string chanelId, string memberNo, string nickname,
+        string chanelId, string memberNo, string pix, string nickname,
         double rating, string sex, string avatarId)
     {
         var json = JsonSerializer.Serialize(new
         {
-            memberNo, nickname, rating, sex, avatarId,
+            memberNo, pix, nickname, rating, sex, avatarId,
         });
 
         if (_redis.IsAvailable)
@@ -147,7 +148,7 @@ public class ChannelMemberService
 
             var entries = players.Select(player => new HashEntry(player.MemberNo, JsonSerializer.Serialize(new
             {
-                memberNo = player.Pix,
+                memberNo = player.MemberNo,
                 pix = player.Pix,
                 nickname = player.NickName,
                 rating = player.Rating,
@@ -169,7 +170,7 @@ public class ChannelMemberService
             player => player.MemberNo,
             player => JsonSerializer.Serialize(new
             {
-                memberNo = player.Pix,
+                memberNo = player.MemberNo,
                 pix = player.Pix,
                 nickname = player.NickName,
                 rating = player.Rating,
@@ -182,9 +183,16 @@ public class ChannelMemberService
 /// <summary>Channel member state stored in Redis.</summary>
 public sealed class ChannelMemberEntry
 {
+    [JsonPropertyName("memberNo")]
     public string MemberNo { get; set; } = "";
+    [JsonPropertyName("pix")]
+    public string Pix      { get; set; } = "";
+    [JsonPropertyName("nickname")]
     public string Nickname { get; set; } = "";
+    [JsonPropertyName("rating")]
     public double Rating   { get; set; }
+    [JsonPropertyName("sex")]
     public string Sex      { get; set; } = "male";
+    [JsonPropertyName("avatarId")]
     public string AvatarId { get; set; } = "";
 }

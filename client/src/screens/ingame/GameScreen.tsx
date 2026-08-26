@@ -1553,7 +1553,7 @@ export default function GameScreen() {
           return { ...value, trickTitle: player?.trickTitle }
         }),
       }
-      const delay = document.visibilityState === 'visible' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      const delay = document.visibilityState === 'visible'
         ? getLegacyKyoResultDelayMs(delayData)
         : 0
       if (delay > 0) kyoResultTimerRef.current = window.setTimeout(showKyoResult, delay)

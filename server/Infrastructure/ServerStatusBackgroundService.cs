@@ -102,25 +102,29 @@ public class ServerStatusBackgroundService : BackgroundService
             {
                 await RemoveNoActivePlayingRoomsAsync();
 
-                // サーバールーム数を登録
-                int roomCount = _session.GetTotalRoomCount();
-                await _load.RegisterSelfAsync(serverUrl, roomCount);
+                var chanelIds = _session.GetActiveChannelIds().ToArray();
+                var ownedChanelIds = await _load.RefreshChannelLeasesBatchAsync(chanelIds, serverUrl);
 
-                // 全アクティブルームの TTL をパイプラインで一括リフレッシュ (PerformanceAnalysis §2-2)
-                var activeRooms = _session.GetAllRooms().ToArray();
-                var roomIds = activeRooms.Select(r => r.RoomId);
-                await _roomRegistry.RefreshTtlBatchAsync(roomIds);
+                // 全アクティブルームを現在状態で再登録し、TTL と一覧表示を同時に同期する。
+                var activeRooms = _session.GetAllRooms()
+                    .Where(room => ownedChanelIds.Contains(room.ChannelId))
+                    .ToArray();
+                await _load.RegisterSelfAsync(serverUrl, activeRooms.Length);
+                await Task.WhenAll(activeRooms.Select(room => _roomRegistry.RegisterRoomAsync(
+                    room.RoomId, room.ChannelId, room.RoomTitle,
+                    room.IsPrivate, room.ActivePlayerCount, room.LimitCnt,
+                    room.ServerUrl, room.RoomOption, room.MaxViewer,
+                    RoomStatePayload.GetLegacyRoomState(room),
+                    room.State == Models.Game.GameRoomState.Playing ? 1 : 0)));
                 await _roomRegistry.RefreshContinueRoomsAsync(activeRooms);
 
                 // 担当チャンネルの Redis リース TTL を一括更新 (動的チャンネル割り当て)
-                var chanelIds = _session.GetActiveChannelIds();
-                await _load.RefreshChannelLeasesBatchAsync(chanelIds, serverUrl);
-                await _roomRegistry.RefreshChannelSetTtlBatchAsync(chanelIds);
+                await _roomRegistry.RefreshChannelSetTtlBatchAsync(ownedChanelIds);
 
                 // チャンネルメンバー HASH は現在のセッション状態で同期する。
                 // HASH 全体の TTL 更新だけだと切断済みメンバーが残り続けるため、
                 // 生存 ConnectionId を持つ PlayerSessionService を正とする。
-                foreach (var chanelId in chanelIds)
+                foreach (var chanelId in ownedChanelIds)
                     await _channelMembers.SyncChannelAsync(chanelId, _session.GetAllChannelPlayers(chanelId));
 
                 var lostLobbyConnections = await _lobbySessions.RefreshAllAsync();

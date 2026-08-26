@@ -52,7 +52,7 @@ export default function ChannelGroupScreen() {
         {items.map(item => (
           <div key={item.title} className="majak-desktop-channel-group__menu-entry">
             <button type="button" className="majak-responsive-control-button majak-responsive-menu-button majak-desktop-channel-group__action" onClick={item.onClick}>
-              <strong className="majak-type-xl">{item.title}</strong>
+              <strong>{item.title}</strong>
             </button>
             <p className="majak-desktop-channel-group__description">{item.description}</p>
           </div>
