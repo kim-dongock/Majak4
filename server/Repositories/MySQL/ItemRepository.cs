@@ -94,6 +94,21 @@ public class ItemRepository
         }
     }
 
+    public virtual async Task<List<(int CustomId, int Kind)>> GetEquippedCustomItemsAsync(string memberNo)
+    {
+        var memberNoValue = ParseMemberNo(memberNo);
+        await using var db = await RequireGameDb().CreateAsync();
+        return await (
+            from owned in db.PlayerCustomItems.AsNoTracking()
+            join master in db.CustomItemMasters.AsNoTracking() on owned.CustomId equals master.CustomId
+            where owned.MemberNo == memberNoValue
+                && owned.Quantity > 0
+                && owned.EquipSlot == 1
+                && master.IsValid
+            select new ValueTuple<int, int>(checked((int)owned.CustomId), master.Kind))
+            .ToListAsync();
+    }
+
     /// <summary>
     /// デフォルトカスタムアイテム付与 (初回ログイン時) — InsertDefaultCustomItem
     /// MERGE INTO MJK_USERCUSTOMITEM

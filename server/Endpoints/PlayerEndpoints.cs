@@ -231,6 +231,7 @@ internal static class PlayerEndpoints
         app.MapGet("/api/player/continue-room", async (
             HttpContext context,
             RoomRegistryService roomRegistry,
+            ItemRepository itemRepository,
             PlayerSessionService sessions,
             GameAuthTokenService gameAuth) =>
         {
@@ -239,6 +240,7 @@ internal static class PlayerEndpoints
 
             var room = await roomRegistry.GetContinueRoomAsync(auth.MemberNo);
             if (room is null) return Results.Ok(new { found = false });
+            var customEquips = await itemRepository.GetEquippedCustomItemsAsync(auth.MemberNo);
             return Results.Ok(new
             {
                 found = true,
@@ -250,6 +252,9 @@ internal static class PlayerEndpoints
                 serverUrl = room.ServerUrl,
                 roomOption = room.RoomOption,
                 updatedAt = room.UpdatedAt,
+                customEquips = customEquips
+                    .Select(item => new { customType = item.Kind, customId = item.CustomId })
+                    .ToArray(),
             });
         });
     }

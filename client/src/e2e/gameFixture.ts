@@ -9,6 +9,7 @@ interface SentMessage {
 }
 
 interface GameSceneProbe extends Phaser.Scene {
+  boardBackground?: Phaser.GameObjects.Image
   players: Array<{ hand: Array<{ bipaiIndex?: number }>; handSprites?: Phaser.GameObjects.Image[] }>
   handSprites: Phaser.GameObjects.Image[][]
   legacyEffectSprites: Phaser.GameObjects.Image[]
@@ -17,6 +18,7 @@ interface GameSceneProbe extends Phaser.Scene {
 }
 
 const sent: SentMessage[] = []
+const fixtureParams = new URLSearchParams(window.location.search)
 installSignalRTestAdapter({
   send: (cmd, params) => { sent.push({ kind: 'send', name: cmd, payload: params }) },
   invoke: (method, args) => {
@@ -31,6 +33,9 @@ const game = createGame(document.querySelector<HTMLElement>('#game')!, {
   myOdr: 1,
   roomName: 'Virtual training room',
   roomOption: '102002000000000',
+  customBgId: Number(fixtureParams.get('bg') ?? 0),
+  customBoardType: Number(fixtureParams.get('bgType') ?? 0),
+  customHaiId: Number(fixtureParams.get('hai') ?? 0),
   skipInitialRoomEnter: true,
   requestInitialGameResync: false,
   players: [
@@ -43,6 +48,11 @@ const game = createGame(document.querySelector<HTMLElement>('#game')!, {
 
 function scene(): GameSceneProbe {
   return game.scene.getScene('GameScene') as GameSceneProbe
+}
+
+function textureSourceUrl(source: unknown): string {
+  if (typeof source !== 'object' || source === null || !('src' in source)) return ''
+  return typeof source.src === 'string' ? source.src : ''
 }
 
 function initialPai() {
@@ -146,6 +156,14 @@ window.__majakGameFixture = {
   seatRevealTextures: () => scene().legacyEffectSprites.filter(sprite => sprite.active).map(sprite => sprite.texture.key),
   visibleHandCount: () => scene().handSprites.flat().filter(sprite => sprite.active && sprite.visible).length,
   selectedBipaiIndex: () => scene().selectedDiscardBipaiIndex,
+  boardTexture: () => ({
+    exists: Boolean(scene().boardBackground?.active),
+    key: scene().boardBackground?.texture.key ?? '',
+    source: textureSourceUrl(game.textures.get('mj_board').source[0]?.source),
+    scaleX: scene().boardBackground?.scaleX ?? 0,
+    scaleY: scene().boardBackground?.scaleY ?? 0,
+  }),
+  textureExists: (key: string) => game.textures.exists(key),
   sent: () => structuredClone(sent),
 }
 
@@ -162,6 +180,8 @@ declare global {
       seatRevealTextures: () => string[]
       visibleHandCount: () => number
       selectedBipaiIndex: () => number | undefined
+      boardTexture: () => { exists: boolean; key: string; source: string; scaleX: number; scaleY: number }
+      textureExists: (key: string) => boolean
       sent: () => SentMessage[]
     }
   }

@@ -254,7 +254,8 @@ function playFixtureEffect(game: Phaser.Game, effect: FixtureEffect, odr: number
       invoke('redrawDiscards', sourceOdr)
     }
     const discardSprites = scene['suteSprites'] as Array<Array<Phaser.GameObjects.Image>>
-    const source = discardSprites?.[sourceOdr]?.at(-1)
+    const sourceSprites = discardSprites?.[sourceOdr]
+    const source = sourceSprites?.[sourceSprites.length - 1]
     if (source) {
       scene['lastRonSource'] = {
         x: source.x,

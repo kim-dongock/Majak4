@@ -1,12 +1,11 @@
 const CUSTOM_BOARD_TENGOKU = 100002
-const CUSTOM_BOARD_DEFAULT = 100000
 const CUSTOM_BGM_ID_EXTRA = 100008
 const CUSTOM_BGM_ID_TENGOKU = 100009
 const CUSTOM_ITEM_TYPE_BG_EXTRA = 11
 const CUSTOM_ITEM_TYPE_BG_TENGOKU = 12
 const DEFAULT_BOARD_SKIN_ID = 5
 const BOARD_SKIN_IDS = new Set([5, 6, 7, 8, 16, 17, 18, 19, 24, 25, 26, 29, 30, 100001, 100002])
-const HAI_SKIN_IDS = new Set([100004, 100005])
+const HAI_SKIN_IDS = new Set([1, 2, 3, 4, 20, 21, 22, 23, 27, 28, 100004, 100005])
 
 export interface LegacyRoomPalette {
   normal: string
@@ -73,7 +72,8 @@ function invertRgb(red: number, green: number, blue: number): string {
 }
 
 export function isTengokuBoardSkin(customBgId: unknown, customBoardType?: unknown): boolean {
-  return asFiniteNumber(customBgId) === CUSTOM_BOARD_TENGOKU || asFiniteNumber(customBoardType) === CUSTOM_ITEM_TYPE_BG_TENGOKU
+  const board = asFiniteNumber(customBgId)
+  return board === CUSTOM_BOARD_TENGOKU || (board == null && asFiniteNumber(customBoardType) === CUSTOM_ITEM_TYPE_BG_TENGOKU)
 }
 
 export function getLegacyRoomPalette(tengoku: boolean): LegacyRoomPalette {
@@ -92,9 +92,10 @@ export function getLegacyBoardSoundSkinId(customBgId: unknown, customBoardType?:
 export function getLegacyBoardSkinId(customBgId: unknown, customBoardType?: unknown): number {
   const board = asFiniteNumber(customBgId)
   const type = asFiniteNumber(customBoardType)
-  if (type === CUSTOM_ITEM_TYPE_BG_TENGOKU || board === CUSTOM_BOARD_TENGOKU) return CUSTOM_BOARD_TENGOKU
-  if (type === CUSTOM_ITEM_TYPE_BG_EXTRA || board === 100001) return 100001
-  return board != null && BOARD_SKIN_IDS.has(board) ? board : DEFAULT_BOARD_SKIN_ID
+  if (board != null && BOARD_SKIN_IDS.has(board)) return board
+  if (type === CUSTOM_ITEM_TYPE_BG_TENGOKU) return CUSTOM_BOARD_TENGOKU
+  if (type === CUSTOM_ITEM_TYPE_BG_EXTRA) return 100001
+  return DEFAULT_BOARD_SKIN_ID
 }
 
 export function getLegacyHaiSkinId(customHaiId: unknown): number | undefined {
@@ -110,8 +111,10 @@ export function getLegacyBoardImageUrl(customBgId: unknown, customBoardType?: un
 export function getLegacyFullUiSkinId(customBgId: unknown, customBoardType?: unknown): number | undefined {
   const board = asFiniteNumber(customBgId)
   const type = asFiniteNumber(customBoardType)
-  if (type === CUSTOM_ITEM_TYPE_BG_TENGOKU || board === CUSTOM_BOARD_TENGOKU) return CUSTOM_BOARD_TENGOKU
-  if (type === CUSTOM_ITEM_TYPE_BG_EXTRA || board === 100001) return 100001
+  if (board === CUSTOM_BOARD_TENGOKU) return CUSTOM_BOARD_TENGOKU
+  if (board === 100001) return 100001
+  if (board == null && type === CUSTOM_ITEM_TYPE_BG_TENGOKU) return CUSTOM_BOARD_TENGOKU
+  if (board == null && type === CUSTOM_ITEM_TYPE_BG_EXTRA) return 100001
   return undefined
 }
 

@@ -50,14 +50,13 @@ import {
   shouldEnableAutoPassAtKyokuStart,
   type AutoControlState,
 } from '../../game/autoControl'
-import { GAME_LOAD_PROGRESS_EVENT, GAME_LOAD_STEPS, type GameLoadStep } from '../../game/gameLoadProgress'
+import { GAME_BOARD_SURROUND_COLOR_EVENT, GAME_LOAD_PROGRESS_EVENT, GAME_LOAD_STEPS, type GameLoadStep } from '../../game/gameLoadProgress'
 import { finalizePaifuRecording } from '../../game/paifuRecording'
 import { getLegacyKyoResultDelayMs } from '../../game/legacyAnimations'
 import { applyTengokuTextColor, getLegacyBoardImageUrl, getLegacyBoardSoundSkinId, getLegacyFullUiSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 
 const IMG = '/assets/images/game'
-const CUSTOM_BOARD_DEFAULT = 100000
 const CMD_USE_EMOTICON = 'mjkc24e'
 const CMD_YAKUMAN_BONUS = 'mjkc23e'
 const CMD_GAME_PLAY = 'playing'
@@ -772,6 +771,19 @@ export default function RoomScreen() {
     : `${IMG}/${baseKey}.png`
   const bgSkinFallbackSrc = (_skinKey: string, baseKey = _skinKey) => hasFullCustomBoardSkin ? `${IMG}/${baseKey}.png` : undefined
   const customBoardSrc = getLegacyBoardImageUrl(customBoardId, customBoardType)
+  const [gameSurroundColor, setGameSurroundColor] = useState('#176b2a')
+  const gameSurroundStyle = {
+    '--majak-game-surround-color': gameSurroundColor,
+    backgroundColor: gameSurroundColor,
+  } as CSSProperties
+  useEffect(() => {
+    const onBoardSurroundColor = (event: Event) => {
+      const color = String((event as CustomEvent<{ color?: string }>).detail?.color ?? '')
+      if (color) setGameSurroundColor(color)
+    }
+    window.addEventListener(GAME_BOARD_SURROUND_COLOR_EVENT, onBoardSurroundColor)
+    return () => window.removeEventListener(GAME_BOARD_SURROUND_COLOR_EVENT, onBoardSurroundColor)
+  }, [])
   const promptSrc = {
     waitEntry: bgSkinSrc('mj_promptWaitEntry'),
     pushReady: bgSkinSrc('mj_promptPushReady'),
@@ -2050,11 +2062,6 @@ export default function RoomScreen() {
      * CHgGameWnd::OnSocketClose がエラーを返した場合は ForceExit() する。
      */
     let connectionLostHandled = false
-    let connectionCloseMessage = ''
-    const onConnectionClosing = (data: Record<string, unknown>) => {
-      connectionCloseMessage = String(data.message ?? 'サーバーにより接続が終了されました。')
-    }
-    SignalR.on('connection:closing', onConnectionClosing)
     const onConnectionLost = (error?: Error) => {
       if (!mounted || connectionLostHandled) return
       connectionLostHandled = true
@@ -2287,7 +2294,6 @@ export default function RoomScreen() {
       }
       SignalR.offConnectionLost(onConnectionLost)
       SignalR.offReconnected(onReconnected)
-      SignalR.off('connection:closing', onConnectionClosing)
       window.removeEventListener('offline', onBrowserOffline)
       SignalR.off('c14e',             onRoomEnter)
       SignalR.off('c55e',             onReserveChance)
@@ -3189,7 +3195,7 @@ export default function RoomScreen() {
 
     if (isMobileIngame) {
       return (
-        <div ref={mobileIngameShellRef} className="majak-mobile-ingame-shell">
+        <div ref={mobileIngameShellRef} className="majak-mobile-ingame-shell" style={gameSurroundStyle}>
           <div
             className="majak-mobile-ingame-scale"
             style={{
@@ -3311,8 +3317,8 @@ export default function RoomScreen() {
     }
 
     return (
-      <div className={`majak-responsive-ingame-shell${inlineGameLoading ? ' is-loading' : ''}`}>
-        <div className="majak-responsive-ingame-playfield">
+      <div className={`majak-responsive-ingame-shell${inlineGameLoading ? ' is-loading' : ''}`} style={gameSurroundStyle}>
+        <div className="majak-responsive-ingame-playfield" style={gameSurroundStyle}>
           <div className="majak-responsive-ingame-world">
             {inlineGameStage}
           </div>
@@ -3340,7 +3346,14 @@ export default function RoomScreen() {
                     return (
                       <div key={viewer.pix} className={`majak-mobile-lobby-member${selectedViewer?.pix === viewer.pix ? ' is-selected' : ''}`}>
                         <div className="majak-mobile-lobby-member__row">
-                          <button type="button" className="majak-mobile-lobby-member__select" title={viewer.name || viewer.pix} onClick={() => setSelectedViewer(viewer)}>
+                          <button type="button" className="majak-mobile-lobby-member__select" title={viewer.name || viewer.pix} onClick={() => setSelectedViewer({
+                            pix: viewer.pix,
+                            name: viewer.name,
+                            avatarId: viewer.avatarId,
+                            sex: viewer.sex === 'F' || viewer.sex === 'female' ? 'female' : 'male',
+                            rating: viewer.rating,
+                            slevel: viewer.slevel ?? viewer.dan,
+                          })}>
                             <img
                               src={viewer.avatarId ? getShortAvatarUrl(viewer.avatarId) : fallback}
                               alt=""

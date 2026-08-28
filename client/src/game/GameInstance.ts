@@ -62,7 +62,6 @@ export interface CreateGameOptions {
 let gameInstance: Phaser.Game | null = null
 /** リプレイモード設定 — Phaser シーンが参照できるよう module スコープで保持 */
 let _gameOptions: CreateGameOptions = {}
-let gameParent: HTMLElement | null = null
 let gameHost: HTMLDivElement | null = null
 let parkingHost: HTMLDivElement | null = null
 
@@ -118,7 +117,6 @@ function parkGameHost(): void {
   parkingHost.hidden = true
   if (!parkingHost.parentElement) document.body.appendChild(parkingHost)
   if (gameHost.parentElement !== parkingHost) parkingHost.appendChild(gameHost)
-  gameParent = null
 }
 
 export function createGame(parent: HTMLElement, options: CreateGameOptions = {}): Phaser.Game {
@@ -130,7 +128,6 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
   _gameOptions = options
   if (gameInstance) {
     ensureGameHost(parent)
-    gameParent = parent
     gameInstance.loop.wake()
     gameInstance.scale.refresh()
     gameInstance.registry.set(GAME_OPTIONS_REGISTRY_KEY, _gameOptions)
@@ -175,7 +172,6 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
       },
     },
   })
-  gameParent = parent
 
   return gameInstance
 }
@@ -199,7 +195,6 @@ export function destroyGame(): void {
     }
     gameInstance = null
     _gameOptions = {}
-    gameParent = null
     gameHost?.remove()
     parkingHost?.remove()
     gameHost = null

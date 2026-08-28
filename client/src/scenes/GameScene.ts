@@ -64,7 +64,6 @@ import {
   MOBILE_PLAYFIELD_OFFSET_Y,
   mobileCenterHudOffset,
   mobileDiscardScale,
-  mobileEffectPointFromAnchor,
   mobileVisibleWorldBounds,
   mobileVisibleWorldLayoutKey,
   responsiveDesktopCenterOffset,
@@ -123,6 +122,9 @@ const TIME_WARNING_START_MS = 5000
 let INGAME_LAYOUT = getIngameLayout()
 let BOARD_X = INGAME_LAYOUT.board.x,   BOARD_Y = INGAME_LAYOUT.board.y
 let BOARD_W = INGAME_LAYOUT.board.width, BOARD_H = INGAME_LAYOUT.board.height
+const FLUID_BOARD_BACKGROUND_SCALE = 1.5
+const BOARD_BACKGROUND_SAFE_WIDTH = 580
+const BOARD_BACKGROUND_SAFE_HEIGHT = 460
 let SIDE_PANEL = INGAME_LAYOUT.sidePanel
 let DRAGON_OVERLAY = INGAME_LAYOUT.dragonOverlay
 let CENTER_INFO = INGAME_LAYOUT.centerInfo
@@ -159,7 +161,6 @@ const MOBILE_SELF_HAND_DEPTH = 900
 const LEGACY_GEM_EFFECT_SIZE = { width: 345, height: 353 }
 const LEGACY_YAKUMAN_FINISH_SIZE = { width: 563, height: 435 }
 const LEGACY_TSUMO_EFFECT_THICKNESS = 164
-const LEGACY_LEVEL1_EFFECT_SIZE = { width: 102, height: 124 }
 const MATCH_START_SEAT_REVEAL_DURATION_MS = 3100
 const LEGACY_WAREME_PRESENTATION_DURATION_MS = 3700
 const RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP = 64
@@ -1116,9 +1117,7 @@ export default class GameScene extends Phaser.Scene {
     this.createBoardMask()
 
     /* ── ボード背景 mj_board.png (789×704) at (5,31) ── */
-    if (this.layoutMode === 'desktop') {
-      this.boardBackground = this.add.image(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, this.resolveSkinTextureKey('mj_board')).setDepth(-100)
-    }
+    this.boardBackground = this.add.image(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, this.resolveSkinTextureKey('mj_board')).setDepth(-100)
     if (this.textures.exists('mj_taku_dragon_skin')) {
       this.dragonOverlayBg = this.clipToBoard(this.add.image(BOARD_X + DRAGON_OVERLAY.x, BOARD_Y + DRAGON_OVERLAY.y, 'mj_taku_dragon_skin')
         .setOrigin(0, 0)
@@ -1230,10 +1229,21 @@ export default class GameScene extends Phaser.Scene {
     const centerX = BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2 + offset.x
     const centerY = BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2 + offset.y
     if (this.boardBackground) {
+      const visibleBounds = this.layoutMode === 'responsiveDesktop'
+        ? responsiveDesktopVisibleWorldBounds()
+        : isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
+      const backgroundScale = visibleBounds
+        ? Math.max(
+            FLUID_BOARD_BACKGROUND_SCALE,
+            (visibleBounds.right - visibleBounds.left) / BOARD_BACKGROUND_SAFE_WIDTH,
+            (visibleBounds.bottom - visibleBounds.top) / BOARD_BACKGROUND_SAFE_HEIGHT,
+          )
+        : this.layoutMode === 'desktop' ? 1 : FLUID_BOARD_BACKGROUND_SCALE
       this.boardBackground.setPosition(
         isMobileIngameLayout(this.layoutMode) ? centerX : BOARD_X + BOARD_W / 2 + offset.x,
         isMobileIngameLayout(this.layoutMode) ? centerY : BOARD_Y + BOARD_H / 2 + offset.y,
       )
+      this.boardBackground.setScale(backgroundScale)
     }
     if (this.dragonOverlayBg) {
       if (isMobileIngameLayout(this.layoutMode)) {
@@ -2533,7 +2543,7 @@ export default class GameScene extends Phaser.Scene {
       this.players,
       wasInitialized ? previousRoomPosToOdr : this.roomPosToOdr,
       engineToRoom,
-    ).map((player, odr) => player ?? createEmptyPlayerState(odr))
+    ).map(player => player ?? createEmptyPlayerState())
     engineToRoom.forEach((roomPos, odr) => {
       if (Number.isInteger(roomPos) && roomPos >= 0 && roomPos < this.players.length && odr >= 0 && odr < this.players.length) {
         this.roomPosToOdr[roomPos] = odr
@@ -2760,16 +2770,6 @@ export default class GameScene extends Phaser.Scene {
     return delay + duration
   }
 
-  private playLegacySkillFrameSequence(keys: string[], x: number, y: number, frameDelays: readonly number[], delay = 0) {
-    const uiScene = this.scene.get('UIScene') as Phaser.Scene & {
-      playLegacySkillFrameSequence?: (effectKeys: string[], effectX: number, effectY: number, delays: readonly number[], startDelay?: number) => number
-    }
-    if (uiScene?.sys.isActive() && uiScene.playLegacySkillFrameSequence) {
-      return uiScene.playLegacySkillFrameSequence(keys, x, y, frameDelays, delay)
-    }
-    return this.playLegacyFrameSequence(keys, x, y, frameDelays, { delay, additive: true })
-  }
-
   private legacyBoardEffectPlacement() {
     if (this.layoutMode === 'responsiveDesktop') {
       const bounds = responsiveDesktopVisibleWorldBounds()
@@ -2909,34 +2909,12 @@ export default class GameScene extends Phaser.Scene {
 
   private playLegacyLevel1Skills(startDelay = 0) {
     if (!this.shouldPlayLegacyVisuals()) return 0
-    const positions = [{ x: 0, y: 580 }, { x: 687, y: 580 }, { x: 687, y: 0 }, { x: 0, y: 0 }]
     let duration = startDelay
     this.players.forEach((player, odr) => {
       const definition = this.legacySkillDefinition(player.trickTitle, 1)
       if (!definition) return
       this.emitToUiScene('titleSkill', { odr, element: definition.element, level: 1, delays: definition.delays, delay: startDelay })
       duration = Math.max(duration, startDelay + definition.delays.reduce((sum, delay) => sum + delay, 0) + 500)
-      return
-      const loc = odrToLoc(odr, this.myOdr)
-      const desktopPoint = boardEdgePoint(positions[loc], loc, this.layoutMode)
-      const mobileBounds = isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
-      const point = mobileBounds
-        ? {
-            x: loc === 1 || loc === 2 ? mobileBounds.right - LEGACY_LEVEL1_EFFECT_SIZE.width : mobileBounds.left,
-            y: loc === 0 || loc === 1 ? mobileBounds.bottom - LEGACY_LEVEL1_EFFECT_SIZE.height : mobileBounds.top,
-          }
-        : desktopPoint
-      if (this.isLocalPlayerOdr(odr)) {
-        if (startDelay > 0) this.time.delayedCall(startDelay, () => playMajakSfx(definition.sound, this.soundSkinOptions()))
-        else playMajakSfx(definition.sound, this.soundSkinOptions())
-      }
-      duration = Math.max(duration, this.playLegacySkillFrameSequence(
-        numberedLegacyKeys(`mj_ef_L1${definition.element}`, definition.delays.length, 1),
-        point.x,
-        point.y,
-        definition.delays,
-        startDelay,
-      ) + 500)
     })
     return duration
   }
@@ -2947,22 +2925,6 @@ export default class GameScene extends Phaser.Scene {
     playMajakSfx(definition.sound, this.soundSkinOptions())
     this.emitToUiScene('titleSkill', { odr: presentation.odr, element: definition.element, level: 2, delays: definition.delays })
     return definition.delays.reduce((sum, delay) => sum + delay, 0)
-    const loc = odrToLoc(presentation.odr, this.myOdr)
-    const source = presentation.pinType === 0
-      ? this.lastRonSource
-      : this.handSprites[presentation.odr][this.handSprites[presentation.odr].length - 1]
-    if (!source) return 0
-    const offsets = presentation.pinType === 0
-      ? [{ x: -58, y: -87 }, { x: -51, y: -92 }, { x: -58, y: -87 }, { x: -51, y: -92 }]
-      : [{ x: -58, y: -87 }, { x: -51, y: -92 }, { x: -55, y: -70 }, { x: -51, y: -92 }]
-    const point = { x: source.x + offsets[loc].x, y: source.y + offsets[loc].y }
-    playMajakSfx(definition.sound, this.soundSkinOptions())
-    return this.playLegacySkillFrameSequence(
-      numberedLegacyKeys(`mj_ef_L2${definition.element}`, definition.delays.length, 1),
-      point.x,
-      point.y,
-      definition.delays,
-    )
   }
 
   private playLegacyGemGame(delay: number) {
@@ -2990,12 +2952,6 @@ export default class GameScene extends Phaser.Scene {
     return firstHandSprite
       ? { x: firstHandSprite.x, y: firstHandSprite.y }
       : boardLocalPoint(TEH_POS[loc])
-  }
-
-  private mobileHandAnchoredEffectPoint(point: { x: number; y: number }, odr: number, loc: number) {
-    const desktopAnchor = boardLocalPoint(DESKTOP_INGAME_LAYOUT.handPosition[loc])
-    const mobileAnchor = this.mobileHandAnchor(odr, loc)
-    return mobileEffectPointFromAnchor(point, desktopAnchor, mobileAnchor)
   }
 
   private playLegacyHoraFire(presentation: LegacyHoraPresentation) {

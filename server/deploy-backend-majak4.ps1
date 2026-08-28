@@ -16,8 +16,34 @@ $PROJECT_DIR = $PSScriptRoot
 $ZIP_NAME    = "majak4-api.zip"
 $ZIP_PATH    = Join-Path $PSScriptRoot $ZIP_NAME
 $PUBLISH_DIR = Join-Path $PSScriptRoot "publish"
+$LOCAL_ENV_PATH = Join-Path $PSScriptRoot ".env.studio35"
 
-function ssh-run($cmd) {
+if (-not (Test-Path $LOCAL_ENV_PATH)) {
+    throw "Studio35 deployment settings are missing. Create '$LOCAL_ENV_PATH' from 'studio35.env.example'."
+}
+
+$localSettings = @{}
+Get-Content $LOCAL_ENV_PATH | ForEach-Object {
+    $line = $_.Trim()
+    if ($line.Length -eq 0 -or $line.StartsWith("#")) { return }
+    $parts = $line -split "=", 2
+    if ($parts.Count -eq 2) {
+        $localSettings[$parts[0].Trim()] = $parts[1].Trim()
+    }
+}
+
+$requiredSettings = @("GAME_DB_CONNECTION", "LOG_DB_CONNECTION", "REDIS_CONNECTION")
+foreach ($settingName in $requiredSettings) {
+    if ([string]::IsNullOrWhiteSpace($localSettings[$settingName])) {
+        throw "Required Studio35 deployment setting '$settingName' is missing from '$LOCAL_ENV_PATH'."
+    }
+}
+
+$GAME_DB_CONNECTION = $localSettings["GAME_DB_CONNECTION"]
+$LOG_DB_CONNECTION = $localSettings["LOG_DB_CONNECTION"]
+$REDIS_CONNECTION = $localSettings["REDIS_CONNECTION"]
+
+function Invoke-Ssh($cmd) {
     ssh -i $SSH_KEY -o StrictHostKeyChecking=no "${USER}@${SERVER}" $cmd
 }
 
@@ -54,25 +80,29 @@ SyslogIdentifier=$SERVICE
 User=ubuntu
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://localhost:$PORT
+Environment=AWS__ParameterStore__Enabled=false
+Environment="ConnectionStrings__GameDatabase=$GAME_DB_CONNECTION"
+Environment="ConnectionStrings__LogDatabase=$LOG_DB_CONNECTION"
+Environment="Redis__ConnectionString=$REDIS_CONNECTION"
 
 [Install]
 WantedBy=multi-user.target
 "@
 $serviceUnit | ssh -i $SSH_KEY -o StrictHostKeyChecking=no "${USER}@${SERVER}" `
     "cat | sudo tee /etc/systemd/system/${SERVICE}.service > /dev/null"
-ssh-run "sudo systemctl daemon-reload"
-ssh-run "sudo systemctl enable $SERVICE"
+Invoke-Ssh "sudo systemctl daemon-reload"
+Invoke-Ssh "sudo systemctl enable $SERVICE"
 
 # ─── 5. Deploy ───────────────────────────────────────────────────
 Write-Host "`n[5/6] Deploying on server..." -ForegroundColor Yellow
-ssh-run "sudo systemctl stop $SERVICE 2>/dev/null || true"
-ssh-run "sleep 8 ; sudo fuser -k ${PORT}/tcp 2>/dev/null || true ; sleep 3"
-ssh-run "sudo mkdir -p $REMOTE_PATH"
-ssh-run "sudo rm -rf $REMOTE_PATH/*"
-ssh-run "sudo unzip -o ~/$ZIP_NAME -d $REMOTE_PATH > /dev/null 2>&1; true"
-ssh-run "sudo chown -R ubuntu:ubuntu $REMOTE_PATH"
-ssh-run "rm ~/$ZIP_NAME"
-ssh-run "sudo systemctl start $SERVICE"
+Invoke-Ssh "sudo systemctl stop $SERVICE 2>/dev/null || true"
+Invoke-Ssh "sleep 8 ; sudo fuser -k ${PORT}/tcp 2>/dev/null || true ; sleep 3"
+Invoke-Ssh "sudo mkdir -p $REMOTE_PATH"
+Invoke-Ssh "sudo rm -rf $REMOTE_PATH/*"
+Invoke-Ssh "sudo unzip -o ~/$ZIP_NAME -d $REMOTE_PATH > /dev/null 2>&1; true"
+Invoke-Ssh "sudo chown -R ubuntu:ubuntu $REMOTE_PATH"
+Invoke-Ssh "rm ~/$ZIP_NAME"
+Invoke-Ssh "sudo systemctl start $SERVICE"
 
 # ─── 6. Setup / reload Nginx ─────────────────────────────────────
 Write-Host "`n[6/6] Configuring Nginx..." -ForegroundColor Yellow
@@ -116,9 +146,9 @@ server {
 }
 "@ | Out-String | ForEach-Object { [System.IO.File]::WriteAllText($tmpNginxConf, $_, [System.Text.UTF8Encoding]::new($false)) }
 scp -i $SSH_KEY -o StrictHostKeyChecking=no $tmpNginxConf "${USER}@${SERVER}:/tmp/nginx-deploy.conf"
-ssh-run "sudo cp /tmp/nginx-deploy.conf $nginxAvailable"
-ssh-run "sudo ln -sf $nginxAvailable /etc/nginx/sites-enabled/$DOMAIN"
-ssh-run "sudo nginx -t && sudo systemctl reload nginx"
+Invoke-Ssh "sudo cp /tmp/nginx-deploy.conf $nginxAvailable"
+Invoke-Ssh "sudo ln -sf $nginxAvailable /etc/nginx/sites-enabled/$DOMAIN"
+Invoke-Ssh "sudo nginx -t && sudo systemctl reload nginx"
 Remove-Item $tmpNginxConf -ErrorAction SilentlyContinue
 
 # ─── Cleanup ─────────────────────────────────────────────────────
@@ -131,4 +161,4 @@ Write-Host "SSL : ssh -i $SSH_KEY ${USER}@${SERVER} 'sudo certbot --nginx -d $DO
 Write-Host "Logs: ssh -i $SSH_KEY ${USER}@${SERVER} 'sudo journalctl -u $SERVICE -f'" -ForegroundColor Gray
 
 Write-Host "`nService Status:" -ForegroundColor Yellow
-ssh-run "sudo systemctl status $SERVICE --no-pager | head -20"
+Invoke-Ssh "sudo systemctl status $SERVICE --no-pager | head -20"

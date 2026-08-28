@@ -153,30 +153,6 @@ function SpriteButton({
   )
 }
 
-function MobileLobbyCommandButton({
-  onClick,
-  children,
-  hidden,
-  disabled,
-}: {
-  onClick: () => void
-  children: React.ReactNode
-  hidden?: boolean
-  disabled?: boolean
-}) {
-  if (hidden) return null
-  return (
-    <button
-      type="button"
-      className="majak-mobile-lobby-command-button"
-      disabled={disabled}
-      onClick={disabled ? undefined : onClick}
-    >
-      {children}
-    </button>
-  )
-}
-
 /** ====================================================================
  * ルームエントリー型 — API から受け取る型 (ApiRoomEntry) と同型にする
  * ==================================================================== */
@@ -2104,7 +2080,7 @@ export default function LobbyScreen() {
   const replayChannel = isReplayChannel(channelId)
   const tournamentChannel = isTournamentChannel(channelId)
   const useResponsiveDesktopLayout = layoutMode === 'desktop'
-  const showShopButtons = !trainingChannel
+  const showShopButtons = true
   const showRankingButton = !trainingChannel && daniChannel && !tournamentChannel
   const showMissionButton = !trainingChannel && !daniChannel && !tournamentChannel
   const showFreeChargeButton = !trainingChannel && !tournamentChannel
@@ -3229,12 +3205,6 @@ export default function LobbyScreen() {
     })
   }
 
-  /** プロフィール表示 (IDC_MEMBERLIST_MEMBERINFO 相当) → CMJPlayerInfo ダイアログ */
-  const onViewProfile = () => {
-    if (!selectedMember) return
-    openMemberProfile(selectedMember)
-  }
-
   /** 1対1チャット呼びかけ (IDC_MEMBERLIST_REQONETOONE 相当) */
   const startOneToOneChat = (pix: string) => {
     const m = members.find(x => x.pix === pix)
@@ -3248,11 +3218,6 @@ export default function LobbyScreen() {
       return
     }
     SignalR.send('hc6e', { target: pix, k38e: pix }).catch(() => {})
-  }
-
-  const onReqOneToOne = () => {
-    if (!selectedMember) return
-    startOneToOneChat(selectedMember)
   }
 
   const sendOneToOneChat = () => {

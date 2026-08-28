@@ -15,18 +15,22 @@ public class RedisService
 
     private readonly IConnectionMultiplexer? _mux;
 
-    public RedisService(IConfiguration config)
+    public RedisService(IConfiguration config, ILogger<RedisService>? logger = null)
     {
         var cs = config["Redis:ConnectionString"];
-        if (string.IsNullOrWhiteSpace(cs)) return;
+        if (string.IsNullOrWhiteSpace(cs))
+        {
+            logger?.LogWarning("Redis connection string is not configured.");
+            return;
+        }
 
         try
         {
             _mux = ConnectionMultiplexer.Connect(cs);
         }
-        catch
+        catch (Exception exception)
         {
-            // Redis が起動していない場合はスキップ (開発環境)
+            logger?.LogError(exception, "Redis connection failed.");
         }
     }
 

@@ -16,13 +16,14 @@
  *   MJWindow2.cpp: PANELMODE_PAIF で各ボタン ShowWindow(SW_SHOW)
  * ─────────────────────────────────────────────────────────────────────
  */
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH } from '../../game/GameInstance'
 import { getPaifuReplayPayload } from '../../api/paifu'
 import GameReconnectLoading from '../../components/GameReconnectLoading'
-import { GAME_LOAD_PROGRESS_EVENT, type GameLoadStep } from '../../game/gameLoadProgress'
+import { GAME_BOARD_SURROUND_COLOR_EVENT, GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY, GAME_LOAD_PROGRESS_EVENT, type GameLoadStep } from '../../game/gameLoadProgress'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
+import { useCustomSkinStore } from '../../store/customSkinStore'
 import { getDefaultAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
 
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
@@ -31,6 +32,7 @@ const PAIFU_GRAPH_EVENT = 'majak:paifu-graph'
 const PAIFU_REPLAY_PACKET_EVENT = 'majak:paifu-replay-packet'
 const PAIFU_REPLAY_READY_EVENT = 'majak:paifu-replay-ready'
 const REPLAY_PACKET_INTERVAL_MS = 350
+const REPLAY_END_CHOICE_DELAY_MS = 700
 const ROOM_HEIGHT = 704
 const MOBILE_INGAME_FOCUS_W = 794
 const MOBILE_INGAME_OFFSET_Y = -180
@@ -137,6 +139,7 @@ export default function PaifWnd() {
   const layoutMode = useOutgameLayoutMode()
   const isMobileIngame = layoutMode === 'mobileLandscape'
   const ingameLayoutMode = isMobileIngame ? 'mobileLandscape' : 'responsiveDesktop'
+  const { bgId: customBgId, bgType: customBoardType, haiId: customHaiId } = useCustomSkinStore()
   const navState = location.state as { paifu?: PaifuSource } | null
   const initialSource = navState?.paifu
   const replayArchiveId = useMemo(() => {
@@ -150,7 +153,22 @@ export default function PaifWnd() {
   const [isGraphVisible, setIsGraphVisible] = useState(false)
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [mobileViewOpen, setMobileViewOpen] = useState(false)
+  const [replayEndChoiceVisible, setReplayEndChoiceVisible] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(() => Boolean(document.fullscreenElement))
+  const [gameSurroundColor, setGameSurroundColor] = useState('#176b2a')
+  const gameSurroundStyle = {
+    '--majak-game-surround-color': gameSurroundColor,
+    backgroundColor: gameSurroundColor,
+  } as CSSProperties
+
+  useEffect(() => {
+    const onBoardSurroundColor = (event: Event) => {
+      const color = String((event as CustomEvent<{ color?: string }>).detail?.color ?? '')
+      if (color) setGameSurroundColor(color)
+    }
+    window.addEventListener(GAME_BOARD_SURROUND_COLOR_EVENT, onBoardSurroundColor)
+    return () => window.removeEventListener(GAME_BOARD_SURROUND_COLOR_EVENT, onBoardSurroundColor)
+  }, [])
 
   useEffect(() => {
     const syncFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement))
@@ -237,18 +255,25 @@ export default function PaifWnd() {
     window.addEventListener(GAME_LOAD_PROGRESS_EVENT, handleLoadProgress)
     const seedCursor = replaySeedCursorRef.current
     appliedPacketCursorRef.current = seedCursor
-    createGame(containerRef.current, {
+    const game = createGame(containerRef.current, {
       mode: 'replay',
       layoutMode: ingameLayoutMode,
       players: replayMembers,
+      customBgId,
+      customBoardType,
+      customHaiId,
       paifu: { packets: replayPackets.slice(0, seedCursor) },
     })
+    const registeredSurroundColor = game.registry.get(GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY)
+    if (typeof registeredSurroundColor === 'string' && registeredSurroundColor) {
+      setGameSurroundColor(registeredSurroundColor)
+    }
     return () => {
       window.removeEventListener(PAIFU_REPLAY_READY_EVENT, handleReplayReady)
       window.removeEventListener(GAME_LOAD_PROGRESS_EVENT, handleLoadProgress)
       destroyGame()
     }
-  }, [ingameLayoutMode, isMobileIngame, replayMembers, replayPackets, replaySession, source?.data])
+  }, [customBgId, customBoardType, customHaiId, ingameLayoutMode, isMobileIngame, replayMembers, replayPackets, replaySession, source?.data])
 
   useEffect(() => {
     if (!isMobileIngame) {
@@ -301,6 +326,16 @@ export default function PaifWnd() {
     return () => window.clearTimeout(timer)
   }, [isPlaying, isReplayReady, packetCursor, replayPackets.length])
 
+  useEffect(() => {
+    if (!isReplayReady || replayPackets.length === 0 || packetCursor < replayPackets.length) {
+      setReplayEndChoiceVisible(false)
+      return
+    }
+    setIsPlaying(false)
+    const timer = window.setTimeout(() => setReplayEndChoiceVisible(true), REPLAY_END_CHOICE_DELAY_MS)
+    return () => window.clearTimeout(timer)
+  }, [isReplayReady, packetCursor, replayPackets.length])
+
   /** OnPaifuGrph — グラフ表示の開閉 */
   const handleGraph = () => {
     if (!hasPaifu) return
@@ -352,7 +387,7 @@ export default function PaifWnd() {
 
   /** CMJGameWnd::OnMouseWheel — wheel navigates replay, Shift jumps by kyoku. */
   const handleWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    if (!hasPaifu) return
+    if (!hasPaifu || replayEndChoiceVisible) return
     if (event.deltaY > 0) {
       if (event.shiftKey) {
         if (canNext) handleNext()
@@ -385,18 +420,25 @@ export default function PaifWnd() {
   /** 閉じる — 牌譜一覧へ戻る */
   const handleClose = () => navigate('/paifu', { replace: true })
 
+  const handleReplayAgain = () => {
+    setReplayEndChoiceVisible(false)
+    jumpToPacket(0)
+    playAfterReplayReadyRef.current = true
+  }
+
   const canUseNavi = hasPaifu && isReplayReady && replayPackets.length > 0
   const canPrev = canUseNavi && packetCursor > 0
   const canBack = canUseNavi && packetCursor > 0
   const canNext = canUseNavi && packetCursor < replayPackets.length
   const playDisabled = !hasPaifu || !isReplayReady || (!isPlaying && replayPackets.length === 0)
   const replayProgress = replayPackets.length > 0 ? Math.min(100, packetCursor / replayPackets.length * 100) : 0
+  const replayProgressPercent = Math.round(replayProgress)
 
   const replaySidebar = (
     <aside className="majak-responsive-ingame-sidebar majak-responsive-paifu__sidebar">
       <div className="majak-responsive-ingame-sidebar__status">
-        <div className="majak-responsive-paifu__progress" aria-label={`進行 ${packetCursor} / ${replayPackets.length}`}>
-          <div className="majak-responsive-paifu__progress-label"><span>進行</span><strong>{packetCursor} / {replayPackets.length}</strong></div>
+        <div className="majak-responsive-paifu__progress" aria-label={`進行 ${replayProgressPercent}%`}>
+          <div className="majak-responsive-paifu__progress-label"><span>進行</span><strong>{replayProgressPercent}%</strong></div>
           <div className="majak-responsive-paifu__progress-track"><div style={{ width: `${replayProgress}%` }} /></div>
         </div>
         <strong>{replayMetadata.roomName || source?.title || '牌譜'}</strong>
@@ -428,15 +470,15 @@ export default function PaifWnd() {
       <div className="majak-responsive-ingame-sidebar__actions">
         <div className="majak-responsive-paifu__control-group">
           <button type="button" onClick={handlePrev} disabled={!canPrev}>前局</button>
-          <button type="button" onClick={handleBack} disabled={!canBack}>戻る</button>
-          <button type="button" onClick={handlePlay} disabled={playDisabled} className={isPlaying ? 'is-active' : undefined}>{isPlaying ? '停止' : '再生'}</button>
-          <button type="button" onClick={handleStep} disabled={!canNext}>次へ</button>
           <button type="button" onClick={handleNext} disabled={!canNext}>次局</button>
+          <button type="button" onClick={handleBack} disabled={!canBack}>戻る</button>
+          <button type="button" onClick={handleStep} disabled={!canNext}>次へ</button>
+          <button type="button" onClick={handlePlay} disabled={playDisabled} aria-pressed={isPlaying}>{isPlaying ? '一時停止' : '再生'}</button>
         </div>
         <div className="majak-responsive-paifu__control-group majak-responsive-paifu__view-controls">
-          <button type="button" onClick={handleGraph} disabled={!hasPaifu} className={isGraphVisible ? 'is-active' : undefined}>{isGraphVisible ? 'グラフを閉じる' : 'グラフ'}</button>
+          <button type="button" onClick={handleGraph} disabled={!hasPaifu} aria-pressed={isGraphVisible}>{isGraphVisible ? 'グラフを閉じる' : 'グラフ'}</button>
           <button type="button" onClick={() => handleRotate(3)}>回転</button>
-          <button type="button" onClick={handleHide} className={handHidden ? 'is-active' : undefined}>{handHidden ? '手牌表示' : '手牌非表示'}</button>
+          <button type="button" onClick={handleHide} aria-pressed={!handHidden}>{handHidden ? '手牌表示' : '手牌非表示'}</button>
           <button type="button" onClick={handleClose}>閉じる</button>
         </div>
       </div>
@@ -451,8 +493,8 @@ export default function PaifWnd() {
 
   const desktopReplay = (
     <div className={`majak-responsive-desktop-frame majak-responsive-paifu__frame${isFullscreen ? ' is-fullscreen' : ''}`}>
-      <div className="majak-responsive-ingame-shell">
-        <div className="majak-responsive-ingame-playfield">
+      <div className="majak-responsive-ingame-shell" style={gameSurroundStyle}>
+        <div className="majak-responsive-ingame-playfield" style={gameSurroundStyle}>
           <div className="majak-responsive-ingame-world">
             {replayStage}
           </div>
@@ -465,7 +507,7 @@ export default function PaifWnd() {
   return (
     <main className="majak-responsive-paifu" onWheel={handleWheel}>
       {isMobileIngame ? (
-        <div ref={mobileShellRef} className="majak-mobile-ingame-shell">
+        <div ref={mobileShellRef} className="majak-mobile-ingame-shell" style={gameSurroundStyle}>
           <div
             className="majak-mobile-ingame-scale"
             style={{
@@ -492,7 +534,7 @@ export default function PaifWnd() {
             <div className="majak-mobile-ingame-action-bar">
               <button type="button" onClick={handlePrev} disabled={!canPrev}>前局</button>
               <button type="button" onClick={handleBack} disabled={!canBack}>戻る</button>
-              <button type="button" onClick={handlePlay} disabled={playDisabled}>{isPlaying ? '停止' : '再生'}</button>
+              <button type="button" onClick={handlePlay} disabled={playDisabled} aria-pressed={isPlaying}>{isPlaying ? '一時停止' : '再生'}</button>
               <button type="button" onClick={handleStep} disabled={!canNext}>次へ</button>
               <button type="button" onClick={handleNext} disabled={!canNext}>次局</button>
             </div>
@@ -508,15 +550,32 @@ export default function PaifWnd() {
               {mobileViewOpen ? '▲' : '▼'}
             </button>
             <div className="majak-mobile-ingame-action-bar">
-              <button type="button" onClick={handleGraph} disabled={!hasPaifu} className={isGraphVisible ? 'is-active' : undefined}>{isGraphVisible ? 'グラフを閉じる' : 'グラフ'}</button>
+              <button type="button" onClick={handleGraph} disabled={!hasPaifu} aria-pressed={isGraphVisible}>{isGraphVisible ? 'グラフを閉じる' : 'グラフ'}</button>
               <button type="button" onClick={() => handleRotate(3)}>回転</button>
-              <button type="button" onClick={handleHide} className={handHidden ? 'is-active' : undefined}>{handHidden ? '手牌表示' : '手牌非表示'}</button>
+              <button type="button" onClick={handleHide} aria-pressed={!handHidden}>{handHidden ? '手牌表示' : '手牌非表示'}</button>
               <button type="button" onClick={handleClose}>閉じる</button>
             </div>
           </div>
         </div>
       ) : (
         desktopReplay
+      )}
+
+      {replayEndChoiceVisible && (
+        <div className="majak-popup-overlay majak-paifu-replay-end-overlay">
+          <section className="majak-popup-panel majak-paifu-replay-end-dialog" role="dialog" aria-modal="true" aria-labelledby="majak-paifu-replay-end-title">
+            <header className="majak-popup-titlebar">
+              <h2 id="majak-paifu-replay-end-title">牌譜再生終了</h2>
+            </header>
+            <div className="majak-popup-body">
+              <p>もう一度再生しますか？</p>
+            </div>
+            <footer className="majak-popup-actions">
+              <button type="button" onClick={handleClose}>終了</button>
+              <button type="button" className="is-primary" onClick={handleReplayAgain} autoFocus>もう一度見る</button>
+            </footer>
+          </section>
+        </div>
       )}
 
       <GameReconnectLoading

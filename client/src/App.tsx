@@ -201,7 +201,9 @@ function ContinueRoomBootstrap() {
       if (cancelled) return
       const channelId = room?.channelId ?? room?.chanelId
       if (!room?.roomId || !channelId || !room.serverUrl) return
-      const customSkin = useCustomSkinStore.getState()
+      const customSkin = room.customEquips
+        ? useCustomSkinStore.getState().setEquips(room.customEquips)
+        : useCustomSkinStore.getState()
 
       navigate(`/channel/${encodeURIComponent(channelId)}/lobby/room/${room.roomId}`, {
         replace: true,

@@ -1,4 +1,6 @@
 export const GAME_LOAD_PROGRESS_EVENT = 'majak:game-load-progress'
+export const GAME_BOARD_SURROUND_COLOR_EVENT = 'majak:game-board-surround-color'
+export const GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY = 'majak:game-board-surround-color'
 
 export const GAME_LOAD_STEPS = [
   { id: 'server', label: 'サーバーに接続中' },
@@ -16,4 +18,8 @@ export type GameLoadStep = typeof GAME_LOAD_STEPS[number]['id']
 
 export function emitGameLoadProgress(step: GameLoadStep, details: Record<string, unknown> = {}) {
   window.dispatchEvent(new CustomEvent(GAME_LOAD_PROGRESS_EVENT, { detail: { step, ...details } }))
+}
+
+export function emitGameBoardSurroundColor(color: string) {
+  window.dispatchEvent(new CustomEvent(GAME_BOARD_SURROUND_COLOR_EVENT, { detail: { color } }))
 }

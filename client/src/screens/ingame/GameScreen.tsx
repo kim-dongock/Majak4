@@ -1441,13 +1441,15 @@ export default function GameScreen() {
         isTournament: Boolean(data.isTournament),
       }
       gameEndStatusLines(data).forEach(line => putStatus(line, legacyPalette.normal, true))
+      const currentLevel = myResult?.nlevel
+      const previousLevel = myResult?.prevNlevel
       const shouldShowLevelUp = !nextHanResFlags.isViewer
         && !nextHanResFlags.isTournament
-        && myResult?.nlevel !== undefined
-        && myResult.prevNlevel !== undefined
-        && myResult.nlevel > myResult.prevNlevel
-      const nextLevelUp = shouldShowLevelUp && myResult
-        ? { level: myResult.nlevel, lentMoney: myResult.lentMoney ?? 0 }
+        && currentLevel !== undefined
+        && previousLevel !== undefined
+        && currentLevel > previousLevel
+      const nextLevelUp = shouldShowLevelUp
+        ? { level: currentLevel, lentMoney: myResult?.lentMoney ?? 0 }
         : null
 
       const titleAnnouncementPixes = Array.isArray(data.titleAnnouncementPixes)

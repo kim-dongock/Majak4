@@ -102,6 +102,7 @@ export interface ContinueRoomEntry {
   serverUrl?: string
   roomOption?: string
   updatedAt?: string
+  customEquips?: Array<{ customType: number; customId: number }>
 }
 
 export async function getPlayerContinueRoom(pix: string): Promise<ContinueRoomEntry | null> {

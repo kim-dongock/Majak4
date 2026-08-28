@@ -22,6 +22,7 @@
  */
 import Phaser from 'phaser'
 import { calculateTimeBankSegments, GAME_AUTO_PASS_HOLD_EVENT } from '../game/autoControl'
+import { GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY } from '../game/gameLoadProgress'
 import { DESKTOP_REACH_POSITIONS, getIngameLayout, isMobileIngameLayout, MOBILE_REACH_POSITIONS, type IngameLayoutMode } from '../game/ingameLayout'
 import {
   LEGACY_COSTUME_FRAME_COUNTS,
@@ -452,6 +453,7 @@ export default class UIScene extends Phaser.Scene {
   private isViewer = false
   private customBgId = 0
   private customBoardType = 0
+  private boardSurroundColor?: number
   private chicha = 0
   private oyaOrder = 0
   private kyokuCnt = 0
@@ -460,7 +462,7 @@ export default class UIScene extends Phaser.Scene {
   private lastMobileHudLayoutKey = ''
   private readonly reachedOdr = new Set<number>()
   private replayGraphVisible = false
-  private graphHiddenHudObjects: Phaser.GameObjects.GameObject[] = []
+  private graphHiddenHudObjects: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle> = []
 
   constructor() {
     super({ key: 'UIScene' })
@@ -472,6 +474,10 @@ export default class UIScene extends Phaser.Scene {
     this.isViewer = Boolean(data.isViewer)
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
+    const surroundColor = this.registry.get(GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY)
+    this.boardSurroundColor = typeof surroundColor === 'string'
+      ? Phaser.Display.Color.ValueToColor(surroundColor).color
+      : undefined
     this.activeTurnOdr = null
     this.waremeOdr = null
     this.lastMobileHudLayoutKey = ''
@@ -527,7 +533,8 @@ export default class UIScene extends Phaser.Scene {
         .setOrigin(0, 0).setDepth(2).setVisible(false)
       this.trickTitleSprites[odr] = this.add.image(trk.x, trk.y, this.resolveSkinTextureKey('mj_board'))
         .setOrigin(0, 0).setDepth(1).setVisible(false)
-      this.mobileHudPanels[odr] = this.add.rectangle(0, 0, 1, 1, 0x103916, 0.78)
+      const panelStyle = this.mobileHudPanelStyle()
+      this.mobileHudPanels[odr] = this.add.rectangle(0, 0, 1, 1, panelStyle.fill, panelStyle.fillAlpha)
         .setOrigin(0, 0).setDepth(7).setVisible(false)
       this.desktopHudPanels[odr] = this.add.image(0, 0, this.desktopHudPanelTextureKey())
         .setOrigin(0, 0).setDepth(0).setVisible(false)
@@ -969,6 +976,26 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private mobileHudPanelStyle() {
+    if (this.boardSurroundColor != null) {
+      const sampled = Phaser.Display.Color.IntegerToRGB(this.boardSurroundColor)
+      const channel = (value: number, target: number, amount: number) => Math.round(value + (target - value) * amount)
+      const fill = Phaser.Display.Color.GetColor(
+        channel(sampled.r, 0, 0.28),
+        channel(sampled.g, 0, 0.28),
+        channel(sampled.b, 0, 0.28),
+      )
+      const stroke = Phaser.Display.Color.GetColor(
+        channel(sampled.r, 255, 0.35),
+        channel(sampled.g, 255, 0.35),
+        channel(sampled.b, 255, 0.35),
+      )
+      const activeStroke = Phaser.Display.Color.GetColor(
+        channel(sampled.r, 255, 0.68),
+        channel(sampled.g, 255, 0.68),
+        channel(sampled.b, 255, 0.68),
+      )
+      return { fill, fillAlpha: 0.9, stroke, strokeAlpha: 0.5, activeStroke }
+    }
     const tengoku = isTengokuBoardSkin(this.customBgId, this.customBoardType)
     return tengoku
       ? { fill: 0x10283b, fillAlpha: 0.9, stroke: 0x58d3ff, strokeAlpha: 0.5, activeStroke: 0xa8ecff }
@@ -976,10 +1003,12 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private desktopHudPanelTextureKey() {
+    if (this.boardSurroundColor != null) return `desktopHudPanel-${this.boardSurroundColor.toString(16).padStart(6, '0')}`
     return isTengokuBoardSkin(this.customBgId, this.customBoardType) ? 'desktopHudPanelTengokuV2' : 'desktopHudPanelDefaultV2'
   }
 
   private desktopTurnStripTextureKey() {
+    if (this.boardSurroundColor != null) return `desktopHudTurnStrip-${this.boardSurroundColor.toString(16).padStart(6, '0')}`
     return isTengokuBoardSkin(this.customBgId, this.customBoardType) ? 'desktopHudTurnStripTengoku' : 'desktopHudTurnStripDefault'
   }
 
@@ -1354,7 +1383,7 @@ export default class UIScene extends Phaser.Scene {
       ...this.leftNumber?.sprites ?? [],
       ...this.riboNumber?.sprites ?? [],
       ...this.renchanNumber?.sprites ?? [],
-    ].filter((object): object is Phaser.GameObjects.GameObject => Boolean(object))
+    ].filter((object): object is Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle => Boolean(object))
 
     this.graphHiddenHudObjects = objects.filter(object => object.visible)
     this.graphHiddenHudObjects.forEach(object => object.setVisible(false))

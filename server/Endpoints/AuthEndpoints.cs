@@ -169,7 +169,13 @@ internal static class AuthEndpoints
             await gamePlayers.RefreshLoginAsync(account.MemberNo, account.DisplayName, false);
             await playerRepository.SetDailyMissionAsync(account.MemberNo, 1, 1);
             sessions.IssuePix(account.MemberNo);
-            if (await IssueRefreshCookieAsync(context, refreshSessions, account.MemberNo)) await InsertLoginLogOnceAsync(context, logRepository, account.MemberNo, 0);
+            if (!await IssueRefreshCookieAsync(context, refreshSessions, account.MemberNo))
+            {
+                logger.LogError("Google redirect login could not issue a refresh session.");
+                ClearPendingGoogleIdTokenCookie(context);
+                return Results.Redirect($"{clientAppUrl}/?googleAuth=error");
+            }
+            await InsertLoginLogOnceAsync(context, logRepository, account.MemberNo, 0);
             ClearPendingGoogleIdTokenCookie(context);
             return Results.Redirect($"{clientAppUrl}/?googleAuth=login");
         });
