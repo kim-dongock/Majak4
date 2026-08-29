@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => {
       'localhost',
       '127.0.0.1',
       'dev-majak4.studio35app.net',
+      'dev-game-majak4.hange.jp',
+      'dev-game-majak4.studio35app.net',
     ],
     proxy: {
       // 開発時は .NET サーバーに転送

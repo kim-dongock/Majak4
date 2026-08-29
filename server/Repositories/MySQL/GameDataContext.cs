@@ -66,7 +66,7 @@ public sealed class GameDataContext : DbContext
             entity.Property(x => x.MemberNo).HasColumnName("member_no").HasColumnType("bigint unsigned");
             entity.Property(x => x.DisplayName).HasColumnName("display_name").HasMaxLength(100);
             entity.Property(x => x.Email).HasColumnName("email").HasMaxLength(254);
-            entity.Property(x => x.GoogleSub).HasColumnName("google_sub").HasMaxLength(64);
+            entity.Property(x => x.ExternalAuthId).HasColumnName("external_auth_id").HasMaxLength(255);
             entity.Property(x => x.SexCode).HasColumnName("sex_code").HasMaxLength(1);
             entity.Property(x => x.BirthYear).HasColumnName("birth_year");
             entity.Property(x => x.AvatarId).HasColumnName("avatar_id").HasMaxLength(255);
@@ -80,7 +80,7 @@ public sealed class GameDataContext : DbContext
             entity.Property(x => x.LastLoginAt).HasColumnName("last_login_at");
             entity.Property(x => x.CreatedAt).HasColumnName("created_at");
             entity.Property(x => x.UpdatedAt).HasColumnName("updated_at");
-            entity.HasIndex(x => x.GoogleSub).IsUnique();
+            entity.HasIndex(x => x.ExternalAuthId).IsUnique();
         });
 
         modelBuilder.Entity<PlayerWalletEntity>(entity =>

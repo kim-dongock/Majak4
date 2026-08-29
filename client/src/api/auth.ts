@@ -19,6 +19,17 @@ export function authApiUrl(path: string): string {
   return `${API_BASE}${path}`
 }
 
+export function isHangeClientHost(hostname = window.location.hostname): boolean {
+  const normalized = hostname.toLowerCase().replace(/\.$/, '')
+  return normalized === 'hange.jp' || normalized.endsWith('.hange.jp')
+}
+
+export function getHangeLoginUrl(currentUrl = window.location.href): string {
+  const url = new URL('https://alpha-top.hange.jp/login/index')
+  url.searchParams.set('nexturl', currentUrl)
+  return url.toString()
+}
+
 export interface MajakPlayer {
   pix:       string
   accessToken?: string
@@ -290,16 +301,40 @@ export class AuthError extends Error {
   }
 }
 
-// Legacy Hangame authentication stubs kept for compatibility. New Google auth flow does not use them.
+// Legacy Hangame authentication compatibility.
 
 /** @deprecated Migrated to the Google auth flow. */
 export function detectTestEnv(cookieValue: string): boolean {
   return cookieValue.trimStart().toLowerCase().startsWith('hangametest=')
 }
 
-/** @deprecated Migrated to the Google auth flow. AuthGate handles Google authentication. */
+export async function hangeLogin(): Promise<MajakPlayer | null> {
+  if (isLocalLogoutMarked()) return null
+
+  let res: Response
+  try {
+    res = await fetch(authApiUrl('/auth/majak-login'), {
+      method: 'POST',
+      credentials: 'include',
+    })
+  } catch (err) {
+    throw new AuthError('network', String(err))
+  }
+
+  if (res.status === 401) return null
+  if (!res.ok) throw new AuthError('server', `HTTP ${res.status}`)
+
+  const data = await res.json() as MajakPlayer
+  saveRegisteredPlayerCache(data)
+  clearLocalLogout()
+  return data
+}
+
+/** @deprecated Use hangeLogin(). */
 export async function login(): Promise<MajakPlayer> {
-  throw new AuthError('cookie', 'Hangame auth is no longer supported. Use Google OAuth.')
+  const player = await hangeLogin()
+  if (!player) throw new AuthError('cookie', 'Hangame login cookie is unavailable or invalid.')
+  return player
 }
 
 /** @deprecated Migrated to the Google auth flow. */
@@ -311,7 +346,8 @@ export async function registerPlayer(
   throw new AuthError('cookie', 'Hangame register is no longer supported. Use googleRegister().')
 }
 
-/** @deprecated Migrated to the Google auth flow. */
+/** @deprecated Navigate to getHangeLoginUrl() directly. */
 export function redirectToLogin(): never {
-  throw new AuthError('cookie', 'Hangame redirectToLogin is no longer used.')
+  window.location.assign(getHangeLoginUrl())
+  throw new AuthError('cookie', 'Redirecting to Hangame login.')
 }

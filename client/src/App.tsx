@@ -16,7 +16,17 @@ import MajakFrame from './components/MajakFrame'
 import MessageBoxHost from './components/MessageBoxHost'
 import GameReconnectLoading from './components/GameReconnectLoading'
 import RegistrationDlg from './screens/outgame/dialogs/RegistrationDlg'
-import { authApiUrl, clearLocalLogout, googleLogin, refreshLogin, saveRegisteredPlayerCache, type MajakPlayer } from './api/auth'
+import {
+  authApiUrl,
+  clearLocalLogout,
+  getHangeLoginUrl,
+  googleLogin,
+  hangeLogin,
+  isHangeClientHost,
+  refreshLogin,
+  saveRegisteredPlayerCache,
+  type MajakPlayer,
+} from './api/auth'
 import { getPlayerContinueRoom } from './api/channel'
 import * as SignalR from './api/signalr'
 import { useAuthStore } from './store/authStore'
@@ -279,6 +289,7 @@ function PortraitOrientationNotice() {
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status, player, setLoading, setPlayer, setError, requireLogin } = useAuthStore()
   const layoutMode = useOutgameLayoutMode()
+  const isHangeClient = isHangeClientHost()
   const [idToken, setIdToken] = useState<string | null>(null)
   const [refreshChecked, setRefreshChecked] = useState(false)
   const [registrationRequest, setRegistrationRequest] = useState<{ idToken: string; player: MajakPlayer } | null>(null)
@@ -346,7 +357,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     setLoading()
     let disposed = false
     void (async () => {
-      const handledRedirect = await consumeGoogleRedirectResult()
+      const handledRedirect = isHangeClient ? false : await consumeGoogleRedirectResult()
       if (disposed || handledRedirect) {
         if (!disposed) setRefreshChecked(true)
         return
@@ -354,8 +365,19 @@ function AuthGate({ children }: { children: React.ReactNode }) {
       try {
         const p = await refreshLogin()
         if (disposed) return
-        if (p) setPlayer(p)
-        else setRefreshChecked(true)
+        if (p) {
+          setPlayer(p)
+          return
+        }
+        if (isHangeClient) {
+          const hangePlayer = await hangeLogin()
+          if (disposed) return
+          if (hangePlayer) {
+            setPlayer(hangePlayer)
+            return
+          }
+        }
+        setRefreshChecked(true)
       } catch {
         if (disposed) return
         const latest = useAuthStore.getState()
@@ -365,7 +387,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     })()
 
     return () => { disposed = true }
-  }, [consumeGoogleRedirectResult, setLoading, setPlayer])
+  }, [consumeGoogleRedirectResult, isHangeClient, setLoading, setPlayer])
 
   const handleGoogleCredential = useCallback(async (credential: string) => {
     setLoading()
@@ -434,8 +456,9 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     )
   }
 
-  // Google サインイン待ち (refresh cookie が使えなかった場合、またはゲーム認証が失効した場合のみ表示)
+  // サインイン待ち (refresh cookie が使えなかった場合、またはゲーム認証が失効した場合のみ表示)
   if ((status === 'loading' && !player && !idToken && refreshChecked) || status === 'login_required') {
+    if (isHangeClient) return <HangeSignInScreen />
     return <GoogleSignInScreen onCredential={handleGoogleCredential} onError={() => setError('Google サインインに失敗しました。もう一度お試しください。')} />
   }
 
@@ -488,6 +511,65 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   return <>{children}</>
+}
+
+function HangeSignInScreen() {
+  const handleLogin = () => {
+    clearLocalLogout()
+    window.location.assign(getHangeLoginUrl())
+  }
+
+  return (
+    <div className="majak-screen-surface" style={{
+      position: 'fixed', inset: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--majak-font-family-ui)',
+    }}>
+      <div style={{
+        background: 'rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.15)',
+        borderRadius: 12,
+        padding: '40px 48px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+      }}>
+        <img
+          src="/assets/images/common/ico_big_majak2.jpg"
+          alt="麻雀4"
+          draggable={false}
+          style={{ width: 80, height: 80, borderRadius: 8 }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+        />
+        <div style={{ color: '#fff', fontSize: 'var(--majak-font-22)', fontWeight: 700, letterSpacing: 2 }}>
+          麻雀4
+        </div>
+        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--majak-font-13)', textAlign: 'center' }}>
+          ハンゲIDでログインしてください
+        </div>
+        <button
+          type="button"
+          onClick={handleLogin}
+          style={{
+            width: 280, height: 40,
+            position: 'relative',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxSizing: 'border-box',
+            border: '1px solid #747775', borderRadius: 4,
+            background: '#fff', color: '#1f1f1f',
+            fontSize: 14, fontWeight: 500, cursor: 'pointer',
+          }}
+        >
+          <img
+            src="/assets/images/common/hange-favicon.ico"
+            alt=""
+            draggable={false}
+            style={{ position: 'absolute', left: 12, width: 18, height: 18 }}
+          />
+          ハンゲでログイン
+        </button>
+      </div>
+    </div>
+  )
 }
 
 // ── Google サインイン画面 ────────────────────────────────────────────
@@ -646,7 +728,7 @@ function AnnouncementRoute() {
 
 function LobbySelectRoute() {
   const navigate = useNavigate()
-  return <MajakFrame onGoHome={() => navigate('/channel')}><LobbySelectScreen /></MajakFrame>
+  return <MajakFrame onGoHome={() => navigate('/channel')} onOpenAnnouncements={() => navigate('/announcements')}><LobbySelectScreen /></MajakFrame>
 }
 
 function PaifuArchiveRoute() {

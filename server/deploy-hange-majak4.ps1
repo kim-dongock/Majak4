@@ -6,7 +6,7 @@
 
 param(
     [string]$Server = "hange-alpha-mahjong4.coconefk",
-    [string]$Domain = "alpha-app-majak4.hange.jp",
+    [string]$Domain = "alpha-game-majak4.hange.jp",
     [string]$User = "www-web",
     [string]$SshKey = "C:\Users\kim_dongock\Documents\SSH\open_ssl_hange",
     [int]$Port = 5003

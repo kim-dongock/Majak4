@@ -3,7 +3,7 @@
  *
  * VITE_API_BASE_URL:
  *   development : "" (空文字) → Vite dev server プロキシ (/api/...) 経由
- *   alpha       : "http://alpha-game.majak2.jp"
+ *   alpha       : "https://alpha-game-majak4.hange.jp"
  *   production  : "https://game.majak2.jp"
  */
 import { gameAuthHeaders, refreshedGameAuthHeaders } from './authHeaders'

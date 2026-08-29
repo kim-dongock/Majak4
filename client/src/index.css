@@ -2237,6 +2237,7 @@ body {
 }
 
 .majak-desktop-channel-group .majak-desktop-channel-group__user-summary {
+  --majak-title-avatar-width: clamp(46px, 5vw, 64px);
   --majak-user-summary-name-font: var(--majak-text-md);
   --majak-user-summary-label-font: var(--majak-text-sm);
   --majak-user-summary-value-font: var(--majak-text-sm);
@@ -2247,7 +2248,7 @@ body {
   box-sizing: border-box;
   min-height: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: var(--majak-title-avatar-width) auto minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 3fr);
   column-gap: 8px;
   row-gap: 4px;
@@ -2259,8 +2260,19 @@ body {
   box-shadow: inset 0 0 0 3px #68442d, inset 0 1px 0 4px rgba(255, 232, 181, .14), 0 8px 20px rgba(0, 0, 0, .34);
 }
 
-.majak-desktop-channel-group .majak-desktop-channel-group__user-summary::before {
+.majak-desktop-channel-group .majak-mobile-user-summary__avatar {
   grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: stretch;
+  width: var(--majak-title-avatar-width);
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  object-position: center;
+}
+
+.majak-desktop-channel-group .majak-desktop-channel-group__user-summary::before {
+  grid-column: 2;
   grid-row: 1;
   display: flex;
   align-items: center;
@@ -2274,7 +2286,7 @@ body {
 }
 
 .majak-desktop-channel-group .majak-mobile-user-summary__name {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1;
   display: flex;
   align-items: center;
@@ -2288,7 +2300,7 @@ body {
 }
 
 .majak-desktop-channel-group .majak-mobile-user-summary__fields {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   grid-row: 2;
   min-height: 0;
   align-self: stretch;
@@ -2463,6 +2475,7 @@ body {
 }
 
 .majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary {
+  --majak-title-avatar-width: clamp(46px, 5vw, 64px);
   --majak-user-summary-name-font: var(--majak-text-md);
   --majak-user-summary-label-font: var(--majak-text-sm);
   --majak-user-summary-value-font: var(--majak-text-sm);
@@ -2472,7 +2485,7 @@ body {
   aspect-ratio: 430 / 148;
   min-height: 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: var(--majak-title-avatar-width) auto minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 3fr);
   column-gap: 8px;
   row-gap: 4px;
@@ -2485,8 +2498,19 @@ body {
   box-shadow: inset 0 0 0 3px #68442d, inset 0 1px 0 4px rgba(255, 232, 181, .14), 0 8px 20px rgba(0, 0, 0, .34);
 }
 
-.majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary::before {
+.majak-desktop-lobby-select .majak-mobile-user-summary__avatar {
   grid-column: 1;
+  grid-row: 1 / -1;
+  align-self: stretch;
+  width: var(--majak-title-avatar-width);
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  object-position: center;
+}
+
+.majak-desktop-lobby-select .majak-desktop-lobby-select__user-summary::before {
+  grid-column: 2;
   grid-row: 1;
   display: flex;
   align-items: center;
@@ -2500,7 +2524,7 @@ body {
 }
 
 .majak-desktop-lobby-select .majak-mobile-user-summary__name {
-  grid-column: 2;
+  grid-column: 3;
   grid-row: 1;
   display: flex;
   align-items: center;
@@ -2514,7 +2538,7 @@ body {
 }
 
 .majak-desktop-lobby-select .majak-mobile-user-summary__fields {
-  grid-column: 1 / -1;
+  grid-column: 2 / -1;
   grid-row: 2;
   min-height: 0;
   align-self: stretch;
@@ -4320,8 +4344,12 @@ body:has(.majak-game-screen) {
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat img {
-  width: 114px;
-  height: 168px;
+  width: auto;
+  height: auto;
+  max-width: 114px;
+  max-height: 168px;
+  justify-self: center;
+  image-rendering: auto;
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-seat__info {
@@ -7381,8 +7409,8 @@ body:has(.majak-game-screen) {
 .majak-mobile-lobby-member img {
   width: 24px;
   height: 24px;
-  object-fit: cover;
-  object-position: center 2%;
+  object-fit: contain;
+  object-position: center;
 }
 
 .majak-mobile-lobby-member span {
@@ -9447,8 +9475,6 @@ body:has(.majak-result-overlay) {
 
 /* Outgame room and invite-target responsive overrides. */
 @media (min-width: 769px) and (pointer: fine) {
-  .majak-mobile-config-overlay--desktop .majak-mobile-config-dialog { width: min(980px, calc(100vw - 32px)); height: min(370px, calc(100dvh - 32px)); }
-  .majak-mobile-config-overlay--desktop .majak-mobile-config-dialog .majak-mobile-choice { white-space: nowrap; }
   .majak-room-setup-overlay--desktop .majak-room-setup-dialog .majak-mobile-room-title-select { font-size: var(--majak-text-md); }
   .majak-room-setup-overlay--desktop .majak-mobile-room-create-dialog { width: min(650px, calc(100vw - 24px)); }
   .majak-room-setup-overlay--desktop .majak-mobile-option-dialog { width: min(720px, calc(100vw - 32px)); }
@@ -9704,6 +9730,18 @@ body :is(
 
 .majak-mobile-config-assist-row {
   padding: 7px 8px;
+}
+
+.majak-mobile-config-overlay--desktop .majak-mobile-config-dialog {
+  width: min(860px, calc(100dvw - 32px));
+}
+
+.majak-mobile-config-overlay--desktop .majak-mobile-config-section--wide .majak-mobile-choice-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+#root .majak-mobile-config-dialog .majak-mobile-choice:has(input[type='radio']) {
+  padding-left: 10px;
 }
 
 @media (min-width: 769px) {

@@ -8,7 +8,8 @@ description: "Google認証、会員登録、ゲームJWT、Refresh Cookie、memb
 ## 0. 基本原則
 
 - 現行Web/モバイル版の基本認証はGoogle ID Tokenである。
-- サーバーは `player_account` を管理し、Googleの `sub` を内部会員ID `member_no` に対応付ける。
+- サーバーは `player_account` を管理し、Googleの `sub` またはhangeの `userno` を内部会員ID `member_no` に対応付ける。
+- 外部IDは `external_auth_id` にプロバイダー名前空間付きで保存する。Googleは `google:<sub>`、hangeは `hange:<userno>` とし、外部IDを `member_no` として使用してはならない。
 - `POST /auth/majak-login` と `POST /auth/majak-register` は旧hange起動互換のために残す。新規機能の標準認証経路にしてはならない。
 - RESTとSignalRの本人判定はゲームJWTから得た `member_no` を正本とする。
 - クライアントが送信した `memberNo`、`memberId`、`pix`だけを根拠にDB更新や権限判定をしてはならない。
@@ -18,7 +19,7 @@ description: "Google認証、会員登録、ゲームJWT、Refresh Cookie、memb
 
 ### 1-1. ログイン
 
-- `POST /auth/google-login` はGoogle ID Tokenを検証し、`google_sub` で `player_account` を検索する。
+- `POST /auth/google-login` はGoogle ID Tokenを検証し、`external_auth_id = google:<sub>` で `player_account` を検索する。
 - `POST /auth/google-login-redirect` はGoogle GIS redirect mode用である。既存会員にはRefresh Cookieを発行してクライアントへ戻し、未登録なら登録フローへ遷移させる。
 - WebのGoogleログインはポップアップを使用せず、Google GISの `ux_mode=redirect` と `login_uri=/auth/google-login-redirect` を使用する。ネイティブアプリはCapacitorのGoogleログインを使用する。
 - 未登録の場合は `requiresRegistration=true` を返し、ID Tokenを30分間のHttpOnly Cookie `mj_pending_google_id_token` に一時保存できる。登録中にCookieが失効して401になった場合、クライアントは登録フォームに留まらずGoogleログインへ戻す。
@@ -38,6 +39,8 @@ description: "Google認証、会員登録、ゲームJWT、Refresh Cookie、memb
 
 - `POST /auth/majak-login` は `login` Cookieまたは `loginCookie` bodyの `hangame=` / `hangametest=` 値を `HangameCookieDecryptor` で検証する互換経路である。
 - `POST /auth/majak-register` はレガシーCookieから得た会員情報で旧アカウントを登録する互換経路である。
+- hange認証はCookieの数値 `userno` を `external_auth_id = hange:<userno>` として検索し、新規登録時の `member_no` はDBに採番させる。
+- hangeログインのたびにCookie由来の表示名、性別、生年、アバター、接続環境を `player_account` へ反映する。
 - `k111e`、launch URL、referrer、Cookie由来のpasswordは旧便利アイテム連携の互換値に限る。Google認証、ゲームJWT、MP残高の本人証明に使用しない。
 - 互換passwordは値をログへ出さず、取得元と長さだけを記録する。
 

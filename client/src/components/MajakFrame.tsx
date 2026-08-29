@@ -28,7 +28,7 @@ import { useOutgameLayoutMode } from '../hooks/useOutgameLayoutMode'
 import { useDesktopScreenScale } from '../hooks/useDesktopScreenScale'
 import { showMessage } from '../utils/msgbox'
 import { saveLargestCanvasScreenshot } from '../utils/screenshot'
-import { logout, saveRegisteredPlayerCache } from '../api/auth'
+import { isHangeClientHost, logout, saveRegisteredPlayerCache } from '../api/auth'
 import * as SignalR from '../api/signalr'
 import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
@@ -100,6 +100,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
   const [showProfile, setShowProfile] = useState(false)
   const player = useAuthStore(state => state.player)
   const setPlayer = useAuthStore(state => state.setPlayer)
+  const isHangeClient = isHangeClientHost()
   const isTitleScreen = location.pathname === '/channel'
   const isAnnouncementScreen = location.pathname === '/announcements'
   const isLobbySelectScreen = location.pathname.startsWith('/channel/select/')
@@ -262,7 +263,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
             <div className="majak-mobile-frame__brand">{screenTitle}</div>
             <MobileUserSummary />
             <div className="majak-mobile-frame__tools">
-              {isTitleScreen && <button type="button" onClick={() => setShowProfile(true)}>プロフィール</button>}
+              {isTitleScreen && !isHangeClient && <button type="button" onClick={() => setShowProfile(true)}>プロフィール</button>}
               {usesScreenHeader ? (
                 frameBack && <button type="button" onClick={frameBack}>{isAnnouncementScreen ? '閉じる' : '戻る'}</button>
               ) : <>
@@ -308,10 +309,17 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
         <header className="majak-responsive-desktop-frame__bar">
           <strong className="majak-type-lg">{screenTitle}</strong>
           <div>
-            {isTitleScreen && <button type="button" className="majak-responsive-control-button" onClick={() => setShowProfile(true)}>プロフィール</button>}
+            {(isTitleScreen || isLobbySelectScreen) && !isHangeClient && <button type="button" className="majak-responsive-control-button" onClick={() => setShowProfile(true)}>プロフィール</button>}
             {isAnnouncementScreen ? (
               onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>閉じる</button>
-            ) : isLobbySelectScreen || isPaifuArchiveScreen ? (
+            ) : isLobbySelectScreen ? (
+              <>
+                {onOpenAnnouncements && <button type="button" className="majak-responsive-control-button" onClick={onOpenAnnouncements}>お知らせ</button>}
+                <button type="button" className="majak-responsive-control-button" onClick={handleOpenSettings}>設定</button>
+                {!IS_NATIVE_APP && <button type="button" className="majak-responsive-control-button" onClick={handleMaximize}>{isFullScreen ? '元に戻す' : '全画面'}</button>}
+                {frameBack && <button type="button" className="majak-responsive-control-button" onClick={frameBack}>戻る</button>}
+              </>
+            ) : isPaifuArchiveScreen ? (
               frameBack && <button type="button" className="majak-responsive-control-button" onClick={frameBack}>戻る</button>
             ) : <>
               {onGoHome && <button type="button" className="majak-responsive-control-button" onClick={onGoHome}>閉じる</button>}

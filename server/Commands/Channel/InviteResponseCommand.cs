@@ -36,6 +36,8 @@ public class InviteResponseCommand : ICommand
         if (inviter == null) return;
         if (inviter.ChannelId != player.ChannelId) return;
 
+        string rejectReason = ctx.GetString("rejectReason");
+
         await ctx.Clients.Client(inviter.ConnectionId).SendAsync(Cmd.InviteResponse, new Dictionary<string, object?>
         {
             [GKey.Pix] = player.Pix,
@@ -43,6 +45,7 @@ public class InviteResponseCommand : ICommand
             ["memberNo"] = player.Pix,
             ["pix"] = player.Pix,
             ["accept"] = yesNo == GKey.ValueYes ? "1" : "0",
+            ["rejectReason"] = rejectReason,
         });
     }
 }

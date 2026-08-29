@@ -81,7 +81,7 @@ import {
   setPaifuRecordingMode,
 } from '../game/paifuRecording'
 import { useAuthStore } from '../store/authStore'
-import { getDefaultAvatarUrl, getGameAvatarUrl } from '../utils/resources'
+import { getDefaultAvatarUrl, getHighResolutionGameAvatarUrl } from '../utils/resources'
 import { getUiFontFamily, getUiFontSize } from '../utils/typography'
 import {
   MID_BAD, MID_FESRIC, MID_GOOD, MID_NORMAL, MID_RICHI, MID_TEN_ALLLAST, MID_TEN_NANBA, MID_TEN_REACH1, MID_TEN_REACH2, MID_TEN_TONBA,
@@ -2600,7 +2600,7 @@ export default class GameScene extends Phaser.Scene {
     if (sex) player.sex = sex
     if (avatarId != null && String(avatarId) !== '') {
       player.avatarId = String(avatarId)
-      player.avatarUrl = getGameAvatarUrl(player.avatarId)
+      player.avatarUrl = getHighResolutionGameAvatarUrl(player.avatarId)
     }
     player.fallbackAvatarUrl = getDefaultAvatarUrl(fallbackSex)
   }
@@ -5371,7 +5371,7 @@ export default class GameScene extends Phaser.Scene {
         return `${IMG}/skin/${costumeId}/mj_costume_default_${imageId}.png`
       }
     }
-    if (player.avatarId) return getGameAvatarUrl(player.avatarId)
+    if (player.avatarId) return getHighResolutionGameAvatarUrl(player.avatarId)
     return player.fallbackAvatarUrl ?? getDefaultAvatarUrl(player.sex === 'F' || player.sex === 'female' ? 'female' : 'male')
   }
 

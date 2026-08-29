@@ -13,7 +13,7 @@ import { useAuthStore } from '../../store/authStore'
 import { useCustomSkinStore } from '../../store/customSkinStore'
 import { useGamePlayerStore } from '../../store/gamePlayerStore'
 import { showConfirm as showConfirmMessage, showError, showMessage, checkResult, isOk, tournamentErrorMessage, tournamentRegistErrorMessage } from '../../utils/msgbox'
-import { getAvatarUrl, getShortAvatarUrl, getDefaultAvatarUrl } from '../../utils/resources'
+import { getAvatarUrl, getShortAvatarUrl, getDefaultAvatarUrl, handleShortAvatarError } from '../../utils/resources'
 import { configureMajakSound } from '../../utils/majakSound'
 import { readNoticePayload, type NoticeDisplay } from '../../utils/notice'
 import { sendAccuseComplaint } from '../../utils/accuse'
@@ -816,7 +816,7 @@ function RoomCell({
               const sex = seat?.sex ?? member?.sex ?? 'male'
               return (
                 <span key={seat ? `${seat.pix || 'seat'}-${seat.pos}-${seatIndex}` : `empty-${seatIndex}`} className={`majak-lobby-room-card__seat${seat ? ' is-occupied' : ''}${seat?.disconnected ? ' is-disconnected' : ''}`}>
-                  {seat && <img src={avatarId ? getShortAvatarUrl(avatarId) : getDefaultAvatarUrl(sex)} alt="" draggable={false} onError={event => { event.currentTarget.src = getDefaultAvatarUrl(sex) }} />}
+                  {seat && <img src={avatarId ? getShortAvatarUrl(avatarId) : getDefaultAvatarUrl(sex)} alt="" draggable={false} onError={event => { handleShortAvatarError(event.currentTarget, avatarId, sex) }} />}
                 </span>
               )
             })}
@@ -966,7 +966,7 @@ function isLegacyInviteCancel(value: unknown) {
   return value === true || value === 1 || value === '1' || value === 'true'
 }
 
-function buildInviteResponsePayload(inviterId: string, roomId: number, accept: boolean) {
+function buildInviteResponsePayload(inviterId: string, roomId: number, accept: boolean, rejectReason?: 'inviteDisabled') {
   const pix = useAuthStore.getState().player?.pix ?? ''
   return {
     k3e: pix,
@@ -974,6 +974,7 @@ function buildInviteResponsePayload(inviterId: string, roomId: number, accept: b
     roomId: String(roomId),
     accept: accept ? '1' : '0',
     k64e: accept ? 'v7e' : 'v8e',
+    rejectReason,
   }
 }
 
@@ -1095,7 +1096,7 @@ function MobileMemberListPanel({
                 src={member.avatarId ? getShortAvatarUrl(member.avatarId) : getDefaultAvatarUrl(member.sex)}
                 alt=""
                 draggable={false}
-                onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatarUrl(member.sex) }}
+                onError={event => { handleShortAvatarError(event.currentTarget, member.avatarId, member.sex) }}
               />
               <span>
                 <span className="majak-mobile-lobby-member__identity">
@@ -1283,12 +1284,12 @@ function MemberListPanel({
               src={getShortAvatarUrl(member.avatarId)}
               alt=""
               draggable={false}
-              onError={e => { (e.currentTarget as HTMLImageElement).src = getDefaultAvatarUrl(member.sex === 'female' ? 'female' : 'male') }}
+              onError={event => { handleShortAvatarError(event.currentTarget, member.avatarId, member.sex === 'female' ? 'female' : 'male') }}
               style={{
                 width: 22,
                 height: 22,
-                objectFit: 'cover',
-                objectPosition: 'center 2%',
+                objectFit: 'contain',
+                objectPosition: 'center',
                 imageRendering: 'pixelated',
                 flexShrink: 0,
                 marginLeft: 4,
@@ -2080,7 +2081,7 @@ export default function LobbyScreen() {
   const replayChannel = isReplayChannel(channelId)
   const tournamentChannel = isTournamentChannel(channelId)
   const useResponsiveDesktopLayout = layoutMode === 'desktop'
-  const showShopButtons = true
+  const showShopButton = !trainingChannel
   const showRankingButton = !trainingChannel && daniChannel && !tournamentChannel
   const showMissionButton = !trainingChannel && !daniChannel && !tournamentChannel
   const showFreeChargeButton = !trainingChannel && !tournamentChannel
@@ -2644,7 +2645,7 @@ export default function LobbyScreen() {
         }
 
         if (rejectInvite) {
-          SignalR.send('c23e', buildInviteResponsePayload(inviterId, roomId, false)).catch(() => {})
+          SignalR.send('c23e', buildInviteResponsePayload(inviterId, roomId, false, 'inviteDisabled')).catch(() => {})
           return
         }
         setInviteData(prev => {
@@ -3836,8 +3837,8 @@ export default function LobbyScreen() {
               {mobileActionGroup && (
                 <div className="majak-mobile-lobby-action-panel">
                   {mobileActionGroup === 'items' && <>
-                    {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowShop(true) }}>ショップ</button>}
-                    {showShopButtons && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCustom(true) }}>所持品</button>}
+                    {showShopButton && <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowShop(true) }}>ショップ</button>}
+                    <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCustom(true) }}>所持品</button>
                     <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCollection(true) }}>コレクション</button>
                     <button type="button" className="majak-mobile-lobby-header-button" onClick={() => { setMobileActionGroup(null); setShowCurrencyHistory(true) }}>通貨履歴</button>
                   </>}
@@ -3928,9 +3929,9 @@ export default function LobbyScreen() {
           <nav className="majak-responsive-lobby-actions" aria-label="ロビー操作">
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={onRefreshRoomList}>更新</button>
             {showRankingButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={openRanking}>ランキング</button>}
-            {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowShop(true)}>ショップ</button>}
+            {showShopButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowShop(true)}>ショップ</button>}
             {showMissionButton && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowMission(true)}>ミッション</button>}
-            {showShopButtons && <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>}
+            <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCustom(true)}>所持品</button>
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCollection(true)}>コレクション</button>
             <button type="button" className="majak-responsive-control-button majak-type-md" onClick={() => setShowCurrencyHistory(true)}>通貨履歴</button>
             {showFreeChargeButton && <button type="button" className={`majak-responsive-control-button majak-type-md${isFreeGpReplenishmentAvailable ? ' is-free-gp-available' : ''}`} disabled={freeGpReplenishmentPending} onClick={() => { void onFreeGpReplenish() }}>無料GP補充</button>}
@@ -4195,7 +4196,7 @@ export default function LobbyScreen() {
         x={(tournamentChannel && tournamentPage === 'list' ? 764 : 677) - LOBBY_LEFT_NUDGE} y={591}
         onClick={() => setShowShop(true)}
         title="ショップ"
-        hidden={!showShopButtons}
+        hidden={!showShopButton}
       />
 
       {/* mj_btn_possession.png (80×69) IDC_BTN_CUSTOM at (X_BTN_ICON_OFF_1=764, 622) */}
@@ -4204,7 +4205,6 @@ export default function LobbyScreen() {
         frameW={80} frameH={69}
         x={(tournamentChannel && tournamentPage === 'list' ? 849 : 764) - LOBBY_LEFT_NUDGE} y={591}
         onClick={() => setShowCustom(true)}
-        hidden={!showShopButtons}
       />
 
       {/* トーナメント: IDC_BTN_PARTICIPATION / IDC_BTN_JOINSTOP / IDC_BTN_MEETINGREG / IDC_BTN_TOURNAMENT */}

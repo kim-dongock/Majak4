@@ -10,6 +10,8 @@ namespace MajakServer.Repositories.MySQL;
 /// </summary>
 public class GamePlayerRepository
 {
+    private const string GoogleAuthPrefix = "google:";
+    private const string HangeAuthPrefix = "hange:";
     private readonly GameDataContextFactory _db;
 
     public GamePlayerRepository(GameDataContextFactory db) => _db = db;
@@ -55,6 +57,29 @@ public class GamePlayerRepository
                 .SetProperty(account => account.UpdatedAt, now));
     }
 
+    public virtual async Task RefreshHangeLoginAsync(
+        string memberNo,
+        string displayName,
+        string sexCode,
+        ushort? birthYear,
+        string avatarId,
+        bool isTestEnvironment)
+    {
+        if (!TryParseMemberNo(memberNo, out var memberNoValue)) return;
+        await using var db = await _db.CreateAsync();
+        var now = DateTime.UtcNow;
+        await db.PlayerAccounts
+            .Where(account => account.MemberNo == memberNoValue)
+            .ExecuteUpdateAsync(update => update
+                .SetProperty(account => account.DisplayName, displayName)
+                .SetProperty(account => account.SexCode, sexCode)
+                .SetProperty(account => account.BirthYear, birthYear)
+                .SetProperty(account => account.AvatarId, avatarId)
+                .SetProperty(account => account.SourceEnvironment, isTestEnvironment ? "test" : "production")
+                .SetProperty(account => account.LastLoginAt, now)
+                .SetProperty(account => account.UpdatedAt, now));
+    }
+
     public virtual async Task<bool> UpdateAccountProfileAsync(
         string memberNo,
         ushort birthYear,
@@ -74,13 +99,25 @@ public class GamePlayerRepository
 
     // ── Google 認証専用メソッド ───────────────────────────────────────
 
-    /// <summary>google_sub でアカウントを検索する。</summary>
+    /// <summary>Google subに対応するexternal_auth_idでアカウントを検索する。</summary>
     public virtual async Task<GamePlayerAccount?> GetAccountByGoogleSubAsync(string googleSub)
     {
+        var externalAuthId = GoogleAuthPrefix + googleSub;
         await using var db = await _db.CreateAsync();
         return await db.PlayerAccounts
             .AsNoTracking()
-            .Where(account => account.GoogleSub == googleSub)
+            .Where(account => account.ExternalAuthId == externalAuthId)
+            .Select(account => ToAccount(account))
+            .SingleOrDefaultAsync();
+    }
+
+    public virtual async Task<GamePlayerAccount?> GetAccountByHangeUserNoAsync(string userNo)
+    {
+        var externalAuthId = HangeAuthPrefix + userNo;
+        await using var db = await _db.CreateAsync();
+        return await db.PlayerAccounts
+            .AsNoTracking()
+            .Where(account => account.ExternalAuthId == externalAuthId)
             .Select(account => ToAccount(account))
             .SingleOrDefaultAsync();
     }
@@ -107,7 +144,7 @@ public class GamePlayerRepository
         {
             await using var db = await _db.CreateAsync();
             await using var tx = await db.Database.BeginTransactionAsync();
-            var account = CreateGoogleAccount(displayName, sexCode, birthYear, avatarId, googleSub, email);
+            var account = CreateGoogleAccount(displayName, sexCode, birthYear, avatarId, GoogleAuthPrefix + googleSub, email);
             db.PlayerAccounts.Add(account);
             await db.SaveChangesAsync();
             AddRelatedPlayerRows(db, account.MemberNo);
@@ -119,27 +156,37 @@ public class GamePlayerRepository
 
     // ── 旧 Hangame 認証 (互換維持) ────────────────────────────────────
 
-    public virtual async Task RegisterAsync(
-        string memberNo,
+    public virtual async Task<ulong> RegisterHangeAsync(
+        string userNo,
         string displayName,
         string sexCode,
         string avatarId,
-        bool isTestEnvironment)
+        bool isTestEnvironment,
+        ushort? birthYear = null)
     {
-        if (!TryParseMemberNo(memberNo, out var memberNoValue))
-            throw new InvalidOperationException($"member_no must be numeric: {memberNo}");
-        await using var db = await _db.CreateAsync();
-        AddNewPlayer(
-            db,
-            memberNoValue,
-            displayName,
-            sexCode,
-            avatarId,
-            isTestEnvironment ? "test" : "production",
-            googleSub: null,
-            email: null,
-            termsAgreed: false);
-        await db.SaveChangesAsync();
+        if (!ulong.TryParse(userNo, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            throw new InvalidOperationException("Hange userno must be numeric.");
+
+        await using var strategyDb = await _db.CreateAsync();
+        var strategy = strategyDb.Database.CreateExecutionStrategy();
+        return await strategy.ExecuteAsync(async () =>
+        {
+            await using var db = await _db.CreateAsync();
+            await using var tx = await db.Database.BeginTransactionAsync();
+            var account = CreateHangeAccount(
+                displayName,
+                sexCode,
+                birthYear,
+                avatarId,
+                HangeAuthPrefix + userNo,
+                isTestEnvironment);
+            db.PlayerAccounts.Add(account);
+            await db.SaveChangesAsync();
+            AddRelatedPlayerRows(db, account.MemberNo);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            return account.MemberNo;
+        });
     }
 
     private static PlayerAccountEntity CreateGoogleAccount(
@@ -147,7 +194,7 @@ public class GamePlayerRepository
         string sexCode,
         ushort birthYear,
         string avatarId,
-        string googleSub,
+        string externalAuthId,
         string? email)
     {
         var now = DateTime.UtcNow;
@@ -155,7 +202,7 @@ public class GamePlayerRepository
         {
             DisplayName = displayName ?? string.Empty,
             Email = email,
-            GoogleSub = googleSub,
+            ExternalAuthId = externalAuthId,
             SexCode = sexCode,
             BirthYear = birthYear,
             AvatarId = avatarId,
@@ -169,56 +216,29 @@ public class GamePlayerRepository
         };
     }
 
-    private static void AddNewPlayer(
-        GameDataContext db,
-        ulong memberNo,
+    private static PlayerAccountEntity CreateHangeAccount(
         string displayName,
         string sexCode,
+        ushort? birthYear,
         string avatarId,
-        string sourceEnvironment,
-        string? googleSub,
-        string? email,
-        bool termsAgreed)
+        string externalAuthId,
+        bool isTestEnvironment)
     {
         var now = DateTime.UtcNow;
-        db.AddRange(
-            new PlayerAccountEntity
-            {
-                MemberNo = memberNo,
-                DisplayName = displayName ?? string.Empty,
-                Email = email,
-                GoogleSub = googleSub,
-                SexCode = sexCode,
-                AvatarId = avatarId,
-                TermsAgreedAt = termsAgreed ? now : null,
-                AccountStatus = 1,
-                SourceEnvironment = sourceEnvironment,
-                FirstLoginAt = now,
-                LastLoginAt = now,
-                CreatedAt = now,
-                UpdatedAt = now,
-            },
-            new PlayerWalletEntity
-            {
-                MemberNo = memberNo,
-                CreatedAt = now,
-                UpdatedAt = now,
-            },
-            new PlayerProfileEntity
-            {
-                MemberNo = memberNo,
-                WeeklyTargetDate = DateOnly.FromDateTime(now),
-                JoinedAt = now,
-                CreatedAt = now,
-                UpdatedAt = now,
-            },
-            new PlayerModeStatsEntity
-            {
-                MemberNo = memberNo,
-                ModeCode = "regular",
-                CreatedAt = now,
-                UpdatedAt = now,
-            });
+        return new PlayerAccountEntity
+        {
+            DisplayName = displayName,
+            ExternalAuthId = externalAuthId,
+            SexCode = sexCode,
+            BirthYear = birthYear,
+            AvatarId = avatarId,
+            AccountStatus = 1,
+            SourceEnvironment = isTestEnvironment ? "test" : "production",
+            FirstLoginAt = now,
+            LastLoginAt = now,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
     }
 
     private static void AddRelatedPlayerRows(GameDataContext db, ulong memberNo)

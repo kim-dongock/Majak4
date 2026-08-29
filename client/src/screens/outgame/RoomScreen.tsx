@@ -37,7 +37,7 @@ import { FORCED_HAN_RESULT, FORCE_HAN_RESULT_FOR_TEST } from '../ingame/forcedHa
 import KyoRes, { type KyoResData } from '../ingame/KyoRes'
 import { FORCED_KYO_RESULT, FORCE_KYO_RESULT_FOR_TEST } from '../ingame/forcedKyoResult'
 import MiniChannelWnd from './MiniChannelWnd'
-import { getDefaultAvatarUrl, getGameAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
+import { getAvatarUrl, getDefaultAvatarUrl, getShortAvatarUrl, handleShortAvatarError } from '../../utils/resources'
 import { configureMajakSound, playMajakChat, playMajakSid, SID_EXIT, SID_JOIN } from '../../utils/majakSound'
 import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH, suspendGame } from '../../game/GameInstance'
 import { shouldRequestInitialGameResync } from '../../game/resyncState'
@@ -1805,6 +1805,9 @@ export default function RoomScreen() {
       const yesNo = data.k64e
       const displayName = pendingInviteTargetNameRef.current || displayNameForPix(pix)
       pendingInviteTargetNameRef.current = ''
+      if (data.rejectReason === 'inviteDisabled') {
+        void showMessage(`${displayName}さんはゲーム招待を拒否しています。`, '招待できません')
+      }
       const text = yesNo === 'v7e'
         ? `${displayName}さんがゲームへの招待を承諾しました。`
         : yesNo === 'v6e'
@@ -2744,7 +2747,7 @@ export default function RoomScreen() {
                   {player ? (
                     <>
                       <img
-                        src={player.avatarId ? getGameAvatarUrl(player.avatarId) : avatarFallback}
+                        src={player.avatarId ? getAvatarUrl(player.avatarId) : avatarFallback}
                         alt=""
                         draggable={false}
                         onError={event => { event.currentTarget.src = avatarFallback }}
@@ -3357,7 +3360,7 @@ export default function RoomScreen() {
                             <img
                               src={viewer.avatarId ? getShortAvatarUrl(viewer.avatarId) : fallback}
                               alt=""
-                              onError={event => { event.currentTarget.src = fallback }}
+                              onError={event => { handleShortAvatarError(event.currentTarget, viewer.avatarId, viewer.sex === 'F' || viewer.sex === 'female' ? 'female' : 'male') }}
                             />
                             <span className="majak-mobile-lobby-member__identity">
                               <span className="majak-mobile-lobby-member__name">{viewer.name || viewer.pix}</span>
@@ -3497,7 +3500,7 @@ export default function RoomScreen() {
             style={{ position: 'absolute', left: 0, top: 0, width: ROOM_W, height: ROOM_H, zIndex: 10, pointerEvents: 'none' }}
           >
             <img
-              src={player.avatarId ? getGameAvatarUrl(player.avatarId) : avatarFallback}
+              src={player.avatarId ? getAvatarUrl(player.avatarId) : avatarFallback}
               alt=""
               draggable={false}
               onError={e => {

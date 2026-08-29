@@ -5,7 +5,7 @@ public sealed class PlayerAccountEntity
     public ulong MemberNo { get; set; }
     public string DisplayName { get; set; } = string.Empty;
     public string? Email { get; set; }
-    public string? GoogleSub { get; set; }
+    public string? ExternalAuthId { get; set; }
     public string SexCode { get; set; } = "U";
     public ushort? BirthYear { get; set; }
     public string AvatarId { get; set; } = string.Empty;

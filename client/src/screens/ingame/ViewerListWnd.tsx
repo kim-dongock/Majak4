@@ -8,7 +8,7 @@
  *   m_listViewerAva に追加し、rc.top < VIEWER_WINDOW_BOTTOM の範囲のみ表示。
  *   CToolTipCtrl.AddTool() でプレイヤー情報ツールチップのみ表示。
  */
-import { getDefaultAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
+import { getShortAvatarUrl, handleShortAvatarError } from '../../utils/resources'
 
 const X_VIEWER_WINDOW = 805
 const Y_VIEWER_WINDOW = 235
@@ -88,8 +88,8 @@ export default function ViewerListWnd({ viewers, x = X_VIEWER_WINDOW, y = Y_VIEW
               src={getShortAvatarUrl(viewer.avatarId)}
               alt={viewer.name || viewer.pix}
               draggable={false}
-              onError={e => { e.currentTarget.src = getDefaultAvatarUrl(sex) }}
-              style={{ width: W_VIEWAVA, height: H_VIEWAVA, objectFit: 'cover', imageRendering: 'auto' }}
+              onError={event => { handleShortAvatarError(event.currentTarget, viewer.avatarId, sex) }}
+              style={{ width: W_VIEWAVA, height: H_VIEWAVA, objectFit: 'contain', objectPosition: 'center', imageRendering: 'auto' }}
             />
           </div>
         )

@@ -46,7 +46,7 @@ export default function ChannelGroupScreen() {
     <div className="majak-desktop-channel-group majak-screen-surface">
       <header className="majak-desktop-channel-group__header">
         <img className="majak-desktop-channel-group__logo" src={MOBILE_MAIN_VISUAL_SRC} alt="麻雀4" draggable={false} />
-        <MobileUserSummary className="majak-desktop-channel-group__user-summary" showGrade />
+        <MobileUserSummary className="majak-desktop-channel-group__user-summary" showGrade showAvatar />
       </header>
       <main className="majak-desktop-channel-group__menu" aria-label="対戦メニュー">
         {items.map(item => (

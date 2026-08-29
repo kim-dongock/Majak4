@@ -3,7 +3,6 @@ const CUSTOM_BGM_ID_EXTRA = 100008
 const CUSTOM_BGM_ID_TENGOKU = 100009
 const CUSTOM_ITEM_TYPE_BG_EXTRA = 11
 const CUSTOM_ITEM_TYPE_BG_TENGOKU = 12
-const DEFAULT_BOARD_SKIN_ID = 5
 const BOARD_SKIN_IDS = new Set([5, 6, 7, 8, 16, 17, 18, 19, 24, 25, 26, 29, 30, 100001, 100002])
 const HAI_SKIN_IDS = new Set([1, 2, 3, 4, 20, 21, 22, 23, 27, 28, 100004, 100005])
 
@@ -89,13 +88,13 @@ export function getLegacyBoardSoundSkinId(customBgId: unknown, customBoardType?:
   return undefined
 }
 
-export function getLegacyBoardSkinId(customBgId: unknown, customBoardType?: unknown): number {
+export function getLegacyBoardSkinId(customBgId: unknown, customBoardType?: unknown): number | undefined {
   const board = asFiniteNumber(customBgId)
   const type = asFiniteNumber(customBoardType)
   if (board != null && BOARD_SKIN_IDS.has(board)) return board
   if (type === CUSTOM_ITEM_TYPE_BG_TENGOKU) return CUSTOM_BOARD_TENGOKU
   if (type === CUSTOM_ITEM_TYPE_BG_EXTRA) return 100001
-  return DEFAULT_BOARD_SKIN_ID
+  return undefined
 }
 
 export function getLegacyHaiSkinId(customHaiId: unknown): number | undefined {
@@ -105,6 +104,7 @@ export function getLegacyHaiSkinId(customHaiId: unknown): number | undefined {
 
 export function getLegacyBoardImageUrl(customBgId: unknown, customBoardType?: unknown): string {
   const skinId = getLegacyBoardSkinId(customBgId, customBoardType)
+  if (skinId == null) return '/assets/images/game/mj_board.png'
   return `/assets/images/game/skin/${skinId}/mj_board_${String(skinId).padStart(2, '0')}.png`
 }
 

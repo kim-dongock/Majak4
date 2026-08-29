@@ -584,6 +584,32 @@ public class HangameCookieDecryptorTests
         Assert.Equal("name1", fields["name"]);
     }
 
+    [Fact]
+    public void ParseCookie_UrlEncodedPrefix_UnpacksFields()
+    {
+        var values = Enumerable.Repeat("", HangameCookieDecryptor.FieldNames.Length).ToArray();
+        values[0] = PackString("member1");
+        values[1] = PackString("password1");
+        values[2] = PackString("name1");
+
+        var cookie = Uri.EscapeDataString("hangame=" + string.Join(',', values));
+        var fields = HangameCookieDecryptor.ParseCookie(cookie);
+
+        Assert.NotNull(fields);
+        Assert.Equal("member1", fields!["userid"]);
+    }
+
+    [Fact]
+    public void ParseCookie_ValidFieldsWithoutPrefix_ReturnsNull()
+    {
+        var values = Enumerable.Repeat("", HangameCookieDecryptor.FieldNames.Length).ToArray();
+        values[0] = PackString("member1");
+        values[1] = PackString("password1");
+        values[2] = PackString("name1");
+
+        Assert.Null(HangameCookieDecryptor.ParseCookie(Uri.EscapeDataString(string.Join(',', values))));
+    }
+
     // シナリオ7: password が packed でない場合は不正クッキーとして扱う
     [Fact]
     public void ParseCookie_RawPassword_ReturnsNull()
@@ -608,6 +634,22 @@ public class HangameCookieDecryptorTests
     [Fact]
     public void GetUserId_Empty_ReturnsNull()
         => Assert.Null(HangameCookieDecryptor.GetUserId(""));
+
+    [Fact]
+    public void GetUserNo_PrefersNumericUserNoOverLoginId()
+    {
+        var values = Enumerable.Repeat("", HangameCookieDecryptor.FieldNames.Length).ToArray();
+        values[0] = PackString("member1");
+        values[1] = PackString("password1");
+        values[2] = PackString("name1");
+        values[24] = PackString("12345678");
+
+        var fields = HangameCookieDecryptor.ParseCookie(
+            "hangametest=" + Uri.EscapeDataString(string.Join(',', values)));
+
+        Assert.NotNull(fields);
+        Assert.Equal("12345678", HangameCookieDecryptor.GetUserNo(fields!));
+    }
 
     // ─── TryUnpackString ────────────────────────────────────────────────
 

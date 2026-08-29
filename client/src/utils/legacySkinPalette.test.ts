@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { getLegacyBoardImageUrl, getLegacyBoardSkinId, getLegacyFullUiSkinId, getLegacyHaiSkinId } from './legacySkinPalette'
 
 describe('board skin selection', () => {
+  it('uses the base legacy board when no background skin is equipped', () => {
+    expect(getLegacyBoardSkinId(0, 0)).toBeUndefined()
+    expect(getLegacyBoardImageUrl(0, 0)).toBe('/assets/images/game/mj_board.png')
+  })
+
   it('preserves a standard board ID even when its master kind is 12', () => {
     expect(getLegacyBoardSkinId(16, 12)).toBe(16)
     expect(getLegacyBoardImageUrl(16, 12)).toBe('/assets/images/game/skin/16/mj_board_16.png')

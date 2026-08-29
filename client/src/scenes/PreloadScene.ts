@@ -32,8 +32,6 @@ import { imageEdgeColor } from '../utils/imagePalette'
 
 const IMG  = '/assets/images/game'
 const CUSTOM_BOARD_TENGOKU = 100002
-const DEFAULT_BOARD_SKIN_ID = 5
-
 function customSkinSuffix(id: number): string {
   return String(id).padStart(2, '0')
 }
@@ -66,10 +64,10 @@ export default class PreloadScene extends Phaser.Scene {
     const fullUiSkinId = getLegacyFullUiSkinId(customBgId, customBoardType)
     const fullUiSkinSuffix = customSkinSuffix(fullUiSkinId ?? 0)
     const boardSkinId = getLegacyBoardSkinId(customBgId, customBoardType)
-    const boardSkinSuffix = customSkinSuffix(boardSkinId)
-    const hasCustomBg = boardSkinId !== DEFAULT_BOARD_SKIN_ID
+    const boardSkinSuffix = customSkinSuffix(boardSkinId ?? 0)
+    const hasCustomBg = boardSkinId != null
     const hasFullCustomBg = fullUiSkinId != null
-    const customBgBase = hasCustomBg ? customSkinBase(boardSkinId) : ''
+    const customBgBase = boardSkinId != null ? customSkinBase(boardSkinId) : ''
     const haiSkinId = getLegacyHaiSkinId(customHaiId)
     const haiSkinSuffix = customSkinSuffix(haiSkinId ?? 0)
     const fullUiSkinBase = hasFullCustomBg ? customSkinBase(fullUiSkinId) : ''
@@ -87,7 +85,7 @@ export default class PreloadScene extends Phaser.Scene {
     }
 
     /* ── ゲームボード / サイドバー ── */
-    this.load.image('mj_board', boardImage('mj_board', `skin/${DEFAULT_BOARD_SKIN_ID}/mj_board_${customSkinSuffix(DEFAULT_BOARD_SKIN_ID)}`))
+    this.load.image('mj_board', boardImage('mj_board', 'mj_board'))
     this.load.image('mj_sideBg', `${IMG}/mj_sideBg.png`)
     this.load.image('mj_h_bg', boardImage('mj_h_bg', 'mj_h_bg'))
     loadBgSkinImage('mj_sideBg')

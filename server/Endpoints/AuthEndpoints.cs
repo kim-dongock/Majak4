@@ -93,15 +93,16 @@ internal static class AuthEndpoints
             var fields = string.IsNullOrWhiteSpace(cookieValue)
                 ? null
                 : HangameCookieDecryptor.ParseCookie(cookieValue);
-            if (fields is null || !fields.TryGetValue("userid", out var memberNo)
-                || string.IsNullOrWhiteSpace(memberNo))
+            if (fields is null) return Results.Unauthorized();
+            var userNo = HangameCookieDecryptor.GetUserNo(fields);
+            if (string.IsNullOrWhiteSpace(userNo))
                 return Results.Unauthorized();
 
-            var account = await gamePlayers.GetAccountAsync(memberNo);
+            var account = await gamePlayers.GetAccountByHangeUserNoAsync(userNo);
             if (account is null) return Results.NotFound(new { error = "ACCOUNT_NOT_FOUND" });
             if (account.AccountStatus == 2) return Results.StatusCode(StatusCodes.Status403Forbidden);
 
-            await gamePlayers.AgreeToTermsAsync(memberNo);
+            await gamePlayers.AgreeToTermsAsync(account.MemberNo);
             return Results.Ok(new { accountStatus = account.AccountStatus, termsAgreed = true });
         });
 
@@ -117,26 +118,29 @@ internal static class AuthEndpoints
             var cookieValue = body.LoginCookie;
             if (string.IsNullOrWhiteSpace(cookieValue)) cookieValue = context.Request.Cookies["login"];
             var fields = string.IsNullOrWhiteSpace(cookieValue) ? null : HangameCookieDecryptor.ParseCookie(cookieValue);
-            if (fields is null || !fields.TryGetValue("userid", out var memberNo) || string.IsNullOrWhiteSpace(memberNo))
+            if (fields is null) return Results.Unauthorized();
+            var userNo = HangameCookieDecryptor.GetUserNo(fields);
+            if (string.IsNullOrWhiteSpace(userNo))
                 return Results.Unauthorized();
             var sexCode = body.Sex?.ToUpperInvariant() ?? string.Empty;
             if (sexCode is not ("M" or "F")) return Results.BadRequest(new { error = "INVALID_SEX" });
             if (!AvatarCatalog.IsValid(sexCode, body.AvatarId)) return Results.BadRequest(new { error = "INVALID_AVATAR" });
-            fields.TryGetValue("name", out var displayName);
+            var displayName = HangameCookieDecryptor.GetDisplayName(fields);
             var isTest = cookieValue!.TrimStart().StartsWith("hangametest=", StringComparison.OrdinalIgnoreCase);
-            var account = await gamePlayers.GetAccountAsync(memberNo);
+            var account = await gamePlayers.GetAccountByHangeUserNoAsync(userNo);
             if (account is null)
             {
-                await gamePlayers.RegisterAsync(memberNo, displayName ?? string.Empty, sexCode, body.AvatarId!, isTest);
+                var memberNo = (await gamePlayers.RegisterHangeAsync(userNo, displayName, sexCode, body.AvatarId!, isTest)).ToString(System.Globalization.CultureInfo.InvariantCulture);
                 await moneyService.SetNewPlayerInitialMoneyWithHistoryAsync(memberNo, context.Connection.RemoteIpAddress?.ToString() ?? string.Empty);
-                account = new GamePlayerAccount(displayName ?? string.Empty, sexCode, null, body.AvatarId!, 1, null);
+                account = await gamePlayers.GetAccountAsync(memberNo);
+                if (account is null) return Results.Problem("Hange account registration failed.");
             }
-            await playerRepository.SetDailyMissionAsync(memberNo, conditionType: 1, progressIncrement: 1);
-            var pix = sessions.IssuePix(memberNo);
-            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(memberNo, pix), memberNo = pix, name = displayName ?? account.DisplayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, isTestEnv = isTest, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
+            await playerRepository.SetDailyMissionAsync(account.MemberNo, conditionType: 1, progressIncrement: 1);
+            var pix = sessions.IssuePix(account.MemberNo);
+            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = displayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, isTestEnv = isTest, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
         });
 
-        app.MapPost("/auth/majak-login", async Task<IResult> (HttpContext context, HttpRequest request, GamePlayerRepository gamePlayers, PlayerRepository playerRepository, PlayerSessionService sessions, GameAuthTokenService gameAuth) =>
+        app.MapPost("/auth/majak-login", async Task<IResult> (HttpContext context, HttpRequest request, GamePlayerRepository gamePlayers, PlayerRepository playerRepository, GameMoneyService moneyService, LogRepository logRepository, PlayerSessionService sessions, AuthRefreshSessionService refreshSessions, GameAuthTokenService gameAuth) =>
         {
             MajakLoginRequest? body = null;
             string? cookieValue = null;
@@ -144,14 +148,39 @@ internal static class AuthEndpoints
             cookieValue ??= context.Request.Cookies["login"];
             if (string.IsNullOrWhiteSpace(cookieValue)) return Results.Unauthorized();
             var fields = HangameCookieDecryptor.ParseCookie(cookieValue);
-            if (fields is null || !fields.TryGetValue("userid", out var memberNo) || string.IsNullOrEmpty(memberNo)) return Results.Unauthorized();
-            fields.TryGetValue("name", out var name); fields.TryGetValue("password", out var cookiePassword);
+            if (fields is null) return Results.Unauthorized();
+            var userNo = HangameCookieDecryptor.GetUserNo(fields);
+            if (string.IsNullOrWhiteSpace(userNo)) return Results.Unauthorized();
+            if (fields.TryGetValue("valid", out var valid) && !string.IsNullOrWhiteSpace(valid) && !string.Equals(valid, "Y", StringComparison.OrdinalIgnoreCase)) return Results.Unauthorized();
+            fields.TryGetValue("sex", out var cookieSex);
+            fields.TryGetValue("birthday", out var birthday);
+            fields.TryGetValue("avatarid", out var cookieAvatarId);
+            fields.TryGetValue("password", out var cookiePassword);
             var password = LegacyLaunchPassword.Extract(body?.KeyPwd) ?? LegacyLaunchPassword.Extract(body?.LaunchUrl) ?? LegacyLaunchPassword.Extract(body?.Referrer) ?? LegacyLaunchPassword.Extract(request.Headers.Referer.ToString()) ?? cookiePassword ?? string.Empty;
             var isTest = cookieValue.TrimStart().StartsWith("hangametest=", StringComparison.OrdinalIgnoreCase);
-            var account = await gamePlayers.GetAccountAsync(memberNo);
-            if (account is not null) { await gamePlayers.RefreshLoginAsync(memberNo, name ?? account.DisplayName, isTest); await playerRepository.SetDailyMissionAsync(memberNo, 1, 1); }
-            var pix = sessions.IssuePix(memberNo);
-            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(memberNo, pix), memberNo = pix, name = name ?? string.Empty, sex = account?.SexCode ?? string.Empty, avatarId = account?.AvatarId ?? string.Empty, password, isTestEnv = isTest, requiresRegistration = account is null, accountStatus = account?.AccountStatus ?? 0, termsAgreed = account?.TermsAgreed ?? false });
+            var displayName = HangameCookieDecryptor.GetDisplayName(fields);
+            var sexCode = cookieSex?.Trim().ToUpperInvariant() ?? string.Empty;
+            var birthYear = ParseHangeBirthYear(birthday);
+            var avatarId = cookieAvatarId?.Trim() ?? string.Empty;
+            if (sexCode is not ("M" or "F") || string.IsNullOrWhiteSpace(avatarId) || avatarId.Length > 255) return Results.Unauthorized();
+
+            var account = await gamePlayers.GetAccountByHangeUserNoAsync(userNo);
+            if (account is null)
+            {
+                var memberNo = (await gamePlayers.RegisterHangeAsync(userNo, displayName, sexCode, avatarId, isTest, birthYear)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                await moneyService.SetNewPlayerInitialMoneyWithHistoryAsync(memberNo, context.Connection.RemoteIpAddress?.ToString() ?? string.Empty);
+                account = await gamePlayers.GetAccountAsync(memberNo);
+                if (account is null) return Results.Problem("Hange account registration failed.");
+            }
+            await gamePlayers.RefreshHangeLoginAsync(account.MemberNo, displayName, sexCode, birthYear, avatarId, isTest);
+            account = await gamePlayers.GetAccountAsync(account.MemberNo);
+            if (account is null) return Results.Problem("Hange account refresh failed.");
+
+            await playerRepository.SetDailyMissionAsync(account.MemberNo, 1, 1);
+            var pix = sessions.IssuePix(account.MemberNo);
+            if (!await IssueRefreshCookieAsync(context, refreshSessions, account.MemberNo)) return Results.Problem("Hange refresh session could not be issued.");
+            await InsertLoginLogOnceAsync(context, logRepository, account.MemberNo, 0);
+            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = account.DisplayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, password, isTestEnv = isTest, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
         });
 
         app.MapPost("/auth/google-login-redirect", async Task<IResult> (HttpContext context, GamePlayerRepository gamePlayers, PlayerRepository playerRepository, LogRepository logRepository, IConfiguration configuration, ILogger<AuthEndpointsMarker> logger, PlayerSessionService sessions, AuthRefreshSessionService refreshSessions) =>
@@ -232,6 +261,14 @@ internal static class AuthEndpoints
 
     private static Task<GoogleJsonWebSignature.Payload> ValidateGoogleTokenAsync(string token, string clientId)
         => GoogleJsonWebSignature.ValidateAsync(token, new GoogleJsonWebSignature.ValidationSettings { Audience = [clientId] });
+
+    private static ushort? ParseHangeBirthYear(string? birthday)
+    {
+        if (string.IsNullOrWhiteSpace(birthday)) return null;
+        var digits = new string(birthday.Where(char.IsAsciiDigit).ToArray());
+        if (digits.Length < 4 || !ushort.TryParse(digits[..4], out var year)) return null;
+        return year >= 1900 && year <= DateTime.UtcNow.Year ? year : null;
+    }
 
     private static void SetPendingGoogleIdTokenCookie(HttpContext context, string idToken)
         => context.Response.Cookies.Append(PendingGoogleIdTokenCookieName, idToken, new CookieOptions { HttpOnly = true, Secure = context.Request.IsHttps, SameSite = SameSiteMode.Lax, Expires = DateTimeOffset.UtcNow.AddMinutes(30), Path = "/" });

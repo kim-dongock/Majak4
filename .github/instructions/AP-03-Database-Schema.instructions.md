@@ -143,7 +143,7 @@ description: "使用条件: MySQLゲーム・ログDBのテーブル、カラム
 | `member_no` | `BIGINT UNSIGNED NOT NULL AUTO_INCREMENT` |
 | `display_name` | `VARCHAR(100) NOT NULL DEFAULT ''` |
 | `email` | `VARCHAR(254) NULL` |
-| `google_sub` | `VARCHAR(64) NULL` |
+| `external_auth_id` | `VARCHAR(255) NULL`。`google:<sub>` または `hange:<userno>` |
 | `sex_code` | `CHAR(1) NOT NULL DEFAULT 'U'` |
 | `birth_year` | `SMALLINT UNSIGNED NULL` |
 | `avatar_id` | `VARCHAR(255) NOT NULL DEFAULT ''` |
@@ -161,7 +161,7 @@ description: "使用条件: MySQLゲーム・ログDBのテーブル、カラム
 キー・インデックス・制約:
 
 - `PRIMARY KEY (member_no)`
-- `UNIQUE KEY idx_player_account_google_sub (google_sub)`
+- `UNIQUE KEY idx_player_account_external_auth_id (external_auth_id)`
 - `INDEX idx_player_account_status_created (account_status, created_at)`
 
 ### `player_wallet`

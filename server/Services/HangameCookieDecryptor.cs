@@ -105,6 +105,25 @@ public static class HangameCookieDecryptor
     }
 
     /// <summary>
+    /// Hange の数値会員番号を取得する。userno がない旧形式だけ数値 userid へフォールバックする。
+    /// </summary>
+    public static string? GetUserNo(IReadOnlyDictionary<string, string> fields)
+    {
+        if (fields.TryGetValue("userno", out var userNo) && !string.IsNullOrWhiteSpace(userNo))
+            return ulong.TryParse(userNo, NumberStyles.None, CultureInfo.InvariantCulture, out _) ? userNo : null;
+
+        return fields.TryGetValue("userid", out var userId)
+            && ulong.TryParse(userId, NumberStyles.None, CultureInfo.InvariantCulture, out _)
+                ? userId
+                : null;
+    }
+
+    public static string GetDisplayName(IReadOnlyDictionary<string, string> fields)
+    {
+        return fields.TryGetValue("userid", out var userId) ? userId.Trim() : string.Empty;
+    }
+
+    /// <summary>
     /// クッキー値を解析し、全フィールドの辞書を返す。
     /// </summary>
     public static Dictionary<string, string>? ParseCookie(string cookieValue)
@@ -112,18 +131,21 @@ public static class HangameCookieDecryptor
         if (string.IsNullOrEmpty(cookieValue))
             return null;
 
-        // ① prefix を除去 ("hangame=" / "hangametest=")
-        if (cookieValue.StartsWith("hangametest=", StringComparison.Ordinal))
-            cookieValue = cookieValue["hangametest=".Length..];
-        else if (cookieValue.StartsWith("hangame=", StringComparison.Ordinal))
-            cookieValue = cookieValue["hangame=".Length..];
-
-        if (string.IsNullOrWhiteSpace(cookieValue))
-            return null;
-
-        // ② URL デコード (+ は空白にしない: %2B→+ のみ)
+        // ① URL デコード (+ は空白にしない: %2B→+ のみ)
         // Java の URLDecoder.decode(..., "ISO-8859-1") に相当
         var decoded = Uri.UnescapeDataString(cookieValue.Replace("+", "%2B"));
+
+        // ② prefix を除去 ("hangame=" / "hangametest=")
+        // HTTP Cookie では '=' を含む prefix 自体が %3D encode される場合がある。
+        if (decoded.StartsWith("hangametest=", StringComparison.OrdinalIgnoreCase))
+            decoded = decoded["hangametest=".Length..];
+        else if (decoded.StartsWith("hangame=", StringComparison.OrdinalIgnoreCase))
+            decoded = decoded["hangame=".Length..];
+        else
+            return null;
+
+        if (string.IsNullOrWhiteSpace(decoded))
+            return null;
 
         // ③ CSV 分割
         var values = ParseCsv(decoded);

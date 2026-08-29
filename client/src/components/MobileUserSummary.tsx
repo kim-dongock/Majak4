@@ -3,6 +3,7 @@ import { getPlayerCollection } from '../api/collection'
 import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
 import { gradeLevelName } from '../utils/grade'
+import { getAvatarUrl, getDefaultAvatarUrl } from '../utils/resources'
 
 interface MobileUserSummaryProps {
   gameMoney?: number
@@ -10,6 +11,7 @@ interface MobileUserSummaryProps {
   achievementTitle?: string
   trickTitle?: string
   showGrade?: boolean
+  showAvatar?: boolean
   loadProfile?: boolean
   className?: string
 }
@@ -20,6 +22,7 @@ export default function MobileUserSummary({
   achievementTitle,
   trickTitle,
   showGrade = false,
+  showAvatar = false,
   loadProfile = true,
   className = '',
 }: MobileUserSummaryProps) {
@@ -65,6 +68,17 @@ export default function MobileUserSummary({
 
   return (
     <div className={`majak-mobile-user-summary${className ? ` ${className}` : ''}`} aria-label="ユーザー情報">
+      {showAvatar && (
+        <img
+          className="majak-mobile-user-summary__avatar"
+          src={getAvatarUrl(player.avatarId)}
+          alt=""
+          draggable={false}
+          onError={event => {
+            event.currentTarget.src = getDefaultAvatarUrl(player.sex === 'F' || player.sex === 'female' ? 'female' : 'male')
+          }}
+        />
+      )}
       <span className="majak-mobile-user-summary__name">
         <b className="majak-mobile-user-summary__name-label">ニックネーム</b>
         <strong className="majak-mobile-user-summary__name-value" title={player.name}>{player.name}</strong>

@@ -328,14 +328,14 @@ export default function ResponsiveItemShopDlg({
         .shop-card__bonus { color: #b84228; font: 700 var(--shop-font-card-title)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); }
         .shop-card__cost { display: flex; min-width: 0; flex: 1 1 auto; flex-wrap: nowrap; gap: 5px; align-items: center; white-space: nowrap; }
         .shop-card__cost b { flex: none; color: #195346; font: 700 var(--shop-font-label)/var(--majak-popup-leading-body) var(--majak-font-family-ui); white-space: nowrap; }
-        .shop-card__footer { display: flex; gap: 10px; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 12px; }
+        .shop-card__footer { display: flex; gap: 8px; align-items: stretch; flex-direction: column; margin-top: auto; padding-top: 12px; }
         .shop-card:has(.shop-card__cost) .shop-card__footer { align-items: stretch; flex-direction: column; }
         .shop-card:has(.shop-card__cost) .shop-card__cost { justify-content: space-between; }
         .shop-card:has(.shop-card__cost) .shop-card__footer button { align-self: flex-end; }
         .shop-card__footer strong { min-width: 0; color: #b84228; font: 700 var(--shop-font-price)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); white-space: nowrap; }
         .shop-card__footer span { color: #65736d; font: var(--shop-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
         .shop-card button, .responsive-shop__footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); box-sizing: border-box; border: 0; border-radius: 3px; padding: 0 13px; color: #fff; background: #1c5a4d; font: 700 var(--shop-font-command)/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
-        .shop-card__footer button { flex: none; max-width: 100%; }
+        .shop-card__footer button { flex: none; align-self: flex-end; max-width: 100%; }
         .shop-card button:hover, .responsive-shop__footer button:hover { background: #123f36; }
         .shop-card button:disabled { color: #87918c; background: #d7ddd5; cursor: not-allowed; }
         .responsive-shop__empty { grid-column: 1 / -1; padding: 42px; text-align: center; color: #647069; font: var(--shop-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
