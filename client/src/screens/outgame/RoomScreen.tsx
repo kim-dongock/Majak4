@@ -2693,7 +2693,7 @@ export default function RoomScreen() {
 
   if (roomActionPending && !inlineGame) {
     const pendingStage = (
-      <div style={{ position: 'relative', width: ROOM_W, height: ROOM_H, overflow: 'hidden', background: '#000' }}>
+      <div className="majak-room-entry-loading majak-screen-surface">
         <GameReconnectLoading visible currentStep={gameLoadStep} complete={gameLoadComplete} />
       </div>
     )

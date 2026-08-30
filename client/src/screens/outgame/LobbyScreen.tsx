@@ -344,7 +344,8 @@ function buildContinueAutoEnterPayload(room: RoomEntry, pix: string) {
  * mj_rmimg.png:    4フレーム 150×133
  * mj_bncrall.png:  16フレーム 41×19 — 作成(0)/参加(4)/観戦(8) × 4状態
  * ==================================================================== */
-const DEFAULT_ROOM_SLOT_COUNT = 12
+const DEFAULT_ROOM_SLOT_COUNT = 512
+const ROOM_SLOT_BATCH_SIZE = 20
 const COLS    = 4
 const TABLE_W = 150
 const TABLE_H = 133
@@ -672,8 +673,17 @@ function RoomListPanel({
   onCreateRoom: (slotNo: number) => void
   directRoomActionDisabled?: boolean
 }) {
-  // レガシー: m_RoomSetting.m_nRoomCount = keyMaxRoom。最大ルーム数分だけ空き部屋を描画する。
-  const slots: (RoomEntry | null)[] = Array.from({ length: slotCount }, (_, i) =>
+  const occupiedRoomIds = new Set(rooms.map(room => room.roomId))
+  let contiguousOccupiedRoomCount = 0
+  while (occupiedRoomIds.has(contiguousOccupiedRoomCount + 1)) {
+    contiguousOccupiedRoomCount++
+  }
+  const completedBatches = Math.floor(contiguousOccupiedRoomCount / ROOM_SLOT_BATCH_SIZE)
+  const visibleSlotCount = Math.min(
+    slotCount,
+    Math.max(ROOM_SLOT_BATCH_SIZE, (completedBatches + 1) * ROOM_SLOT_BATCH_SIZE),
+  )
+  const slots: (RoomEntry | null)[] = Array.from({ length: visibleSlotCount }, (_, i) =>
     rooms.find(r => r.roomId === i + 1) ?? null
   )
 
@@ -2449,7 +2459,6 @@ export default function LobbyScreen() {
           }
           return
         }
-        if (legacyRoomCount > 0) setRoomSlotCount(legacyRoomCount)
         const list = Array.isArray(data.rooms)
           ? mergeLegacyRoomSeats(data, (data.rooms as Array<Record<string, unknown>>).map(readRoomEntry))
           : readLegacyRoomList(data)
