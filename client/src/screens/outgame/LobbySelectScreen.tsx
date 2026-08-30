@@ -175,7 +175,7 @@ export default function LobbySelectScreen() {
           <p className="majak-type-xs">ロビー選択</p>
           <h1 className="majak-type-display">{isDani ? '段位戦' : '交流戦'}</h1>
         </div>
-        <MobileUserSummary className="majak-desktop-lobby-select__user-summary" showGrade showAvatar />
+        <MobileUserSummary className="majak-desktop-lobby-select__user-summary" showGrade showAvatar showName={false} showGameMoney={false} />
       </header>
       {isDani && (
         <div className="majak-desktop-lobby-select__rule-tabs" role="tablist" aria-label="対局形式">

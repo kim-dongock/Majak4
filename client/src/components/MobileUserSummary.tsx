@@ -4,14 +4,19 @@ import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
 import { gradeLevelName } from '../utils/grade'
 import { getAvatarUrl, getDefaultAvatarUrl } from '../utils/resources'
+import { getMajakTitleImageUrl, getTrickTitleImageUrl } from '../utils/titleImages'
 
 interface MobileUserSummaryProps {
   gameMoney?: number
   assetTitle?: string
   achievementTitle?: string
+  achievementTitleId?: string
   trickTitle?: string
+  trickTitleId?: string
   showGrade?: boolean
   showAvatar?: boolean
+  showName?: boolean
+  showGameMoney?: boolean
   loadProfile?: boolean
   className?: string
 }
@@ -20,16 +25,20 @@ export default function MobileUserSummary({
   gameMoney,
   assetTitle,
   achievementTitle,
+  achievementTitleId,
   trickTitle,
+  trickTitleId,
   showGrade = false,
   showAvatar = false,
+  showName = true,
+  showGameMoney = true,
   loadProfile = true,
   className = '',
 }: MobileUserSummaryProps) {
   const player = useAuthStore(state => state.player)
   const profile = useGamePlayerStore(state => state.data)
   const fetchProfile = useGamePlayerStore(state => state.fetchProfile)
-  const [profileTitles, setProfileTitles] = useState({ achievement: '', trick: '' })
+  const [profileTitles, setProfileTitles] = useState({ achievement: '', achievementId: '', trick: '', trickId: '' })
 
   useEffect(() => {
     if (!loadProfile || !player?.pix) return
@@ -41,7 +50,9 @@ export default function MobileUserSummary({
         if (!active) return
         setProfileTitles({
           achievement: collection.majakTitles.find(title => title.isEquipped)?.titleName ?? '',
+          achievementId: collection.equippedMajakTitle,
           trick: collection.trickTitles.find(title => title.isEquipped)?.titleName ?? '',
+          trickId: collection.equippedTrickTitle,
         })
       }).catch(() => {})
     }
@@ -65,9 +76,11 @@ export default function MobileUserSummary({
   const currentAssetTitle = assetTitle ?? profile?.slevel
   const currentAchievementTitle = achievementTitle ?? profileTitles.achievement
   const currentTrickTitle = trickTitle ?? profileTitles.trick
+  const majakTitleImage = getMajakTitleImageUrl(achievementTitleId ?? profileTitles.achievementId)
+  const trickTitleImage = getTrickTitleImageUrl(trickTitleId ?? profileTitles.trickId)
 
   return (
-    <div className={`majak-mobile-user-summary${className ? ` ${className}` : ''}`} aria-label="ユーザー情報">
+    <div className={`majak-mobile-user-summary${!showName && !showGameMoney ? ' majak-mobile-user-summary--without-primary' : ''}${className ? ` ${className}` : ''}`} aria-label="ユーザー情報">
       {showAvatar && (
         <img
           className="majak-mobile-user-summary__avatar"
@@ -79,12 +92,25 @@ export default function MobileUserSummary({
           }}
         />
       )}
-      <span className="majak-mobile-user-summary__name">
-        <b className="majak-mobile-user-summary__name-label">ニックネーム</b>
-        <strong className="majak-mobile-user-summary__name-value" title={player.name}>{player.name}</strong>
-      </span>
+      {(showAvatar || majakTitleImage || trickTitleImage) && (
+        <span className="majak-mobile-user-summary__title-art" aria-hidden="true">
+          {trickTitleImage && <img className="majak-mobile-user-summary__trick-title" src={trickTitleImage} alt="" />}
+          {majakTitleImage && (
+            <>
+              <img className="majak-mobile-user-summary__title-base" src="/assets/images/game/mj_title_base.png" alt="" />
+              <img className="majak-mobile-user-summary__majak-title" src={majakTitleImage} alt="" />
+            </>
+          )}
+        </span>
+      )}
+      {showName && (
+        <span className="majak-mobile-user-summary__name">
+          <b className="majak-mobile-user-summary__name-label">ニックネーム</b>
+          <strong className="majak-mobile-user-summary__name-value" title={player.name}>{player.name}</strong>
+        </span>
+      )}
       <div className="majak-mobile-user-summary__fields">
-        <span><b>GP</b><em>{currentGameMoney?.toLocaleString('ja-JP') ?? '-'}</em></span>
+        {showGameMoney && <span><b>GP</b><em>{currentGameMoney?.toLocaleString('ja-JP') ?? '-'}</em></span>}
         <span><b>資産</b><em>{currentAssetTitle || '-'}</em></span>
         {showGrade && <span><b>段位</b><em>{gradeLevelName(profile?.gradeLevel)}</em></span>}
         <span><b>実績</b><em>{currentAchievementTitle || '-'}</em></span>

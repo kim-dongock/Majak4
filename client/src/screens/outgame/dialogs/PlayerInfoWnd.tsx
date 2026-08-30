@@ -379,6 +379,21 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
               onError={event => { event.currentTarget.src = getDefaultAvatarUrl(avatarSex) }}
             />
           </div>
+          <div className="majak-player-profile__title-art" aria-hidden="true">
+            {trickTitle > 0 && (
+              <img
+                className="majak-player-profile__trick-title-image"
+                src={`${IMG}/mj_skill_${padTitleId(trickTitle)}.png`}
+                alt=""
+              />
+            )}
+            {majakTitle > 0 && (
+              <>
+                <img className="majak-player-profile__title-base" src={`${IMG}/mj_title_base.png`} alt="" />
+                <img className="majak-player-profile__majak-title-image" src={`${IMG}/${titleImageName(majakTitle)}`} alt="" />
+              </>
+            )}
+          </div>
           <div className="majak-player-profile__identity">
             <h2 id="majak-player-profile-name">{detail?.name ?? player.name}</h2>
             <div className="majak-player-profile__badges">

@@ -18,6 +18,7 @@ import { configureMajakSound } from '../../utils/majakSound'
 import { readNoticePayload, type NoticeDisplay } from '../../utils/notice'
 import { sendAccuseComplaint } from '../../utils/accuse'
 import { getTabSessionId } from '../../utils/tabSession'
+import { getMajakTitleImageUrl, getTrickTitleImageUrl } from '../../utils/titleImages'
 import WelcomeDlg    from './dialogs/WelcomeDlg'
 import GetCoinDlg from './dialogs/GetCoinDlg'
 import SerialCodeDlg from './dialogs/SerialCodeDlg'
@@ -2032,8 +2033,10 @@ export default function LobbyScreen() {
   const [channelName, setChannelName] = useState<string>('')
   /** トリック称号名 — channel:entered 原典: keyTrickTitleName */
   const [trickTitleName, setTrickTitleName] = useState<string>('')
+  const [trickTitleId, setTrickTitleId] = useState<string>('')
   /** 麻雀称号名 — channel:entered 原典: keyMajakTitleName */
   const [majakTitleName, setMajakTitleName] = useState<string>('')
+  const [majakTitleId, setMajakTitleId] = useState<string>('')
   const [rejectInvite, setRejectInvite] = useState(false)
 
   useEffect(() => {
@@ -2352,6 +2355,8 @@ export default function LobbyScreen() {
         if (typeof data.channelName === 'string') setChannelName(data.channelName as string)
         if (typeof data.trickTitleName === 'string') setTrickTitleName(data.trickTitleName as string)
         if (typeof data.majakTitleName === 'string') setMajakTitleName(data.majakTitleName as string)
+        if (typeof data.tricktitle === 'string') setTrickTitleId(data.tricktitle as string)
+        if (typeof data.majaktitle === 'string') setMajakTitleId(data.majaktitle as string)
         setIsLobbyDataReady(true)
         if (tournamentChannel) requestTournamentList()
       }
@@ -3432,6 +3437,8 @@ export default function LobbyScreen() {
           onEquipChange={collection => {
             setMajakTitleName(collection.majakTitles.find(title => title.isEquipped)?.titleName ?? '')
             setTrickTitleName(collection.trickTitles.find(title => title.isEquipped)?.titleName ?? '')
+            setMajakTitleId(collection.equippedMajakTitle)
+            setTrickTitleId(collection.equippedTrickTitle)
           }}
         />
       )}
@@ -3687,7 +3694,9 @@ export default function LobbyScreen() {
               gameMoney={gamMoney}
               assetTitle={slevel}
               achievementTitle={majakTitleName}
+              achievementTitleId={majakTitleId}
               trickTitle={trickTitleName}
+              trickTitleId={trickTitleId}
               showGrade
               loadProfile={false}
               className="majak-mobile-user-summary--lobby"
@@ -3829,7 +3838,9 @@ export default function LobbyScreen() {
               gameMoney={gamMoney}
               assetTitle={slevel}
               achievementTitle={majakTitleName}
+              achievementTitleId={majakTitleId}
               trickTitle={trickTitleName}
+              trickTitleId={trickTitleId}
               showGrade
               loadProfile={false}
               className="majak-mobile-user-summary--lobby"
@@ -4160,14 +4171,31 @@ export default function LobbyScreen() {
         }}
       />
 
+      {getTrickTitleImageUrl(trickTitleId) && (
+        <img
+          src={getTrickTitleImageUrl(trickTitleId)}
+          alt=""
+          draggable={false}
+          style={{ position: 'absolute', left: 756, top: 46, width: 100, height: 122, imageRendering: 'pixelated', pointerEvents: 'none' }}
+        />
+      )}
+
       {/* mj_title_base.png — レガシー: m_UserTitleBase は麻雀称号保有時のみ描画 */}
-      {majakTitleName && (
+      {getMajakTitleImageUrl(majakTitleId) && (
+        <>
         <img
           src={`${IMG}/mj_title_base.png`}
           alt=""
           draggable={false}
           style={{ position: 'absolute', left: 756, top: 16, width: 100, height: 52, imageRendering: 'pixelated', pointerEvents: 'none' }}
         />
+        <img
+          src={getMajakTitleImageUrl(majakTitleId)}
+          alt=""
+          draggable={false}
+          style={{ position: 'absolute', left: 781, top: 23, width: 50, height: 38, imageRendering: 'pixelated', pointerEvents: 'none' }}
+        />
+        </>
       )}
 
       {/* Nickname (legacy member-id position) */}

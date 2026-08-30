@@ -9,6 +9,7 @@ import { gameAuthHeaders } from '../api/authHeaders'
 
 export interface GamePlayerData {
   gamMoney:   number
+  cashCount?: number
   slevel:     string
   nlevel:     number
   gradeLevel: number

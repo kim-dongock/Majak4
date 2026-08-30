@@ -34,7 +34,6 @@ import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
 import EndingPopupWnd from '../screens/outgame/dialogs/EndingPopupWnd'
 import ProfileEditDlg from '../screens/outgame/dialogs/ProfileEditDlg'
-import MobileUserSummary from './MobileUserSummary'
 
 const MAJAK3 = '/assets/images/game'
 export const MAJAK_ACCUSE_EVENT = 'majak:accuse-click'
@@ -44,6 +43,30 @@ const IS_NATIVE_APP = Capacitor.isNativePlatform()
 
 type LockableScreenOrientation = ScreenOrientation & {
   lock?: (orientation: 'landscape') => Promise<void>
+}
+
+function FramePlayerBalances({ name, mp, gp }: { name: string; mp?: number; gp?: number }) {
+  const [expanded, setExpanded] = useState(false)
+  const amount = (value?: number) => typeof value === 'number' && Number.isFinite(value)
+    ? value.toLocaleString('ja-JP')
+    : '-'
+
+  return (
+    <div className={`majak-frame-player-balances${expanded ? ' is-expanded' : ''}`} aria-label="プレイヤー残高">
+      <span className="majak-frame-player-balances__name"><b>ニックネーム</b><em title={name}>{name}</em></span>
+      <span className="majak-frame-player-balances__detail majak-frame-player-balances__mp"><b>MP</b><em>{amount(mp)}</em></span>
+      <span className="majak-frame-player-balances__detail majak-frame-player-balances__gp"><b>GP</b><em>{amount(gp)}</em></span>
+      <button
+        type="button"
+        className="majak-frame-player-balances__toggle"
+        aria-label={expanded ? '残高情報を閉じる' : '残高情報を開く'}
+        aria-expanded={expanded}
+        onClick={() => setExpanded(value => !value)}
+      >
+        <span aria-hidden="true" />
+      </button>
+    </div>
+  )
 }
 
 // ── スプライトボタン (4フレーム: normal/disabled/hover/pressed) ──────
@@ -100,11 +123,14 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
   const [showProfile, setShowProfile] = useState(false)
   const player = useAuthStore(state => state.player)
   const setPlayer = useAuthStore(state => state.setPlayer)
+  const gamePlayer = useGamePlayerStore(state => state.data)
+  const fetchGamePlayer = useGamePlayerStore(state => state.fetchProfile)
   const isHangeClient = isHangeClientHost()
   const isTitleScreen = location.pathname === '/channel'
   const isAnnouncementScreen = location.pathname === '/announcements'
   const isLobbySelectScreen = location.pathname.startsWith('/channel/select/')
     || /^\/channel\/[^/]+$/.test(location.pathname)
+  const showFramePlayerBalances = isTitleScreen || isLobbySelectScreen
   const isLobbyListScreen = /\/channel\/[^/]+\/lobby$/.test(location.pathname)
   const isPaifuArchiveScreen = location.pathname === '/paifu'
   const screenTitle = isAnnouncementScreen
@@ -158,6 +184,11 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
   useEffect(() => {
     configureMajakSound(cfg)
   }, [cfg])
+
+  useEffect(() => {
+    if (!showFramePlayerBalances || !player?.pix) return
+    void fetchGamePlayer(player.pix)
+  }, [fetchGamePlayer, player?.pix, showFramePlayerBalances])
 
   useEffect(() => {
     const onFullScreenChange = () => setIsFullScreen(Boolean(document.fullscreenElement))
@@ -260,8 +291,13 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
       <div className={`majak-mobile-frame${accBox === 'room' ? ' majak-mobile-frame--room' : ''}`} style={{ position: 'relative' }}>
         {showMobileHeader && (
           <header className="majak-mobile-frame__bar">
-            <div className="majak-mobile-frame__brand">{screenTitle}</div>
-            <MobileUserSummary />
+            <div className="majak-mobile-frame__brand">
+              <span className="majak-mobile-frame__brand-screen">{screenTitle}</span>
+              <span className="majak-mobile-frame__brand-compact">麻雀4</span>
+            </div>
+            {showFramePlayerBalances && player && (
+              <FramePlayerBalances name={player.name} mp={gamePlayer?.cashCount} gp={gamePlayer?.gamMoney} />
+            )}
             <div className="majak-mobile-frame__tools">
               {isTitleScreen && !isHangeClient && <button type="button" onClick={() => setShowProfile(true)}>プロフィール</button>}
               {usesScreenHeader ? (
@@ -271,7 +307,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
                 {onOpenAnnouncements && <button type="button" onClick={onOpenAnnouncements}>お知らせ</button>}
                 {!IS_NATIVE_APP && <button type="button" onClick={enterFullscreen} title="全画面表示">全画面</button>}
                 <button type="button" onClick={handleOpenSettings}>設定</button>
-                {showMobileExit && <button type="button" onClick={handleClose}>終了</button>}
+                {showMobileExit && <button type="button" onClick={handleClose}>ログアウト</button>}
                 {accBox && <button type="button" onClick={handleAccuse}>通報</button>}
               </>}
             </div>
@@ -308,6 +344,9 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
       {isResponsiveDesktopScreen ? (
         <header className="majak-responsive-desktop-frame__bar">
           <strong className="majak-type-lg">{screenTitle}</strong>
+          {showFramePlayerBalances && player && (
+            <FramePlayerBalances name={player.name} mp={gamePlayer?.cashCount} gp={gamePlayer?.gamMoney} />
+          )}
           <div>
             {(isTitleScreen || isLobbySelectScreen) && !isHangeClient && <button type="button" className="majak-responsive-control-button" onClick={() => setShowProfile(true)}>プロフィール</button>}
             {isAnnouncementScreen ? (
@@ -327,7 +366,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
               <button type="button" className="majak-responsive-control-button" onClick={handleOpenSettings}>設定</button>
               {isLobbyListScreen && <button type="button" className="majak-responsive-control-button" onClick={handleChangeLobby}>ロビー変更</button>}
               {!isLobbyListScreen && accBox !== 'room' && !IS_NATIVE_APP && <button type="button" className="majak-responsive-control-button" onClick={handleMaximize}>{isFullScreen ? '元に戻す' : '全画面'}</button>}
-              {!isLobbyListScreen && accBox !== 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleClose}>終了</button>}
+              {!isLobbyListScreen && accBox !== 'room' && <button type="button" className="majak-responsive-control-button" onClick={handleClose}>ログアウト</button>}
             </>}
           </div>
         </header>
