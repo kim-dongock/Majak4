@@ -21,7 +21,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キー | 型 | TTL | 用途 |
 |------|----|-----|------|
-| `majak2:primary-leader` | STRING | **30 秒** | URL・ホスト・PID・起動nonceを含むプロセス固有IDを保持する |
+| `majak4:primary-leader` | STRING | **30 秒** | URL・ホスト・PID・起動nonceを含むプロセス固有IDを保持する |
 
 ### 書き込み / 更新タイミング
 
@@ -48,31 +48,31 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キー | 型 | TTL | DB テーブル | 用途 |
 |------|----|-----|-------------|------|
-| `majak2:mast:titles` | STRING (JSON) | **24 時間** | `MJK_TITLEMAST` | 称号 ID → 称号名マップ |
-| `majak2:mast:customitems` | STRING (JSON) | **24 時間** | `MJK_CUSTOMITEMMAST` + `MJK_CUSTOMSHOPLIST` | カスタムアイテムマスター (CustomId, Kind, Name, Price) |
-| `majak2:mast:customshop` | STRING (JSON) | **5 分** | `MJK_CUSTOMSHOPMAST` | カスタムショップ商品一覧 (販売期間が変わるため短期 TTL) |
-| `majak2:mast:customset` | STRING (JSON) | **24 時間** | `MJK_CUSTOMSETMAST` | セット商品 CustomId → 子 CustomId 一覧 |
-| `majak2:mast:adminids` | STRING (JSON) | **24 時間** | `MJK_ADMINIDLIST` | 管理者 ID リスト (MemberId, AdminSts) |
-| `majak2:mast:dailymission` | STRING (JSON) | **24 時間** | `MJK_DAILYMISSIONMAST` | デイリーミッションマスター (MissionId, ConditionType, ConditionCnt, Point) |
-| `majak2:mast:weeklyreward` | STRING (JSON) | **1 時間** | `MJK_WEEKLYREWARDMAST` | 週間報酬マスター (RewardId, RewardType, RewardCnt, MustPoint) |
-| `majak2:mast:grademanage` | STRING (JSON) | **1 時間** | `MJK_GRADEMANAGE` | グレードランキング選択可能年月リスト |
-| `majak2:mast:cups` | STRING (JSON) | **2 分** | `MAJAKCUPMAST` + `MAJAKCUPCHANELMT` | カップチャンネル設定 (DateFrom, DateTo, IsFestive) |
-| `majak2:mast:channels` | STRING (JSON) | **15 分** | `CHANELMAST` + `CHANELWT` | チャンネル一覧 (静的設定 + 現在人数) |
+| `majak4:mast:titles` | STRING (JSON) | **24 時間** | `MJK_TITLEMAST` | 称号 ID → 称号名マップ |
+| `majak4:mast:customitems` | STRING (JSON) | **24 時間** | `MJK_CUSTOMITEMMAST` + `MJK_CUSTOMSHOPLIST` | カスタムアイテムマスター (CustomId, Kind, Name, Price) |
+| `majak4:mast:customshop` | STRING (JSON) | **5 分** | `MJK_CUSTOMSHOPMAST` | カスタムショップ商品一覧 (販売期間が変わるため短期 TTL) |
+| `majak4:mast:customset` | STRING (JSON) | **24 時間** | `MJK_CUSTOMSETMAST` | セット商品 CustomId → 子 CustomId 一覧 |
+| `majak4:mast:adminids` | STRING (JSON) | **24 時間** | `MJK_ADMINIDLIST` | 管理者 ID リスト (MemberId, AdminSts) |
+| `majak4:mast:dailymission` | STRING (JSON) | **24 時間** | `MJK_DAILYMISSIONMAST` | デイリーミッションマスター (MissionId, ConditionType, ConditionCnt, Point) |
+| `majak4:mast:weeklyreward` | STRING (JSON) | **1 時間** | `MJK_WEEKLYREWARDMAST` | 週間報酬マスター (RewardId, RewardType, RewardCnt, MustPoint) |
+| `majak4:mast:grademanage` | STRING (JSON) | **1 時間** | `MJK_GRADEMANAGE` | グレードランキング選択可能年月リスト |
+| `majak4:mast:cups` | STRING (JSON) | **2 分** | `MAJAKCUPMAST` + `MAJAKCUPCHANELMT` | カップチャンネル設定 (DateFrom, DateTo, IsFestive) |
+| `majak4:mast:channels` | STRING (JSON) | **15 分** | `CHANELMAST` + `CHANELWT` | チャンネル一覧 (静的設定 + 現在人数) |
 
 ### 書き込み / 無効化タイミング
 
 | キー | 書き込みタイミング | 無効化タイミング |
 |------|--------------------|-----------------|
-| `majak2:mast:titles` | 起動時 `MasterCacheService.BootstrapAsync()` (プライマリのみ)。キャッシュミス時に各サービスが書き戻す | TTL 切れ (24h) |
-| `majak2:mast:customitems` | 同上 | TTL 切れ (24h) |
-| `majak2:mast:customshop` | 起動時 Bootstrap + キャッシュミス時 (`MasterCacheService.GetCustomShopMastAsync`) | TTL 切れ (5m) |
-| `majak2:mast:customset` | 起動時 Bootstrap + キャッシュミス時 (`MasterCacheService.GetCustomSetMastAsync`) | TTL 切れ (24h) |
-| `majak2:mast:adminids` | 同上 | TTL 切れ (24h) |
-| `majak2:mast:dailymission` | 起動時 Bootstrap + キャッシュミス時 (`MasterCacheService.GetDailyMissionMastAsync`) | TTL 切れ (24h) |
-| `majak2:mast:weeklyreward` | 起動時 Bootstrap + キャッシュミス時 (`PlayerRepository.GetWeeklyRewardMastAsync`) | TTL 切れ (1h) |
-| `majak2:mast:grademanage` | 起動時 Bootstrap + キャッシュミス時 (`PlayerRepository.GetGradeManageListAsync`) | TTL 切れ (1h) |
-| `majak2:mast:cups` | 起動時 Bootstrap + キャッシュミス時 (`PlayerRepository.GetCupConfigsAsync`) | `CupChannelBackgroundService` が `UpdateCupStatus` 呼び出し後に **即時** `MasterCacheService.InvalidateCupConfigsAsync()` → その後のアクセスで DB 再読み込み + 書き戻し |
-| `majak2:mast:channels` | 起動時 Bootstrap + キャッシュミス時 (`ChannelRepository.GetChannelListAsync`) | TTL 切れ (15m)。必要であれば `MasterCacheService.InvalidateChannelsAsync()` で即時無効化可 |
+| `majak4:mast:titles` | 起動時 `MasterCacheService.BootstrapAsync()` (プライマリのみ)。キャッシュミス時に各サービスが書き戻す | TTL 切れ (24h) |
+| `majak4:mast:customitems` | 同上 | TTL 切れ (24h) |
+| `majak4:mast:customshop` | 起動時 Bootstrap + キャッシュミス時 (`MasterCacheService.GetCustomShopMastAsync`) | TTL 切れ (5m) |
+| `majak4:mast:customset` | 起動時 Bootstrap + キャッシュミス時 (`MasterCacheService.GetCustomSetMastAsync`) | TTL 切れ (24h) |
+| `majak4:mast:adminids` | 同上 | TTL 切れ (24h) |
+| `majak4:mast:dailymission` | 起動時 Bootstrap + キャッシュミス時 (`MasterCacheService.GetDailyMissionMastAsync`) | TTL 切れ (24h) |
+| `majak4:mast:weeklyreward` | 起動時 Bootstrap + キャッシュミス時 (`PlayerRepository.GetWeeklyRewardMastAsync`) | TTL 切れ (1h) |
+| `majak4:mast:grademanage` | 起動時 Bootstrap + キャッシュミス時 (`PlayerRepository.GetGradeManageListAsync`) | TTL 切れ (1h) |
+| `majak4:mast:cups` | 起動時 Bootstrap + キャッシュミス時 (`PlayerRepository.GetCupConfigsAsync`) | `CupChannelBackgroundService` が `UpdateCupStatus` 呼び出し後に **即時** `MasterCacheService.InvalidateCupConfigsAsync()` → その後のアクセスで DB 再読み込み + 書き戻し |
+| `majak4:mast:channels` | 起動時 Bootstrap + キャッシュミス時 (`ChannelRepository.GetChannelListAsync`) | TTL 切れ (15m)。必要であれば `MasterCacheService.InvalidateChannelsAsync()` で即時無効化可 |
 
 ---
 
@@ -80,12 +80,12 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キーパターン | 型 | TTL | DB テーブル | 用途 |
 |-------------|----|-----|-------------|------|
-| `majak2:ranking:grade:{rankDate}:{rankKind}:{maxCnt}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | グレードランキングリスト (最大 maxCnt 件) |
-| `majak2:ranking:grade:{rankDate}:{rankKind}:{maxCnt}:display-name-v2` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | 表示名を含むグレードランキングリスト。末尾はキャッシュスキーマ版 |
-| `majak2:ranking:grade:self:{rankDate}:{memberNo}:{grade}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | プレイヤー自身のランキング情報 |
-| `majak2:graderank:counts:{rankDate}` | STRING (JSON) | **5 分** | `MJK_GRADERANK` | グレード別プレイヤー数 (全サーバー共有) |
-| `majak2:mast:proplayers` | STRING (JSON) | **1 時間** | `EVTUSERMAST` (EVTCODE='5333') | プロプレイヤーリスト (全サーバー共有) |
-| `majak2:cup:topscore:{channelId}` | STRING (JSON) | **1 分** | `MAJAKCUPRAT` | カップチャンネルの最高スコア |
+| `majak4:ranking:grade:{rankDate}:{rankKind}:{maxCnt}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | グレードランキングリスト (最大 maxCnt 件) |
+| `majak4:ranking:grade:{rankDate}:{rankKind}:{maxCnt}:display-name-v2` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | 表示名を含むグレードランキングリスト。末尾はキャッシュスキーマ版 |
+| `majak4:ranking:grade:self:{rankDate}:{memberNo}:{grade}` | STRING (JSON) | **5 分** | `MJK_GRADERAT` | プレイヤー自身のランキング情報 |
+| `majak4:graderank:counts:{rankDate}` | STRING (JSON) | **5 分** | `MJK_GRADERANK` | グレード別プレイヤー数 (全サーバー共有) |
+| `majak4:mast:proplayers` | STRING (JSON) | **1 時間** | `EVTUSERMAST` (EVTCODE='5333') | プロプレイヤーリスト (全サーバー共有) |
+| `majak4:cup:topscore:{channelId}` | STRING (JSON) | **1 分** | `MAJAKCUPRAT` | カップチャンネルの最高スコア |
 
 > `{rankDate}` = `YYYYMM` 形式の整数 (例: `202606`)
 
@@ -93,10 +93,10 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キー | 書き込みタイミング | 無効化タイミング |
 |------|--------------------|-----------------|
-| `majak2:ranking:grade:…` | `RatingRankInfoCommand` がランキング表示リクエスト時、DB 照会結果を `PlayerRepository.GetGradeRankListAsync()` / `GetGradeRankSelfAsync()` で書き込む | TTL 切れ (5m) のみ。強制無効化なし |
-| `majak2:graderank:counts:{rankDate}` | `GradeRankBackgroundService` が 5 分ごとに `PlayerRepository.GetGradeRankCountsAsync()` で書き込む。キャッシュミス時も書き戻す | TTL 切れ (5m) |
-| `majak2:mast:proplayers` | 起動時 Bootstrap + `GradeRankBackgroundService` が 1 時間ごとに `PlayerRepository.GetProPlayerListAsync()` で書き込む | TTL 切れ (1h) |
-| `majak2:cup:topscore:{channelId}` | `CupChannelBackgroundService` がフェスティブカップの通知タイミング (11:00 / 23:00) に `PlayerRepository.GetCupTopScoreAsync()` で書き込む | TTL 切れ (1m) |
+| `majak4:ranking:grade:…` | `RatingRankInfoCommand` がランキング表示リクエスト時、DB 照会結果を `PlayerRepository.GetGradeRankListAsync()` / `GetGradeRankSelfAsync()` で書き込む | TTL 切れ (5m) のみ。強制無効化なし |
+| `majak4:graderank:counts:{rankDate}` | `GradeRankBackgroundService` が 5 分ごとに `PlayerRepository.GetGradeRankCountsAsync()` で書き込む。キャッシュミス時も書き戻す | TTL 切れ (5m) |
+| `majak4:mast:proplayers` | 起動時 Bootstrap + `GradeRankBackgroundService` が 1 時間ごとに `PlayerRepository.GetProPlayerListAsync()` で書き込む | TTL 切れ (1h) |
+| `majak4:cup:topscore:{channelId}` | `CupChannelBackgroundService` がフェスティブカップの通知タイミング (11:00 / 23:00) に `PlayerRepository.GetCupTopScoreAsync()` で書き込む | TTL 切れ (1m) |
 
 ---
 
@@ -108,11 +108,14 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 | `channel:{chanelId}:rooms` | SET | **90 秒** | チャンネル内のルーム ID セット |
 | `continue:{memberNo}:room` | STRING (JSON) | **30 秒** | 対局中切断プレイヤーの続行先ルーム。キーと内部値の会員IDは `member_no` |
 
+`room:{chanelId}:{roomId}` と `channel:{chanelId}:rooms` の `{chanelId}` は Redis Cluster の hash tag でもある。同じチャンネルのルーム本体とindexを同一slotへ配置し、Luaによる原子的なルーム予約を可能にする。
+
 ### 書き込み / 更新 / 削除タイミング
 
 | タイミング | 処理 | クラス |
 |----------|------|--------|
 | ルーム作成時 | `room:{chanelId}:{roomId}` SET + `channel:{chanelId}:rooms` SADD | `RoomRegistryService.RegisterRoomAsync()` |
+| 新規ルーム予約時 | 期限切れ roomId の掃除、`SCARD` 相当の有効数確認、`max_room` 判定、ルーム SET + index SADD を Lua で原子的に実行 | `RoomRegistryService.TryRegisterRoomAsync()` |
 | プレイヤー入退室時 | `room:{chanelId}:{roomId}` の MemberCnt を更新 (TTL リセット) | `RoomRegistryService.UpdateMemberCountAsync()` |
 | 対局中プレイヤーのネットワーク切断時 | `continue:{memberNo}:room` SET。値は `room:{chanelId}:{roomId}` の ServerUrl / RoomOption を参照する。明示退室では作成しない | `MajakGameHub.HandleRoomDisconnectAsync()` |
 | 続行プレイヤー復帰時 | `continue:{memberNo}:room` DEL | `AutoEnterRoomCommand` / `RoomEnterRoomCommand` |
@@ -124,6 +127,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 > **ゴーストルーム防止**: サーバーがクラッシュすると TTL 更新が止まり、最大 30 秒後に `room:{chanelId}:{roomId}` が自動消滅する。
 > **続行先の整合性**: `/api/player/continue-room` はJWTの `member_no` を正本に検索する。対応する `room:{chanelId}:{roomId}` が存在しない場合は `continue:{memberNo}:room` を削除して未検出として返す。
+> **ルーム上限**: 通常作成、オートマッチング、トーナメントの新規ルームはすべて `TryRegisterRoomAsync()` を通す。状態更新とTTL更新だけを行う既存ルームには `RegisterRoomAsync()` を使う。
 
 ---
 
@@ -152,7 +156,7 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 | `game:servers` | ZSET | なし (スコアで生存判定) | serverUrl → 最終報告 UnixTime。スコアが `now - 30秒` より古いサーバーは死亡とみなす |
 | `game:server:roomcounts` | HASH | なし | serverUrl → 現在のルーム数 |
 | `game:server:channelcounts` | HASH | なし | serverUrl → 担当チャンネル数 |
-| `channel:{chanelId}:server` | STRING | **60 秒** | このチャンネルを担当するサーバー URL (動的割り当てリース) |
+| `channel:{chanelId}:server` | STRING | **60 秒** | DBで割り当てられたサーバーの実行時所有リース。ルーティングの正本は `channel_master.server_url` |
 
 ### 書き込み / 更新 / 削除タイミング
 
@@ -162,9 +166,12 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 | `game:server:roomcounts` | **8 秒ごと** | `HSET` でルーム数を更新 | 同上 |
 | `game:server:roomcounts` / `game:server:channelcounts` | **8 秒ごと** | `game:servers` から生存期限切れサーバーを削除する際、同じ serverUrl フィールドを `HDEL` | `ServerLoadService.RegisterSelfAsync()` |
 | `game:servers` / `roomcounts` | グレースフルシャットダウン | `ZREM` / `HDEL` で即削除 | `ServerLoadService.UnregisterSelfAsync()` |
-| `channel:{chanelId}:server` | チャンネル入室時 | Luaで未登録時の取得と channelcounts 加算を原子的に実行。別サーバー所有中なら入室を拒否 | `ServerLoadService.ClaimChannelAsync()` |
+| `channel:{chanelId}:server` | チャンネル入室時 | DB割り当て先と自サーバーURLの一致を先に検証し、単一キーLuaで未登録時の取得を原子的に実行。別サーバー所有中なら入室を拒否 | `ServerLoadService.ClaimChannelAsync()` |
 | `channel:{chanelId}:server` | **8 秒ごと** | Luaで現在値が自サーバーの場合だけ TTL を更新し、期限切れなら原子的に再取得。実所有数で channelcounts を再計算 | `ServerStatusBackgroundService` → `ServerLoadService.RefreshChannelLeasesBatchAsync()` |
-| `channel:{chanelId}:server` / `channelcounts` | グレースフルシャットダウン | Luaで現在値が自サーバーの場合だけキー削除と HASH デクリメントを原子的に実行 | `ServerLoadService.ReleaseChannelsAsync()` |
+| `channel:{chanelId}:server` / `channelcounts` | グレースフルシャットダウン | 単一キーLuaで自サーバー所有リースだけを削除し、全解放後に自サーバーのchannelcountsを0へ更新 | `ServerLoadService.ReleaseChannelsAsync()` |
+| `channel:{chanelId}:server` | 管理画面でチャンネル設定更新 | 単一キーLuaで旧所有リースを削除し、次回入場時に新しいDB割り当てを反映。channelcountsは次回heartbeatで実所有数へ収束 | `ServerLoadService.ResetChannelLeaseAsync()` |
+
+`GET /api/channel/{chanelId}/server` は `channel_master.server_url` を取得した後、`game:servers` の最終報告が30秒以内か確認する。Redis未接続、heartbeatなし、またはチャンネル非公開の場合は接続先を返さず503とする。
 
 ### 6-1. グローバルロビー接続リース
 
@@ -190,12 +197,12 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 すべてのキャッシュ値は `System.Text.Json` でシリアライズする。  
 `RedisService.GetJsonAsync<T>()` / `SetJsonAsync<T>()` を必ず使用すること。
 
-### `majak2:mast:titles` の値 (例)
+### `majak4:mast:titles` の値 (例)
 ```json
 { "mjks001": "鳳凰", "mjks002": "天才", ... }
 ```
 
-### `majak2:mast:cups` の値 (例)
+### `majak4:mast:cups` の値 (例)
 ```json
 [
   { "ChannelId": "MAJAK2CUP001", "ChannelName": "春カップ",
@@ -233,10 +240,10 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 | キーパターン | 型 | TTL | DBテーブル | 用途 |
 |---------|------|-----|-----------|------|
-| `majak2:player:{memberNo}:daily:{yyyyMMdd}` | STRING (JSON) | **当日終了まで** | `MJK_DAILYMISSIONLIST` | 当日のデイリーミッション達成状態 (missionId → state) |
-| `majak2:player:{memberNo}:weekly:{monDate}` | STRING (JSON) | **次の月曜日まで** | `MJK_WEEKLYREWARDLIST` | 今週の週間報酬受取状態 (rewardId → status) |
-| `majak2:player:{memberNo}:weeklypoint:{monDate}` | STRING (JSON) | **次の月曜日まで** | `MJK_DAILYMISSIONLIST` + `MJK_DAILYMISSIONMAST` | 今週の累積ポイント (int) |
-| `majak2:player:{memberNo}:dailypoint:{yyyyMMdd}` | STRING (JSON) | **当日終了まで** | `MJK_DAILYMISSIONLIST` + `MJK_DAILYMISSIONMAST` | 当日ポイントと上限 (`[own, max]`) |
+| `majak4:player:{memberNo}:daily:{yyyyMMdd}` | STRING (JSON) | **当日終了まで** | `MJK_DAILYMISSIONLIST` | 当日のデイリーミッション達成状態 (missionId → state) |
+| `majak4:player:{memberNo}:weekly:{monDate}` | STRING (JSON) | **次の月曜日まで** | `MJK_WEEKLYREWARDLIST` | 今週の週間報酬受取状態 (rewardId → status) |
+| `majak4:player:{memberNo}:weeklypoint:{monDate}` | STRING (JSON) | **次の月曜日まで** | `MJK_DAILYMISSIONLIST` + `MJK_DAILYMISSIONMAST` | 今週の累積ポイント (int) |
+| `majak4:player:{memberNo}:dailypoint:{yyyyMMdd}` | STRING (JSON) | **当日終了まで** | `MJK_DAILYMISSIONLIST` + `MJK_DAILYMISSIONMAST` | 当日ポイントと上限 (`[own, max]`) |
 
 ---
 
@@ -261,6 +268,6 @@ description: "Redis キー一覧・TTL・書き込み/無効化タイミング"
 
 - `MasterCacheService` のキー定数 (`KeyTitles` 等) を文字列でハードコードしてはならない。必ずクラスの `const` / `static string` を参照すること。
 - Redis 書き込みエラーは `catch { }` で握りつぶして正常系を継続する (可用性優先)。
-- `majak2:mast:cups` は `CupChannelBackgroundService.UpdateCupStatusAsync()` 後に **必ず** `MasterCacheService.InvalidateCupConfigsAsync()` を呼ぶ。呼び忘れると古い状態が最大 2 分間キャッシュされる。
+- `majak4:mast:cups` は `CupChannelBackgroundService.UpdateCupStatusAsync()` 後に **必ず** `MasterCacheService.InvalidateCupConfigsAsync()` を呼ぶ。呼び忘れると古い状態が最大 2 分間キャッシュされる。
 - `channel:{chanelId}:members` は TTL 付き HASH。アクティブ中は 8 秒ごとに延命し、異常終了時は最大 90 秒で消える。
 - 開発環境 (Redis 未起動) では全キーがフォールバック動作し、テストに影響しない。

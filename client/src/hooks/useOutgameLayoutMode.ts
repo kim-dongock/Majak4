@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 export type OutgameLayoutMode = 'desktop' | 'mobileLandscape' | 'mobilePortrait'
 
-const MOBILE_OUTGAME_QUERY = '(max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse)'
+const MOBILE_OUTGAME_QUERY = '(max-width: 768px), (orientation: landscape) and (max-height: 540px)'
 
 function readOutgameLayoutMode(): OutgameLayoutMode {
   if (typeof window === 'undefined') return 'desktop'

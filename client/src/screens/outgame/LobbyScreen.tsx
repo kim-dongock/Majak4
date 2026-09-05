@@ -8,12 +8,12 @@
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import * as SignalR from '../../api/signalr'
-import { getChannelServerUrl, getBestServer, getChannels, getPlayerContinueRoom } from '../../api/channel'
+import { ChannelUnavailableError, getChannelServerUrl, getChannels, getPlayerContinueRoom } from '../../api/channel'
 import { useAuthStore } from '../../store/authStore'
 import { useCustomSkinStore } from '../../store/customSkinStore'
 import { useGamePlayerStore } from '../../store/gamePlayerStore'
 import { showConfirm as showConfirmMessage, showError, showMessage, checkResult, isOk, tournamentErrorMessage, tournamentRegistErrorMessage } from '../../utils/msgbox'
-import { getAvatarUrl, getShortAvatarUrl, getDefaultAvatarUrl, handleShortAvatarError } from '../../utils/resources'
+import { getAvatarUrl, getShortAvatarUrl, getWebHalfAvatarUrl, getDefaultAvatarUrl, handleShortAvatarError } from '../../utils/resources'
 import { configureMajakSound } from '../../utils/majakSound'
 import { readNoticePayload, type NoticeDisplay } from '../../utils/notice'
 import { sendAccuseComplaint } from '../../utils/accuse'
@@ -664,6 +664,7 @@ function RoomListPanel({
   onEnter,
   onCreateRoom,
   directRoomActionDisabled,
+  roomCreationDisabled,
 }: {
   rooms: RoomEntry[]
   members: RoomAvatarMember[]
@@ -673,6 +674,7 @@ function RoomListPanel({
   onEnter: (roomId: string) => void
   onCreateRoom: (slotNo: number) => void
   directRoomActionDisabled?: boolean
+  roomCreationDisabled?: boolean
 }) {
   const occupiedRoomIds = new Set(rooms.map(room => room.roomId))
   let contiguousOccupiedRoomCount = 0
@@ -702,6 +704,7 @@ function RoomListPanel({
             onEnter={onEnter}
             onCreateRoom={onCreateRoom}
             directRoomActionDisabled={directRoomActionDisabled}
+            roomCreationDisabled={roomCreationDisabled}
           />
         ))}
       </div>
@@ -731,6 +734,7 @@ function RoomListPanel({
           onEnter={onEnter}
           onCreateRoom={onCreateRoom}
           directRoomActionDisabled={directRoomActionDisabled}
+          roomCreationDisabled={roomCreationDisabled}
         />
       ))}
     </div>
@@ -745,7 +749,7 @@ function RoomListPanel({
  *   frame 8-11 : 観戦 (normal/disabled/hover/pressed)
  * ==================================================================== */
 function RoomCell({
-  slotNo, room, members, channelId, onEnter, onCreateRoom, directRoomActionDisabled,
+  slotNo, room, members, channelId, onEnter, onCreateRoom, directRoomActionDisabled, roomCreationDisabled,
   variant = 'desktop',
 }: {
   slotNo: number
@@ -756,6 +760,7 @@ function RoomCell({
   onEnter: (roomId: string, asViewer: boolean) => void
   onCreateRoom: (slotNo: number) => void
   directRoomActionDisabled?: boolean
+  roomCreationDisabled?: boolean
 }) {
   const isEmpty  = room === null
   const occupiedMemberCount = !isEmpty ? room.memberCnt + room.opMemberCnt : 0
@@ -768,7 +773,7 @@ function RoomCell({
       ? roomState === ROOM_JOIN || roomState === ROOM_JOINREADY || roomState === ROOM_GAMEJOIN
       : !isFull)
   const hasRoomAction = isEmpty || isJoinable || isViewable
-  const roomActionBlocked = Boolean(directRoomActionDisabled && !isViewable)
+  const roomActionBlocked = Boolean((directRoomActionDisabled && !isViewable) || (isEmpty && roomCreationDisabled))
   const isMobile = variant === 'mobile'
   const seats: RoomSeat[] = !isEmpty && room.seats.length > 0
     ? normalizeRoomCellSeats(room)
@@ -825,9 +830,21 @@ function RoomCell({
               const member = seat ? members.find(item => item.pix === seat.pix) : undefined
               const avatarId = seat?.avatarId ?? member?.avatarId
               const sex = seat?.sex ?? member?.sex ?? 'male'
+              const avatarFallback = getDefaultAvatarUrl(sex)
               return (
                 <span key={seat ? `${seat.pix || 'seat'}-${seat.pos}-${seatIndex}` : `empty-${seatIndex}`} className={`majak-lobby-room-card__seat${seat ? ' is-occupied' : ''}${seat?.disconnected ? ' is-disconnected' : ''}`}>
-                  {seat && <img src={avatarId ? getShortAvatarUrl(avatarId) : getDefaultAvatarUrl(sex)} alt="" draggable={false} onError={event => { handleShortAvatarError(event.currentTarget, avatarId, sex) }} />}
+                  {seat && <img
+                    src={avatarId ? getWebHalfAvatarUrl(avatarId) : avatarFallback}
+                    alt=""
+                    draggable={false}
+                    loading="lazy"
+                    onError={event => {
+                      if (event.currentTarget.dataset.avatarFallback !== 'default') {
+                        event.currentTarget.dataset.avatarFallback = 'default'
+                        event.currentTarget.src = avatarFallback
+                      }
+                    }}
+                  />}
                 </span>
               )
             })}
@@ -1944,6 +1961,7 @@ export default function LobbyScreen() {
   const [rooms,   _setRooms]   = useState<RoomEntry[]>([])
   const roomsRef = useRef<RoomEntry[]>([])
   const [roomSlotCount, setRoomSlotCount] = useState(DEFAULT_ROOM_SLOT_COUNT)
+  const [channelMaxRoom, setChannelMaxRoom] = useState(DEFAULT_ROOM_SLOT_COUNT)
   const [members, _setMembers] = useState<MemberEntry[]>([])
   const [isLobbyDataReady, setIsLobbyDataReady] = useState(false)
   const membersRef = useRef<MemberEntry[]>([])
@@ -2150,10 +2168,15 @@ export default function LobbyScreen() {
       getChannels().then(channels => {
         if (!mounted) return
         const channel = channels.find(c => c.subId === channelId || c.chanelId === channelId)
-        setRoomSlotCount(channel?.maxRoom && channel.maxRoom > 0 ? channel.maxRoom : DEFAULT_ROOM_SLOT_COUNT)
+        const maxRoom = channel?.maxRoom && channel.maxRoom > 0 ? channel.maxRoom : DEFAULT_ROOM_SLOT_COUNT
+        setChannelMaxRoom(maxRoom)
+        setRoomSlotCount(maxRoom)
         if (channel?.chanelName) setChannelName(channel.chanelName)
       }).catch(() => {
-        if (mounted) setRoomSlotCount(DEFAULT_ROOM_SLOT_COUNT)
+        if (mounted) {
+          setChannelMaxRoom(DEFAULT_ROOM_SLOT_COUNT)
+          setRoomSlotCount(DEFAULT_ROOM_SLOT_COUNT)
+        }
       })
     }
 
@@ -2323,6 +2346,11 @@ export default function LobbyScreen() {
           ? mergeLegacyRoomSeats(data, (data.rooms as Array<Record<string, unknown>>).map(readRoomEntry))
           : []
         _setRooms(roomList)
+        const responseMaxRoom = Number(data.maxRoom ?? 0)
+        if (responseMaxRoom > 0) {
+          setChannelMaxRoom(responseMaxRoom)
+          setRoomSlotCount(Math.max(responseMaxRoom, ...roomList.map(room => room.roomId)))
+        }
         if (Array.isArray(data.customEquips)) {
           const nextCustomEquip = setCustomSkinEquips(data.customEquips as Array<Record<string, unknown>>)
           const nextCustomEquipIds = { charaId: nextCustomEquip.charaId, haiId: nextCustomEquip.haiId, bgId: nextCustomEquip.bgId }
@@ -2454,7 +2482,6 @@ export default function LobbyScreen() {
       const onRoomList = (data: Record<string, unknown>) => {
         if (!mounted) return
         const manualRefresh = manualRefreshRef.current === 'room'
-        const legacyRoomCount = Number(data.k51e ?? 0)
         if (data.k51e == null && Number(data.result) !== 1) {
           if (manualRefresh) {
             manualRefreshRef.current = null
@@ -2468,6 +2495,11 @@ export default function LobbyScreen() {
           ? mergeLegacyRoomSeats(data, (data.rooms as Array<Record<string, unknown>>).map(readRoomEntry))
           : readLegacyRoomList(data)
         _setRooms(list)
+        const responseMaxRoom = Number(data.maxRoom ?? 0)
+        if (responseMaxRoom > 0) {
+          setChannelMaxRoom(responseMaxRoom)
+          setRoomSlotCount(Math.max(responseMaxRoom, ...list.map(room => room.roomId)))
+        }
         tryContinueRestore(list)
         if (manualRefresh) {
           manualRefreshRef.current = null
@@ -2926,8 +2958,8 @@ export default function LobbyScreen() {
       }
 
       /**
-       * チャンネル担当サーバー URL を Redis リースから取得し WebSocket 接続
-       * GET /api/channel/{id}/server → ResolveChannelServerAsync()
+      * DB で割り当てられたチャンネル担当 URL の heartbeat を確認して WebSocket 接続
+      * GET /api/channel/{id}/server → channel_master.server_url + Redis 生存確認
        * レガシー: HgChannelWnd::OnSocketConnect 相当
        */
       try {
@@ -2974,11 +3006,15 @@ export default function LobbyScreen() {
         if (mounted) cleanup = fn
         else fn()
       })
-      .catch(err => {
+      .catch(async err => {
         if (!mounted) return
         console.error('[LobbyScreen] init failed', err)
-        showError('サーバーへの接続に失敗しました')
-        navigate(channelId ? `/channel/${channelId}` : '/channel', { replace: true })
+        await showError(err instanceof ChannelUnavailableError
+          ? '現在このチャンネルのサーバーは稼働していないため接続できません。'
+          : 'サーバーへの接続に失敗しました')
+        if (!mounted) return
+        const group = getLobbySelectGroup(channelId)
+        navigate(group ? `/channel/select/${group}` : '/channel', { replace: true })
       })
 
     return () => {
@@ -3163,12 +3199,13 @@ export default function LobbyScreen() {
   }
 
   /** ルーム作成 (CHgChannelWnd::OnCreateRoom 相当)
-   * AP-04 §8: ルーム数が最少のサーバー URL を取得して RoomScreen へ遷移する。
-   * 同一サーバーの場合はロビーの WebSocket 接続を維持して RoomScreen へ渡す。
+   * AP-04 §8: DB でチャンネルに割り当てられ、heartbeat 確認済みのロビーサーバーを使う。
+   * ロビーの WebSocket 接続を維持して RoomScreen へ渡す。
    */
   const createRoomWithOption = async (nextRoomOpt: MJOption, roomInfo: RoomCreateInfo, slotNo: number) => {
     try {
-      const bestServerUrl = await getBestServer()
+      const channelServerUrl = connectedServerUrlRef.current
+      if (!channelServerUrl) throw new Error('Channel server is not connected')
       const optStr = optionToString(nextRoomOpt)
       const maxViewer = roomInfo.viewerEnable ? 12 : 0
       keepSignalRForRoomRef.current = true
@@ -3176,7 +3213,7 @@ export default function LobbyScreen() {
         `/channel/${channelId}/lobby/room/${slotNo}`,
         {
           state: {
-            serverUrl: bestServerUrl,
+            serverUrl: channelServerUrl,
             mode: 'create',
             skipEnterChannel: true,
             roomId: slotNo,
@@ -3199,6 +3236,10 @@ export default function LobbyScreen() {
   }
 
   const onCreateRoom = (slotNo: number) => {
+    if (rooms.length >= channelMaxRoom) {
+      showError(`ルーム数が上限（${channelMaxRoom}室）に達しています。`)
+      return
+    }
     setPendingRoomCreateSlot(slotNo)
     setShowRoomCreate(true)
   }
@@ -3672,7 +3713,7 @@ export default function LobbyScreen() {
     return (
       <div className="majak-boot-loading majak-screen-surface">
         <div className="majak-boot-loading__panel">
-          <img className="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} />
+          <img className="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak4.jpg" alt="" draggable={false} />
           <div className="majak-sync-spinner" aria-hidden="true" />
         </div>
       </div>
@@ -3883,6 +3924,7 @@ export default function LobbyScreen() {
             onEnter={onEnterRoom}
             onCreateRoom={onCreateRoom}
             directRoomActionDisabled={autoMatchingChannel}
+            roomCreationDisabled={rooms.length >= channelMaxRoom}
           />
           <aside className="majak-mobile-lobby-side">
             <div className="majak-mobile-lobby-command-panel">
@@ -3994,7 +4036,7 @@ export default function LobbyScreen() {
       ) : (
         <>
           {/* ── ルームリスト (CHgRoomListWnd) — 空きセルの「作成」ボタンをクリックでルーム作成 ── */}
-          <RoomListPanel rooms={rooms} members={members} slotCount={roomSlotCount} channelId={channelId} onEnter={onEnterRoom} onCreateRoom={onCreateRoom} directRoomActionDisabled={autoMatchingChannel} />
+          <RoomListPanel rooms={rooms} members={members} slotCount={roomSlotCount} channelId={channelId} onEnter={onEnterRoom} onCreateRoom={onCreateRoom} directRoomActionDisabled={autoMatchingChannel} roomCreationDisabled={rooms.length >= channelMaxRoom} />
 
           {/* ── メンバーリスト (CHgMemberListWnd) MoveWindow(678,212,336×403) ── */}
           <MemberListPanel members={displayMembers} totalMemberCount={allDisplayMembers.length} selectedMember={selectedMember} isDani={daniChannel} filter={memberFilter} onFilterChange={setMemberFilter} onSelectMember={setSelectedMember} onViewProfile={openMemberProfile} onStartOneToOne={startOneToOneChat} />

@@ -251,7 +251,7 @@ function AppLoadingScreen() {
   return (
     <div className="majak-boot-loading majak-screen-surface">
       <div className="majak-boot-loading__panel">
-        <img className="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} />
+        <img className="majak-boot-loading__logo" src="/assets/images/common/ico_big_majak4.jpg" alt="" draggable={false} />
         <div className="majak-sync-spinner" aria-hidden="true" />
       </div>
     </div>
@@ -263,7 +263,7 @@ function PortraitOrientationNotice() {
     <main className="majak-mobile-portrait-notice majak-screen-surface" aria-live="polite">
       <img
         className="majak-mobile-portrait-notice__logo"
-        src="/assets/images/common/ico_big_majak2.jpg"
+        src="/assets/images/common/ico_big_majak4.jpg"
         alt="麻雀4"
         draggable={false}
       />
@@ -534,7 +534,7 @@ function HangeSignInScreen() {
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
       }}>
         <img
-          src="/assets/images/common/ico_big_majak2.jpg"
+          src="/assets/images/common/ico_big_majak4.jpg"
           alt="麻雀4"
           draggable={false}
           style={{ width: 80, height: 80, borderRadius: 8 }}
@@ -612,7 +612,7 @@ function GoogleSignInScreen({
         boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
       }}>
         <img
-          src="/assets/images/common/ico_big_majak2.jpg"
+          src="/assets/images/common/ico_big_majak4.jpg"
           alt="麻雀4"
           draggable={false}
           style={{ width: 80, height: 80, borderRadius: 8 }}
@@ -762,7 +762,7 @@ export default function App() {
             <Route path="/channel" element={<ChannelGroupRoute />} />
             <Route path="/announcements" element={<AnnouncementRoute />} />
             <Route path="/channel/select/:group" element={<LobbySelectRoute />} />
-            <Route path="/channel/:channelId" element={<LobbySelectRoute />} />
+            <Route path="/channel/:channelId" element={<Navigate to="/channel" replace />} />
             <Route path="/channel/:channelId/lobby" element={<MajakFrame accBox="channel"><LobbyScreen /></MajakFrame>} />
             <Route path="/channel/:channelId/lobby/room/:roomId" element={<MajakFrame accBox="room"><RoomScreen /></MajakFrame>} />
             <Route path="/channel/:channelId/lobby/:lobbyId/room/:roomId" element={<MajakFrame accBox="room"><RoomScreen /></MajakFrame>} />

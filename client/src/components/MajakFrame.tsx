@@ -274,7 +274,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
         <main className="majak-mobile-portrait-notice majak-screen-surface" aria-live="polite">
           <img
             className="majak-mobile-portrait-notice__logo"
-            src="/assets/images/common/ico_big_majak2.jpg"
+            src="/assets/images/common/ico_big_majak4.jpg"
             alt="麻雀4"
             draggable={false}
           />

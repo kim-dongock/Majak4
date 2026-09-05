@@ -17,6 +17,9 @@ description: "Google認証、会員登録、ゲームJWT、Refresh Cookie、memb
 
 ## 1. Googleログインと会員登録
 
+- `Authentication:GoogleEnabled` は環境別のParameter Store JSONで管理する。Studio35は `true` とGoogle Client IDを設定し、hange Alphaは `false` としてGoogleゲーム・管理者認証エンドポイントを登録しない。
+- hange Alphaクライアントは `VITE_AUTH_PROVIDER=hange` とし、Google OAuth Providerを生成せずhangeログインだけを使用する。
+
 ### 1-1. ログイン
 
 - `POST /auth/google-login` はGoogle ID Tokenを検証し、`external_auth_id = google:<sub>` で `player_account` を検索する。

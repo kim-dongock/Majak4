@@ -19,16 +19,16 @@ VALUES
     ('CASH_500_WEB',    '550 MP (+50 bonus)',  550,       500,   'web',     NULL,               TRUE,  30),
     ('CASH_1000_WEB',   '1150 MP (+150 bonus)',1150,     1000,   'web',     NULL,               TRUE,  40),
     ('CASH_3000_WEB',   '3600 MP (+600 bonus)',3600,     3000,   'web',     NULL,               TRUE,  50),
-    ('CASH_100_IOS',    '100 MP',              100,       120,   'ios',     'jp.majak2.cash100',  TRUE,  10),
-    ('CASH_300_IOS',    '300 MP',              300,       360,   'ios',     'jp.majak2.cash300',  TRUE,  20),
-    ('CASH_500_IOS',    '550 MP (+50 bonus)',  550,       600,   'ios',     'jp.majak2.cash500',  TRUE,  30),
-    ('CASH_1000_IOS',   '1150 MP (+150 bonus)',1150,     1200,   'ios',     'jp.majak2.cash1000', TRUE,  40),
-    ('CASH_3000_IOS',   '3600 MP (+600 bonus)',3600,     3600,   'ios',     'jp.majak2.cash3000', TRUE,  50),
-    ('CASH_100_AND',    '100 MP',              100,       120,   'android', 'jp.majak2.cash100',  TRUE,  10),
-    ('CASH_300_AND',    '300 MP',              300,       360,   'android', 'jp.majak2.cash300',  TRUE,  20),
-    ('CASH_500_AND',    '550 MP (+50 bonus)',  550,       600,   'android', 'jp.majak2.cash500',  TRUE,  30),
-    ('CASH_1000_AND',   '1150 MP (+150 bonus)',1150,     1200,   'android', 'jp.majak2.cash1000', TRUE,  40),
-    ('CASH_3000_AND',   '3600 MP (+600 bonus)',3600,     3600,   'android', 'jp.majak2.cash3000', TRUE,  50);
+    ('CASH_100_IOS',    '100 MP',              100,       120,   'ios',     'jp.majak4.cash100',  TRUE,  10),
+    ('CASH_300_IOS',    '300 MP',              300,       360,   'ios',     'jp.majak4.cash300',  TRUE,  20),
+    ('CASH_500_IOS',    '550 MP (+50 bonus)',  550,       600,   'ios',     'jp.majak4.cash500',  TRUE,  30),
+    ('CASH_1000_IOS',   '1150 MP (+150 bonus)',1150,     1200,   'ios',     'jp.majak4.cash1000', TRUE,  40),
+    ('CASH_3000_IOS',   '3600 MP (+600 bonus)',3600,     3600,   'ios',     'jp.majak4.cash3000', TRUE,  50),
+    ('CASH_100_AND',    '100 MP',              100,       120,   'android', 'jp.majak4.cash100',  TRUE,  10),
+    ('CASH_300_AND',    '300 MP',              300,       360,   'android', 'jp.majak4.cash300',  TRUE,  20),
+    ('CASH_500_AND',    '550 MP (+50 bonus)',  550,       600,   'android', 'jp.majak4.cash500',  TRUE,  30),
+    ('CASH_1000_AND',   '1150 MP (+150 bonus)',1150,     1200,   'android', 'jp.majak4.cash1000', TRUE,  40),
+    ('CASH_3000_AND',   '3600 MP (+600 bonus)',3600,     3600,   'android', 'jp.majak4.cash3000', TRUE,  50);
 
 -- 初期データ: transaction_code_master
 INSERT INTO transaction_code_master

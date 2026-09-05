@@ -4,6 +4,7 @@ import type {
   CashProduct, DailyRevenue, AdminAccount,
   GameEconomyPolicy,
   GameAnnouncement,
+  ChannelMaster,
 } from './types'
 
 // ── Auth ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,12 @@ export const announcementApi = {
   update: (article: GameAnnouncement) =>
     api.put<GameAnnouncement>(`/api/admin/announcements/${article.announcementId}`, article),
   remove: (announcementId: number) => api.del<void>(`/api/admin/announcements/${announcementId}`),
+}
+
+export const channelApi = {
+  list: () => api.get<ChannelMaster[]>('/api/admin/channels'),
+  update: (channel: ChannelMaster) =>
+    api.put<ChannelMaster>(`/api/admin/channels/${encodeURIComponent(channel.channelId)}`, channel),
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────

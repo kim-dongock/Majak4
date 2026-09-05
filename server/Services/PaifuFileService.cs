@@ -13,7 +13,6 @@ public sealed class PaifuFileService
 {
     private const int MaxCompressedBytes = 8 * 1024 * 1024;
     private const int MaxPlaintextBytes = 16 * 1024 * 1024;
-    private const int MaxPackets = 3_000;
     private readonly LogDataContextFactory _db;
     private readonly PaifuObjectStore _objects;
     private readonly int _retentionDays;
@@ -68,7 +67,7 @@ public sealed class PaifuFileService
             Members: item.Members.Select(member => new PaifuMember(member.Name, member.Title, member.Rating, member.Result)).ToArray(),
             Result: item.Result);
         var plain = JsonSerializer.SerializeToUtf8Bytes(payload);
-        if (plain.Length > MaxPlaintextBytes || item.Packets.Count > MaxPackets) return;
+        if (plain.Length > MaxPlaintextBytes) return;
         var compressed = Compress(plain);
         if (compressed.Length > MaxCompressedBytes) return;
 

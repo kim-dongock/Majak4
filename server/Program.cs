@@ -28,6 +28,8 @@ if (env is not "Development" and not "Production")
         reloadOnChange: false);
 }
 
+await ParameterStoreJsonConfiguration.AddEnvironmentJsonAsync(builder);
+
 // ─── Configuration ────────────────────────────────────────────
 builder.Services.Configure<RuntimeFlagOptions>(
     builder.Configuration.GetSection(RuntimeFlagOptions.SectionName));
@@ -89,10 +91,7 @@ builder.Services.AddSingleton<PaifuArchiveUploadQueue>();
 // ─── Admin ────────────────────────────────────────────────────
 builder.Services.AddScoped<AdminRepository>();
 builder.Services.AddScoped<AdminAuthService>();
-builder.Services.AddSingleton<ServerLoadService>(sp =>
-    new ServerLoadService(
-        sp.GetRequiredService<RedisService>(),
-        sp.GetRequiredService<IOptions<ChannelServerSettings>>().Value));
+builder.Services.AddSingleton<ServerLoadService>();
 builder.Services.AddSingleton<MasterCacheService>();
 builder.Services.AddSingleton<ChannelMemberService>();
 builder.Services.AddSingleton<RoomRegistryService>();

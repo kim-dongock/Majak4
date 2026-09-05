@@ -22,6 +22,6 @@ export const useAuthStore = create<AuthState>()(
       isSuperAdmin: () => get().role === 'super_admin',
       canManageGem: () => get().role === 'super_admin' || get().role === 'operator',
     }),
-    { name: 'majak2-admin-auth' },
+    { name: 'majak4-admin-auth' },
   ),
 )

@@ -1,6 +1,6 @@
 ---
 applyTo: "server/**,server.tests/**,client/**,scripts/**"
-description: "麻雀4のサーバー構成、チャンネル階層、SignalR接続、ロビー入場、サービス間責務を確認・変更するときに参照する"
+description: "麻雀4のサーバー構成、ゲームモード、チャンネル階層、SignalR接続、ロビー入場、性能・同時実行、サービス間責務を確認・変更するときに参照する"
 ---
 
 # AP-04 アーキテクチャ / チャンネルサーバー構成
@@ -69,6 +69,11 @@ GameId (SVCID):  MAJAK4
 | `environment` | 対象環境 (dev / alpha / prod) |
 | `server_url` | このロビーを担当するサーバーの URL |
 
+- `max_room` はクライアント表示だけの値ではなく、通常作成・オートマッチング・トーナメントを含む新規ルーム作成のサーバー側上限である。
+- 新規作成は `RoomRegistryService.TryRegisterRoomAsync()` で Redis 上の有効ルームを数え、上限確認と登録を原子的に行う。複数サーバーから同時に作成しても `max_room` を超えてはならない。
+- 管理画面で `max_room` を変更した場合はチャンネルマスターキャッシュを即時無効化する。上限を現在ルーム数より小さくした場合、既存ルームは維持し、新規作成だけを現在数が上限未満になるまで拒否する。
+- `c1e` と `c12e` は構造化応答に `maxRoom` と `currentRoomCount` を含める。クライアントは満室時に作成操作を無効化するが、最終判定は常にサーバーが行う。
+
 ### appsettings 設定キー
 ```json
 "ConnectionStrings": {
@@ -83,7 +88,7 @@ GameId (SVCID):  MAJAK4
   "RoomChargeGrade":    100    // 段位チャンネルの室料
 },
 "ChannelServerSettings": {
-  "ServerUrl": "http://localhost:5000",
+  "ServerUrl": "http://localhost:5246",
   "LobbySessionLeaseSeconds": 90
 },
 "RuntimeFlag": {
@@ -231,12 +236,12 @@ ws://{host}:{port}/hubs/majak
 | 項目 | 内容 |
 |------|------|
 | **チャンネル** | MySQLゲームDBのカテゴリ情報。特定サーバーに固定しない |
-| **チャンネル→サーバー割り当て** | **Redis 動的リース** — `channel:{chanelId}:server` (TTL=60s) で管理。起動サーバー数・負荷に応じて自動割り当て |
-| **ロビー (チャンネル画面)** | **SignalR接続あり** (レガシー設計準拠)。`GET /api/channel/{id}/server` → Redisリースから担当サーバー取得 → SignalR接続 |
+| **チャンネル→サーバー割り当て** | **MySQL固定割り当て** — `channel_master.server_url` を正本とし、管理画面から更新する。`channel:{chanelId}:server` は実行時所有リースとして使用する |
+| **ロビー (チャンネル画面)** | **SignalR接続あり** (レガシー設計準拠)。`GET /api/channel/{id}/server` → DB割り当て先がRedis heartbeat上で生存している場合だけURL取得 → SignalR接続 |
 | **ルーム入室/作成** | ロビーのSignalR接続を再利用 (同一サーバーなら再接続不要) |
 | **チャンネルユーザーリスト** | Redis HASH (`channel:{chanelId}:members`) で管理。複数サーバー間で共有 |
 | **ルームリスト** | Redis TTL (30秒) で管理。ゲームサーバーが書き込み、8秒ごとに現在状態を再登録 |
-| **ルーム作成時サーバー選択** | Redis のルーム数カウントを参照し、最小ルーム数のサーバーに動的に振り分ける |
+| **ルーム作成時サーバー選択** | `channel_master.server_url` で割り当て済みのロビー接続先をそのまま使用する。Redis で別サーバーへ動的に振り分けない |
 | **自動スケールアウト** | 新サーバーが起動すると 8秒後に Redis に自動登録 → 即座に選択対象に追加 |
 
 ### 8-2. Redis データ構造
@@ -244,7 +249,7 @@ ws://{host}:{port}/hubs/majak
 | キー | 型 | TTL | 書き込み主体 | 内容 |
 |------|----|-----|-------------|------|
 | `channel:{chanelId}:members` | HASH | **90s** | REST / SignalR同期 | HASH fieldはサーバー内部識別子、公開JSONの `memberNo` / `pix` は `pix` |
-| `channel:{chanelId}:server` | STRING | **60s** | `ServerLoadService.ClaimChannelAsync()` | このチャンネルを担当するサーバー URL (動的リース) |
+| `channel:{chanelId}:server` | STRING | **60s** | `ServerLoadService.ClaimChannelAsync()` | DB割り当て先サーバーの実行時所有リース。ルーティングの正本ではない |
 | `game:server:channelcounts` | HASH | なし | `ServerLoadService` | serverUrl → 担当チャンネル数 |
 | `room:{chanelId}:{roomId}` | STRING | **30s** | `MajakGameHub` + `ServerStatusBackgroundService` | チャンネルごとのJSONルーム情報 (serverUrl 含む)。roomIdはチャンネル間で重複するため単独キーにしない |
 | `channel:{chanelId}:rooms` | SET | なし | `MajakGameHub` | roomId の集合 (TTL 切れ roomId は自動掃除) |
@@ -281,8 +286,8 @@ ChannelSelectScreen          REST API
     |<── [{chanelId, ...}]   |
 
 LobbyScreen (レガシー設計準拠: ロビー入室時にSignalR接続)
-    |── GET /api/channel/{id}/server ─>|  Redis channel:{id}:server から担当サーバー URL 取得
-    |                                  |  未割り当てなら alive サーバーのうちチャンネル数最小に動的割り当て
+    |── GET /api/channel/{id}/server ─>|  MySQL channel_master.server_url から担当サーバー URL 取得
+    |                                  |  game:servers の30秒以内heartbeatがなければ503で接続拒否
     |── SignalR.connect(serverUrl, JWT)>|  JWT検証 + Hub接続
     |── send("c1e", {pix, ...}) ─────>|  JWTのmember_noでDBロード + chanel_*登録
     |<── channel:entered             |  Redis リース登録 (ClaimChannelAsync)
@@ -295,12 +300,10 @@ LobbyScreen (レガシー設計準拠: ロビー入室時にSignalR接続)
     |── POST /api/channel/{id}/leave >
 
     ↓ ユーザーが「ルーム作成」をクリック
-    |── GET /api/room/best-server ────>|  Redis でルーム数最小サーバーを選択
-    |<── { serverUrl: "http://..." }       |
+    |── 接続中ロビーの serverUrl を再利用  |  DB 割り当て済みサーバーから移動しない
 
-RoomScreen (SignalR接続を再利用または再接続)
+  RoomScreen (SignalR接続を再利用)
     |── SignalR.connect(serverUrl) ───>|  同一 URL ならスキップ (ロビー接続を再利用)
-    |                                  |  別 URL なら再接続 (マルチサーバー構成)
     |── invoke("CreateRoom", ...) ────>|  ルーム作成
     |<── room:created { result:1, roomId }|
 
@@ -309,69 +312,73 @@ RoomScreen (SignalR接続を再利用または再接続)
     |<── room:enter { result:1, ... }   |
 ```
 
-### 8-5. ルーム作成時のサーバー選択ロジック (`ServerLoadService`)
+### 8-5. チャンネル担当サーバーの決定
 
 ```
-GET /api/room/best-server
-  ① ZRANGEBYSCORE game:servers (now-30) +inf   → alive サーバー一覧
-  ② HMGET game:server:roomcounts {servers}      → 各サーバーのルーム数
-  ③ ルーム数が最小のサーバー URL を返す
-  ④ フォールバック: Redis 利用不可 or alive サーバーなし
-     → ChannelServerSettings.ServerUrl (appsettings の自サーバー URL)
+GET /api/channel/{chanelId}/server
+  ① MySQL channel_master から公開状態と server_url を直接取得
+  ② Redis game:servers で server_url の30秒以内 heartbeat を確認
+  ③ 生存している場合だけ server_url を返す
+  ④ Redis 利用不可、heartbeatなし、非公開の場合は503を返す
 ```
 
-### 8-6. 自動スケールアウトの動作
+ルーム作成時はロビー接続中の同じ `serverUrl` を再利用する。Redis のルーム数を使って別サーバーを選択してはならない。
 
-新しいゲームサーバーを起動するだけで自動的に負荷分散対象に追加される:
+### 8-6. サーバー追加時の動作
+
+新しいゲームサーバーは起動時に自身の実行状態だけを登録する。チャンネル割り当ては自動変更しない:
 1. 新サーバーが起動 → `ServerStatusBackgroundService` が動作開始
-2. 8秒後: `ZADD game:servers {now} {newServerUrl}` + `HSET game:server:roomcounts ... 0`
-3. 次の `GET /api/room/best-server` で新サーバーが選択対象に追加される
-4. ルーム数 0 なので最優先で選ばれる
+2. 最初のループで直ちに `ZADD game:servers {now} {newServerUrl}` + `HSET game:server:roomcounts ... 0`
+3. 管理画面で対象チャンネルの `channel_master.server_url` を新サーバーへ変更する
+4. チャンネルマスターキャッシュと旧実行リースを無効化し、次回入場から新サーバーを使用する
 
 ### 8-7. REST API 一覧
 
 | メソッド | パス | 説明 |
 |---------|------|------|
 | `GET`  | `/api/channels` | チャンネル一覧 (MySQLゲームDB) |
-| `GET`  | `/api/channel/{chanelId}/server` | ルーム数最小サーバー URL (best-server と同じ) |
+| `GET`  | `/api/channel/{chanelId}/server` | DB 割り当て先が Redis heartbeat 上で生存している場合に URL を返す |
 | `POST` | `/api/channel/{chanelId}/enter` | ロビー入室 (Redis 登録) |
 | `POST` | `/api/channel/{chanelId}/leave` | ロビー退室 (Redis 削除) |
 | `GET`  | `/api/channel/{chanelId}/members` | チャンネルメンバー一覧 (Redis) |
 | `GET`  | `/api/channel/{chanelId}/rooms` | ルーム一覧 (Redis TTL) |
-| `GET`  | `/api/room/best-server` | ルーム数最小サーバー URL |
 
 ### 8-8. 環境別構成
 
-| 環境 | `ASPNETCORE_ENVIRONMENT` | `ServerUrl` | Redis | 起動方法 |
-|------|--------------------------|-------------|-------|---------|
-| 開発 | `Development` | `http://localhost:5000` | `localhost:6379` | `docker compose up -d` |
-| アルファ | `Alpha` | `http://alpha-game.majak2.jp` | `alpha-redis.majak2.jp:6379` | サーバー設定 |
-| 本番 | `Production` | `https://game.majak2.jp` | `redis-prod.majak2.jp:6379` (SSL) | サーバー設定 |
+| 環境 | `ASPNETCORE_ENVIRONMENT` | Parameter Store path | 公開API URL |
+|------|--------------------------|----------------------|-------------|
+| 開発 | `Development` | `/config/application_development/majak4` | `http://localhost:5246` |
+| アルファ | `Alpha` | `/config/application_alpha/majak4` | `https://alpha-app-majak4.hange.jp` |
+| 本番 | `Production` | `/config/application_production/majak4` | `https://app-majak4.studio35app.net` |
+
+- hange Alphaのクライアント公開URLは`https://alpha-game-majak4.hange.jp`、API公開URLは`https://alpha-app-majak4.hange.jp`として分離する。
+- `alpha-game-majak4.hange.jp`はCloudFrontからS3バケット`alpha-game-majak4-hange-jp`を配信し、API・認証・SignalR通信は`alpha-app-majak4.hange.jp`へ直接接続する。
+- `ParameterStoreJsonConfiguration`がサービス登録前に環境別SecureStringを復号し、JSONをconfigurationへ追加する。取得失敗、空値、不正JSONでは起動を失敗させる。
+- DB、Redis、JWT、Google認証、CORS、Paifu等のruntime値はParameter Store JSONを正本とする。
+- deploy scriptはSSH server、user、key path、domain、port、remote path等の配備情報だけを保持し、DB・Redis・JWT等をsystemdへ展開しない。
 
 #### クライアント Vite 環境変数 (`VITE_API_BASE_URL`)
 | 環境 | `.env` ファイル | 値 | ビルドコマンド |
 |------|---------------|-----|--------------|
 | 開発 | `.env.development` | `` (空) | `vite dev` |
-| アルファ | `.env.alpha` | `http://alpha-game.majak2.jp` | `vite build --mode alpha` |
-| 本番 | `.env.production` | `https://game.majak2.jp` | `vite build` |
+| アルファ | `.env.alpha` | `https://alpha-app-majak4.hange.jp` | `vite build --mode alpha` |
+| 本番 | `.env.production` | `https://app-majak4.studio35app.net` | `vite build --mode production` |
 
 ### 8-9. 開発環境セットアップ
 
 ```bash
-# Redis を Docker で起動 (初回のみ)
-docker compose up -d
+# Studio35 profileからDevelopment用Parameter Store JSONを取得して起動
+.\server\run-development.ps1
 
-# .NET サーバー起動
-cd server
-dotnet run
+# hange profileを使う場合 (必要に応じて -AspNetCoreEnvironment Alpha を追加)
+.\server\run-development.ps1 -AwsProfile hange_majak4
 
 # クライアント起動
 cd client
 npm run dev
 ```
 
-`appsettings.Development.json` の `Redis:ConnectionString` は `localhost:6379` に設定済み。
-Redis が起動していない場合は `RedisService` がフォールバック動作する (メモリ辞書で代替)。
+DevelopmentでもDB・Redis接続先は`/config/application_development/majak4`を正本とする。DevelopmentのRedis接続先にはAlphaとは分離されたRedisを設定する。Redisが利用できない場合、一部のsession/leader機能はローカルfallbackで動作するが、Redis依存の分散動作を検証したことにはならない。
 
 ---
 
@@ -395,8 +402,8 @@ Redis が起動していない場合は `RedisService` がフォールバック�
 サーバーが落ちると最大 30 秒で別サーバーが自動昇格する。
 
 ```
-Redis キー: "majak2:primary-leader"
-Redis 値:   ServerUrl (例: "https://game1.majak2.jp")
+Redis キー: "majak4:primary-leader"
+Redis 値:   ServerUrl + machine name + process ID + GUID のプロセス固有ID
 TTL:        30 秒
 更新間隔:   8 秒 (ServerStatusBackgroundService 内)
 ```
@@ -405,7 +412,7 @@ TTL:        30 秒
 
 ```
 起動時
-  └─ SETNX "majak2:primary-leader" = serverUrl (TTL 30秒)
+  └─ SETNX "majak4:primary-leader" = process-specific serverId (TTL 30秒)
        ├─ 取得成功 → IsLeader = true  (プライマリ)
        └─ 取得失敗 → IsLeader = false (セカンダリ)
 
@@ -439,7 +446,7 @@ Redis に接続できない場合 (開発環境など) は
 
 ```json
 "ChannelServerSettings": {
-  "ServerUrl": "https://game.majak2.jp",
+  "ServerUrl": "https://app-majak4.studio35app.net",
   "IsPrimaryServer": true   // Redis 未接続時のフォールバック値
 }
 ```
@@ -459,7 +466,7 @@ Redis に接続できない場合 (開発環境など) は
 
 #### `ServerStatusBackgroundService` が全サーバーで実行される理由
 - 各サーバーが**自分自身の**ルーム数と生存確認を Redis に登録するのが目的
-- 全サーバーが実行しなければルーム数最小サーバー選択 (`best-server`) が正常に機能しない
+- 全サーバーが実行しなければ DB で割り当てられた接続先の生存確認と障害検知が機能しない
 
 ### 9-3. グレースフルシャットダウン
 
@@ -472,3 +479,38 @@ ApplicationStopping フック (同期):
 ```
 
 サーバークラッシュ時は TTL 更新が止まり、最大 30 秒後にルームエントリが自動消滅する。
+
+---
+
+## 10. ゲームモード別ランタイム契約
+
+### 10-1. 練習卓
+
+- 空席は練習NPCとして扱い、roomで選択した`Legacy`または`Advanced` AIを使う。新規roomの既定は`Advanced`とする。
+- 高性能AIのチー／ポンは、次の必須打牌まで評価してシャンテンが厳密に改善する場合だけ行う。
+- 人間プレイヤーの推奨打牌は現在の`actionSeq`にだけ有効で、通常の入力検証を変更しない。
+- 練習結果はGP、龍珠、rating、grade、通常戦績、称号、result missionを変更せず、通常history・training history・replay paifu archiveへ保存しない。
+- 保存や精算を行わなくても、接続中ユーザーには通常の開始・action・result packet順序を維持する。
+
+### 10-2. 交流戦・段位戦
+
+- `0086B`は東風、`0082B`はクイタンあり半荘で、`unit_money=20`の通常historyと4人分の通常resultを保存する。
+- `0085F`は`unit_money=100`で、通常resultに加えてhigh-class resultを更新し、GP精算額は100単位とする。
+- `0075B`はwaremeを有効にし、wareme seatに関係する和了・放銃・被ツモの移動点だけを2倍にする。honba、noten、nagashiは2倍にしない。
+- grade channelは東風／半荘のchannel種別に従い、クイタンあり、赤牌2枚、yakitori・wareme・nagashi・chipなしの固定ruleを使う。入場境界はAP-07を正本とする。
+- custom normal roomのruleは`RoomOption`から決定し、局数、クイタン、赤牌、yakitori、wareme、chip、ron mode、umaを対局終了まで保持する。
+
+### 10-3. オートマッチング
+
+- `mjkc2e`はauto-matching channelだけが受け付け、enqueue前にGP、beginner、grade、cup条件を検証する。
+- queueはchannelごとに分離し、pre-match exclusionに抵触する組み合わせを作らない。
+- 予約roomは期待する全員が`mjkc6e`を確認してから開始し、未完了予約はFAILEROOM期限で解消する。
+- 自動roomの東風／半荘設定はchannelのgame-type文字から決定する。
+
+## 11. 性能・同時実行原則
+
+- 同じroom engineへのaction適用はroom単位の`SemaphoreSlim`で直列化し、複数接続から同時に状態を変更させない。
+- 相互に独立したDB readだけを`Task.WhenAll`で並列化する。同じtransactionや更新順序に依存する処理は並列化しない。
+- channel member検索は全接続scanではなくchannel indexを使用する。
+- 周期的な複数Redis TTL更新はbatch/pipelineで送信し、room数に比例したnetwork round tripを作らない。
+- MySQL game/log DBは別poolを使い、接続上限は想定同時接続・room数とquery fan-outを測定して決める。過去の固定台数試算をcapacity保証として扱わない。

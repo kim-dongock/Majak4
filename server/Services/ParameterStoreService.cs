@@ -162,9 +162,7 @@ public class ParameterStoreService : IParameterStoreService
             parameterValue = Regex.Replace(parameterValue, @"\s*,\s*", ",");
             parameterValue = parameterValue.Trim();
 
-            _logger.LogInformation("After minifying JSON, length: {Length}, First 100 chars: {Preview}",
-                parameterValue.Length,
-                parameterValue.Length > 100 ? parameterValue.Substring(0, 100) : parameterValue);
+            _logger.LogInformation("Parameter JSON normalized. Length: {Length}", parameterValue.Length);
 
             // まず JSON としてパースを試みる
             AwsParameterConfig? config = null;

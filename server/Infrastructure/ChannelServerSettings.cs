@@ -6,9 +6,9 @@ namespace MajakServer.Infrastructure;
 ///
 /// appsettings.json 例:
 /// "ChannelServerSettings": {
-///   "ServerUrl": "https://game.majak2.jp",
+///   "ServerUrl": "https://game.majak4.jp",
 ///   "ChannelUrlMap": {
-///     "MAJAK20090A001": "https://game1.majak2.jp"
+///     "MAJAK20090A001": "https://game1.majak4.jp"
 ///   }
 /// }
 ///
@@ -24,6 +24,11 @@ public class ChannelServerSettings
     /// ChannelUrlMap に該当エントリがない場合のデフォルト値。
     /// </summary>
     public string ServerUrl { get; set; } = "http://localhost:5000";
+
+    /// <summary>
+    /// true の場合、channel_master.server_url より ServerUrl を優先する。
+    /// </summary>
+    public bool UseConfiguredServerUrl { get; set; }
 
     /// <summary>
     /// このサーバーインスタンスがプライマリサーバーかどうか。
@@ -62,5 +67,23 @@ public class ChannelServerSettings
             return mapped;
         }
         return ServerUrl;
+    }
+
+    public string ResolveAssignedUrl(string? assignedServerUrl)
+    {
+        if (UseConfiguredServerUrl || string.IsNullOrWhiteSpace(assignedServerUrl))
+            return ServerUrl.Trim().TrimEnd('/');
+
+        var normalized = assignedServerUrl.Trim().TrimEnd('/');
+        if (Uri.TryCreate(normalized, UriKind.Absolute, out _))
+            return normalized;
+
+        if (Uri.TryCreate(ServerUrl.Trim(), UriKind.Absolute, out var configuredUri)
+            && Uri.TryCreate($"{configuredUri.Scheme}://{normalized}", UriKind.Absolute, out var assignedUri))
+        {
+            return assignedUri.ToString().TrimEnd('/');
+        }
+
+        return normalized;
     }
 }

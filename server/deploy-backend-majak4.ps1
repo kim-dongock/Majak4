@@ -1,47 +1,30 @@
 # Majak4 API Deployment
 # Usage:
-#   .\deploy-majak4.ps1
-# Prerequisites: SSH key, dotnet SDK
+#   .\deploy-backend-majak4.ps1
+# Prerequisites: SSH key, dotnet SDK, and an EC2 IAM role with ssm:GetParameter
+
+param(
+    [string]$Server = "52.194.197.87",
+    [string]$User = "ubuntu",
+    [string]$SshKey = "C:\Users\kim_dongock\.ssh\wonderlog-redis-key2.pem",
+    [string]$Domain = "app-majak4.studio35app.net",
+    [int]$Port = 5003
+)
 
 $ErrorActionPreference = "Stop"
 
-$SERVER      = "52.194.197.87"
-$USER        = "ubuntu"
-$SSH_KEY     = "C:\Users\kim_dongock\.ssh\wonderlog-redis-key2.pem"
-$DOMAIN      = "app-majak4.studio35app.net"
-$REMOTE_PATH = "/var/www/majak4-api"
-$SERVICE     = "majak4-api"
-$PORT        = 5003
 $PROJECT_DIR = $PSScriptRoot
 $ZIP_NAME    = "majak4-api.zip"
 $ZIP_PATH    = Join-Path $PSScriptRoot $ZIP_NAME
 $PUBLISH_DIR = Join-Path $PSScriptRoot "publish"
-$LOCAL_ENV_PATH = Join-Path $PSScriptRoot ".env.studio35"
-
-if (-not (Test-Path $LOCAL_ENV_PATH)) {
-    throw "Studio35 deployment settings are missing. Create '$LOCAL_ENV_PATH' from 'studio35.env.example'."
-}
-
-$localSettings = @{}
-Get-Content $LOCAL_ENV_PATH | ForEach-Object {
-    $line = $_.Trim()
-    if ($line.Length -eq 0 -or $line.StartsWith("#")) { return }
-    $parts = $line -split "=", 2
-    if ($parts.Count -eq 2) {
-        $localSettings[$parts[0].Trim()] = $parts[1].Trim()
-    }
-}
-
-$requiredSettings = @("GAME_DB_CONNECTION", "LOG_DB_CONNECTION", "REDIS_CONNECTION")
-foreach ($settingName in $requiredSettings) {
-    if ([string]::IsNullOrWhiteSpace($localSettings[$settingName])) {
-        throw "Required Studio35 deployment setting '$settingName' is missing from '$LOCAL_ENV_PATH'."
-    }
-}
-
-$GAME_DB_CONNECTION = $localSettings["GAME_DB_CONNECTION"]
-$LOG_DB_CONNECTION = $localSettings["LOG_DB_CONNECTION"]
-$REDIS_CONNECTION = $localSettings["REDIS_CONNECTION"]
+$SERVER = $Server
+$USER = $User
+$SSH_KEY = $SshKey
+$DOMAIN = $Domain
+$REMOTE_PATH = "/var/www/majak4-api"
+$SERVICE = "majak4-api"
+$PORT = $Port
+$AWS_REGION = "ap-northeast-1"
 
 function Invoke-Ssh($cmd) {
     ssh -i $SSH_KEY -o StrictHostKeyChecking=no "${USER}@${SERVER}" $cmd
@@ -77,13 +60,10 @@ ExecStart=/usr/bin/dotnet $REMOTE_PATH/MajakServer.dll
 Restart=always
 RestartSec=10
 SyslogIdentifier=$SERVICE
-User=ubuntu
+User=$USER
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=ASPNETCORE_URLS=http://localhost:$PORT
-Environment=AWS__ParameterStore__Enabled=false
-Environment="ConnectionStrings__GameDatabase=$GAME_DB_CONNECTION"
-Environment="ConnectionStrings__LogDatabase=$LOG_DB_CONNECTION"
-Environment="Redis__ConnectionString=$REDIS_CONNECTION"
+Environment=AWS__Region=$AWS_REGION
 
 [Install]
 WantedBy=multi-user.target
@@ -100,7 +80,7 @@ Invoke-Ssh "sleep 8 ; sudo fuser -k ${PORT}/tcp 2>/dev/null || true ; sleep 3"
 Invoke-Ssh "sudo mkdir -p $REMOTE_PATH"
 Invoke-Ssh "sudo rm -rf $REMOTE_PATH/*"
 Invoke-Ssh "sudo unzip -o ~/$ZIP_NAME -d $REMOTE_PATH > /dev/null 2>&1; true"
-Invoke-Ssh "sudo chown -R ubuntu:ubuntu $REMOTE_PATH"
+Invoke-Ssh "sudo chown -R ${USER}:${USER} $REMOTE_PATH"
 Invoke-Ssh "rm ~/$ZIP_NAME"
 Invoke-Ssh "sudo systemctl start $SERVICE"
 

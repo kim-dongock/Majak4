@@ -57,6 +57,7 @@ public class ChannelRepository
                 master.MaxRoom,
                 master.ChannelType,
                 master.UnitMoney,
+                master.ServerUrl,
                 MemberCount = runtime == null ? (ushort)0 : runtime.MemberCount,
                 UsedRoom = runtime == null ? (ushort)0 : runtime.UsedRoom,
                 IsLocked = runtime != null && runtime.IsLocked,
@@ -70,6 +71,7 @@ public class ChannelRepository
             MaxRoom = checked((int)row.MaxRoom),
             ChanelType = row.ChannelType,
             UnitMoney = checked((int)row.UnitMoney),
+            ServerUrl = row.ServerUrl,
             MemberCnt = row.MemberCount,
             UsedRoom = row.UsedRoom,
             IsLocked = row.IsLocked,
@@ -103,10 +105,73 @@ public class ChannelRepository
             MaxRoom    = c.MaxRoom,
             ChanelType = c.ChanelType,
             UnitMoney  = c.UnitMoney,
+            ServerUrl  = c.ServerUrl,
             MemberCnt  = c.MemberCnt,
             UsedRoom   = c.UsedRoom,
             IsLocked   = c.IsLocked,
         }).ToList();
+
+    public async Task<ChannelAdminInfo?> GetChannelAsync(string channelId, string gameId = "MAJAK4")
+    {
+        await using var db = await _gameDb.CreateAsync();
+        return await db.ChannelMasters.AsNoTracking()
+            .Where(channel => channel.GameId == gameId
+                && (channel.ChannelId == channelId || channel.SubId == channelId))
+            .Select(channel => new ChannelAdminInfo
+            {
+                ChannelId = channel.ChannelId,
+                SubId = channel.SubId,
+                ChannelName = channel.ChannelName,
+                MaxMember = checked((int)channel.MaxMember),
+                MaxRoom = checked((int)channel.MaxRoom),
+                UnitMoney = checked((int)channel.UnitMoney),
+                ChannelType = channel.ChannelType,
+                IsActive = channel.IsActive,
+                ServerUrl = channel.ServerUrl,
+            })
+            .FirstOrDefaultAsync();
+    }
+
+    public async Task<IReadOnlyList<ChannelAdminInfo>> GetAdminChannelListAsync(string gameId = "MAJAK4")
+    {
+        await using var db = await _gameDb.CreateAsync();
+        return await db.ChannelMasters.AsNoTracking()
+            .Where(channel => channel.GameId == gameId)
+            .OrderBy(channel => channel.SubId)
+            .ThenBy(channel => channel.ChannelId)
+            .Select(channel => new ChannelAdminInfo
+            {
+                ChannelId = channel.ChannelId,
+                SubId = channel.SubId,
+                ChannelName = channel.ChannelName,
+                MaxMember = checked((int)channel.MaxMember),
+                MaxRoom = checked((int)channel.MaxRoom),
+                UnitMoney = checked((int)channel.UnitMoney),
+                ChannelType = channel.ChannelType,
+                IsActive = channel.IsActive,
+                ServerUrl = channel.ServerUrl,
+            })
+            .ToListAsync();
+    }
+
+    public async Task<ChannelAdminInfo?> UpdateChannelAsync(string channelId, ChannelAdminUpdate update)
+    {
+        await using var db = await _gameDb.CreateAsync();
+        var channel = await db.ChannelMasters.FirstOrDefaultAsync(item => item.ChannelId == channelId && item.GameId == "MAJAK4");
+        if (channel is null) return null;
+
+        channel.ChannelName = update.ChannelName.Trim();
+        channel.MaxMember = checked((uint)update.MaxMember);
+        channel.MaxRoom = checked((uint)update.MaxRoom);
+        channel.UnitMoney = checked((uint)update.UnitMoney);
+        channel.ChannelType = checked((byte)update.ChannelType);
+        channel.IsActive = update.IsActive;
+        channel.ServerUrl = update.ServerUrl.Trim().TrimEnd('/');
+        channel.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        await _redis.InvalidateAsync(MasterCacheService.KeyChannels);
+        return await GetChannelAsync(channelId);
+    }
 
     public static string RepairDisplayName(string subId, string chanelName)
     {
@@ -188,6 +253,8 @@ public sealed class ChannelInfo
     public int    ChanelType { get; init; }
     /// <summary>単位マネー (室料計算用)</summary>
     public int    UnitMoney  { get; init; }
+    /// <summary>担当ゲームサーバーの公開 URL</summary>
+    public string ServerUrl  { get; init; } = "";
     /// <summary>現在接続人数 (CHANELWT.MEMBERCNT)</summary>
     public int    MemberCnt  { get; init; }
     /// <summary>使用中ルーム数 (CHANELWT.USEDROOM)</summary>
@@ -195,3 +262,25 @@ public sealed class ChannelInfo
     /// <summary>ロック中フラグ (LOCKSTATE != 0)</summary>
     public bool   IsLocked   { get; init; }
 }
+
+public sealed class ChannelAdminInfo
+{
+    public string ChannelId { get; init; } = "";
+    public string SubId { get; init; } = "";
+    public string ChannelName { get; init; } = "";
+    public int MaxMember { get; init; }
+    public int MaxRoom { get; init; }
+    public int UnitMoney { get; init; }
+    public int ChannelType { get; init; }
+    public bool IsActive { get; init; }
+    public string ServerUrl { get; init; } = "";
+}
+
+public sealed record ChannelAdminUpdate(
+    string ChannelName,
+    int MaxMember,
+    int MaxRoom,
+    int UnitMoney,
+    int ChannelType,
+    bool IsActive,
+    string ServerUrl);

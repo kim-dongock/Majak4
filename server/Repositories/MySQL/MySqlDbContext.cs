@@ -59,18 +59,15 @@ public abstract class MySqlDbContextBase
 
     private async Task<string> BuildConnectionStringAsync()
     {
+        string connectionName = _role == MySqlDatabaseRole.Game ? "GameDatabase" : "LogDatabase";
+        string? configuredConnectionString = _configuration.GetConnectionString(connectionName);
+        if (!string.IsNullOrWhiteSpace(configuredConnectionString))
+            return configuredConnectionString;
+
         bool parameterStoreEnabled = _configuration.GetValue<bool>("AWS:ParameterStore:Enabled");
         if (!parameterStoreEnabled)
-        {
-            string connectionName = _role == MySqlDatabaseRole.Game ? "GameDatabase" : "LogDatabase";
-            string? localConnectionString = _configuration.GetConnectionString(connectionName);
-            if (!string.IsNullOrWhiteSpace(localConnectionString))
-                return localConnectionString;
-
             throw new InvalidOperationException(
-                $"MySQL {_role} database connection is not configured. " +
-                $"Set ConnectionStrings:{connectionName} when AWS:ParameterStore:Enabled is false.");
-        }
+                $"MySQL {_role} database connection is not configured. Set ConnectionStrings:{connectionName}.");
 
         var config = await _parameterStore.GetParameterConfigAsync();
         var values = _role == MySqlDatabaseRole.Game
@@ -91,11 +88,6 @@ public abstract class MySqlDbContextBase
         if (string.IsNullOrWhiteSpace(host) || string.IsNullOrWhiteSpace(database)
             || string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(password))
         {
-            string connectionName = _role == MySqlDatabaseRole.Game ? "GameDatabase" : "LogDatabase";
-            string? localConnectionString = _configuration.GetConnectionString(connectionName);
-            if (!string.IsNullOrWhiteSpace(localConnectionString))
-                return localConnectionString;
-
             throw new InvalidOperationException(
                 $"MySQL {_role} database connection is not configured. " +
                 $"Set mysql_{_role.ToString().ToLowerInvariant()}_* in Parameter Store or ConnectionStrings:{connectionName}.");

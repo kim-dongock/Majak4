@@ -5,14 +5,14 @@ using StackExchange.Redis;
 namespace MajakServer.Services;
 
 /// <summary>
-/// ゲームサーバー負荷管理 — Redis で各サーバーのルーム数を管理し、
-/// ルーム作成時に最小ルーム数のサーバー URL を返す。
+/// ゲームサーバー実行状態管理 — Redis で各サーバーの heartbeat、ルーム数、
+/// チャンネル実行リースを管理する。
 ///
 /// Redis キー:
 ///   game:servers          ZSET  member=serverUrl  score=lastSeenUnixTime
 ///   game:server:roomcounts HASH  field=serverUrl   value=roomCount
 ///
-/// Redis が利用不可の場合は ChannelServerSettings.ServerUrl を返す (フォールバック)。
+/// チャンネルの割り当て先は channel_master.server_url を正本とし、このサービスでは選択しない。
 /// AP-04 §8 参照。
 /// </summary>
 public class ServerLoadService
@@ -21,7 +21,6 @@ public class ServerLoadService
         local current = redis.call('GET', KEYS[1])
         if not current then
             redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2])
-            redis.call('HINCRBY', KEYS[2], ARGV[1], 1)
             return 1
         end
         if current == ARGV[1] then
@@ -42,10 +41,13 @@ public class ServerLoadService
     private const string ReleaseChannelLeaseScript = """
         if redis.call('GET', KEYS[1]) == ARGV[1] then
             redis.call('DEL', KEYS[1])
-            redis.call('HINCRBY', KEYS[2], ARGV[1], -1)
             return 1
         end
         return 0
+        """;
+
+    private const string ResetChannelLeaseScript = """
+        return redis.call('DEL', KEYS[1])
         """;
 
     private const string ServersKey   = "game:servers";
@@ -54,13 +56,15 @@ public class ServerLoadService
     // サーバーが最後に報告してから何秒以内なら「生存」とみなすか
     private const int AliveThresholdSeconds = 30;
 
-    private readonly RedisService          _redis;
-    private readonly ChannelServerSettings _settings;
+    private readonly RedisService _redis;
+    private readonly ILogger<ServerLoadService>? _logger;
+    private int _unavailableLogged;
+    private int _registrationLogged;
 
-    public ServerLoadService(RedisService redis, ChannelServerSettings settings)
+    public ServerLoadService(RedisService redis, ILogger<ServerLoadService>? logger = null)
     {
-        _redis    = redis;
-        _settings = settings;
+        _redis = redis;
+        _logger = logger;
     }
 
     /// <summary>
@@ -69,7 +73,19 @@ public class ServerLoadService
     /// </summary>
     public async Task RegisterSelfAsync(string serverUrl, int roomCount)
     {
-        if (!_redis.IsAvailable) return;
+        if (!_redis.IsAvailable)
+        {
+            if (Interlocked.Exchange(ref _unavailableLogged, 1) == 0)
+                _logger?.LogWarning(
+                    "Server heartbeat skipped because Redis is unavailable. serverUrl={ServerUrl}",
+                    serverUrl);
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _unavailableLogged, 0) == 1)
+            _logger?.LogInformation(
+                "Server heartbeat resumed after Redis became available. serverUrl={ServerUrl}",
+                serverUrl);
 
         double now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var db = _redis.Db!;
@@ -79,6 +95,19 @@ public class ServerLoadService
 
         // HSET game:server:roomcounts <serverUrl> <roomCount>
         await db.HashSetAsync(RoomCountKey, serverUrl, roomCount);
+
+        if (Interlocked.Exchange(ref _registrationLogged, 1) == 0)
+            _logger?.LogInformation(
+                "Server heartbeat registered in Redis. serverUrl={ServerUrl} roomCount={RoomCount} timestamp={Timestamp}",
+                serverUrl,
+                roomCount,
+                now);
+        else
+            _logger?.LogDebug(
+                "Server heartbeat refreshed in Redis. serverUrl={ServerUrl} roomCount={RoomCount} timestamp={Timestamp}",
+                serverUrl,
+                roomCount,
+                now);
 
         // 古いエントリを掃除 (AliveThreshold の 2 倍以上古いもの)
         var staleServers = await db.SortedSetRangeByScoreAsync(
@@ -103,122 +132,61 @@ public class ServerLoadService
         var db = _redis.Db!;
         await db.SortedSetRemoveAsync(ServersKey, serverUrl);
         await db.HashDeleteAsync(RoomCountKey, serverUrl);
+        await db.HashDeleteAsync(ChannelCountKey, serverUrl);
     }
 
-    /// <summary>
-    /// ルーム数が最小の生存サーバー URL を返す。
-    /// Redis が利用不可または生存サーバーなし → ChannelServerSettings.ServerUrl を返す。
-    /// </summary>
-    public async Task<string> GetBestServerAsync()
+    public async Task<bool> IsServerActiveAsync(string serverUrl)
     {
-        if (!_redis.IsAvailable) return _settings.ServerUrl;
-
-        double now   = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        double since = now - AliveThresholdSeconds;
-        var    db    = _redis.Db!;
-
-        // 生存サーバー一覧
-        var aliveEntries = await db.SortedSetRangeByScoreAsync(
-            ServersKey, since, double.PositiveInfinity);
-
-        if (aliveEntries.Length == 0) return _settings.ServerUrl;
-
-        var serverUrls  = aliveEntries.Select(e => (string)e!).ToArray();
-
-        // ルーム数を一括取得
-        var countValues = await db.HashGetAsync(
-            RoomCountKey,
-            serverUrls.Select(u => (RedisValue)u).ToArray());
-
-        string bestUrl  = serverUrls[0];
-        int    bestCnt  = int.MaxValue;
-
-        for (int i = 0; i < serverUrls.Length; i++)
+        if (string.IsNullOrWhiteSpace(serverUrl))
         {
-            int cnt = countValues[i].TryParse(out int v) ? v : int.MaxValue;
-            if (cnt < bestCnt)
-            {
-                bestCnt = cnt;
-                bestUrl = serverUrls[i];
-            }
+            _logger?.LogWarning("Server activity check rejected an empty server URL.");
+            return false;
+        }
+        if (!_redis.IsAvailable)
+        {
+            _logger?.LogWarning(
+                "Server activity check failed because Redis is unavailable. serverUrl={ServerUrl}",
+                serverUrl);
+            return false;
         }
 
-        return bestUrl;
+        var lastSeen = await _redis.Db!.SortedSetScoreAsync(ServersKey, serverUrl);
+        var threshold = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - AliveThresholdSeconds;
+        var isActive = lastSeen.HasValue && lastSeen.Value >= threshold;
+        if (!isActive)
+            _logger?.LogWarning(
+                "Server is inactive in Redis. serverUrl={ServerUrl} lastSeen={LastSeen} threshold={Threshold}",
+                serverUrl,
+                lastSeen,
+                threshold);
+        else
+            _logger?.LogDebug(
+                "Server is active in Redis. serverUrl={ServerUrl} lastSeen={LastSeen}",
+                serverUrl,
+                lastSeen);
+        return isActive;
     }
 
-    // ─── チャンネル動的サーバー割り当て (Redis Lease) ─────────────────────
+    public async Task ResetChannelLeaseAsync(string chanelId)
+    {
+        if (!_redis.IsAvailable || string.IsNullOrWhiteSpace(chanelId)) return;
+
+        await _redis.Db!.ScriptEvaluateAsync(
+            ResetChannelLeaseScript,
+            new RedisKey[] { string.Format(ChannelServerKey, chanelId) });
+    }
+
+    // ─── DB 割り当て済みチャンネルの実行リース ───────────────────────────
     //
     // Redis キー:
     //   channel:{chanelId}:server     STRING TTL=60s  このチャンネルを担当するサーバー URL
     //   game:server:channelcounts     HASH   serverUrl → 担当チャンネル数
     //
-    // 割り当てアルゴリズム:
-    //   1. channel:{id}:server が存在すれば即返す (キャッシュヒット)
-    //   2. 存在しなければ alive サーバーのうち channelcount 最小のサーバーを選ぶ
-    //   3. SET NX EX 60 でアトミックに書き込む (レースコンディション防止)
-    //   4. NX 失敗 (他サーバーが先に書いた) なら GET し直して返す
+    // channel_master.server_url と一致するサーバーだけが、入場時にこのリースを取得する。
 
     private const string ChannelServerKey  = "channel:{0}:server";
     private const string ChannelCountKey   = "game:server:channelcounts";
     private static readonly TimeSpan ChannelLeaseTtl = TimeSpan.FromSeconds(60);
-
-    /// <summary>
-    /// 指定チャンネルを担当するサーバー URL を返す。
-    /// Redis に割り当て済みなら即返し、なければ動的割り当てを行う。
-    /// Redis が利用不可の場合は ChannelServerSettings.ServerUrl を返す。
-    /// </summary>
-    public async Task<string> ResolveChannelServerAsync(string chanelId)
-    {
-        if (!_redis.IsAvailable) return _settings.ServerUrl;
-
-        var db  = _redis.Db!;
-        var key = string.Format(ChannelServerKey, chanelId);
-
-        // 1. キャッシュヒット
-        var cached = await db.StringGetAsync(key);
-        if (cached.HasValue) return (string)cached!;
-
-        // 2. alive サーバー一覧を取得
-        double now   = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        double since = now - AliveThresholdSeconds;
-
-        var aliveEntries = await db.SortedSetRangeByScoreAsync(
-            ServersKey, since, double.PositiveInfinity);
-
-        if (aliveEntries.Length == 0) return _settings.ServerUrl;
-
-        var serverUrls = aliveEntries.Select(e => (string)e!).ToArray();
-
-        // 3. 各サーバーの担当チャンネル数を取得
-        var channelCounts = await db.HashGetAsync(
-            ChannelCountKey,
-            serverUrls.Select(u => (RedisValue)u).ToArray());
-
-        string selectedUrl = serverUrls[0];
-        int    minCount    = int.MaxValue;
-
-        for (int i = 0; i < serverUrls.Length; i++)
-        {
-            int cnt = channelCounts[i].TryParse(out int v) ? v : 0;
-            if (cnt < minCount)
-            {
-                minCount    = cnt;
-                selectedUrl = serverUrls[i];
-            }
-        }
-
-        // 4. リース取得と担当数加算を Lua で原子的に実行
-        bool claimed = await ClaimChannelLeaseAsync(db, key, selectedUrl);
-
-        if (!claimed)
-        {
-            // 他サーバーが先に書いた → 改めて GET
-            var winner = await db.StringGetAsync(key);
-            return winner.HasValue ? (string)winner! : selectedUrl;
-        }
-
-        return selectedUrl;
-    }
 
     /// <summary>
     /// このサーバーがチャンネルを担当していることを Redis に登録する。
@@ -282,9 +250,10 @@ public class ServerLoadService
         {
             await db.ScriptEvaluateAsync(
                 ReleaseChannelLeaseScript,
-                new RedisKey[] { string.Format(ChannelServerKey, id), ChannelCountKey },
+                new RedisKey[] { string.Format(ChannelServerKey, id) },
                 new RedisValue[] { serverUrl });
         }
+        await db.HashSetAsync(ChannelCountKey, serverUrl, 0);
     }
 
     private static async Task<bool> ClaimChannelLeaseAsync(
@@ -292,7 +261,7 @@ public class ServerLoadService
     {
         long claimed = (long)await db.ScriptEvaluateAsync(
             ClaimChannelLeaseScript,
-            new RedisKey[] { key, ChannelCountKey },
+            new RedisKey[] { key },
             new RedisValue[] { serverUrl, (long)ChannelLeaseTtl.TotalMilliseconds });
         return claimed == 1;
     }

@@ -29,7 +29,7 @@ interface Props {
 }
 
 export default function PaifuSaveDlg({
-  defaultFileName = 'Majak2Paifu.txt',
+  defaultFileName = 'Majak4Paifu.txt',
   initialComment = '',
   onSave,
   onCancel,
@@ -58,7 +58,7 @@ export default function PaifuSaveDlg({
               type="text"
               value={fileName}
               onChange={e => setFileName(e.target.value)}
-              placeholder="Majak2Paifu.txt"
+              placeholder="Majak4Paifu.txt"
             />
           </label>
           <fieldset className="majak-mobile-dialog-section majak-paifu-save-dialog__scope">

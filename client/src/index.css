@@ -545,7 +545,7 @@ button.majak-press-feedback {
   line-height: var(--majak-popup-leading-body);
 }
 
-@media (max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse) {
+@media (max-width: 768px), (orientation: landscape) and (max-height: 540px) {
   .majak-popup-panel > .majak-ending-popup__body > p {
     font-size: var(--majak-text-sm);
   }
@@ -1207,7 +1207,7 @@ button.majak-press-feedback {
 .majak-type-xl { font-size: var(--majak-text-xl); line-height: var(--majak-leading-tight); }
 .majak-type-display { font-size: var(--majak-text-display); line-height: var(--majak-leading-tight); }
 
-@media (max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse) {
+@media (max-width: 768px), (orientation: landscape) and (max-height: 540px) {
   :root {
     --majak-text-xs: calc(12px * var(--majak-type-scale));
     --majak-text-sm: calc(14px * var(--majak-type-scale));
@@ -3130,11 +3130,12 @@ body {
 
 /* The title and lobby selectors use the desktop markup at every viewport.
    Preserve its two-column composition on phone landscape screens and only compact it. */
-@media (max-width: 900px) and (orientation: landscape) {
+@media (max-width: 1024px) and (orientation: landscape) and (max-height: 540px) {
   .majak-mobile-frame__content > .majak-desktop-channel-group,
   .majak-mobile-frame__content > .majak-desktop-lobby-select {
     --majak-type-scale: .78;
-    min-height: 100%;
+    height: 100%;
+    min-height: 0;
     padding: 8px 12px;
     gap: 8px;
   }
@@ -3605,6 +3606,12 @@ body:has(.majak-game-screen) {
   align-items: flex-start;
 }
 
+@media (min-width: 769px) and (max-width: 1366px) and (min-height: 541px) and (pointer: coarse) {
+  .majak-responsive-desktop-frame {
+    width: 100vw !important;
+  }
+}
+
 .majak-ingame-viewport {
   width: 100vw;
   height: 100vh;
@@ -3832,6 +3839,88 @@ body:has(.majak-game-screen) {
   max-width: clamp(72px, 18vw, 140px);
 }
 
+.majak-mobile-frame__bar > .majak-frame-player-balances {
+  width: auto;
+  min-width: 0;
+  margin-left: clamp(18px, 3vw, 24px);
+  flex: 0 1 auto;
+  grid-template-columns: max-content 30px;
+  column-gap: 8px;
+  row-gap: 3px;
+  position: relative;
+  z-index: 4;
+}
+
+.majak-mobile-frame__bar .majak-frame-player-balances > .majak-frame-player-balances__name {
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-columns: 88px minmax(0, 1fr);
+}
+
+.majak-mobile-frame__bar .majak-frame-player-balances__detail {
+  display: none;
+  transform: none;
+}
+
+.majak-mobile-frame__bar .majak-frame-player-balances.is-expanded .majak-frame-player-balances__detail {
+  display: grid;
+  position: absolute;
+  left: 0;
+  right: 32px;
+  width: auto;
+  grid-column: 1 / -1;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 5px;
+  padding: 3px 0;
+  box-sizing: border-box;
+  background: rgba(8, 37, 18, .96);
+  box-shadow: inset 1px 0 rgba(200, 223, 160, .5), inset -1px 0 rgba(200, 223, 160, .5);
+  transform: none;
+}
+
+.majak-mobile-frame__bar .majak-frame-player-balances.is-expanded .majak-frame-player-balances__mp {
+  top: calc(100% + 12px);
+  border-top: 1px solid rgba(200, 223, 160, .5);
+  border-radius: 3px 3px 0 0;
+}
+
+.majak-mobile-frame__bar .majak-frame-player-balances.is-expanded .majak-frame-player-balances__gp {
+  top: calc(100% + 40px);
+  border-bottom: 1px solid rgba(200, 223, 160, .5);
+  border-radius: 0 0 3px 3px;
+  transform: none;
+}
+
+.majak-mobile-frame .majak-frame-player-balances__toggle {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: stretch;
+  width: 30px;
+  min-height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(200, 223, 160, .72);
+  border-radius: 3px;
+  color: #f4f7e9;
+  background: rgba(11, 67, 35, .68);
+  font: inherit;
+  cursor: pointer;
+}
+
+.majak-mobile-frame .majak-frame-player-balances__toggle span {
+  width: 8px;
+  height: 8px;
+  display: block;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+}
+
+.majak-mobile-frame .majak-frame-player-balances.is-expanded .majak-frame-player-balances__toggle span {
+  transform: translateY(2px) rotate(225deg);
+}
+
 .majak-mobile-frame .majak-desktop-lobby-select__user-summary {
   display: none;
 }
@@ -4047,6 +4136,7 @@ body:has(.majak-game-screen) {
   background: rgba(17, 82, 35, 0.88);
   font-size: var(--majak-font-14);
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .majak-mobile-frame__content {
@@ -4064,6 +4154,10 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-frame__content:has(.majak-mobile-lobby-screen) {
+  overflow: hidden;
+}
+
+.majak-mobile-frame__content:has(> .majak-desktop-channel-group) {
   overflow: hidden;
 }
 
@@ -4105,7 +4199,7 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-ingame-shell canvas {
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 
 .majak-mobile-ingame-tool-drawer {
@@ -5253,88 +5347,6 @@ body:has(.majak-game-screen) {
 
   .majak-mobile-frame__brand-compact {
     display: inline;
-  }
-
-  .majak-mobile-frame__bar > .majak-frame-player-balances {
-    width: auto;
-    min-width: 0;
-    margin-left: clamp(10px, 2vw, 16px);
-    flex: 0 1 auto;
-    grid-template-columns: max-content 30px;
-    column-gap: 2px;
-    row-gap: 3px;
-    position: relative;
-    z-index: 4;
-  }
-
-  .majak-mobile-frame__bar .majak-frame-player-balances > .majak-frame-player-balances__name {
-    grid-column: 1;
-    grid-row: 1;
-    grid-template-columns: 88px minmax(0, 1fr);
-  }
-
-  .majak-mobile-frame__bar .majak-frame-player-balances__detail {
-    display: none;
-    transform: none;
-  }
-
-  .majak-mobile-frame__bar .majak-frame-player-balances.is-expanded .majak-frame-player-balances__detail {
-    display: grid;
-    position: absolute;
-    left: 0;
-    right: 32px;
-    width: auto;
-    grid-column: 1 / -1;
-    grid-template-columns: 88px minmax(0, 1fr);
-    gap: 5px;
-    padding: 3px 0;
-    box-sizing: border-box;
-    background: rgba(8, 37, 18, .96);
-    box-shadow: inset 1px 0 rgba(200, 223, 160, .5), inset -1px 0 rgba(200, 223, 160, .5);
-    transform: none;
-  }
-
-  .majak-mobile-frame__bar .majak-frame-player-balances.is-expanded .majak-frame-player-balances__mp {
-    top: calc(100% + 12px);
-    border-top: 1px solid rgba(200, 223, 160, .5);
-    border-radius: 3px 3px 0 0;
-  }
-
-  .majak-mobile-frame__bar .majak-frame-player-balances.is-expanded .majak-frame-player-balances__gp {
-    top: calc(100% + 40px);
-    border-bottom: 1px solid rgba(200, 223, 160, .5);
-    border-radius: 0 0 3px 3px;
-    transform: none;
-  }
-
-  .majak-frame-player-balances__toggle {
-    grid-column: 2;
-    grid-row: 1;
-    align-self: stretch;
-    width: 30px;
-    min-height: 22px;
-    display: grid;
-    place-items: center;
-    padding: 0;
-    border: 1px solid rgba(200, 223, 160, .72);
-    border-radius: 3px;
-    color: #f4f7e9;
-    background: rgba(11, 67, 35, .68);
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .majak-frame-player-balances__toggle span {
-    width: 8px;
-    height: 8px;
-    display: block;
-    border-right: 2px solid currentColor;
-    border-bottom: 2px solid currentColor;
-    transform: translateY(-2px) rotate(45deg);
-  }
-
-  .majak-frame-player-balances.is-expanded .majak-frame-player-balances__toggle span {
-    transform: translateY(2px) rotate(225deg);
   }
 
   .majak-mobile-frame__tools button {
@@ -8206,7 +8218,7 @@ body:has(.majak-game-screen) {
   }
 }
 
-@media (orientation: landscape) and (max-height: 430px) {
+@media (orientation: landscape) and (max-height: 440px) {
   .majak-mobile-frame__content > .majak-desktop-channel-group {
     --majak-type-scale: .7;
     gap: 5px;
@@ -8215,7 +8227,7 @@ body:has(.majak-game-screen) {
 
   .majak-mobile-frame .majak-desktop-channel-group__header {
     align-self: center;
-    transform: translateY(-8px);
+    transform: translateY(-12px);
   }
 
   .majak-mobile-frame .majak-desktop-channel-group__logo {
@@ -8244,7 +8256,7 @@ body:has(.majak-game-screen) {
   .majak-mobile-frame .majak-desktop-channel-group__menu {
     margin-top: 4px;
     row-gap: 12px;
-    transform: translateY(-12px);
+    transform: translateY(-16px);
   }
 
   .majak-mobile-frame .majak-desktop-channel-group__action {
@@ -9607,7 +9619,7 @@ body:has(.majak-result-overlay) {
   .majak-currency-history fieldset { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-@media (max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse) {
+@media (max-width: 768px), (orientation: landscape) and (max-height: 540px) {
   .majak-currency-history { --majak-currency-history-meta-font-size: var(--majak-text-xs); }
 }
 
@@ -10414,7 +10426,7 @@ body :is(
   font-weight: 400;
 }
 
-@media (max-width: 768px), (orientation: landscape) and (max-height: 540px), (max-width: 1023px) and (pointer: coarse) {
+@media (max-width: 768px), (orientation: landscape) and (max-height: 540px) {
   .majak-collection-tabs button,
   .majak-popup-panel.majak-mobile-config-dialog .majak-mobile-config-tabs button {
     font-size: var(--majak-text-sm);

@@ -22,11 +22,14 @@ internal static class TestTournamentServiceFactory
             new Mock<PlayerRepository>(MockBehavior.Loose).Object,
             new RatingService()));
         var provider = services.BuildServiceProvider();
+        var masterCache = TestMasterCacheFactory.Create();
 
         return new TournamentService(
             provider.GetRequiredService<IServiceScopeFactory>(),
             session ?? new PlayerSessionService(),
             hub ?? new Mock<IHubContext<MajakGameHub>>().Object,
+            new RoomRegistryService(TestMasterCacheFactory.CreateRedisService()),
+            masterCache,
             logger ?? new Mock<ILogger<TournamentService>>().Object);
     }
 }

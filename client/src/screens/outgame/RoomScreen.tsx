@@ -29,6 +29,7 @@ import { MAJAK_ACCUSE_EVENT } from '../../components/MajakFrame'
 import GameReconnectLoading from '../../components/GameReconnectLoading'
 import CfgDlg, { loadMajakConfig, saveMajakConfig, type MJConfig } from './dialogs/CfgDlg'
 import AccuseDlg from './dialogs/AccuseDlg'
+import LevelupDlg from './dialogs/LevelupDlg'
 import PlayerInfoWnd, { type PlayerInfo as PlayerInfoDialogData } from './dialogs/PlayerInfoWnd'
 import ViewerListWnd, { type ViewerEntry } from '../ingame/ViewerListWnd'
 import SlideAnnounce, { type SlideAnnounceData } from '../ingame/SlideAnnounce'
@@ -39,7 +40,7 @@ import { FORCED_KYO_RESULT, FORCE_KYO_RESULT_FOR_TEST } from '../ingame/forcedKy
 import MiniChannelWnd from './MiniChannelWnd'
 import { getAvatarUrl, getDefaultAvatarUrl, getShortAvatarUrl, handleShortAvatarError } from '../../utils/resources'
 import { configureMajakSound, playMajakChat, playMajakSid, SID_EXIT, SID_JOIN } from '../../utils/majakSound'
-import { createGame, destroyGame, GAME_HEIGHT, GAME_WIDTH, suspendGame } from '../../game/GameInstance'
+import { createGame, destroyGame, freezeGameFrame, GAME_HEIGHT, GAME_WIDTH, suspendGame } from '../../game/GameInstance'
 import { shouldRequestInitialGameResync } from '../../game/resyncState'
 import {
   GAME_AUTO_CONTROL_EVENT,
@@ -802,6 +803,7 @@ export default function RoomScreen() {
   const [forcedHanResultDismissed, setForcedHanResultDismissed] = useState(false)
   const displayedHanResData = FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed ? FORCED_HAN_RESULT : hanResData
   const [hanResFlags, setHanResFlags] = useState({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
+  const [levelUp, setLevelUp] = useState<{ level: number; lentMoney: number } | null>(null)
   const [kyoResData, setKyoResData] = useState<KyoResData | null>(null)
   const [kyoResultAction, setKyoResultAction] = useState<{
     roomId: string
@@ -849,6 +851,7 @@ export default function RoomScreen() {
   const viewersRef = useRef<ViewerEntry[]>([])
   const messageSeqRef = useRef(0)
   const gameNavigatedRef = useRef(false)
+  const gameReportHandledRef = useRef(false)
   const roomActionSentKeyRef = useRef('')
   const reconnectSetupSerialRef = useRef(0)
   const exitingRoomRef = useRef(false)
@@ -958,6 +961,19 @@ export default function RoomScreen() {
     setAutoControl(resetAutoControl)
     setKyoResData(null)
     setKyoResultAction(null)
+    setMobileIngameChatOpen(false)
+    setMobileIngameToolOpen(false)
+  }
+  const holdInlineGameForResults = (reason: string) => {
+    inlineGameEndedRef.current = true
+    inlineGameLoadingVisibleRef.current = false
+    logRejoinProbe('inline game held for results', { reason })
+    freezeGameFrame()
+    setInlineGameLoading(false)
+    setKyoResData(null)
+    setKyoResultAction(null)
+    setKyoResultSubmitted(false)
+    setKyoResultProgress({})
     setMobileIngameChatOpen(false)
     setMobileIngameToolOpen(false)
   }
@@ -1364,6 +1380,11 @@ export default function RoomScreen() {
         }
       }
       if (Number(data.state ?? -1) === 2) {
+        gameReportHandledRef.current = false
+        setHanResData(null)
+        setLevelUp(null)
+        setAnnounceData(null)
+        setPendingAnnounces([])
         inlineGameLoadingVisibleRef.current = true
         setInlineGameLoading(true)
         setInlineGame(true)
@@ -1634,6 +1655,7 @@ export default function RoomScreen() {
         void exitRoomToLobby(seatPos)
         return
       }
+      if (gameReportHandledRef.current) return
       finishInlineGame('mjkroom game_ended')
     }
     SignalR.on('mjkroom', onRoomState)
@@ -1644,12 +1666,16 @@ export default function RoomScreen() {
      */
     const onGameReport = (data: Record<string, unknown>) => {
       if (!mounted) return
+      const reportRoomId = String(data.roomId ?? data.k42e ?? '')
+      if (roomId && reportRoomId && roomId !== reportRoomId) return
       if (Number(data.result) !== 1) {
         finishInlineGame('c32e game report failure')
         setHanResData(null)
         setStatusLog(prev => appendRoomLog(prev, { id: nextMessageId(), name: '', text: 'ゲーム結果の取得に失敗しました。', color: legacyPalette.error, bold: true }))
         return
       }
+      if (gameReportHandledRef.current) return
+      gameReportHandledRef.current = true
       const myPix = useAuthStore.getState().player?.pix ?? ''
       const players = readHanResPlayers(data, myPix)
       const shouldAutoExit = autoControlRef.current.prox
@@ -1668,22 +1694,31 @@ export default function RoomScreen() {
         result: myResult ? `${myResult.rank + 1}位` : '',
         members: players.map(player => ({ name: player.name, result: `${player.rank + 1}位` })),
       })
-      finishInlineGame('c32e game report')
       if (shouldAutoExit) {
         void exitRoomToLobby(seatPos)
         return
       }
       const isViewerResult = locState.mode === 'view'
         || !playersRef.current.some(player => player.playerId === myPix)
-      setHanResFlags({
+      const nextHanResFlags = {
         hasTor: Boolean(data.hasTor),
         hasTip: Boolean(data.hasTip),
         isViewer: isViewerResult,
         isTournament: Boolean(data.isTournament),
-      })
+      }
+      setHanResFlags(nextHanResFlags)
+      const currentLevel = myResult?.nlevel
+      const previousLevel = myResult?.prevNlevel
+      const shouldShowLevelUp = !nextHanResFlags.isViewer
+        && !nextHanResFlags.isTournament
+        && currentLevel !== undefined
+        && previousLevel !== undefined
+        && currentLevel > previousLevel
+      setLevelUp(shouldShowLevelUp ? { level: currentLevel, lentMoney: myResult?.lentMoney ?? 0 } : null)
       gameEndStatusLines(data).forEach(line => {
         setStatusLog(prev => appendRoomLog(prev, { id: nextMessageId(), name: '', text: line, color: legacyPalette.normal, bold: true }))
       })
+      holdInlineGameForResults('c32e game report')
       setHanResData(players)
     }
     SignalR.on('c32e', onGameReport)
@@ -1691,6 +1726,7 @@ export default function RoomScreen() {
     const onGamePlay = (data: Record<string, unknown>) => {
       if (!mounted) return
       if (data.playType === 'MJPID_INIHAN' || data.playType === 'MJPID_INIKYO') {
+        if (data.playType === 'MJPID_INIHAN') gameReportHandledRef.current = false
         if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
         kyoResultTimerRef.current = null
         setKyoResData(null)
@@ -1870,8 +1906,12 @@ export default function RoomScreen() {
       advanceGameLoad('resources', { trigger: 'navigateToGame' })
       gameNavigatedRef.current = true
       inlineGameEndedRef.current = false
+      gameReportHandledRef.current = false
       setHanResData(null)
       setHanResFlags({ hasTor: false, hasTip: false, isViewer: false, isTournament: false })
+      setLevelUp(null)
+      setAnnounceData(null)
+      setPendingAnnounces([])
       setIsReady(false)
       setPlayers(prev => prev.map(player => ({ ...player, ready: false })))
       logRejoinProbe('navigateToGame / set inlineGame true')
@@ -2505,7 +2545,9 @@ export default function RoomScreen() {
     setHanResData(null)
     if (hanResFlags.isViewer) {
       void exitRoomToLobby(undefined, true)
+      return
     }
+    finishInlineGame('han result closed')
   }
   const dispatchAutoControl = (state: AutoControlState) => {
     window.dispatchEvent(new CustomEvent(GAME_AUTO_CONTROL_EVENT, { detail: state }))
@@ -2884,6 +2926,29 @@ export default function RoomScreen() {
         onClose={() => { if (!FORCE_KYO_RESULT_FOR_TEST) void sendKyoResultAction() }}
       />
     ) : null
+    const levelUpOverlay = levelUp && !announceData && pendingAnnounces.length === 0 ? (
+      <LevelupDlg
+        level={levelUp.level}
+        lentMoney={levelUp.lentMoney}
+        onClose={() => setLevelUp(null)}
+      />
+    ) : null
+    const hanResultOverlay = displayedHanResData && !levelUp && !announceData && pendingAnnounces.length === 0 ? (
+      <HanRes
+        players={displayedHanResData}
+        hasTor={hanResFlags.hasTor}
+        hasTip={FORCE_HAN_RESULT_FOR_TEST || hanResFlags.hasTip}
+        isViewer={hanResFlags.isViewer}
+        isTournament={hanResFlags.isTournament}
+        displayScale={isMobileIngame ? mobileHanResScale : 1}
+        displayOffsetY={isMobileIngame ? MOBILE_HAN_RES_OFFSET_Y : 0}
+        backdrop
+        onClose={() => {
+          if (FORCE_HAN_RESULT_FOR_TEST && !forcedHanResultDismissed) setForcedHanResultDismissed(true)
+          else closeHanRes()
+        }}
+      />
+    ) : null
 
     const inlineGameStage = (
       <div className="majak-inline-game-stage" style={{ width: ingameLayoutMode === 'responsiveDesktop' ? '100%' : ROOM_W, height: ingameLayoutMode === 'responsiveDesktop' ? '100%' : ROOM_H, overflow: 'hidden', background: isMobileIngame || ingameLayoutMode === 'responsiveDesktop' ? 'transparent' : '#000' }}>
@@ -3213,6 +3278,8 @@ export default function RoomScreen() {
             {inlineGameStage}
           </div>
           {kyoResultOverlay}
+          {levelUpOverlay}
+          {hanResultOverlay}
           <GameReconnectLoading visible={inlineGameLoading} currentStep={gameLoadStep} complete={gameLoadComplete} />
           {!mobileIngameChatOpen && (
             <div className={`majak-mobile-ingame-tool-drawer${mobileIngameToolOpen ? ' is-open' : ''}`} style={mobileIngameToolDrawerStyle}>
@@ -3333,7 +3400,7 @@ export default function RoomScreen() {
           <aside className={`majak-responsive-ingame-sidebar${tengokuBoardSkin ? ' is-tengoku-skin' : ''}`}>
             <div className="majak-responsive-ingame-sidebar__status" ref={statusLogRef}>
               {isViewerUser && statusLog.length === 0
-                ? <img className="majak-responsive-ingame-sidebar__brand" src="/assets/images/common/ico_big_majak2.jpg" alt="麻雀4" draggable={false} />
+                ? <img className="majak-responsive-ingame-sidebar__brand" src="/assets/images/common/ico_big_majak4.jpg" alt="麻雀4" draggable={false} />
                 : statusLog.map(message => <div key={message.id} style={{ color: message.color ?? undefined, fontWeight: message.bold ? 'bold' : undefined }}>{message.text}</div>)}
             </div>
             <section className="majak-responsive-ingame-sidebar__viewers" aria-label="観戦者一覧">
@@ -3408,6 +3475,8 @@ export default function RoomScreen() {
         )}
         {selectedViewer && <PlayerInfoWnd player={selectedViewer} onClose={() => setSelectedViewer(null)} />}
         {kyoResultOverlay}
+        {levelUpOverlay}
+        {hanResultOverlay}
         {showInviteList && (
           <MiniChannelWnd
             channelId={channelId}

@@ -153,7 +153,7 @@ public class EnterChannelCommand : ICommand
             bool isContinuePlayer = false;
             if (existing.RoomId is int existingRoomId)
             {
-                var existingRoom = _session.GetRoom(existingRoomId);
+                var existingRoom = _session.GetRoom(existing.ChannelId, existingRoomId);
                 if (existingRoom?.State == Models.Game.GameRoomState.Playing)
                 {
                     isContinuePlayer = existingRoom.Seats.Any(
@@ -415,6 +415,18 @@ public class EnterChannelCommand : ICommand
         }
 
         _ratingService.UpdatePlayerLevel(player);
+        var channelList = await _masterCache.GetChannelListAsync();
+        var channelInfo = channelList.FirstOrDefault(c => c.SubId == subId || c.ChanelId == channelId);
+        var configuredServerUrl = _channelSettings.Value.ResolveAssignedUrl(channelInfo?.ServerUrl);
+        var currentServerUrl = _channelSettings.Value.ResolveAssignedUrl(null);
+        if (!_channelSettings.Value.UseConfiguredServerUrl
+            && !string.IsNullOrWhiteSpace(configuredServerUrl)
+            && !string.Equals(configuredServerUrl, currentServerUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            await ctx.Caller.SendAsync(Cmd.EnterChannel,
+                FailPayload("CHANNEL_SERVER_MISMATCH", "ロビーの接続先が変更されました。ロビーを選び直してください。", channelId, memberNo));
+            return;
+        }
         if (!await _loadService.ClaimChannelAsync(channelId, _channelSettings.Value.ServerUrl))
         {
             await ctx.Caller.SendAsync(Cmd.EnterChannel,
@@ -525,7 +537,7 @@ public class EnterChannelCommand : ICommand
             location = FormatMemberLocation(m.RoomId),
         });
         var channelRooms = (await _roomRegistry.GetChannelRoomsAsync(channelId))
-            .Select(r => new { registry = r, session = _session.GetRoom(r.RoomId) })
+            .Select(r => new { registry = r, session = _session.GetRoom(channelId, r.RoomId) })
             .Where(x => x.session is not { HasNoActiveMembers: true }
                 || x.session.State == Models.Game.GameRoomState.Playing)
             .Select(x => x.session is not null
@@ -542,9 +554,8 @@ public class EnterChannelCommand : ICommand
                 ["maxViewer"] = x.registry.MaxViewer,
                 ["state"] = x.registry.State > 0 ? x.registry.State : null,
                 ["roomPlaying"] = x.registry.RoomPlaying > 0 ? x.registry.RoomPlaying : null,
-            });
-        var channelList = await _masterCache.GetChannelListAsync();
-        var channelInfo = channelList.FirstOrDefault(c => c.SubId == subId || c.ChanelId == channelId);
+            })
+            .ToArray();
         var chanelName  = ChannelRepository.RepairDisplayName(subId, channelInfo?.ChanelName ?? channelId);
         string trickTitleName = _titleService.GetTitleName(player.TrickTitle) ?? "";
         string majakTitleName = _titleService.GetTitleName(player.MajakTitle) ?? "";
@@ -652,6 +663,8 @@ public class EnterChannelCommand : ICommand
             mjkk102e = tournamentRoomId,
             tournamentRoomOrder,
             mjkk103e = tournamentRoomOrder,
+            maxRoom = Math.Max(1, channelInfo?.MaxRoom ?? _session.GetKnownChannelRoomSlotCount(channelId)),
+            currentRoomCount = channelRooms.Length,
             members     = channelMembers,
             rooms       = channelRooms,
         });
@@ -700,7 +713,7 @@ public class EnterChannelCommand : ICommand
             location = FormatMemberLocation(member.RoomId),
         }).ToArray();
         var channelRooms = (await _roomRegistry.GetChannelRoomsAsync(channelId))
-            .Select(room => new { registry = room, session = _session.GetRoom(room.RoomId) })
+            .Select(room => new { registry = room, session = _session.GetRoom(channelId, room.RoomId) })
             .Where(room => room.session is not { HasNoActiveMembers: true }
                 || room.session.State == Models.Game.GameRoomState.Playing)
             .Select(room => room.session is not null
@@ -719,6 +732,8 @@ public class EnterChannelCommand : ICommand
                     ["roomPlaying"] = room.registry.RoomPlaying > 0 ? room.registry.RoomPlaying : null,
                 })
             .ToArray();
+        var channelInfo = (await _masterCache.GetChannelListAsync())
+            .FirstOrDefault(channel => channel.ChanelId == channelId || channel.SubId == channelId);
 
         await ctx.Caller.SendAsync(Cmd.EnterChannel, new
         {
@@ -738,6 +753,8 @@ public class EnterChannelCommand : ICommand
             gemcount = player.GemCount,
             mjkk55e = player.GemCount,
             cashCount = player.CashCount,
+            maxRoom = Math.Max(1, channelInfo?.MaxRoom ?? _session.GetKnownChannelRoomSlotCount(channelId)),
+            currentRoomCount = channelRooms.Length,
             matchCnt = player.ActiveRecord.MatchCnt,
             k26e = player.ActiveRecord.MatchCnt,
             winCnt = player.ActiveRecord.WinCnt,
@@ -773,7 +790,7 @@ public class EnterChannelCommand : ICommand
     {
         if (roomId <= 0) return false;
 
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(channelId, roomId);
         if (room == null
             || room.ChannelId != channelId
             || (!allowActiveMember && room.State != Models.Game.GameRoomState.Playing))
@@ -794,7 +811,7 @@ public class EnterChannelCommand : ICommand
             .Select(seat => seat!.MemberNo)
             .FirstOrDefault() ?? "";
 
-        _session.RemovePendingMatchMember(roomId, memberNo);
+        _session.RemovePendingMatchMember(channelId, roomId, memberNo);
         if (abandoningMember.RoomId == roomId)
         {
             _session.LeaveRoom(abandoningMember);
@@ -805,19 +822,19 @@ public class EnterChannelCommand : ICommand
                 room.RemoveViewer(memberNo);
             else
                 room.RemovePlayer(memberNo);
-            if (room.IsEmpty) _session.RemoveRoom(roomId);
+            if (room.IsEmpty) _session.RemoveRoom(channelId, roomId);
         }
         abandoningMember.RoomId = null;
         abandoningMember.IsOutPlayer = false;
         await _roomRegistry.ClearContinueRoomAsync(memberNo);
 
-        await ctx.Clients.Group($"room_{roomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(channelId, roomId))
             .SendAsync(Cmd.DeleteMember, Commands.Room.RoomGetMembersCommand.BuildDeleteMemberPayload(
                 roomHost, abandoningMember, isViewer ? GKey.ValueViewer : GKey.ValuePlayer, seatPos));
         if (!string.IsNullOrWhiteSpace(abandoningMember.ConnectionId))
-            await ctx.Groups.RemoveFromGroupAsync(abandoningMember.ConnectionId, $"room_{roomId}");
+            await ctx.Groups.RemoveFromGroupAsync(abandoningMember.ConnectionId, SignalRGroup.Room(channelId, roomId));
 
-        var updatedRoom = _session.GetRoom(roomId);
+        var updatedRoom = _session.GetRoom(channelId, roomId);
         var roomState = updatedRoom == null
             ? RoomStatePayload.BuildEmpty(roomId, "abandoned")
             : RoomStatePayload.Build(updatedRoom, "abandoned");
@@ -840,7 +857,7 @@ public class EnterChannelCommand : ICommand
     {
         if (!isContinuePlayer && existing.RoomId is int roomId)
         {
-            var room = _session.GetRoom(roomId);
+            var room = _session.GetRoom(existing.ChannelId, roomId);
             if (room != null)
             {
                 int seatPos = (int)existing.SeatPos;
@@ -849,9 +866,9 @@ public class EnterChannelCommand : ICommand
                     .Select(seat => seat!.MemberNo)
                     .FirstOrDefault() ?? "";
 
-                _session.RemovePendingMatchMember(roomId, existing.MemberNo);
+                _session.RemovePendingMatchMember(existing.ChannelId, roomId, existing.MemberNo);
                 _session.LeaveRoom(existing);
-                await ctx.Clients.Group($"room_{roomId}")
+                await ctx.Clients.Group(SignalRGroup.Room(existing.ChannelId, roomId))
                     .SendAsync(Cmd.DeleteMember, Commands.Room.RoomGetMembersCommand.BuildDeleteMemberPayload(
                         roomHost, existing, existing.IsViewer ? GKey.ValueViewer : GKey.ValuePlayer, seatPos));
 
@@ -862,14 +879,14 @@ public class EnterChannelCommand : ICommand
                     var okPayload = new Dictionary<string, object>();
                     for (int index = 0; index < GameConst.PlayerMaxCount; index++)
                         okPayload[$"{Key.OkButton}{index}"] = room.OkButtonStates[index] ? 1 : 0;
-                    await ctx.Clients.Group($"room_{roomId}").SendAsync(Cmd.SendOkButton, okPayload);
+                    await ctx.Clients.Group(SignalRGroup.Room(existing.ChannelId, roomId)).SendAsync(Cmd.SendOkButton, okPayload);
                 }
 
-                await ctx.Groups.RemoveFromGroupAsync(existing.ConnectionId, $"room_{roomId}");
-                var updatedRoom = _session.GetRoom(roomId);
+                await ctx.Groups.RemoveFromGroupAsync(existing.ConnectionId, SignalRGroup.Room(existing.ChannelId, roomId));
+                var updatedRoom = _session.GetRoom(existing.ChannelId, roomId);
                 if (updatedRoom == null)
                 {
-                    _session.ExpirePendingMatch(roomId);
+                    _session.ExpirePendingMatch(existing.ChannelId, roomId);
                     await _roomRegistry.RemoveRoomAsync(roomId, existing.ChannelId);
                     await ctx.Clients.Group($"chanel_{existing.ChannelId}")
                         .SendAsync(Cmd.RoomState, RoomStatePayload.BuildEmpty(roomId, "left"));

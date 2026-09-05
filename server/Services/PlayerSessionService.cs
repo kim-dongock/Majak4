@@ -65,10 +65,10 @@ public class PlayerSessionService
     private readonly ConcurrentDictionary<string, string> _memberToConn = new();
     private readonly ConcurrentDictionary<string, string> _pixToMemberNo = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, string> _memberNoToPix = new(StringComparer.Ordinal);
-    // RoomId → GameRoom
-    private readonly ConcurrentDictionary<int, GameRoom> _rooms = new();
+    // (ChannelId, RoomId) → GameRoom
+    private readonly ConcurrentDictionary<(string ChannelId, int RoomId), GameRoom> _rooms = new();
 
-    // チャンネル別インデックス (PerformanceAnalysis §2-1)
+    // チャンネル別インデックス (AP-04 §11)
     // GetChannelMembers / GetAllChannelPlayers の O(N) 全体スキャンを O(1) に改善する。
     // chanelId → (ConnectionId → MajakPlayer)
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, MajakPlayer>> _byChannel = new();
@@ -76,7 +76,7 @@ public class PlayerSessionService
     private readonly Dictionary<string, MemberEntryGate> _memberEntryGates = new(StringComparer.Ordinal);
     private readonly object _memberEntryGatesSync = new();
 
-    private int _nextRoomId = 0;
+    private readonly ConcurrentDictionary<string, int> _nextRoomIdByChannel = new();
 
     // ─── プレイヤー ───────────────────────────────────────────────
 
@@ -261,8 +261,9 @@ public class PlayerSessionService
         long unitMoney = 0, int minCnt = 0,
         int roomId = 0)
     {
-        int resolvedRoomId = roomId > 0 ? roomId : AllocateNextRoomId();
-        if (roomId > 0 && _rooms.ContainsKey(resolvedRoomId))
+        int resolvedRoomId = roomId > 0 ? roomId : AllocateNextRoomId(channelId);
+        var roomKey = (channelId, resolvedRoomId);
+        if (roomId > 0 && _rooms.ContainsKey(roomKey))
             throw new InvalidOperationException($"Room slot {resolvedRoomId} is already in use.");
 
         var room = new GameRoom
@@ -295,7 +296,7 @@ public class PlayerSessionService
         };
         // オーナーは 0番席
         room.AddPlayer(owner, 0);
-        if (!_rooms.TryAdd(resolvedRoomId, room))
+        if (!_rooms.TryAdd(roomKey, room))
         {
             owner.RoomId = null;
             throw new InvalidOperationException($"Room slot {resolvedRoomId} is already in use.");
@@ -316,7 +317,7 @@ public class PlayerSessionService
         string cupNormalYakuCondition = "", string cupYakumanCondition = "",
         string subId = "", long unitMoney = 0)
     {
-        int roomId = AllocateNextRoomId();
+        int roomId = AllocateNextRoomId(channelId);
         var room = new GameRoom
         {
             RoomId           = roomId,
@@ -342,39 +343,69 @@ public class PlayerSessionService
             CupYakumanCondition    = cupYakumanCondition,
             SubId            = subId,
         };
-        _rooms[roomId] = room;
+        _rooms[(channelId, roomId)] = room;
         return room;
     }
 
-    private int AllocateNextRoomId()
+    private int AllocateNextRoomId(string channelId)
     {
         int roomId;
         do
         {
-            roomId = Interlocked.Increment(ref _nextRoomId);
+            roomId = _nextRoomIdByChannel.AddOrUpdate(channelId, 1, (_, current) => current + 1);
         }
-        while (_rooms.ContainsKey(roomId));
+        while (_rooms.ContainsKey((channelId, roomId)));
         return roomId;
     }
 
+    public GameRoom? GetRoom(string channelId, int roomId)
+        => _rooms.TryGetValue((channelId, roomId), out var room) ? room : null;
+
+    [Obsolete("Use GetRoom(channelId, roomId). This overload returns null when a room ID exists in multiple channels.")]
     public GameRoom? GetRoom(int roomId)
-        => _rooms.TryGetValue(roomId, out var r) ? r : null;
+        => GetUniqueRoom(roomId);
 
+    public bool RemoveRoom(string channelId, int roomId)
+        => _rooms.TryRemove((channelId, roomId), out _);
+
+    [Obsolete("Use RemoveRoom(channelId, roomId).")]
     public bool RemoveRoom(int roomId)
-        => _rooms.TryRemove(roomId, out _);
-
-    public GameRoom? RemovePlayingRoomIfNoActivePlayers(int roomId)
     {
-        if (!_rooms.TryGetValue(roomId, out var room)) return null;
+        var room = GetUniqueRoom(roomId);
+        return room != null && RemoveRoom(room.ChannelId, roomId);
+    }
+
+    public GameRoom? RemovePlayingRoomIfNoActivePlayers(string channelId, int roomId)
+    {
+        var roomKey = (channelId, roomId);
+        if (!_rooms.TryGetValue(roomKey, out var room)) return null;
         lock (room)
         {
             if (room.State != GameRoomState.Playing || !room.HasNoActivePlayers)
                 return null;
-            if (!_rooms.TryRemove(roomId, out var removed))
+            if (!_rooms.TryRemove(roomKey, out var removed))
                 return null;
-            ExpirePendingMatch(roomId);
+            ExpirePendingMatch(channelId, roomId);
             return removed;
         }
+    }
+
+    [Obsolete("Use RemovePlayingRoomIfNoActivePlayers(channelId, roomId).")]
+    public GameRoom? RemovePlayingRoomIfNoActivePlayers(int roomId)
+    {
+        var room = GetUniqueRoom(roomId);
+        return room == null ? null : RemovePlayingRoomIfNoActivePlayers(room.ChannelId, roomId);
+    }
+
+    private GameRoom? GetUniqueRoom(int roomId)
+    {
+        GameRoom? match = null;
+        foreach (var room in _rooms.Values.Where(room => room.RoomId == roomId))
+        {
+            if (match != null) return null;
+            match = room;
+        }
+        return match;
     }
 
     public IReadOnlyList<GameRoom> RemoveNoActivePlayingRooms()
@@ -382,7 +413,7 @@ public class PlayerSessionService
         var removed = new List<GameRoom>();
         foreach (var room in _rooms.Values.ToArray())
         {
-            var emptyRoom = RemovePlayingRoomIfNoActivePlayers(room.RoomId);
+            var emptyRoom = RemovePlayingRoomIfNoActivePlayers(room.ChannelId, room.RoomId);
             if (emptyRoom != null) removed.Add(emptyRoom);
         }
         return removed;
@@ -402,7 +433,7 @@ public class PlayerSessionService
             if (seatOrder >= 0)
                 return (room, seatOrder);
 
-            var pending = GetPendingMatch(room.RoomId);
+            var pending = GetPendingMatch(channelId, room.RoomId);
             if (pending != null && IsPendingMatchMember(pending, memberNo))
                 return (room, -1);
         }
@@ -431,13 +462,13 @@ public class PlayerSessionService
             .Max();
 
     /// <summary>予約中オートマッチングルームかどうか。原典: GetReservePlayerCount() &gt; 0。</summary>
-    public bool HasPendingMatch(int roomId)
-        => _pendingMatches.ContainsKey(roomId);
+    public bool HasPendingMatch(string channelId, int roomId)
+        => _pendingMatches.ContainsKey((channelId, roomId));
 
     /// <summary>プレイヤーをルームに入室。空席を自動配置</summary>
     public bool JoinRoom(int roomId, MajakPlayer player)
     {
-        var room = GetRoom(roomId);
+        var room = GetRoom(player.ChannelId, roomId);
         if (room == null) return false;
         lock (room)
         {
@@ -463,7 +494,7 @@ public class PlayerSessionService
     public void LeaveRoom(MajakPlayer player)
     {
         if (player.RoomId == null) return;
-        var room = GetRoom(player.RoomId.Value);
+        var room = GetRoom(player.ChannelId, player.RoomId.Value);
         if (room == null) return;
 
         lock (room)
@@ -480,7 +511,7 @@ public class PlayerSessionService
             player.RoomId = null;
 
             if (room.IsEmpty)
-                _rooms.TryRemove(room.RoomId, out _);
+                _rooms.TryRemove((room.ChannelId, room.RoomId), out _);
         }
     }
 
@@ -493,7 +524,7 @@ public class PlayerSessionService
     public bool DisconnectFromRoom(MajakPlayer player, string disconnectedConnectionId)
     {
         bool detachedSeat = false;
-        if (player.RoomId is int roomId && _rooms.TryGetValue(roomId, out var room))
+        if (player.RoomId is int roomId && _rooms.TryGetValue((player.ChannelId, roomId), out var room))
         {
             lock (room)
             {
@@ -527,7 +558,7 @@ public class PlayerSessionService
 
     public int RebindPlayingRoomPlayer(int roomId, MajakPlayer player)
     {
-        var room = GetRoom(roomId);
+        var room = GetRoom(player.ChannelId, roomId);
         if (room?.State != GameRoomState.Playing) return -1;
 
         lock (room)
@@ -562,7 +593,7 @@ public class PlayerSessionService
     /// </summary>
     public int ReconnectToRoom(int roomId, MajakPlayer player)
     {
-        var room = GetRoom(roomId);
+        var room = GetRoom(player.ChannelId, roomId);
         if (room == null) return -1;
 
         lock (room)
@@ -677,14 +708,18 @@ public class PlayerSessionService
     // mjkc2e 送信後、mjkc6e (AutoEnterRoom) で全員揃うまでの中間状態を管理する。
     // 5秒以内に全員が mjkc6e を送らなければ FAILEROOM タイマーが発火する。
 
-    private readonly ConcurrentDictionary<int, PendingAutoMatch> _pendingMatches = new();
+    private readonly ConcurrentDictionary<(string ChannelId, int RoomId), PendingAutoMatch> _pendingMatches = new();
 
     /// <summary>予約登録 (GoAutoMatching → AddReservePlayer 相当)</summary>
     public void RegisterPendingMatch(PendingAutoMatch match)
-        => _pendingMatches[match.RoomId] = match;
+        => _pendingMatches[(match.ChannelId, match.RoomId)] = match;
 
+    public PendingAutoMatch? GetPendingMatch(string channelId, int roomId)
+        => _pendingMatches.TryGetValue((channelId, roomId), out var match) ? match : null;
+
+    [Obsolete("Use GetPendingMatch(channelId, roomId).")]
     public PendingAutoMatch? GetPendingMatch(int roomId)
-        => _pendingMatches.TryGetValue(roomId, out var m) ? m : null;
+        => GetUniquePendingMatch(roomId);
 
     public bool IsPendingMatchMember(PendingAutoMatch match, string memberNo)
     {
@@ -694,9 +729,9 @@ public class PlayerSessionService
         }
     }
 
-    public void RemovePendingMatchMember(int roomId, string memberNo)
+    public void RemovePendingMatchMember(string channelId, int roomId, string memberNo)
     {
-        if (!_pendingMatches.TryGetValue(roomId, out var match)) return;
+        if (!_pendingMatches.TryGetValue((channelId, roomId), out var match)) return;
         lock (match)
         {
             match.RemovedMembers.Add(memberNo);
@@ -708,9 +743,10 @@ public class PlayerSessionService
     /// AutoEnterRoom (mjkc6e) 確定処理。
     /// 返り値: (全員揃った, PendingAutoMatch) — 全員揃った場合は pending を削除済み。
     /// </summary>
-    public (bool AllEntered, PendingAutoMatch? Match) ConfirmAutoEntry(int roomId, string memberNo)
+    public (bool AllEntered, PendingAutoMatch? Match) ConfirmAutoEntry(string channelId, int roomId, string memberNo)
     {
-        if (!_pendingMatches.TryGetValue(roomId, out var match)) return (false, null);
+        var roomKey = (channelId, roomId);
+        if (!_pendingMatches.TryGetValue(roomKey, out var match)) return (false, null);
 
         lock (match)
         {
@@ -718,17 +754,44 @@ public class PlayerSessionService
             match.EnteredMembers.Add(memberNo);
             if (match.EnteredMembers.Count >= match.ExpectedMembers.Length)
             {
-                _pendingMatches.TryRemove(roomId, out _);
+                _pendingMatches.TryRemove(roomKey, out _);
                 return (true, match);
             }
             return (false, match);
         }
     }
 
+    [Obsolete("Use ConfirmAutoEntry(channelId, roomId, memberNo).")]
+    public (bool AllEntered, PendingAutoMatch? Match) ConfirmAutoEntry(int roomId, string memberNo)
+    {
+        var match = GetUniquePendingMatch(roomId);
+        return match == null
+            ? (false, null)
+            : ConfirmAutoEntry(match.ChannelId, roomId, memberNo);
+    }
+
     /// <summary>FAILEROOM タイムアウト時に呼ぶ。未揃いなら取り除いて返す。</summary>
+    public PendingAutoMatch? ExpirePendingMatch(string channelId, int roomId)
+    {
+        _pendingMatches.TryRemove((channelId, roomId), out var match);
+        return match;
+    }
+
+    [Obsolete("Use ExpirePendingMatch(channelId, roomId).")]
     public PendingAutoMatch? ExpirePendingMatch(int roomId)
     {
-        _pendingMatches.TryRemove(roomId, out var match);
+        var match = GetUniquePendingMatch(roomId);
+        return match == null ? null : ExpirePendingMatch(match.ChannelId, roomId);
+    }
+
+    private PendingAutoMatch? GetUniquePendingMatch(int roomId)
+    {
+        PendingAutoMatch? match = null;
+        foreach (var pending in _pendingMatches.Values.Where(pending => pending.RoomId == roomId))
+        {
+            if (match != null) return null;
+            match = pending;
+        }
         return match;
     }
 

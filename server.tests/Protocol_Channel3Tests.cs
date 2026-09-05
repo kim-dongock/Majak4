@@ -21,16 +21,58 @@ namespace MajakServer.Tests;
 public class CreateRoomCommandTests
 {
     private static MasterCacheService CreateMasterCache(
-        PlayerRepository playerRepo, string channelId, string subId, int unitMoney = 20)
+        PlayerRepository playerRepo, string channelId, string subId, int unitMoney = 20, int maxRoom = 48)
     {
         var channelRepo = new Mock<ChannelRepository>(MockBehavior.Loose,
             (GameDataContextFactory)null!, TestMasterCacheFactory.CreateRedisService());
         channelRepo.Setup(repo => repo.GetChannelListAsync("MAJAK4"))
             .ReturnsAsync(new List<ChannelInfo>
             {
-                new() { ChanelId = channelId, SubId = subId, UnitMoney = unitMoney },
+                new() { ChanelId = channelId, SubId = subId, UnitMoney = unitMoney, MaxRoom = maxRoom },
             });
         return TestMasterCacheFactory.Create(playerRepo: playerRepo, channelRepo: channelRepo.Object);
+    }
+
+    [Fact]
+    public async Task Execute_WhenChannelReachedMaxRoom_DeniesCreatingAnotherRoom()
+    {
+        const string channelId = "MAJAK200000001";
+        var session = new PlayerSessionService();
+        var player = new MajakPlayer
+        {
+            ConnectionId = "c1",
+            MemberNo = "host01",
+            ChannelId = channelId,
+        };
+        session.Register(player);
+
+        var registry = new RoomRegistryService(TestMasterCacheFactory.CreateRedisService());
+        await registry.RegisterRoomAsync(
+            101, channelId, "existing room", false, 1, 4,
+            "http://test", "120000001000000");
+
+        var repoMock = new Mock<PlayerRepository>(MockBehavior.Loose);
+        repoMock.Setup(r => r.GetCupConfigsAsync()).ReturnsAsync(new List<CupConfig>());
+        var cmd = new CreateRoomCommand(
+            session,
+            repoMock.Object,
+            registry,
+            CreateMasterCache(repoMock.Object, channelId, "00000", maxRoom: 1),
+            Microsoft.Extensions.Options.Options.Create(new ChannelServerSettings { ServerUrl = "http://test" }),
+            new Mock<ILogger<CreateRoomCommand>>().Object);
+        var (ctx, sent) = CommandTestHelper.MakeContext(player, new Dictionary<string, object?>
+        {
+            [GKey.ChannelId] = channelId,
+            [GKey.RoomOption] = "120000001000000",
+            [GKey.RoomId] = 102,
+        });
+
+        await cmd.ExecuteAsync(ctx);
+
+        Assert.Null(session.GetRoom(102));
+        Assert.Contains(sent, item => item.method == Cmd.ConnectTypeError);
+        Assert.DoesNotContain(sent, item => item.method == Cmd.RoomCreated);
+        Assert.Single(await registry.GetChannelRoomsAsync(channelId));
     }
 
     [Fact]
@@ -193,6 +235,7 @@ public class CreateRoomCommandTests
         session.Register(player);
 
         var repoMock = new Mock<PlayerRepository>(MockBehavior.Loose);
+        repoMock.Setup(r => r.GetCupConfigsAsync()).ReturnsAsync(new List<CupConfig>());
         var cmd = new CreateRoomCommand(
             session,
             repoMock.Object,
@@ -230,6 +273,7 @@ public class CreateRoomCommandTests
         session.Register(player);
 
         var repoMock = new Mock<PlayerRepository>(MockBehavior.Loose);
+        repoMock.Setup(r => r.GetCupConfigsAsync()).ReturnsAsync(new List<CupConfig>());
         var cmd = new CreateRoomCommand(
             session,
             repoMock.Object,

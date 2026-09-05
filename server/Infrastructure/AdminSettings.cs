@@ -15,10 +15,10 @@ public class AdminSettings
     public string JwtSecret { get; set; } = string.Empty;
 
     /// <summary>JWT issuer クレーム値。</summary>
-    public string JwtIssuer { get; set; } = "majak2-admin";
+    public string JwtIssuer { get; set; } = "majak4-admin";
 
     /// <summary>JWT audience クレーム値。</summary>
-    public string JwtAudience { get; set; } = "majak2-admin-site";
+    public string JwtAudience { get; set; } = "majak4-admin-site";
 
     /// <summary>JWT 有効時間 (分)。デフォルト 480 分 = 8 時間。</summary>
     public int JwtExpiryMinutes { get; set; } = 480;

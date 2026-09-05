@@ -10,6 +10,16 @@ export interface DiscardSourceDecision {
   displayIdx: number
 }
 
+export function isDrawnTilePosition(handCount: number, index: number, afterCall: boolean): boolean {
+  return !afterCall && handCount % 3 === 2 && index === handCount - 1
+}
+
+export function sortHandForDisplay<T extends { code: number }>(tiles: readonly T[], keepLastAsDrawn: boolean): T[] {
+  const sortedLength = keepLastAsDrawn ? Math.max(0, tiles.length - 1) : tiles.length
+  const sorted = tiles.slice(0, sortedLength).sort((left, right) => left.code - right.code)
+  return keepLastAsDrawn && tiles.length > 0 ? [...sorted, tiles[tiles.length - 1]] : sorted
+}
+
 export const DISCARD_SOURCE_MARKER_DEPTH = -1
 
 export function offsetDiscardSourceMarker(

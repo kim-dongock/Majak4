@@ -107,6 +107,24 @@ public class TournamentRepository
             .ToListAsync();
     }
 
+    public async Task<List<TournamentPlanMasterEntity>> SelectAllPlanMastersAsync()
+    {
+        await using var db = await RequireGameDb().CreateAsync();
+        return await db.TournamentPlanMasters.AsNoTracking()
+            .OrderByDescending(plan => plan.StartAt)
+            .ThenBy(plan => plan.CupId)
+            .ThenBy(plan => plan.Sequence)
+            .ToListAsync();
+    }
+
+    public async Task<List<TournamentLimitEntity>> SelectAllLimitEntitiesAsync()
+    {
+        await using var db = await RequireGameDb().CreateAsync();
+        return await db.TournamentLimits.AsNoTracking()
+            .OrderBy(limit => limit.LimitNo)
+            .ToListAsync();
+    }
+
     // ───────────────────────────────────────────────────────── INSERT ──────
 
     /// <summary>
@@ -131,6 +149,66 @@ public class TournamentRepository
                 "MJK_TOURNAMENT_SEQ", "MJK_TOURNAMENTPLAN", plan.PlanMemberNo);
             return false;
         }
+    }
+
+    public async Task<TournamentPlanMasterEntity> UpsertPlanMasterAsync(TournamentPlanMasterEntity value)
+    {
+        await using var db = await RequireGameDb().CreateAsync();
+        var entity = await db.TournamentPlanMasters.SingleOrDefaultAsync(plan =>
+            plan.CupId == value.CupId && plan.Sequence == value.Sequence);
+        var now = DateTime.Now;
+        if (entity is null)
+        {
+            entity = value;
+            entity.CreatedAt = now;
+            db.TournamentPlanMasters.Add(entity);
+        }
+        else
+        {
+            entity.CupName = value.CupName;
+            entity.IsFinal = value.IsFinal;
+            entity.StartAt = value.StartAt;
+            entity.EndAt = value.EndAt;
+            entity.MinLevel = value.MinLevel;
+            entity.MaxLevel = value.MaxLevel;
+            entity.UnitMoney = value.UnitMoney;
+            entity.MaxMatchCount = value.MaxMatchCount;
+            entity.MinMatchCount = value.MinMatchCount;
+            entity.Prize = value.Prize;
+            entity.Detail = value.Detail;
+            entity.Status = value.Status;
+            entity.AdminComment = value.AdminComment;
+            entity.IsValid = value.IsValid;
+            entity.RuleId = value.RuleId;
+            entity.NoticeUrl = value.NoticeUrl;
+            entity.BannerUrl = value.BannerUrl;
+            entity.BillingStatus = value.BillingStatus;
+        }
+        entity.UpdatedAt = now;
+        await db.SaveChangesAsync();
+        return entity;
+    }
+
+    public async Task<TournamentLimitEntity> UpsertLimitAsync(TournamentLimitEntity value)
+    {
+        await using var db = await RequireGameDb().CreateAsync();
+        var entity = await db.TournamentLimits.SingleOrDefaultAsync(limit => limit.LimitNo == value.LimitNo);
+        var now = DateTime.Now;
+        if (entity is null)
+        {
+            entity = value;
+            entity.CreatedAt = now;
+            db.TournamentLimits.Add(entity);
+        }
+        else
+        {
+            entity.IsValid = value.IsValid;
+            entity.LimitStartAt = value.LimitStartAt;
+            entity.LimitEndAt = value.LimitEndAt;
+        }
+        entity.UpdatedAt = now;
+        await db.SaveChangesAsync();
+        return entity;
     }
 
     /// <summary>

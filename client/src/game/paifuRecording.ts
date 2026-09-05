@@ -31,9 +31,9 @@ type ActivePaifuRecording = {
 }
 
 export const GAME_PAIFU_RECORDING_CONFIG_EVENT = 'majak:paifu-recording-config'
-const STORAGE_KEY = 'majak2.recorded-paifu.v1'
-const LAST_USED_FILE_NAME_KEY = 'majak2.paifu-last-file-name.v1'
-const DEFAULT_FILE_NAME = 'Majak2Paifu.txt'
+const STORAGE_KEY = 'majak4.recorded-paifu.v1'
+const LAST_USED_FILE_NAME_KEY = 'majak4.paifu-last-file-name.v1'
+const DEFAULT_FILE_NAME = 'Majak4Paifu.txt'
 const MAX_RECORDED_PAIFU = 20
 let activeRecording: ActivePaifuRecording | null = null
 

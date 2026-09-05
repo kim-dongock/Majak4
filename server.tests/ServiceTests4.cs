@@ -87,7 +87,7 @@ public class TournamentMatchingTests
             .ReturnsAsync(true);
         _repoMock.Setup(r => r.MergeJoinAsync(
                 It.IsAny<string>(), It.IsAny<long>(),
-                It.IsAny<int>(), It.IsAny<string>()))
+            It.IsAny<int>(), It.IsAny<string>(), It.IsAny<long>()))
             .ReturnsAsync((true, 1));
         _repoMock.Setup(r => r.MergePlannerManageAsync(It.IsAny<TournamentJoin>()))
             .ReturnsAsync(true);
@@ -2753,6 +2753,21 @@ public class GameLogicHelperTests
         Assert.Equal("MJPID_INIHAN", ((JsonElement)CommandTestHelper.ToDict(room.PlayHistory[0])["playType"]!).GetString());
         Assert.Equal(Cmd.PaiInfoList, ((JsonElement)CommandTestHelper.ToDict(room.PlayHistory[1])["cmd"]!).GetString());
         Assert.Equal("MJPID_INIKYO", ((JsonElement)CommandTestHelper.ToDict(room.PlayHistory[2])["playType"]!).GetString());
+
+        Assert.Equal(2, room.PaifuHistory.Count);
+        var paifuPaiPacket = CommandTestHelper.ToDict(room.PaifuHistory[0]);
+        Assert.Equal(Cmd.PaiInfoList, ((JsonElement)paifuPaiPacket["cmd"]!).GetString());
+        var paifuPai = ((JsonElement)paifuPaiPacket["data"]!).GetProperty("pai").EnumerateArray().ToArray();
+        Assert.Equal(54, paifuPai.Length);
+        Assert.All(paifuPai, item => Assert.True(item.GetProperty("code").GetInt32() > 0));
+        Assert.Equal(54, paifuPai.Select(item => item.GetProperty("idx").GetInt32()).Distinct().Count());
+
+        room.Engine.KyokuInfo.Dice[0] = 5;
+        room.Engine.KyokuInfo.Dice[1] = 5;
+        var paifuKyokuPacket = CommandTestHelper.ToDict(room.PaifuHistory[1]);
+        var storedDice = ((JsonElement)paifuKyokuPacket["data"]!).GetProperty("dice")
+            .EnumerateArray().Select(item => item.GetInt32()).ToArray();
+        Assert.Equal(new[] { 1, 2 }, storedDice);
     }
 
     [Theory]

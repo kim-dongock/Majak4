@@ -158,7 +158,7 @@ public class ServerStatusBackgroundService : BackgroundService
             foreach (var player in room.Seats.Where(seat => seat != null).Select(seat => seat!))
                 await _roomRegistry.ClearContinueRoomAsync(player.MemberNo);
             await _roomRegistry.RemoveRoomAsync(room.RoomId, room.ChannelId);
-            await _hub.Clients.Group($"room_{room.RoomId}")
+            await _hub.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
                 .SendAsync(Cmd.AutoExitRoom, new Dictionary<string, object?>
                 {
                     [GKey.Pix] = "",

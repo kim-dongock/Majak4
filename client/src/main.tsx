@@ -39,10 +39,14 @@ window.addEventListener('unhandledrejection', event => {
   event.preventDefault()
 })
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+const app = (
   <React.StrictMode>
-    <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''}>
-      <App />
-    </GoogleOAuthProvider>
-  </React.StrictMode>,
+    <App />
+  </React.StrictMode>
+)
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  import.meta.env.VITE_AUTH_PROVIDER === 'hange'
+    ? app
+    : <GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID ?? ''}>{app}</GoogleOAuthProvider>,
 )

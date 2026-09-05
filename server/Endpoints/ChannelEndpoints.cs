@@ -1,5 +1,7 @@
 using MajakServer.Infrastructure;
+using MajakServer.Repositories.MySQL;
 using MajakServer.Services;
+using Microsoft.Extensions.Options;
 
 namespace MajakServer.Endpoints;
 
@@ -8,10 +10,16 @@ internal static class ChannelEndpoints
     internal static void MapChannelEndpoints(this WebApplication app)
     {
         app.MapGet("/api/channel/{chanelId}/server",
-            async (string chanelId, ServerLoadService load) =>
+            async (string chanelId, ChannelRepository channels, ServerLoadService load, IOptions<ChannelServerSettings> settings) =>
             {
-                var url = await load.ResolveChannelServerAsync(chanelId);
-                return Results.Ok(new { serverUrl = url });
+                var channel = await channels.GetChannelAsync(chanelId);
+                if (channel is null) return Results.NotFound(new { error = "CHANNEL_NOT_FOUND" });
+                if (!channel.IsActive)
+                    return Results.Json(new { error = "CHANNEL_UNAVAILABLE" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+                var serverUrl = settings.Value.ResolveAssignedUrl(channel.ServerUrl);
+                if (!await load.IsServerActiveAsync(serverUrl))
+                    return Results.Json(new { error = "CHANNEL_SERVER_INACTIVE" }, statusCode: StatusCodes.Status503ServiceUnavailable);
+                return Results.Ok(new { serverUrl });
             });
 
         app.MapPost("/api/channel/{chanelId}/enter",
@@ -74,13 +82,6 @@ internal static class ChannelEndpoints
                     roomOption = room.RoomOption,
                     serverUrl = room.ServerUrl,
                 }));
-            });
-
-        app.MapGet("/api/room/best-server",
-            async (ServerLoadService load) =>
-            {
-                var url = await load.GetBestServerAsync();
-                return Results.Ok(new { serverUrl = url });
             });
 
         app.MapGet("/api/channels", async (MasterCacheService masterCache, ChannelMemberService members, RoomRegistryService roomRegistry) =>

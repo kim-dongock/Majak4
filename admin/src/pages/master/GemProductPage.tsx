@@ -120,7 +120,7 @@ export default function GemProductPage() {
             <InputNumber style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="ストア商品 ID" name="storeProductId">
-            <Input placeholder="例: jp.hange.majak2.gem100" />
+            <Input placeholder="例: jp.hange.majak4.gem100" />
           </Form.Item>
           <Form.Item label="表示順" name="sortOrder" rules={[{ required: true, type: 'number', min: 0 }]}>
             <InputNumber style={{ width: '100%' }} />

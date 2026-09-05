@@ -3,8 +3,8 @@
  *
  * VITE_API_BASE_URL:
  *   development : "" (空文字) → Vite dev server プロキシ (/api/...) 経由
- *   alpha       : "https://alpha-game-majak4.hange.jp"
- *   production  : "https://game.majak2.jp"
+ *   alpha       : "https://alpha-app-majak4.hange.jp"
+ *   production  : "https://game.majak4.jp"
  */
 import { gameAuthHeaders, refreshedGameAuthHeaders } from './authHeaders'
 
@@ -12,6 +12,14 @@ import { gameAuthHeaders, refreshedGameAuthHeaders } from './authHeaders'
 // 開発時は Vite dev server プロキシを使うため空文字でよい。
 declare const __API_BASE__: string | undefined
 const API_BASE: string = ((typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '') ?? '').replace(/\/$/, '')
+
+class ChannelApiError extends Error {
+  constructor(readonly status: number, message: string) {
+    super(message)
+  }
+}
+
+export class ChannelUnavailableError extends Error {}
 
 // ── 内部ヘルパー ──────────────────────────────────────────────
 async function apiPost(path: string, body: unknown): Promise<void> {
@@ -28,15 +36,21 @@ async function apiGet<T>(path: string): Promise<T> {
   let res = await request(await refreshedGameAuthHeaders())
   if (res.status === 401)
     res = await request(await refreshedGameAuthHeaders(undefined, true))
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`)
+  if (!res.ok) throw new ChannelApiError(res.status, `GET ${path} failed: ${res.status}`)
   return res.json() as Promise<T>
 }
 
 // ── チャンネルサーバー URL 取得 ───────────────────────────────
 export async function getChannelServerUrl(chanelId: string): Promise<string> {
-  const data = await apiGet<{ serverUrl: string }>(
-    `/api/channel/${encodeURIComponent(chanelId)}/server`)
-  return data.serverUrl
+  try {
+    const data = await apiGet<{ serverUrl: string }>(
+      `/api/channel/${encodeURIComponent(chanelId)}/server`)
+    return data.serverUrl
+  } catch (error) {
+    if (error instanceof ChannelApiError && error.status === 503)
+      throw new ChannelUnavailableError('Channel server is inactive')
+    throw error
+  }
 }
 
 // ── チャンネル入室 (Redis に登録) ─────────────────────────────
@@ -108,12 +122,6 @@ export interface ContinueRoomEntry {
 export async function getPlayerContinueRoom(pix: string): Promise<ContinueRoomEntry | null> {
   const data = await apiGet<ContinueRoomEntry>(`/api/player/continue-room?pix=${encodeURIComponent(pix)}`)
   return data.found ? data : null
-}
-
-// ── ルーム数最小サーバー URL 取得 (ルーム作成時に使用) ───────
-export async function getBestServer(): Promise<string> {
-  const data = await apiGet<{ serverUrl: string }>('/api/room/best-server')
-  return data.serverUrl
 }
 
 // ── チャンネル一覧取得 (GET /api/channels) ──────────────────

@@ -37,7 +37,7 @@ public class GetRoomListCommand : ICommand
         if (player == null) return;
 
         var localRooms = _session.GetChannelRooms(player.ChannelId)
-            .Where(r => !_session.HasPendingMatch(r.RoomId))
+            .Where(r => !_session.HasPendingMatch(r.ChannelId, r.RoomId))
             .Where(r => !r.HasNoActiveMembers || r.State == GameRoomState.Playing)
             .OrderBy(r => r.RoomId)
             .ToList();
@@ -75,7 +75,7 @@ public class GetRoomListCommand : ICommand
             var channels = await _masterCache.GetChannelListAsync();
             var channel = channels.FirstOrDefault(c => c.ChanelId == player.ChannelId || c.SubId == player.ChannelId);
             if (channel is not null)
-                roomSlotCount = Math.Max(channel.MaxRoom, roomSlotCount);
+                roomSlotCount = Math.Max(1, channel.MaxRoom);
         }
 
         var packet = new Dictionary<string, object?>
@@ -83,6 +83,8 @@ public class GetRoomListCommand : ICommand
             ["result"] = 1,
             [GKey.Result] = GKey.ValueSuccess,
             ["count"] = rooms.Count,
+            ["currentRoomCount"] = rooms.Count,
+            ["maxRoom"] = roomSlotCount,
             [GKey.RoomCount] = Math.Max(roomSlotCount, rooms.Count),
             ["rooms"] = rooms,
         };
@@ -412,26 +414,26 @@ public class ExitChannelCommand : ICommand
         if (player.RoomId.HasValue)
         {
             int roomId = player.RoomId.Value;
-            var room = _session.GetRoom(roomId);
+            var room = _session.GetRoom(channelId, roomId);
             int playerPos = (int)player.SeatPos;
             string playerType = player.IsViewer ? GKey.ValueViewer : GKey.ValuePlayer;
-            await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, $"room_{roomId}");
+            await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, SignalRGroup.Room(channelId, roomId));
             _session.LeaveRoom(player);
             string roomHost = room?.Seats
                 .Where(s => s != null && !s.IsOutPlayer)
                 .Select(s => s!.MemberNo)
                 .FirstOrDefault() ?? "";
 
-            await ctx.Clients.Group($"room_{roomId}")
+            await ctx.Clients.Group(SignalRGroup.Room(channelId, roomId))
                 .SendAsync(Cmd.DeleteMember, MajakServer.Commands.Room.RoomGetMembersCommand.BuildDeleteMemberPayload(
                     roomHost, player, playerType, playerPos));
 
-            var afterRoom = _session.GetRoom(roomId);
+            var afterRoom = _session.GetRoom(channelId, roomId);
             if (_roomRegistry != null)
             {
                 if (afterRoom == null)
                 {
-                    _session.ExpirePendingMatch(roomId);
+                    _session.ExpirePendingMatch(channelId, roomId);
                     await _roomRegistry.RemoveRoomAsync(roomId, channelId);
                 }
                 else
@@ -599,10 +601,10 @@ public class CreateRoomCommand : ICommand
             return;
         }
 
-        var existingRoom = _session.GetRoom(requestRoomId);
+        var existingRoom = _session.GetRoom(channelId, requestRoomId);
         if (existingRoom != null && existingRoom.HasNoActiveMembers && existingRoom.State != GameRoomState.Playing)
         {
-            _session.RemoveRoom(requestRoomId);
+            _session.RemoveRoom(channelId, requestRoomId);
             await _roomRegistry.RemoveRoomAsync(requestRoomId, existingRoom.ChannelId);
             existingRoom = null;
         }
@@ -647,26 +649,54 @@ public class CreateRoomCommand : ICommand
             player.CircleInfo = keepCircleInfo;
         }
 
-        var room = _session.CreateRoom(channelId, player,
-            roomOption, moneyRate, minMoney, maxMoney, isPrivate,
-            roomTitle: roomTitle,
-            roomPassword: roomPassword,
-            roomType: roomType,
-            maxViewer: maxViewer,
-            cupId:            thisCupRoom?.CupId            ?? 0,
-            cupSeq:           thisCupRoom?.CupSeq           ?? 0,
-            cupJudgementType: thisCupRoom?.JudgementType    ?? -1,
-            cupPointSumType:  thisCupRoom?.CupPointSumType  ?? 0,
-            cupMaxMatchCntLimit: thisCupRoom?.MaxMatchCntLimit ?? -1,
-            cupConditionRegular: thisCupRoom?.ConditionRegular ?? 0,
-            cupConditionBilling: thisCupRoom?.ConditionBilling ?? 0,
-            cupEntryLimited:     thisCupRoom?.EntryLimited     ?? false,
-            cupNormalYakuCondition: thisCupRoom?.NormalYakuCondition ?? "",
-            cupYakumanCondition:    thisCupRoom?.YakumanCondition    ?? "",
-            subId:            subId,
-            unitMoney:        unitMoney,
-            minCnt:           minCnt,
-            roomId:           requestRoomId);
+        var registrationResult = await _roomRegistry.TryRegisterRoomAsync(
+            requestRoomId, channelId, roomTitle,
+            isPrivate, memberCnt: 1, memberMax: 4,
+            _channelSettings.Value.ResolveUrl(channelId), roomOption,
+            channelInfo.MaxRoom, maxViewer);
+        if (registrationResult == RoomRegistrationResult.ChannelFull)
+        {
+            await SendRoomConnectError(ctx, requestRoomId,
+                $"ルーム数が上限（{Math.Max(1, channelInfo.MaxRoom)}室）に達しています。",
+                LegacyErrorCode.MajAutoEnterRoomFailed);
+            return;
+        }
+        if (registrationResult == RoomRegistrationResult.RoomIdInUse)
+        {
+            await SendRoomConnectError(ctx, requestRoomId, "既に使用中のルームです。", LegacyErrorCode.NotEmptyRoom);
+            return;
+        }
+
+        GameRoom room;
+        try
+        {
+            room = _session.CreateRoom(channelId, player,
+                roomOption, moneyRate, minMoney, maxMoney, isPrivate,
+                roomTitle: roomTitle,
+                roomPassword: roomPassword,
+                roomType: roomType,
+                maxViewer: maxViewer,
+                cupId:            thisCupRoom?.CupId            ?? 0,
+                cupSeq:           thisCupRoom?.CupSeq           ?? 0,
+                cupJudgementType: thisCupRoom?.JudgementType    ?? -1,
+                cupPointSumType:  thisCupRoom?.CupPointSumType  ?? 0,
+                cupMaxMatchCntLimit: thisCupRoom?.MaxMatchCntLimit ?? -1,
+                cupConditionRegular: thisCupRoom?.ConditionRegular ?? 0,
+                cupConditionBilling: thisCupRoom?.ConditionBilling ?? 0,
+                cupEntryLimited:     thisCupRoom?.EntryLimited     ?? false,
+                cupNormalYakuCondition: thisCupRoom?.NormalYakuCondition ?? "",
+                cupYakumanCondition:    thisCupRoom?.YakumanCondition    ?? "",
+                subId:            subId,
+                unitMoney:        unitMoney,
+                minCnt:           minCnt,
+                roomId:           requestRoomId);
+        }
+        catch (InvalidOperationException)
+        {
+            await _roomRegistry.RemoveRoomAsync(requestRoomId, channelId);
+            await SendRoomConnectError(ctx, requestRoomId, "既に使用中のルームです。", LegacyErrorCode.NotEmptyRoom);
+            return;
+        }
         room.TrainingAiLevel = trainingAiLevel;
         room.ServerUrl = _channelSettings.Value.ResolveUrl(channelId);
 
@@ -676,7 +706,7 @@ public class CreateRoomCommand : ICommand
                 room.RequiredCircles[cid] = cname;
         }
 
-        await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, $"room_{room.RoomId}");
+        await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, SignalRGroup.Room(room.ChannelId, room.RoomId));
 
         await _roomRegistry.RegisterRoomAsync(
             room.RoomId, player.ChannelId, room.RoomTitle,
@@ -773,7 +803,7 @@ public class HanChatAllRelayCommand : ICommand
         if (string.IsNullOrEmpty(message)) return;
         if (_session != null && player.RoomId is int currentRoomId)
         {
-            var room = _session.GetRoom(currentRoomId);
+            var room = _session.GetRoom(player.ChannelId, currentRoomId);
             if (room != null && !IsRoomChatEnabled(room)) return;
         }
         string target = NormalizeChatTarget(ctx.GetString(GKey.Target));
@@ -787,7 +817,7 @@ public class HanChatAllRelayCommand : ICommand
         {
             if (_session != null && player.RoomId is int roomId)
             {
-                _session.GetRoom(roomId)?.Engine.SetDebugHaipaiYaku(debugYaku);
+                _session.GetRoom(player.ChannelId, roomId)?.Engine.SetDebugHaipaiYaku(debugYaku);
             }
             message = debugMessage;
         }
@@ -1026,7 +1056,7 @@ public class ViewRoomCommand : ICommand
         string pwd   = ctx.GetString("roomPwd");
         string playerType = ctx.GetString("playerType");
 
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(player.ChannelId, roomId);
         if (room == null)
         {
             await SendRoomConnectError(ctx, roomId, "ルームが見つかりません", LegacyErrorCode.CannotEnterRoom);
@@ -1079,7 +1109,7 @@ public class ViewRoomCommand : ICommand
             return;
         }
 
-        await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, $"room_{roomId}");
+        await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, SignalRGroup.Room(player.ChannelId, roomId));
 
 
         var memberListPayload = MajakServer.Commands.Room.RoomGetMembersCommand.BuildMemberListPayload(room, player.MemberNo);
@@ -1087,7 +1117,7 @@ public class ViewRoomCommand : ICommand
             await ctx.Caller.SendAsync(Cmd.MemberList, memberListPayload);
 
 
-        await ctx.Clients.Group($"room_{roomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(player.ChannelId, roomId))
             .SendAsync(Cmd.AddMember, MajakServer.Commands.Room.RoomGetMembersCommand.BuildAddMemberPayload(room, player, GKey.ValueViewer));
 
         await ctx.Clients.Group($"chanel_{player.ChannelId}")

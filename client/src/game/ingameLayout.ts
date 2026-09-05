@@ -180,7 +180,7 @@ export const MOBILE_DISCARD_CENTER_INFO_OFFSETS = [
   { x: 24.5, y: 149 },
   { x:  280, y: 146.5 },
   { x: 219, y: -27 },
-  { x: -46, y: -15.5 },
+  { x: -46, y:  5.5 },
 ] as const
 
 export const MOBILE_DEAD_WALL_SHIFT_X = 24

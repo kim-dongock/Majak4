@@ -79,7 +79,7 @@ export const DEFAULT_CONFIG: MJConfig = {
   bChkPai: true, bChkTap: true, bChkTnp: true, bChkHor: true,
 }
 
-const CONFIG_STORAGE_KEY = 'majak2.config'
+const CONFIG_STORAGE_KEY = 'majak4.config'
 const BOOLEAN_CONFIG_KEYS = ['bChkBGM', 'bChkSND', 'bChkPIO', 'bChkAUT', 'bChkPai', 'bChkTap', 'bChkTnp', 'bChkHor'] as const
 const NUMBER_CONFIG_KEYS = ['nVolBGM', 'nVolSND', 'nChkPAS', 'nSelPasKey', 'nChkREC'] as const
 

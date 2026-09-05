@@ -29,7 +29,7 @@ import Phaser from 'phaser'
 import * as SignalR from '../api/signalr'
 import type { CreateGameOptions } from '../game/GameInstance'
 import { DEFAULT_GAME_ASSIST_CONFIG, GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig, type GameAssistConfig } from '../game/assistConfig'
-import { assistTileMask, decideAutoDiscardDelayMs, decideDiscardSource, decideTimedDiscardIndex, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, offsetDiscardSourceMarker, waitGuideWorldY } from '../game/assistLogic'
+import { assistTileMask, decideAutoDiscardDelayMs, decideDiscardSource, decideTimedDiscardIndex, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, isDrawnTilePosition, offsetDiscardSourceMarker, sortHandForDisplay, waitGuideWorldY } from '../game/assistLogic'
 import {
   GAME_AUTO_PASS_HOLD_EVENT,
   GAME_AUTO_CONTROL_EVENT,
@@ -63,7 +63,6 @@ import {
   centerMobileEffectPoint,
   MOBILE_PLAYFIELD_OFFSET_Y,
   mobileCenterHudOffset,
-  mobileDiscardScale,
   mobileVisibleWorldBounds,
   mobileVisibleWorldLayoutKey,
   responsiveDesktopCenterOffset,
@@ -71,6 +70,7 @@ import {
   responsiveDesktopVisibleWorldBounds,
 } from '../game/mobileIngameViewport'
 import { canCompleteGameResync, restoreVisiblePaiCodes, shouldUsePendingInitPaiInfo } from '../game/resyncState'
+import { buildInitialHandIndices, inferInitialDealStart } from '../game/replayInitialDeal'
 import {
   beginPaifuRecording,
   cancelPaifuRecording,
@@ -136,14 +136,18 @@ let Z_PANEL = INGAME_LAYOUT.panel.depth
 let ACTION_BUTTON_LAYOUT = INGAME_LAYOUT.actionButtons
 const DESKTOP_DISCARD_COLS = 6
 const MOBILE_DISCARD_COLS = 10
-const MOBILE_TILE_SCALE = 0.76
+const MOBILE_NON_SELF_TILE_SCALE = 0.70
+const MOBILE_TILE_SCALE = MOBILE_NON_SELF_TILE_SCALE
 const MOBILE_SELF_HAND_TILE_SCALE = 0.95
-const MOBILE_OTHER_HAND_TILE_SCALE = MOBILE_SELF_HAND_TILE_SCALE * 0.78
+const MOBILE_OTHER_HAND_TILE_SCALE = MOBILE_NON_SELF_TILE_SCALE
 const MOBILE_OTHER_HAND_STEP_RATIO = 0.72
 const MOBILE_TOP_HAND_TILE_OFFSET = -2
 const MOBILE_SIDE_HAND_Y_OFFSET = 0
+const MOBILE_LEFT_SIDE_HAND_OUTER_OFFSET = 20
+const MOBILE_RIGHT_SIDE_HAND_OUTER_OFFSET = 8
+const MOBILE_TOP_MELD_OUTER_OFFSET_Y = 16
+const MOBILE_BOTTOM_MELD_OUTER_OFFSET_Y = 16
 const MOBILE_DISCARD_LAYOUT_SCALE = 1.20
-const MOBILE_DISCARD_TILE_SCALE = 0.70
 const MOBILE_CONTENT_BASE_ASPECT = 375 / 667
 const MOBILE_CONTENT_SCALE_MIN = 0.68
 const MOBILE_OPPONENT_SUMMARY_TILE_SCALE = 0.64
@@ -285,10 +289,13 @@ function handPos(loc: 0 | 1 | 2 | 3, idx: number, isDrawTile: boolean, isOpenMod
   const tableLoc = loc === 0 ? 4 : loc
   const offset = isDrawTile ? MOH_OFS[tableLoc] : { x: 0, y: 0 }
   const openOffset = isOpenMode ? OPN_OFS[tableLoc] : { x: 0, y: 0 }
-  return boardEdgePoint({
+  const point = {
     x: TEH_POS[tableLoc].x + TEH_COL[tableLoc].x * idx + offset.x + openOffset.x,
     y: TEH_POS[tableLoc].y + TEH_COL[tableLoc].y * idx + offset.y + openOffset.y,
-  }, loc, CURRENT_INGAME_LAYOUT_MODE)
+  }
+  return CURRENT_INGAME_LAYOUT_MODE === 'responsiveDesktop'
+    ? boardLocalPoint(point)
+    : boardEdgePoint(point, loc, CURRENT_INGAME_LAYOUT_MODE)
 }
 
 function mobileOuterHandPos(loc: 0 | 1 | 2 | 3, idx: number, _count: number, isDrawTile: boolean, scale: number): { x: number; y: number } | null {
@@ -321,8 +328,8 @@ function mobileOuterHandPos(loc: 0 | 1 | 2 | 3, idx: number, _count: number, isD
   const totalHeight = Math.max(0, layoutCount - 1) * step + tileHeight
   const avatarInnerGap = MOBILE_HUD_AVATAR_INSET_X + MOBILE_HUD_AVATAR_WIDTH + MOBILE_SIDE_HAND_AVATAR_GAP
   const x = loc === 1
-    ? bounds.right - avatarInnerGap - tileWidth
-    : bounds.left + avatarInnerGap + MOBILE_LEFT_SIDE_HAND_INNER_OFFSET
+    ? bounds.right - avatarInnerGap - tileWidth + MOBILE_RIGHT_SIDE_HAND_OUTER_OFFSET
+    : bounds.left + avatarInnerGap + MOBILE_LEFT_SIDE_HAND_INNER_OFFSET - MOBILE_LEFT_SIDE_HAND_OUTER_OFFSET
   const y = loc === 1
     ? centerY - totalHeight / 2 + MOBILE_SIDE_HAND_Y_OFFSET + Math.max(0, layoutCount - 1 - idx) * step - drawGap
     : centerY - totalHeight / 2 + MOBILE_SIDE_HAND_Y_OFFSET + idx * step + drawGap
@@ -380,7 +387,9 @@ function discardPos(loc: 0 | 1 | 2 | 3, idx: number, flag: number, mode: IngameL
   const col = idx % DISCARD_COLS
   const row = Math.floor(idx / DISCARD_COLS)
   const base = discardBasePos(loc, mode)
-  const layoutScale = isMobileIngameLayout(mode) ? mobileDiscardScale(MOBILE_DISCARD_LAYOUT_SCALE) : 1
+  const layoutScale = isMobileIngameLayout(mode)
+    ? MOBILE_DISCARD_LAYOUT_SCALE * (MOBILE_NON_SELF_TILE_SCALE / 0.70) * mobileContentScale()
+    : 1
   let x = base.x + (STH_COL[loc].x * col + STH_ROW[loc].x * row) * layoutScale
   let y = base.y + (STH_COL[loc].y * col + STH_ROW[loc].y * row) * layoutScale
   if (flag === 2) {
@@ -412,7 +421,24 @@ function mobileMeldBasePos(loc: 0 | 1 | 2 | 3, meldScale: number): { x: number; 
   const desktopMeldBase = DESKTOP_INGAME_LAYOUT.meldPosition[loc]
   return {
     x: handEnd.x + (desktopMeldBase.x - desktopHandEnd.x) * meldScale,
-    y: handEnd.y + (desktopMeldBase.y - desktopHandEnd.y) * meldScale,
+    y: handEnd.y + (desktopMeldBase.y - desktopHandEnd.y) * meldScale
+      + (loc === 2 ? -MOBILE_TOP_MELD_OUTER_OFFSET_Y : loc === 0 ? MOBILE_BOTTOM_MELD_OUTER_OFFSET_Y : 0),
+  }
+}
+
+function responsiveMeldBasePos(loc: 0 | 1 | 2 | 3): { x: number; y: number } {
+  const desktopHandLoc = loc === 0 ? 4 : loc
+  const desktopHandEnd = {
+    x: DESKTOP_INGAME_LAYOUT.handPosition[desktopHandLoc].x
+      + DESKTOP_INGAME_LAYOUT.handStep[desktopHandLoc].x * (MOBILE_OTHER_HAND_FIXED_COUNT - 1),
+    y: DESKTOP_INGAME_LAYOUT.handPosition[desktopHandLoc].y
+      + DESKTOP_INGAME_LAYOUT.handStep[desktopHandLoc].y * (MOBILE_OTHER_HAND_FIXED_COUNT - 1),
+  }
+  const handEnd = handPos(loc, MOBILE_OTHER_HAND_FIXED_COUNT - 1, false)
+  const desktopMeldBase = DESKTOP_INGAME_LAYOUT.meldPosition[loc]
+  return {
+    x: handEnd.x + desktopMeldBase.x - desktopHandEnd.x,
+    y: handEnd.y + desktopMeldBase.y - desktopHandEnd.y,
   }
 }
 
@@ -420,13 +446,7 @@ function meldPos(loc: 0 | 1 | 2 | 3, row: number, col: number, flag: number, mod
   const dir = flag === 2 ? ((loc + 1) % 4) as 0 | 1 | 2 | 3 : loc
   const meldLayout = DESKTOP_INGAME_LAYOUT
   const mobileBase = isMobileIngameLayout(mode) ? mobileMeldBasePos(loc, scale) : null
-  const responsiveBounds = mode === 'responsiveDesktop' ? responsiveDesktopVisibleWorldBounds() : null
-  const responsiveBase = responsiveBounds
-    ? {
-        x: responsiveBounds.left + meldLayout.meldPosition[loc].x / meldLayout.board.width * (responsiveBounds.right - responsiveBounds.left),
-        y: responsiveBounds.top + meldLayout.meldPosition[loc].y / meldLayout.board.height * (responsiveBounds.bottom - responsiveBounds.top),
-      }
-    : null
+  const responsiveBase = mode === 'responsiveDesktop' ? responsiveMeldBasePos(loc) : null
   const base = mobileBase ?? meldLayout.meldPosition[loc]
   const stepScale = isMobileIngameLayout(mode) ? scale : 1
   const scaleX = stepScale
@@ -460,20 +480,23 @@ function skinTextureCandidate(key: string): string {
 function mobileDeadWallBasePos(): { x: number; y: number } | null {
   const bounds = mobileVisibleWorldBounds()
   if (!bounds) return null
-  const tileWidth = 31 * MOBILE_TILE_SCALE
-  const groupWidth = 6 * TEH_COL[0].x + tileWidth
+  const tileStep = TEH_COL[0].x * MOBILE_NON_SELF_TILE_SCALE * mobileContentScale()
+  const groupWidth = tileStep * 7
   const rightAvatarLeft = bounds.right - MOBILE_HUD_AVATAR_WIDTH - MOBILE_HUD_AVATAR_INSET_X
   return {
     x: rightAvatarLeft - MOBILE_DEAD_WALL_AVATAR_GAP - groupWidth - BOARD_X + MOBILE_DEAD_WALL_SHIFT_X,
-    y: bounds.top + MOBILE_HUD_AVATAR_INSET_TOP - BOARD_Y + WAN_EXPOSE_OFFSET_Y + MOBILE_DEAD_WALL_AVATAR_Y_OFFSET + MOBILE_PLAYFIELD_OFFSET_Y,
+    y: bounds.top + MOBILE_HUD_AVATAR_INSET_TOP - BOARD_Y
+      + WAN_EXPOSE_OFFSET_Y * MOBILE_NON_SELF_TILE_SCALE * mobileContentScale()
+      + MOBILE_DEAD_WALL_AVATAR_Y_OFFSET + MOBILE_PLAYFIELD_OFFSET_Y,
   }
 }
 
 function deadWallPos(idx: number, mode: IngameLayoutMode): { x: number; y: number } {
   const base = isMobileIngameLayout(mode) ? mobileDeadWallBasePos() ?? WAN_POS : WAN_POS
+  const tileScale = isMobileIngameLayout(mode) ? MOBILE_NON_SELF_TILE_SCALE * mobileContentScale() : 1
   return boardLocalPoint({
-    x: base.x + (6 - Math.floor(idx / 2)) * TEH_COL[0].x,
-    y: base.y - (idx % 2 === 0 ? WAN_EXPOSE_OFFSET_Y : 0),
+    x: base.x + (6 - Math.floor(idx / 2)) * TEH_COL[0].x * tileScale,
+    y: base.y - (idx % 2 === 0 ? WAN_EXPOSE_OFFSET_Y * tileScale : 0),
   })
 }
 
@@ -1000,13 +1023,14 @@ export default class GameScene extends Phaser.Scene {
   private mobileHandSummaryStateKey = ''
   private mobileCenterInfoLayoutKey = ''
   private responsiveActionPanelOffsetY = 0
+  private deadWallScaleOverride?: 'topHand'
 
   constructor() {
     super({ key: 'GameScene' })
   }
 
   private tileScale(): number {
-    return this.layoutMode === 'mobileLandscape' ? MOBILE_TILE_SCALE : 1
+    return this.layoutMode === 'mobileLandscape' ? MOBILE_TILE_SCALE * mobileContentScale() : 1
   }
 
   private handTileScale(odr: number, loc: 0 | 1 | 2 | 3): number {
@@ -1022,10 +1046,14 @@ export default class GameScene extends Phaser.Scene {
     return this.tileScale()
   }
 
-  private discardTileScale(): number {
-    return this.layoutMode === 'mobileLandscape'
-      ? mobileDiscardScale(MOBILE_DISCARD_TILE_SCALE)
+  private deadWallTileScale(): number {
+    return this.deadWallScaleOverride === 'topHand'
+      ? this.handTileScale(0, 2)
       : this.tileScale()
+  }
+
+  private discardTileScale(): number {
+    return this.tileScale()
   }
 
   private shouldUseMobileOpponentHandSummary(odr: number, loc: 0 | 1 | 2 | 3): boolean {
@@ -1044,6 +1072,7 @@ export default class GameScene extends Phaser.Scene {
     this.mobileHandSummaryStateKey = ''
     this.mobileCenterInfoLayoutKey = ''
     this.responsiveActionPanelOffsetY = 0
+    this.deadWallScaleOverride = data.deadWallScale
     this.roomId = data.roomId ?? ''
     this.paifuRoomName = data.roomName ?? this.roomId
     this.myOdr  = data.myOdr  ?? 0
@@ -2470,7 +2499,15 @@ export default class GameScene extends Phaser.Scene {
 
   private resolveSkinTextureKey(key: string): string {
     const candidate = skinTextureCandidate(key)
-    return this.textures.exists(candidate) ? candidate : key
+    const resolvedKey = this.textures.exists(candidate) ? candidate : key
+    if (key.startsWith('hai_') && this.textures.exists(resolvedKey)) {
+      this.textures.get(resolvedKey).setFilter(
+        this.layoutMode === 'mobileLandscape'
+          ? Phaser.Textures.FilterMode.LINEAR
+          : Phaser.Textures.FilterMode.NEAREST,
+      )
+    }
+    return resolvedKey
   }
 
   private resolveSkinTexture(texture: { key: string; frame?: number }): { key: string; frame?: number } {
@@ -3011,7 +3048,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     tiles.forEach((tile, idx) => {
-      const isDrawTile = idx === tiles.length - 1 && tiles.length % 3 === 2
+      const isDrawTile = isDrawnTilePosition(tiles.length, idx, this.discardAfterCall[odr])
       const useOpenOrDownLayout = this.isViewer || (this.isReplay && this.replayHandOpen && (!isMobileIngameLayout(this.layoutMode) || loc !== 0))
       const handScale = this.handTileScale(odr, loc)
       const position = isMobileIngameLayout(this.layoutMode)
@@ -3025,7 +3062,7 @@ export default class GameScene extends Phaser.Scene {
         : handDepth(y, idx)
       let spr: Phaser.GameObjects.Image
 
-      if (isBottomHand) {
+      if (isBottomHand && tile.code > 0) {
         /* 自分の手牌: 表向き + インタラクティブ */
         const frame = paiToFrame(tile.code)
         spr = this.add.image(x, y, texture.key, frame)
@@ -3048,7 +3085,7 @@ export default class GameScene extends Phaser.Scene {
             ? this.createLegacyHoverCursor(spr)
             : this.createTileSelectionFrame(spr)
         }
-      } else if ((this.isReplay && this.replayHandOpen) || (this.isViewer && this.replayHandOpen && tile.code > 0)) {
+      } else if (tile.code > 0 && ((this.isReplay && this.replayHandOpen) || (this.isViewer && this.replayHandOpen))) {
         const frame = paiToFrame(tile.code)
         spr = this.clipToBoard(this.add.image(x, y, this.resolveSkinTextureKey(openHandTexture(loc)), frame)
           .setOrigin(0, 0)
@@ -3068,60 +3105,12 @@ export default class GameScene extends Phaser.Scene {
       }
       this.handSprites[odr].push(spr)
     })
-    this.centerResponsiveHorizontalHand(odr, loc)
     this.alignResponsiveLocalHandAbovePanel(odr, loc)
-    this.alignResponsiveMeldsWithHand(odr, loc)
     this.updateMobileActionHandVisibility()
     this.applyInitialDealVisibility(odr)
     if (!this.isViewer && odr === this.myOdr) this.redrawTenpaiMarkers()
     this.redrawDiscardSourceMarker(odr)
     this.redrawPaifuGraphContent()
-  }
-
-  private centerResponsiveHorizontalHand(odr: number, loc: 0 | 1 | 2 | 3) {
-    if (this.layoutMode !== 'responsiveDesktop' || (loc !== 0 && loc !== 2)) return
-    const bounds = responsiveDesktopVisibleWorldBounds()
-    const sprites = this.handSprites[odr].filter(sprite => sprite.active)
-    if (!bounds || sprites.length === 0) return
-    const left = Math.min(...sprites.map(sprite => sprite.getBounds().left))
-    const right = Math.max(...sprites.map(sprite => sprite.getBounds().right))
-    const top = Math.min(...sprites.map(sprite => sprite.getBounds().top))
-    const bottom = Math.max(...sprites.map(sprite => sprite.getBounds().bottom))
-    const shiftX = (bounds.left + bounds.right - left - right) / 2
-    const shiftY = this.isResponsiveDesktopFullscreen()
-      ? (() => {
-          const tableCenter = boardLocalPoint({
-            x: CENTER_INFO.x + CENTER_INFO.width / 2,
-            y: CENTER_INFO.y + CENTER_INFO.height / 2,
-          })
-          const handHeight = bottom - top
-          const targetTop = loc === 0
-            ? tableCenter.y + (bounds.bottom - tableCenter.y - handHeight) * RESPONSIVE_DESKTOP_BOTTOM_HAND_OUTER_RATIO
-            : bounds.top + (tableCenter.y - bounds.top - handHeight) * (1 - RESPONSIVE_DESKTOP_HORIZONTAL_HAND_OUTER_RATIO)
-          return targetTop - top
-        })()
-      : 0
-    if (loc === 0) {
-      const panelOffsetDelta = shiftY - this.responsiveActionPanelOffsetY
-      this.responsiveActionPanelOffsetY = shiftY
-      if (panelOffsetDelta !== 0) {
-        if (this.actionPanelSprite) this.actionPanelSprite.y += panelOffsetDelta
-        this.updateActionButtonPositions(new Set(this.currentActionOffers))
-      }
-    }
-    sprites.forEach(sprite => {
-      sprite.x += shiftX
-      sprite.y += shiftY
-    })
-    this.meldSprites[odr].filter(sprite => sprite.active).forEach(sprite => {
-      sprite.x += shiftX
-      sprite.y += shiftY
-    })
-    if (odr !== this.myOdr) return
-    if (this.selectedCursor) this.selectedCursor.x += shiftX
-    if (this.drawnTileCursor) this.drawnTileCursor.x += shiftX
-    if (this.selectedCursor) this.selectedCursor.y += shiftY
-    if (this.drawnTileCursor) this.drawnTileCursor.y += shiftY
   }
 
   private alignResponsiveLocalHandAbovePanel(odr: number, loc: 0 | 1 | 2 | 3) {
@@ -3447,39 +3436,7 @@ export default class GameScene extends Phaser.Scene {
         this.meldSprites[odr].push(spr)
       })
     })
-    this.alignResponsiveMeldsWithHand(odr, loc)
     this.redrawPaifuGraphContent()
-  }
-
-  private alignResponsiveMeldsWithHand(odr: number, loc: 0 | 1 | 2 | 3) {
-    if (this.layoutMode !== 'responsiveDesktop' && !isMobileIngameLayout(this.layoutMode)) return
-    const handSprites = this.handSprites[odr].filter(sprite => sprite.active)
-    const meldSprites = this.meldSprites[odr].filter(sprite => sprite.active)
-    if (handSprites.length === 0 || meldSprites.length === 0) return
-
-    const handBounds = {
-      left: Math.min(...handSprites.map(sprite => sprite.getBounds().left)),
-      right: Math.max(...handSprites.map(sprite => sprite.getBounds().right)),
-      top: Math.min(...handSprites.map(sprite => sprite.getBounds().top)),
-      bottom: Math.max(...handSprites.map(sprite => sprite.getBounds().bottom)),
-    }
-    const meldBounds = {
-      left: Math.min(...meldSprites.map(sprite => sprite.getBounds().left)),
-      right: Math.max(...meldSprites.map(sprite => sprite.getBounds().right)),
-      top: Math.min(...meldSprites.map(sprite => sprite.getBounds().top)),
-      bottom: Math.max(...meldSprites.map(sprite => sprite.getBounds().bottom)),
-    }
-    const attachShift = loc === 0
-      ? { x: handBounds.right - meldBounds.left, y: handBounds.bottom - meldBounds.bottom }
-      : loc === 1
-        ? { x: handBounds.right - meldBounds.right, y: handBounds.top - meldBounds.bottom }
-        : loc === 2
-          ? { x: handBounds.left - meldBounds.right, y: handBounds.top - meldBounds.top }
-          : { x: handBounds.left - meldBounds.left, y: handBounds.bottom - meldBounds.top }
-    meldSprites.forEach(sprite => {
-      sprite.x += attachShift.x
-      sprite.y += attachShift.y
-    })
   }
 
   private clearDeadWall() {
@@ -3588,7 +3545,7 @@ export default class GameScene extends Phaser.Scene {
         : this.add.image(x, y, this.resolveSkinTextureKey('hai_ura_2'))
       this.clipToBoard(sprite
         .setOrigin(0, 0)
-        .setScale(this.tileScale())
+        .setScale(this.deadWallTileScale())
         .setDepth(y + (idx % 2 === 0 ? WAN_EXPOSE_OFFSET_Y * 2 : 0)))
       if (code) this.bindAssistTileInput(sprite, code)
       this.deadWallSprites.push(sprite)
@@ -5339,8 +5296,8 @@ export default class GameScene extends Phaser.Scene {
       if (action === Act.Kan || action === Act.Ank || action === Act.Cha) {
         this.syncLiveDoraIndicators(this.paifuGraphRound.dora.length + 1)
       }
-      this.applyMeldAction(odr, action as Act, indices, this.readClaimedOdr(data, odr, action as Act), suppressLivePlayback)
       this.discardAfterCall[odr] = action === Act.Chi || action === Act.Pon
+      this.applyMeldAction(odr, action as Act, indices, this.readClaimedOdr(data, odr, action as Act), suppressLivePlayback)
     }
 
     this.reportGameDiscardAudit(data, odr, action)
@@ -5636,8 +5593,9 @@ export default class GameScene extends Phaser.Scene {
       const expectedHandCount = openPos === initialOyaOrder ? 14 : 13
       const initialHand = this.selectInitialHandTiles(openPos, msg.tiles, initialOyaOrder, initialDice, expectedHandCount)
       if (initialHand.length === 0) return
-      this.players[openPos].hand = this.cloneTiles(initialHand)
-      this.paifuGraphInitialHands[openPos] = this.cloneTiles(initialHand)
+      const displayedHand = sortHandForDisplay(initialHand, initialHand.length % 3 === 2)
+      this.players[openPos].hand = this.cloneTiles(displayedHand)
+      this.paifuGraphInitialHands[openPos] = this.cloneTiles(displayedHand)
       this.redrawHand(openPos)
     }
   }
@@ -5650,19 +5608,24 @@ export default class GameScene extends Phaser.Scene {
     for (let odr = 0; odr < this.players.length; odr++) {
       const initialHand = this.buildInitialHandTiles(odr, msg.tiles, initialOyaOrder, initialDice)
       if (initialHand.length === 0) continue
-      this.players[odr].hand = this.cloneTiles(initialHand)
-      this.paifuGraphInitialHands[odr] = this.cloneTiles(initialHand.filter(tile => tile.code > 0))
+      const displayedHand = sortHandForDisplay(initialHand, initialHand.length % 3 === 2)
+      this.players[odr].hand = this.cloneTiles(displayedHand)
+      this.paifuGraphInitialHands[odr] = this.cloneTiles(displayedHand.filter(tile => tile.code > 0))
       this.redrawHand(odr)
     }
   }
 
   private buildInitialHandTiles(openPos: number, tiles: TileState[], oyaOrder?: number, dice?: number[]): TileState[] {
-    const handIndices = this.buildInitialHandIndexSet(openPos, oyaOrder, dice)
+    let handIndices = this.buildInitialHandIndexSet(openPos, oyaOrder, dice)
     if (!handIndices) return []
     const byBipaiIndex = new Map<number, TileState>()
     tiles.forEach(tile => {
       if (tile.bipaiIndex !== undefined) byBipaiIndex.set(tile.bipaiIndex, tile)
     })
+    if (handIndices.some(bipaiIndex => !byBipaiIndex.has(bipaiIndex)) && oyaOrder !== undefined) {
+      const inferredStart = inferInitialDealStart(tiles.flatMap(tile => tile.bipaiIndex === undefined ? [] : [tile.bipaiIndex]))
+      if (inferredStart !== undefined) handIndices = buildInitialHandIndices(openPos, oyaOrder, inferredStart)
+    }
     return handIndices.map(bipaiIndex => byBipaiIndex.get(bipaiIndex) ?? { code: 0, bipaiIndex, isSelected: false })
   }
 
@@ -5729,25 +5692,7 @@ export default class GameScene extends Phaser.Scene {
     if (oyaOrder === undefined || oyaOrder < 0 || oyaOrder >= this.players.length) return undefined
     const haipaiPos = this.getHaipaiPos(oyaOrder, dice)
     if (haipaiPos === undefined) return undefined
-    const indices: number[] = []
-    let seatOdr = oyaOrder
-    let offset = 0
-    for (let round = 0; round < 3; round++) {
-      for (let player = 0; player < this.players.length; player++) {
-        for (let count = 0; count < 4; count++) {
-          if (seatOdr === openPos) indices.push((haipaiPos + offset) % 136)
-          offset++
-        }
-        seatOdr = (seatOdr + 1) % this.players.length
-      }
-    }
-    for (let player = 0; player < this.players.length; player++) {
-      if (seatOdr === openPos) indices.push((haipaiPos + offset) % 136)
-      offset++
-      seatOdr = (seatOdr + 1) % this.players.length
-    }
-    if (openPos === oyaOrder) indices.push((haipaiPos + offset) % 136)
-    return indices
+    return buildInitialHandIndices(openPos, oyaOrder, haipaiPos)
   }
 
   private getHaipaiPos(oyaOrder?: number, dice?: number[]): number | undefined {

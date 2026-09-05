@@ -95,9 +95,11 @@ interface CostumeAnimationState {
 
 const TURN_MARK_EVENT = 'majak:turn-mark'
 const PAIFU_GRAPH_EVENT = 'majak:paifu-graph'
+const GAME_EFFECT_WINDOW_EVENT = 'majak:game-effect-window'
 const UI_FLOW_TRACE_PREFIX = '[UIFlow]'
 const DEBUG_UI_FLOW = import.meta.env.VITE_DEBUG_GAME === '1'
 const IMG = '/assets/images/game'
+const CALL_ACTION_DURATION_MS = 1100
 const BOARD_X = 5
 const BOARD_Y = 31
 const CUSTOM_DEFAULT_ID_COSTUME = 100011
@@ -446,6 +448,7 @@ export default class UIScene extends Phaser.Scene {
   private timerBankMs = 0
   private timerBankEnabled = false
   private timerEvent?: Phaser.Time.TimerEvent
+  private pendingTimer?: { data: ActionPromptTimerData; endAt: number }
   private flowTraceSerial = 0
   private players: PlayerHudState[] = []
   private myOdr = 0
@@ -670,7 +673,7 @@ export default class UIScene extends Phaser.Scene {
     gs.events.on('actionPromptStart', (data: ActionPromptTimerData) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.traceUiFlow('actionPromptStart event', { ...data })
-      if (Number.isFinite(data.timeLimit) && Number(data.timeLimit) > 0) this.startTimer(data)
+      if (Number.isFinite(data.timeLimit) && Number(data.timeLimit) > 0) this.queueTimer(data)
     }, this)
 
     gs.events.on('actionPromptEnd', (data: { viewOdr?: number }) => {
@@ -709,11 +712,15 @@ export default class UIScene extends Phaser.Scene {
   }
 
   update() {
+    this.startPendingTimerIfReady()
     if (!isMobileIngameLayout(this.layoutMode) && this.layoutMode !== 'responsiveDesktop') return
     const bounds = mobileVisibleWorldBounds()
     if (!bounds) return
     const layoutKey = mobileVisibleWorldLayoutKey(this.layoutMode)
-    if (layoutKey === this.lastMobileHudLayoutKey) return
+    if (layoutKey === this.lastMobileHudLayoutKey) {
+      if (this.layoutMode === 'responsiveDesktop') this.updateTimerLayout()
+      return
+    }
     this.lastMobileHudLayoutKey = layoutKey
     this.updateCenterHudLayout()
     this.updateTimerLayout()
@@ -729,6 +736,11 @@ export default class UIScene extends Phaser.Scene {
 
   private showCallAction(data: { odr: number; frame: number; avatarUrl: string; fallbackAvatarUrl: string; costumeAction?: LegacyCostumeAction }) {
     if (data.odr < 0 || data.odr >= 4) return
+    if (document.visibilityState === 'visible') {
+      window.dispatchEvent(new CustomEvent(GAME_EFFECT_WINDOW_EVENT, {
+        detail: { durationMs: CALL_ACTION_DURATION_MS },
+      }))
+    }
     if (data.costumeAction) this.startCostumeAction(data.odr, data.costumeAction)
     const loc = this.odrToLoc(data.odr)
     const point = this.callActionPoint(loc)
@@ -738,7 +750,7 @@ export default class UIScene extends Phaser.Scene {
     const avatar = this.showCallAvatar(data.odr, loc, point, data.avatarUrl, data.fallbackAvatarUrl)
     this.callSprites.push(balloon)
     if (avatar.sprite) this.callSprites.push(avatar.sprite)
-    this.time.delayedCall(1100, () => {
+    this.time.delayedCall(CALL_ACTION_DURATION_MS, () => {
       balloon.destroy()
       avatar.destroy()
       this.callSprites = this.callSprites.filter(item => item !== balloon && item !== avatar.sprite)
@@ -1880,7 +1892,24 @@ export default class UIScene extends Phaser.Scene {
   /* ======================================================================
    * タイマー (CMJRoomWnd WM_TIMER 相当)
    * ======================================================================*/
-  private startTimer(data: ActionPromptTimerData) {
+  private queueTimer(data: ActionPromptTimerData) {
+    const limitMs = Math.max(0, Math.trunc(Number(data.timeLimit ?? 0)))
+    this.stopTimer()
+    if (limitMs <= 0) return
+    this.pendingTimer = { data, endAt: performance.now() + limitMs }
+  }
+
+  private startPendingTimerIfReady() {
+    const pending = this.pendingTimer
+    if (!pending) return
+    const gameScene = this.scene.get('GameScene') as Phaser.Scene & { getActionPanelBounds?: () => Phaser.Geom.Rectangle | null }
+    const panelBounds = gameScene.getActionPanelBounds?.()
+    if (!panelBounds || panelBounds.width <= 0 || panelBounds.height <= 0) return
+    this.pendingTimer = undefined
+    this.startTimer(pending.data, pending.endAt)
+  }
+
+  private startTimer(data: ActionPromptTimerData, endAt: number) {
     if (this.isViewer) {
       this.timerBack.setVisible(false)
       this.timerBar.setVisible(false)
@@ -1906,7 +1935,7 @@ export default class UIScene extends Phaser.Scene {
     this.timerBankMs = Math.max(0, Number(data.timeBankMs ?? 0))
     this.timerBankEnabled = Boolean(data.timeBankEnabled)
     this.timerMaxMs = Math.max(1, Number(data.maxTimeMs ?? 0), this.timerBaseTimeMs + this.timerBankMs)
-    this.timerEndAt = performance.now() + Math.max(1, limitMs)
+    this.timerEndAt = endAt
     this.traceUiFlow('timer start', { ...data, limitMs })
     this.updateTimerLayout()
     this.timerBack.setVisible(true)
@@ -1920,16 +1949,16 @@ export default class UIScene extends Phaser.Scene {
         this.timerBankEnabled,
       )
       const scale = W_TIMBAR / this.timerMaxMs
-      const baseWidth = Math.max(0, Math.round(segments.turnMs * scale))
+      const turnWidth = Math.max(0, Math.round(segments.turnMs * scale))
       const bankWidth = Math.max(0, Math.round(segments.bankMs * scale))
       const keepWidth = Math.max(0, Math.round(segments.keepMs * scale))
       const x = this.timerBack.x
       const y = this.timerBack.y
-      this.timerBar.setPosition(x, y).setDisplaySize(baseWidth, H_TIMBAR)
-        .setFillStyle(this.timerBankEnabled ? 0x0000ff : 0xff0000).setVisible(baseWidth > 0)
-      this.timerTurnBar.setPosition(x + baseWidth, y).setDisplaySize(bankWidth, H_TIMBAR)
-        .setFillStyle(this.timerBankEnabled ? 0x0080ff : 0xff8080).setVisible(bankWidth > 0)
-      this.timerKeepBar.setPosition(x + baseWidth + bankWidth, y).setDisplaySize(keepWidth, H_TIMBAR)
+      this.timerBar.setPosition(x, y).setDisplaySize(bankWidth, H_TIMBAR)
+        .setFillStyle(this.timerBankEnabled ? 0x0000ff : 0xff0000).setVisible(bankWidth > 0)
+      this.timerTurnBar.setPosition(x + bankWidth, y).setDisplaySize(turnWidth, H_TIMBAR)
+        .setFillStyle(this.timerBankEnabled ? 0x0080ff : 0xff8080).setVisible(turnWidth > 0)
+      this.timerKeepBar.setPosition(x + bankWidth + turnWidth, y).setDisplaySize(keepWidth, H_TIMBAR)
         .setFillStyle(0x00ffff).setVisible(keepWidth > 0)
       if (remainMs <= 0) this.stopTimer()
     }
@@ -1943,6 +1972,7 @@ export default class UIScene extends Phaser.Scene {
 
   private stopTimer() {
     this.traceUiFlow('timer stop')
+    this.pendingTimer = undefined
     this.timerEvent?.destroy()
     this.timerEvent = undefined
     this.timerMaxMs = 0

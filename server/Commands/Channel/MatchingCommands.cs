@@ -219,12 +219,12 @@ public class AutoEnterRoomCommand : ICommand
             _logger?.LogError(
                 "AutoEnterRoom failed: member no mismatch. roomId={RoomId} sessionMemberNo={SessionMemberNo} payloadPlayerId={PayloadPlayerId} resolvedMemberNo={ResolvedMemberNo}",
                 roomId, player.MemberNo, payloadPlayerId, payloadMemberNo);
-            _session.RemovePendingMatchMember(roomId, player.MemberNo);
+            _session.RemovePendingMatchMember(player.ChannelId, roomId, player.MemberNo);
             await SendConnectError(ctx, roomId, "Member No mismatch", LegacyErrorCode.NotMatchSocketId);
             return;
         }
 
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(player.ChannelId, roomId);
         if (room == null)
         {
             _logger?.LogError(
@@ -246,7 +246,7 @@ public class AutoEnterRoomCommand : ICommand
 
         // Check whether the player is included in PendingAutoMatch.
         // Legacy reference: FindReservePlayer(pPlayer->m_szMemberNo).
-        var pending = _session.GetPendingMatch(roomId);
+        var pending = _session.GetPendingMatch(player.ChannelId, roomId);
         bool isViewRequest = IsConnectForView(connectFor);
         bool isViewer = isViewRequest;
         if (!isViewer && pending != null && !_session.IsPendingMatchMember(pending, player.MemberNo))
@@ -266,7 +266,7 @@ public class AutoEnterRoomCommand : ICommand
             _logger?.LogError(
                 "AutoEnterRoom failed: invalid connectFor. roomId={RoomId} memberNo={MemberNo} connectFor={ConnectFor}",
                 roomId, player.MemberNo, connectFor);
-            _session.RemovePendingMatchMember(roomId, player.MemberNo);
+            _session.RemovePendingMatchMember(player.ChannelId, roomId, player.MemberNo);
             await SendConnectError(ctx, roomId, "Invalid enter room type", LegacyErrorCode.MajAutoEnterRoomFailed);
             return;
         }
@@ -324,7 +324,7 @@ public class AutoEnterRoomCommand : ICommand
             {
                 if (playerType != GKey.ValuePlayer)
                 {
-                    _session.RemovePendingMatchMember(roomId, player.MemberNo);
+                    _session.RemovePendingMatchMember(player.ChannelId, roomId, player.MemberNo);
                     await SendConnectError(ctx, roomId, "Auto enter room failed", LegacyErrorCode.MajAutoEnterRoomFailed);
                     return;
                 }
@@ -335,7 +335,7 @@ public class AutoEnterRoomCommand : ICommand
 
                 if (hasActiveSeat && !isPlayingSeatReconnect)
                 {
-                    _session.RemovePendingMatchMember(roomId, player.MemberNo);
+                    _session.RemovePendingMatchMember(player.ChannelId, roomId, player.MemberNo);
                     await SendConnectError(ctx, roomId, "Same member already in room", LegacyErrorCode.SameUserAlreadyIn);
                     return;
                 }
@@ -374,7 +374,7 @@ public class AutoEnterRoomCommand : ICommand
                         string roomPwd = FirstString(ctx, GKey.RoomPwd, "roomPwd");
                         if (room.Password != roomPwd)
                         {
-                            _session.RemovePendingMatchMember(roomId, player.MemberNo);
+                            _session.RemovePendingMatchMember(player.ChannelId, roomId, player.MemberNo);
                             await SendConnectError(ctx, roomId, "Invalid password", LegacyErrorCode.InvalidPassword);
                             return;
                         }
@@ -389,7 +389,7 @@ public class AutoEnterRoomCommand : ICommand
                     bool joined = _session.JoinRoom(roomId, player);
                     if (!joined)
                     {
-                        _session.RemovePendingMatchMember(roomId, player.MemberNo);
+                        _session.RemovePendingMatchMember(player.ChannelId, roomId, player.MemberNo);
                         await SendConnectError(ctx, roomId, "Room full", LegacyErrorCode.MajAutoEnterRoomFailed);
                         return;
                     }
@@ -400,7 +400,7 @@ public class AutoEnterRoomCommand : ICommand
             }
 
 
-            await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, $"room_{roomId}");
+            await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, SignalRGroup.Room(player.ChannelId, roomId));
 
 
 
@@ -410,7 +410,7 @@ public class AutoEnterRoomCommand : ICommand
 
 
 
-            await _hub.Clients.Group($"room_{roomId}")
+            await _hub.Clients.Group(SignalRGroup.Room(player.ChannelId, roomId))
                 .SendAsync(Cmd.AddMember, MajakServer.Commands.Room.RoomGetMembersCommand.BuildAddMemberPayload(
                     room, player, isViewer ? GKey.ValueViewer : GKey.ValuePlayer));
 
@@ -438,7 +438,7 @@ public class AutoEnterRoomCommand : ICommand
         if (room.State == GameRoomState.Playing && !isViewer) return;
         if (isViewer) return;
 
-        var (allEntered, match) = _session.ConfirmAutoEntry(roomId, player.MemberNo);
+        var (allEntered, match) = _session.ConfirmAutoEntry(player.ChannelId, roomId, player.MemberNo);
         _logger?.LogInformation(
             "AutoEnterRoom confirmed. roomId={RoomId} memberNo={MemberNo} allEntered={AllEntered} entered={Entered}/{Expected}",
             roomId,

@@ -84,3 +84,16 @@ export interface GameAnnouncement {
   createdAt: string
   updatedAt: string
 }
+
+export interface ChannelMaster {
+  channelId: string
+  subId: string
+  channelName: string
+  maxMember: number
+  maxRoom: number
+  unitMoney: number
+  channelType: number
+  isActive: boolean
+  serverUrl: string
+  serverActive: boolean
+}

@@ -59,7 +59,7 @@ public class InviteCommand : ICommand
         if (target.ChannelId != player.ChannelId) return;
         if (target.RejectInvite) return;
 
-        var room = _session.GetRoom(player.RoomId.Value);
+        var room = _session.GetRoom(player.ChannelId, player.RoomId.Value);
         string roomPwd = room?.Password ?? "";
 
 

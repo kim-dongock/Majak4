@@ -278,6 +278,7 @@ public class GamePlayerRepository
             account.TermsAgreedAt)
         {
             MemberNoValue = account.MemberNo,
+            ExternalAuthId = account.ExternalAuthId,
         };
 
     private static bool TryParseMemberNo(string memberNo, out ulong memberNoValue)
@@ -305,8 +306,10 @@ public sealed record GamePlayerAccount(
 {
     /// <summary>DB の member_no。</summary>
     public ulong MemberNoValue { get; init; }
+    public string? ExternalAuthId { get; init; }
     /// <summary>レガシープロトコル互換の文字列表現。</summary>
     public string MemberNo => MemberNoValue.ToString(CultureInfo.InvariantCulture);
+    public bool IsHangeAccount => ExternalAuthId?.StartsWith("hange:", StringComparison.Ordinal) == true;
     /// <summary>プレイ可能かどうか (管理者承認済み)。</summary>
     public bool IsActive => AccountStatus == 1;
     /// <summary>利用規約に同意済みかどうか。</summary>

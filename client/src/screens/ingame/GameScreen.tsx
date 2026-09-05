@@ -54,6 +54,8 @@ const KYO_RESULT_PROGRESS_EVENT = 'majak:kyo-result-progress'
 const KYO_RESULT_CONFIRMED_EVENT = 'majak:kyo-result-confirmed'
 const GAME_STATUS_EVENT = 'majak:game-status'
 const GAME_SYNC_EVENT = 'majak:game-sync'
+const GAME_EFFECT_WINDOW_EVENT = 'majak:game-effect-window'
+const GAME_EFFECT_SETTLE_MS = 80
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
 const PAIFU_HAND_OPEN_EVENT = 'majak:paifu-hand-open'
 const MAX_GAME_LOG_MESSAGES = 200
@@ -694,7 +696,7 @@ function GameLoadingOverlay({ visible }: { visible: boolean }) {
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0, 0, 0, 0.58)', pointerEvents: 'auto' }}>
       <div style={{ width: 260, height: 312, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 18, background: 'rgba(255, 255, 255, 0.94)', border: '1px solid rgba(0, 0, 0, 0.24)', boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)' }} aria-busy="true" aria-label="対局状況を同期中">
-        <img src="/assets/images/common/ico_big_majak2.jpg" alt="" draggable={false} style={{ width: 230, height: 230, objectFit: 'cover' }} />
+        <img src="/assets/images/common/ico_big_majak4.jpg" alt="" draggable={false} style={{ width: 230, height: 230, objectFit: 'cover' }} />
         <div className="majak-sync-spinner" aria-hidden="true" />
       </div>
     </div>
@@ -824,13 +826,19 @@ export default function GameScreen() {
   }, [awaitingTitleAnnouncement])
 
   useEffect(() => {
-    if (displayedHanResData || levelUp || announceData || pendingTitleAnnounces.length === 0) return
+    if (displayedHanResData || displayedKyoResData || levelUp || announceData || pendingTitleAnnounces.length === 0) return
     const [next, ...remaining] = pendingTitleAnnounces
     pendingTitleAnnouncesRef.current = remaining
     announceDataRef.current = next
     setPendingTitleAnnounces(remaining)
     setAnnounceData(next)
-  }, [announceData, displayedHanResData, levelUp, pendingTitleAnnounces])
+  }, [announceData, displayedHanResData, displayedKyoResData, levelUp, pendingTitleAnnounces])
+
+  useEffect(() => {
+    if (!hanResData || announceData || pendingTitleAnnounces.length === 0 || pendingResultBeforeOverlays) return
+    setPendingResultBeforeOverlays({ players: hanResData, flags: hanResFlags, levelUp: null })
+    setHanResData(null)
+  }, [announceData, hanResData, hanResFlags, pendingResultBeforeOverlays, pendingTitleAnnounces.length])
 
   useEffect(() => {
     if (awaitingTitleAnnouncement || announceData || pendingTitleAnnounces.length > 0 || !pendingResultBeforeOverlays) return
@@ -868,11 +876,13 @@ export default function GameScreen() {
   const statusLogRef = useRef<HTMLDivElement>(null)
   const chatLogRef = useRef<HTMLDivElement>(null)
   const callAvatarTimersRef = useRef<number[]>([])
+  const gameEffectUntilRef = useRef(0)
   const syncLoadingStartedAtRef = useRef(0)
   const syncLoadingOffTimerRef = useRef<number | null>(null)
   const playersRef = useRef<GamePlayerEntry[]>(players)
   const viewersRef = useRef<ViewerEntry[]>(viewers)
   const gameOrderLockedRef = useRef(false)
+  const gameReportHandledRef = useRef(false)
   const effectiveMyOdrRef = useRef<number | undefined>(effectiveMyOdr)
   const messageSeqRef = useRef(0)
   const proxyGuideShownRef = useRef(false)
@@ -980,6 +990,7 @@ export default function GameScreen() {
         w: Number(detail.w ?? 66),
         h: Number(detail.h ?? 94),
       }
+      gameEffectUntilRef.current = Math.max(gameEffectUntilRef.current, performance.now() + 1100)
       setActiveCallAvatars(prev => [...prev, item])
       const timer = window.setTimeout(() => {
         setActiveCallAvatars(prev => prev.filter(active => active.id !== item.id))
@@ -993,6 +1004,17 @@ export default function GameScreen() {
       callAvatarTimersRef.current.forEach(timer => window.clearTimeout(timer))
       callAvatarTimersRef.current = []
     }
+  }, [])
+
+  useEffect(() => {
+    const onGameEffectWindow = (event: Event) => {
+      const detail = (event as CustomEvent<{ durationMs?: number }>).detail ?? {}
+      const durationMs = Number(detail.durationMs ?? 0)
+      if (!Number.isFinite(durationMs) || durationMs <= 0) return
+      gameEffectUntilRef.current = Math.max(gameEffectUntilRef.current, performance.now() + durationMs)
+    }
+    window.addEventListener(GAME_EFFECT_WINDOW_EVENT, onGameEffectWindow)
+    return () => window.removeEventListener(GAME_EFFECT_WINDOW_EVENT, onGameEffectWindow)
   }, [])
 
   const putChatMessage = (text: string, color: string, bold = false) => {
@@ -1364,6 +1386,22 @@ export default function GameScreen() {
     }
 
     const onGameReport = (data: Record<string, unknown>) => {
+      const activeRoomId = String(gameState?.roomId ?? roomId ?? '')
+      const reportRoomId = String(data.roomId ?? data.k42e ?? '')
+      if (activeRoomId && reportRoomId && activeRoomId !== reportRoomId) return
+      if (Number(data.result) === 1) {
+        if (gameReportHandledRef.current) return
+        gameReportHandledRef.current = true
+      }
+      if (kyoResultTimerRef.current !== null) {
+        window.clearTimeout(kyoResultTimerRef.current)
+        kyoResultTimerRef.current = null
+      }
+      setKyoResData(null)
+      setKyoResultAction(null)
+      setKyoResultSubmitted(false)
+      setKyoResultProgress({})
+
       const tournamentTotalReportCnt = Number(data.tournamentTotalReportCnt ?? data.mjkk98e ?? 0)
       const users = Array.isArray(data.users)
         ? data.users as Array<Record<string, unknown>>
@@ -1484,6 +1522,7 @@ export default function GameScreen() {
     const onGamePlay = (data: Record<string, unknown>) => {
       if (!mounted) return
       if (data.playType === 'MJPID_INIHAN') {
+        gameReportHandledRef.current = false
         if (kyoResultTimerRef.current !== null) window.clearTimeout(kyoResultTimerRef.current)
         kyoResultTimerRef.current = null
         const memberInfo = Array.isArray(data.memberInfo) ? data.memberInfo : []
@@ -1555,11 +1594,18 @@ export default function GameScreen() {
           return { ...value, trickTitle: player?.trickTitle }
         }),
       }
-      const delay = document.visibilityState === 'visible'
-        ? getLegacyKyoResultDelayMs(delayData)
-        : 0
-      if (delay > 0) kyoResultTimerRef.current = window.setTimeout(showKyoResult, delay)
-      else showKyoResult()
+      queueMicrotask(() => {
+        if (!mounted) return
+        const effectDuration = document.visibilityState === 'visible'
+          ? Math.max(
+              getLegacyKyoResultDelayMs(delayData),
+              gameEffectUntilRef.current - performance.now(),
+            )
+          : 0
+        const delay = effectDuration > 0 ? effectDuration + GAME_EFFECT_SETTLE_MS : 0
+        if (delay > 0) kyoResultTimerRef.current = window.setTimeout(showKyoResult, delay)
+        else showKyoResult()
+      })
     }
     SignalR.on(CMD_GAME_PLAY, onGamePlay)
 

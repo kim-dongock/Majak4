@@ -1211,7 +1211,7 @@ public class PlayerRepository
     public virtual async Task<Dictionary<int, int>> GetDailyMissionListAsync(string memberNo)
     {
         // Check the Redis cache until midnight. SetDailyMissionAsync invalidates related state.
-        string cacheKey = $"majak2:player:{memberNo}:daily:{DateTime.Today:yyyyMMdd}";
+        string cacheKey = $"majak4:player:{memberNo}:daily:{DateTime.Today:yyyyMMdd}";
         var cached = await Redis.GetJsonAsync<Dictionary<int, int>>(cacheKey);
         if (cached is not null) return cached;
 
@@ -1253,7 +1253,7 @@ public class PlayerRepository
     public virtual async Task<Dictionary<int, int>> GetWeeklyRewardListAsync(string memberNo)
     {
         // Check the Redis cache until next Monday. TryReceiveWeeklyRewardAsync invalidates related state.
-        string cacheKey = $"majak2:player:{memberNo}:weekly:{WeekStartKey()}";
+        string cacheKey = $"majak4:player:{memberNo}:weekly:{WeekStartKey()}";
         var cached = await Redis.GetJsonAsync<Dictionary<int, int>>(cacheKey);
         if (cached is not null) return cached;
 
@@ -1293,7 +1293,7 @@ public class PlayerRepository
     public virtual async Task<int> GetWeeklyPointAsync(string memberNo)
     {
         // Check the Redis cache until next Monday. SetDailyMissionAsync invalidates related state.
-        string cacheKey = $"majak2:player:{memberNo}:weeklypoint:{WeekStartKey()}";
+        string cacheKey = $"majak4:player:{memberNo}:weeklypoint:{WeekStartKey()}";
         var cachedPt = await Redis.GetJsonAsync<int?>(cacheKey);
         if (cachedPt.HasValue) return cachedPt.Value;
 
@@ -1428,7 +1428,7 @@ public class PlayerRepository
             if (isNew || wasNotReceived)
             {
                 // Invalidate the weekly reward cache after DB state is committed.
-                await Redis.InvalidateAsync($"majak2:player:{memberNo}:weekly:{WeekStartKey()}");
+                await Redis.InvalidateAsync($"majak4:player:{memberNo}:weekly:{WeekStartKey()}");
                 return true;
             }
             return false;
@@ -1489,7 +1489,7 @@ public class PlayerRepository
             return true;
             });
             if (reflected)
-                await Redis.InvalidateAsync($"majak2:player:{player.MemberNo}:weekly:{WeekStartKey()}");
+                await Redis.InvalidateAsync($"majak4:player:{player.MemberNo}:weekly:{WeekStartKey()}");
             return reflected;
         }
         catch
@@ -2554,9 +2554,9 @@ public class PlayerRepository
         try
         {
             await UpdateDailyMissionsAsync(memberNo, conditionType, progressIncrement);
-            await Redis.InvalidateAsync($"majak2:player:{memberNo}:daily:{DateTime.Today:yyyyMMdd}");
-            await Redis.InvalidateAsync($"majak2:player:{memberNo}:weeklypoint:{WeekStartKey()}");
-            await Redis.InvalidateAsync($"majak2:player:{memberNo}:dailypoint:{DateTime.Today:yyyyMMdd}");
+            await Redis.InvalidateAsync($"majak4:player:{memberNo}:daily:{DateTime.Today:yyyyMMdd}");
+            await Redis.InvalidateAsync($"majak4:player:{memberNo}:weeklypoint:{WeekStartKey()}");
+            await Redis.InvalidateAsync($"majak4:player:{memberNo}:dailypoint:{DateTime.Today:yyyyMMdd}");
         }
         catch { }
     }
@@ -2646,7 +2646,7 @@ public class PlayerRepository
     public virtual async Task<(int DayOwn, int DayMax)> GetDailyPointAsync(string memberNo)
     {
         var memberNoValue = ParseMemberNo(memberNo);
-        string cacheKey = $"majak2:player:{memberNo}:dailypoint:{DateTime.Today:yyyyMMdd}";
+        string cacheKey = $"majak4:player:{memberNo}:dailypoint:{DateTime.Today:yyyyMMdd}";
         var cached = await Redis.GetJsonAsync<int[]>(cacheKey);
         if (cached is { Length: 2 }) return (cached[0], cached[1]);
 
@@ -2851,7 +2851,7 @@ public class PlayerRepository
     public virtual async Task<Dictionary<int, int>> GetGradeRankCountsAsync(int rankDate)
     {
 
-        string cacheKey = $"majak2:graderank:counts:{rankDate}";
+        string cacheKey = $"majak4:graderank:counts:{rankDate}";
         var cachedRaw = await Redis.GetJsonAsync<Dictionary<string, int>>(cacheKey);
         if (cachedRaw is { Count: > 0 })
             return cachedRaw.ToDictionary(kv => int.Parse(kv.Key), kv => kv.Value);

@@ -21,6 +21,8 @@ export interface CreateGameOptions {
   mode?: 'game' | 'replay'
   /** Phaser 内の配置モード。ゲーム状態処理は共通で、座標だけ切り替える。 */
   layoutMode?: IngameLayoutMode
+  /** 開発用 fixture の王牌スケール上書き */
+  deadWallScale?: 'topHand'
   /** 通常対局時のルームID */
   roomId?: string
   /** 牌譜に保存するルーム名 */
@@ -75,6 +77,7 @@ function isClosedAudioContextError(error: unknown): boolean {
 function sameGameOptions(a: CreateGameOptions, b: CreateGameOptions): boolean {
   return a.mode === b.mode &&
     a.layoutMode === b.layoutMode &&
+    a.deadWallScale === b.deadWallScale &&
     a.roomId === b.roomId &&
     a.roomName === b.roomName &&
     a.myOdr === b.myOdr &&
@@ -182,6 +185,12 @@ export function suspendGame(): void {
   gameInstance.scene.stop('UIScene')
   gameInstance.scene.stop('GameScene')
   parkGameHost()
+  gameInstance.loop.sleep()
+}
+
+export function freezeGameFrame(): void {
+  if (!gameInstance) return
+  stopMajakBgm()
   gameInstance.loop.sleep()
 }
 

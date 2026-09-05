@@ -1,5 +1,10 @@
 namespace MajakServer.Models.Protocol;
 
+public static class SignalRGroup
+{
+    public static string Room(string channelId, int roomId) => $"room_{channelId}_{roomId}";
+}
+
 /// <summary>
 /// MAJ::command* に対応する SignalR メソッド名定数
 /// 原典: HMajProtocol.cpp

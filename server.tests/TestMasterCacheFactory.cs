@@ -19,9 +19,17 @@ internal static class TestMasterCacheFactory
         ChannelRepository? channelRepo = null)
     {
         var services = new ServiceCollection();
+        if (channelRepo is null)
+        {
+            var channelRepoMock = new Mock<ChannelRepository>(
+                MockBehavior.Loose, (GameDataContextFactory)null!, CreateRedisService());
+            channelRepoMock.Setup(repo => repo.GetChannelListAsync(It.IsAny<string>()))
+                .ReturnsAsync(new List<ChannelInfo>());
+            channelRepo = channelRepoMock.Object;
+        }
         services.AddSingleton(playerRepo ?? new Mock<PlayerRepository>(MockBehavior.Loose).Object);
         services.AddSingleton(itemRepo ?? new Mock<ItemRepository>(MockBehavior.Loose).Object);
-        services.AddSingleton(channelRepo ?? new Mock<ChannelRepository>(MockBehavior.Loose, (GameDataContextFactory)null!, CreateRedisService()).Object);
+        services.AddSingleton(channelRepo);
 
         var provider = services.BuildServiceProvider();
         var redis = CreateRedisService();

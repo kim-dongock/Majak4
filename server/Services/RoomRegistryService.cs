@@ -23,8 +23,30 @@ public class RoomRegistryService
     private static readonly TimeSpan RoomTtl = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan ChannelRoomsTtl = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan ContinueRoomTtl = RoomTtl;
+    private const string TryRegisterRoomScript = """
+        local roomIds = redis.call('SMEMBERS', KEYS[2])
+        local activeCount = 0
+        for _, existingRoomId in ipairs(roomIds) do
+            if redis.call('EXISTS', ARGV[6] .. existingRoomId) == 1 then
+                activeCount = activeCount + 1
+            else
+                redis.call('SREM', KEYS[2], existingRoomId)
+            end
+        end
+        if redis.call('EXISTS', KEYS[1]) == 1 then
+            return 2
+        end
+        if activeCount >= tonumber(ARGV[1]) then
+            return 1
+        end
+        redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+        redis.call('SADD', KEYS[2], ARGV[4])
+        redis.call('PEXPIRE', KEYS[2], ARGV[5])
+        return 0
+        """;
 
     private readonly RedisService _redis;
+    private readonly object _fallbackRoomsLock = new();
 
     // Redis が利用不可の場合のフォールバック (開発環境)
     // chanelId → (roomId → JSON)
@@ -34,9 +56,48 @@ public class RoomRegistryService
     public RoomRegistryService(RedisService redis) => _redis = redis;
 
     // ── キー生成 ─────────────────────────────────────────────
-    private static string RoomKey(int roomId, string chanelId) => $"room:{chanelId}:{roomId}";
-    private static string ChannelKey(string cid)  => $"channel:{cid}:rooms";
+    private static string RoomKey(int roomId, string chanelId) => $"room:{{{chanelId}}}:{roomId}";
+    private static string ChannelKey(string cid)  => $"channel:{{{cid}}}:rooms";
     private static string ContinueRoomKey(string memberNo) => $"continue:{memberNo}:room";
+
+    public async Task<RoomRegistrationResult> TryRegisterRoomAsync(
+        int roomId, string chanelId, string title,
+        bool isPrivate, int memberCnt, int memberMax,
+        string serverUrl, string roomOption, int maxRooms, int maxViewer = 12,
+        int roomState = 0, int roomPlaying = 0)
+    {
+        var entry = new RoomRedisEntry
+        {
+            RoomId = roomId, ChanelId = chanelId, Title = title,
+            IsPrivate = isPrivate, MemberCnt = memberCnt, MemberMax = memberMax,
+            ServerUrl = serverUrl, RoomOption = roomOption, MaxViewer = maxViewer,
+            State = roomState, RoomPlaying = roomPlaying,
+        };
+        var json = JsonSerializer.Serialize(entry);
+        maxRooms = Math.Max(1, maxRooms);
+
+        if (_redis.IsAvailable)
+        {
+            var result = await _redis.Db!.ScriptEvaluateAsync(
+                TryRegisterRoomScript,
+                [RoomKey(roomId, chanelId), ChannelKey(chanelId)],
+                [maxRooms, json, (long)RoomTtl.TotalMilliseconds, roomId,
+                    (long)ChannelRoomsTtl.TotalMilliseconds, $"room:{{{chanelId}}}:"]);
+            return (RoomRegistrationResult)(int)result;
+        }
+
+        lock (_fallbackRoomsLock)
+        {
+            if (!_fallbackRooms.TryGetValue(chanelId, out var map))
+                _fallbackRooms[chanelId] = map = new();
+            if (map.ContainsKey(roomId.ToString()))
+                return RoomRegistrationResult.RoomIdInUse;
+            if (map.Count >= maxRooms)
+                return RoomRegistrationResult.ChannelFull;
+            map[roomId.ToString()] = json;
+            return RoomRegistrationResult.Success;
+        }
+    }
 
     // ── ルーム登録 (CreateRoom 時) ────────────────────────────
     public async Task RegisterRoomAsync(
@@ -240,7 +301,7 @@ public class RoomRegistryService
         await _redis.Db!.KeyExpireAsync(RoomKey(roomId, chanelId), RoomTtl);
     }
 
-    // ── TTL パイプライン一括リフレッシュ (PerformanceAnalysis §2-2)
+    // ── TTL パイプライン一括リフレッシュ (AP-04 §11)
     // N ルーム分の EXPIRE を 1 往復で送信する。
     // ServerStatusBackgroundService の foreach ループから置き換えて使用する。
     public async Task RefreshTtlBatchAsync(IEnumerable<(int roomId, string chanelId)> rooms)
@@ -344,6 +405,13 @@ public class RoomRegistryService
         try { return JsonSerializer.Deserialize<RoomRedisEntry>(fallbackRaw); }
         catch { return null; }
     }
+}
+
+public enum RoomRegistrationResult
+{
+    Success = 0,
+    ChannelFull = 1,
+    RoomIdInUse = 2,
 }
 
 /// <summary>Redis に保存するルームエントリ</summary>

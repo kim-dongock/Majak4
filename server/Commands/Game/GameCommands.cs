@@ -39,7 +39,7 @@ public class GamePlayCommand : ICommand
             return;
         }
 
-        var room = _session.GetRoom(player.RoomId.Value);
+        var room = _session.GetRoom(player.ChannelId, player.RoomId.Value);
         if (room == null)
         {
             ctx.AbortConnectionWithReason($"ProcessCommand_GamePlay room is null. memberNo={player.MemberNo} roomId={player.RoomId}");
@@ -203,10 +203,10 @@ public class ReplayNaviCommand : ICommand
         var player = ctx.Player;
         if (player == null || player.RoomId == null) return;
 
-        var room = _session.GetRoom(player.RoomId.Value);
+        var room = _session.GetRoom(player.ChannelId, player.RoomId.Value);
         if (room == null) return;
 
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.ReplayNavi, ctx.Payload);
     }
 }

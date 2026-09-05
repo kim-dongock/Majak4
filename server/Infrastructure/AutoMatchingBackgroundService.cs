@@ -25,7 +25,7 @@ public class AutoMatchingBackgroundService : BackgroundService
     private readonly IServiceScopeFactory      _scopeFactory;
     private readonly PlayerSessionService      _session;
     private readonly IHubContext<MajakGameHub> _hub;
-    private readonly RoomRegistryService?      _roomRegistry;
+    private readonly RoomRegistryService       _roomRegistry;
     private readonly ILogger<AutoMatchingBackgroundService> _logger;
     private readonly ChannelServerSettings     _serverSettings;
 
@@ -52,7 +52,7 @@ public class AutoMatchingBackgroundService : BackgroundService
         IHubContext<MajakGameHub> hub,
         IOptions<ChannelServerSettings> serverSettings,
         ILogger<AutoMatchingBackgroundService> logger,
-        RoomRegistryService? roomRegistry = null)
+        RoomRegistryService roomRegistry)
     {
         _scopeFactory    = scopeFactory;
         _session         = session;
@@ -200,6 +200,21 @@ public class AutoMatchingBackgroundService : BackgroundService
         // Store SubId on the room for channel type checks.
         room.SubId = subId;
 
+        var registrationResult = await _roomRegistry.TryRegisterRoomAsync(
+            room.RoomId, channelId, room.RoomTitle,
+            room.IsPrivate, room.ActivePlayerCount, room.LimitCnt,
+            room.ServerUrl, room.RoomOption, channelInfo?.MaxRoom ?? 1, room.MaxViewer);
+        if (registrationResult != RoomRegistrationResult.Success)
+        {
+            _session.RemoveRoom(channelId, room.RoomId);
+            foreach (var memberNo in memberNos)
+                _session.EnqueueMatching(channelId, memberNo);
+            _logger.LogInformation(
+                "AutoMatching [{Channel}]: room creation deferred because the channel reached MaxRoom={MaxRoom}.",
+                channelId, Math.Max(1, channelInfo?.MaxRoom ?? 1));
+            return;
+        }
+
         // The owner is automatically entered when creating a normal room, but auto-matching keeps all 4 players reserved.
         // PendingAutoMatch tracks every matched player.
         _session.RegisterPendingMatch(new PendingAutoMatch
@@ -300,7 +315,7 @@ public class AutoMatchingBackgroundService : BackgroundService
     // If not every reserved player enters, send mjkc5e to entered players and destroy the room.
     private async Task FireFaileRoomAsync(int roomId, string channelId)
     {
-        var pending = _session.ExpirePendingMatch(roomId);
+        var pending = _session.ExpirePendingMatch(channelId, roomId);
         if (pending == null) return;   // Everyone entered and the pending record was already removed.
 
         _logger.LogWarning(
@@ -324,14 +339,14 @@ public class AutoMatchingBackgroundService : BackgroundService
             await _hub.Clients.Client(p.ConnectionId).SendAsync(Cmd.AutoExitRoom, payload);
 
             // Remove from the SignalR group and update the session.
-            await _hub.Groups.RemoveFromGroupAsync(p.ConnectionId, $"room_{roomId}");
+            await _hub.Groups.RemoveFromGroupAsync(p.ConnectionId, SignalRGroup.Room(channelId, roomId));
             _session.LeaveRoom(p);
         }
 
-        var afterRoom = _session.GetRoom(roomId);
+        var afterRoom = _session.GetRoom(channelId, roomId);
         if (afterRoom == null || afterRoom.HasNoActiveMembers)
         {
-            _session.RemoveRoom(roomId);
+            _session.RemoveRoom(channelId, roomId);
             if (_roomRegistry != null)
                 await _roomRegistry.RemoveRoomAsync(roomId, channelId);
         }

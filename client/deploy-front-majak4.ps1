@@ -15,9 +15,7 @@ $ErrorActionPreference = "Stop"
 $PROJECT_DIR   = $PSScriptRoot
 $S3_BUCKET     = $S3Bucket
 $CLOUDFRONT_ID = $CloudFrontId
-$VITE_SERVICE  = "majak4"
 $SITE_URL      = "https://majak4.studio35app.net"
-$API_URL       = "https://app-majak4.studio35app.net"
 $S3_REGION     = "ap-northeast-1"
 $DIST_PATH     = Join-Path $PROJECT_DIR "dist"
 $ASSETS_PATH   = Join-Path $DIST_PATH "assets"
@@ -33,12 +31,10 @@ function Assert-AwsSuccess {
 }
 
 # ─── 1. Build ──────────────────────────────────────────────
-Write-Host "`n[1/3] Building for '$VITE_SERVICE' service..." -ForegroundColor Yellow
-$env:VITE_SERVICE_ID = $VITE_SERVICE
-$env:VITE_API_BASE_URL = $API_URL
+Write-Host "`n[1/3] Building the production client..." -ForegroundColor Yellow
 Push-Location $PROJECT_DIR
 try {
-    npm run build
+    npm run build -- --mode production
 } finally {
     Pop-Location
 }

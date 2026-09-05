@@ -4,7 +4,7 @@ namespace MajakServer.Infrastructure;
 /// Redis SETNX を使ったプライマリリーダー選出サービス。
 ///
 /// 仕組み:
-///   - 起動時に Redis キー "majak2:primary-leader" を SETNX で取得しようとする。
+///   - 起動時に Redis キー "majak4:primary-leader" を SETNX で取得しようとする。
 ///   - 取得成功 → このサーバーがプライマリ (IsLeader = true)。
 ///   - 取得失敗 → すでに別サーバーがプライマリ (IsLeader = false)。
 ///   - TTL は 30 秒。ServerStatusBackgroundService の 8 秒ごとのループで
@@ -15,7 +15,7 @@ namespace MajakServer.Infrastructure;
 /// </summary>
 public class PrimaryLeaderService
 {
-    private const string LeaderKey = "majak2:primary-leader";
+    private const string LeaderKey = "majak4:primary-leader";
     private static readonly TimeSpan LeaseTtl = TimeSpan.FromSeconds(30);
 
     private readonly RedisService   _redis;

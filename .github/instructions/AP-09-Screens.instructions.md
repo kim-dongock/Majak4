@@ -1,6 +1,6 @@
 ---
 applyTo: "client/**,server/**"
-description: "クライアント画面一覧 (アウトゲーム / インゲーム / ポップアップ)"
+description: "クライアント画面一覧、アウトゲーム・インゲーム・ポップアップの対応関係と共通ポップアップ構造を確認するときに参照する"
 ---
 
 # AP-09 クライアント画面一覧
@@ -142,3 +142,12 @@ Web 移植時は `modal` / `z-index` 制御で同等の UX を実現すること
 - `keyCustomBoard` (`mjkk134e`) — 背景板
 - `keyCustomHai` (`mjkk135e`) — 牌デザイン
 - `keyCustomCostume` (`mjkk136e`) — コスチューム
+
+### アウトゲーム共通ポップアップ構造
+
+- overlayは`.majak-popup-overlay`、panelは`.majak-popup-panel`、titleは`.majak-popup-titlebar`を使用する。
+- scroll可能な本文は`.majak-popup-body`、command領域は`.majak-popup-actions`を使用し、主操作だけ`.is-primary`とする。
+- desktop、mobile landscape、mobile portraitで同じセマンティックmarkupを使い、サイズと配置だけをCSSで切り替える。
+- title、input、primary、secondary、disabled、hover、focusの各状態を確認する。
+- popupの実装完了はsource inspectionだけで判断せず、`/popup-preview`または実際の起動経路でdesktop・mobile landscape・mobile portraitを確認する。
+- 対局進行用の閉じるボタンなしdialogは、overlay clickやEscapeで閉じられないmodalとして扱う。

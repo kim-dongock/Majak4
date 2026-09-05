@@ -88,7 +88,7 @@ export default function MobileUserSummary({
           alt=""
           draggable={false}
           onError={event => {
-            event.currentTarget.src = getDefaultAvatarUrl(player.sex === 'F' || player.sex === 'female' ? 'female' : 'male')
+            event.currentTarget.src = getDefaultAvatarUrl(player.sex === 'F' ? 'female' : 'male')
           }}
         />
       )}

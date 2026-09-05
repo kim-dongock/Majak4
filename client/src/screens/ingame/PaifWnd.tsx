@@ -24,7 +24,7 @@ import GameReconnectLoading from '../../components/GameReconnectLoading'
 import { GAME_BOARD_SURROUND_COLOR_EVENT, GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY, GAME_LOAD_PROGRESS_EVENT, type GameLoadStep } from '../../game/gameLoadProgress'
 import { useOutgameLayoutMode } from '../../hooks/useOutgameLayoutMode'
 import { useCustomSkinStore } from '../../store/customSkinStore'
-import { getDefaultAvatarUrl, getShortAvatarUrl } from '../../utils/resources'
+import { getDefaultAvatarUrl, getShortAvatarUrl, handleShortAvatarError } from '../../utils/resources'
 
 const PAIFU_ROTATE_EVENT = 'majak:paifu-rotate'
 const PAIFU_HAND_OPEN_EVENT = 'majak:paifu-hand-open'
@@ -458,7 +458,12 @@ export default function PaifWnd() {
           const rating = ratingValue === undefined || ratingValue === null || ratingValue === '' ? undefined : Number(ratingValue)
           return (
             <div key={`${String(member.name ?? member.Name ?? '')}-${index}`}>
-              <img src={avatarId ? getShortAvatarUrl(avatarId) : avatarFallback} alt="" draggable={false} onError={event => { event.currentTarget.src = avatarFallback }} />
+              <img
+                src={avatarId ? getShortAvatarUrl(avatarId) : avatarFallback}
+                alt=""
+                draggable={false}
+                onError={event => handleShortAvatarError(event.currentTarget, avatarId, avatarSex)}
+              />
               <span>{String(member.mjkk34e ?? member.k8e ?? member.nickName ?? member.nickname ?? member.name ?? member.Name ?? '-')}</span>
               <small>{String(member.k32e ?? member.slevel ?? member.title ?? member.Title ?? '')}</small>
               <small className="majak-responsive-paifu__member-gp">GP {typeof gamMoney === 'number' && Number.isFinite(gamMoney) ? gamMoney.toLocaleString() : '-'}</small>

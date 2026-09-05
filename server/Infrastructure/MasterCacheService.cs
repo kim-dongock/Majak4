@@ -13,38 +13,38 @@ namespace MajakServer.Infrastructure;
 ///   - Redis 未接続 / キャッシュミスの場合は DB にフォールバックし、Redis に書き戻す。
 ///
 /// キャッシュキー一覧:
-///   majak2:mast:titles          - Dictionary&lt;string,string&gt;                  TTL 24h
-///   majak2:mast:customitems     - List&lt;CustomItemMastDto&gt;                    TTL 24h
-///   majak2:mast:adminids        - List&lt;AdminIdInfo&gt;                          TTL 24h
-///   majak2:mast:dailymission    - List&lt;DailyMissionMastDto&gt;                  TTL 24h
-///   majak2:mast:weeklyreward    - List&lt;WeeklyRewardMastDto&gt;                  TTL 1h
-///   majak2:mast:grademanage     - List&lt;GradeSelectItem&gt;                      TTL 1h
-///   majak2:mast:cups            - List&lt;CupConfigDto&gt;                         TTL 2min
-///   majak2:mast:channels        - List&lt;ChannelInfoDto&gt;                       TTL 15min
-///   majak2:ranking:grade:{date}:{kind}  - List&lt;GradeRankItem&gt;               TTL 5min
-///   majak2:cup:topscore:{chId}          - int                                TTL 1min
+///   majak4:mast:titles          - Dictionary&lt;string,string&gt;                  TTL 24h
+///   majak4:mast:customitems     - List&lt;CustomItemMastDto&gt;                    TTL 24h
+///   majak4:mast:adminids        - List&lt;AdminIdInfo&gt;                          TTL 24h
+///   majak4:mast:dailymission    - List&lt;DailyMissionMastDto&gt;                  TTL 24h
+///   majak4:mast:weeklyreward    - List&lt;WeeklyRewardMastDto&gt;                  TTL 1h
+///   majak4:mast:grademanage     - List&lt;GradeSelectItem&gt;                      TTL 1h
+///   majak4:mast:cups            - List&lt;CupConfigDto&gt;                         TTL 2min
+///   majak4:mast:channels        - List&lt;ChannelInfoDto&gt;                       TTL 15min
+///   majak4:ranking:grade:{date}:{kind}  - List&lt;GradeRankItem&gt;               TTL 5min
+///   majak4:cup:topscore:{chId}          - int                                TTL 1min
 /// </summary>
 public class MasterCacheService
 {
     // ── Redis キー定数 ──────────────────────────────────────────────────
-    public const string KeyTitles       = "majak2:mast:titles";
-    public const string KeyCustomItems  = "majak2:mast:customitems";
-    public const string KeyCustomShop   = "majak2:mast:customshop";
-    public const string KeyCustomSet    = "majak2:mast:customset";
-    public const string KeyAdminIds     = "majak2:mast:adminids";
-    public const string KeyDailyMission = "majak2:mast:dailymission";
-    public const string KeyWeeklyMast   = "majak2:mast:weeklyreward";
-    public const string KeyGradeManage  = "majak2:mast:grademanage";
-    public const string KeyCupConfigs   = "majak2:mast:cups";
-    public const string KeyChannels     = "majak2:mast:channels";
-    public const string KeyProPlayers   = "majak2:mast:proplayers";
+    public const string KeyTitles       = "majak4:mast:titles";
+    public const string KeyCustomItems  = "majak4:mast:customitems";
+    public const string KeyCustomShop   = "majak4:mast:customshop";
+    public const string KeyCustomSet    = "majak4:mast:customset";
+    public const string KeyAdminIds     = "majak4:mast:adminids";
+    public const string KeyDailyMission = "majak4:mast:dailymission";
+    public const string KeyWeeklyMast   = "majak4:mast:weeklyreward";
+    public const string KeyGradeManage  = "majak4:mast:grademanage";
+    public const string KeyCupConfigs   = "majak4:mast:cups";
+    public const string KeyChannels     = "majak4:mast:channels";
+    public const string KeyProPlayers   = "majak4:mast:proplayers";
 
     public static string KeyGradeRankList(int rankDate, int rankKind, int maxCnt)
-        => $"majak2:ranking:grade:{rankDate}:{rankKind}:{maxCnt}";
+        => $"majak4:ranking:grade:{rankDate}:{rankKind}:{maxCnt}";
     public static string KeyGradeRankSelf(int rankDate, string memberNo, int grade)
-        => $"majak2:ranking:grade:self:{rankDate}:{memberNo}:{grade}";
+        => $"majak4:ranking:grade:self:{rankDate}:{memberNo}:{grade}";
     public static string KeyCupTopScore(string channelId)
-        => $"majak2:cup:topscore:{channelId}";
+        => $"majak4:cup:topscore:{channelId}";
 
     // ── TTL 定数 ────────────────────────────────────────────────────────
     private static readonly TimeSpan TtlStatic     = TimeSpan.FromDays(1);      // 称号・カスタムアイテム・管理者ID

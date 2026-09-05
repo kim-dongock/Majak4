@@ -27,6 +27,17 @@ public class RedisService
         try
         {
             _mux = ConnectionMultiplexer.Connect(cs);
+            logger?.LogInformation(
+                "Redis connection established. endpointCount={EndpointCount} isConnected={IsConnected}",
+                _mux.GetEndPoints().Length,
+                _mux.IsConnected);
+            _mux.ConnectionFailed += (_, args) => logger?.LogWarning(
+                args.Exception,
+                "Redis connection lost. failureType={FailureType}",
+                args.FailureType);
+            _mux.ConnectionRestored += (_, args) => logger?.LogInformation(
+                "Redis connection restored. failureType={FailureType}",
+                args.FailureType);
         }
         catch (Exception exception)
         {

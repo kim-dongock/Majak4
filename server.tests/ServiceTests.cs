@@ -13,6 +13,55 @@ using MajakServer.Services;
 
 namespace MajakServer.Tests;
 
+public class PlayerSessionRoomScopeTests
+{
+    [Fact]
+    public void CreateRoom_SameRoomIdInDifferentChannels_KeepsRoomsIsolated()
+    {
+        var session = new PlayerSessionService();
+        var firstOwner = new MajakPlayer { MemberNo = "member-a", ChannelId = "channel-a" };
+        var secondOwner = new MajakPlayer { MemberNo = "member-b", ChannelId = "channel-b" };
+
+        var firstRoom = session.CreateRoom("channel-a", firstOwner, "", 1, 0, 0, false, roomId: 1);
+        var secondRoom = session.CreateRoom("channel-b", secondOwner, "", 1, 0, 0, false, roomId: 1);
+
+        Assert.Same(firstRoom, session.GetRoom("channel-a", 1));
+        Assert.Same(secondRoom, session.GetRoom("channel-b", 1));
+        Assert.NotSame(firstRoom, secondRoom);
+
+        session.LeaveRoom(firstOwner);
+
+        Assert.Null(session.GetRoom("channel-a", 1));
+        Assert.Same(secondRoom, session.GetRoom("channel-b", 1));
+    }
+
+    [Fact]
+    public void PendingMatchesAndSignalRGroups_SameRoomIdInDifferentChannels_StayIsolated()
+    {
+        var session = new PlayerSessionService();
+        session.RegisterPendingMatch(new PendingAutoMatch
+        {
+            ChannelId = "channel-a",
+            RoomId = 1,
+            ExpectedMembers = ["member-a"],
+        });
+        session.RegisterPendingMatch(new PendingAutoMatch
+        {
+            ChannelId = "channel-b",
+            RoomId = 1,
+            ExpectedMembers = ["member-b"],
+        });
+
+        var (allEntered, match) = session.ConfirmAutoEntry("channel-a", 1, "member-a");
+
+        Assert.True(allEntered);
+        Assert.Equal("channel-a", match?.ChannelId);
+        Assert.Null(session.GetPendingMatch("channel-a", 1));
+        Assert.NotNull(session.GetPendingMatch("channel-b", 1));
+        Assert.NotEqual(SignalRGroup.Room("channel-a", 1), SignalRGroup.Room("channel-b", 1));
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // TitleService 単体テスト
 // 原典: HMajDBObject 称号関連 / ProcessCommand_GetTitle
@@ -1023,7 +1072,8 @@ public class AutoMatchingBackgroundServiceTests
         var logger       = new Mock<ILogger<AutoMatchingBackgroundService>>();
         var settings = Microsoft.Extensions.Options.Options.Create(new MajakServer.Infrastructure.ChannelServerSettings());
         return new AutoMatchingBackgroundService(
-            scopeFactory, _session, hub, settings, logger.Object);
+            scopeFactory, _session, hub, settings, logger.Object,
+            new RoomRegistryService(TestMasterCacheFactory.CreateRedisService()));
     }
 
     // シナリオ1: 4人揃った → ルーム作成 + 全員に AutoMatching 通知

@@ -236,7 +236,7 @@ public class TournamentJoinCommandTests
         _tournRepoMock.Setup(r => r.SelectJoinAsync(It.IsAny<string>()))
             .ReturnsAsync((TournamentJoin?)null);
         _tournRepoMock.Setup(r => r.MergeJoinAsync(
-                It.IsAny<string>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>()))
+            It.IsAny<string>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<long>()))
             .ReturnsAsync((true, 1));
 
         var player = new MajakPlayer { MemberNo = "user01", GamMoney = 50000 };
@@ -254,7 +254,7 @@ public class TournamentJoinCommandTests
         Assert.Equal(100, ((System.Text.Json.JsonElement)changed["seqNo"]!).GetInt64());
         Assert.Equal("joined", ((System.Text.Json.JsonElement)changed["changeType"]!).GetString());
         _tournRepoMock.Verify(r => r.MergeJoinAsync(
-            "user01", 100, TournamentJoinStatus.Join, "00"), Times.Once);
+            "user01", 100, TournamentJoinStatus.Join, "00", It.IsAny<long>()), Times.Once);
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public class TournamentJoinCommandTests
         _tournRepoMock.Setup(r => r.SelectJoinAsync("user01"))
             .ReturnsAsync((TournamentJoin?)null);
         _tournRepoMock.Setup(r => r.MergeJoinAsync(
-                "user01", 100, TournamentJoinStatus.Join, "00"))
+            "user01", 100, TournamentJoinStatus.Join, "00", It.IsAny<long>()))
             .ReturnsAsync((false, 0));
 
         var player = new MajakPlayer { MemberNo = "user01", GamMoney = 50000 };
@@ -290,7 +290,7 @@ public class TournamentJoinCommandTests
         _tournRepoMock.Setup(r => r.SelectJoinAsync(It.IsAny<string>()))
             .ReturnsAsync((TournamentJoin?)null);
         _tournRepoMock.Setup(r => r.MergeJoinAsync(
-                It.IsAny<string>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>()))
+            It.IsAny<string>(), It.IsAny<long>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<long>()))
             .ReturnsAsync((true, 1));
 
         var player = new MajakPlayer { MemberNo = "user01", GamMoney = 50000, IpAddress = "1.2.3.4" };
@@ -397,7 +397,7 @@ public class TournamentJoinCancelCommandTests
         var svc = TournamentTestHelper.BuildWithPlan(plan, _tournRepoMock);
         _tournRepoMock.Setup(r => r.SelectJoinAsync("user01"))
             .ReturnsAsync(new TournamentJoin { JoinSeqNo = 100, JoinStatus = TournamentJoinStatus.Join });
-        _tournRepoMock.Setup(r => r.MergeJoinAsync("user01", 100, TournamentJoinStatus.Cancel, "00"))
+        _tournRepoMock.Setup(r => r.MergeJoinAsync("user01", 100, TournamentJoinStatus.Cancel, "00", It.IsAny<long>()))
             .ReturnsAsync((true, 1));
 
         var player = new MajakPlayer { MemberNo = "user01", GamMoney = 49500, IpAddress = "1.2.3.4" };

@@ -1,3 +1,4 @@
+using MajakServer.Endpoints;
 using MajakServer.Services;
 using Microsoft.AspNetCore.Http;
 
@@ -5,6 +6,18 @@ namespace MajakServer.Tests;
 
 public class AuthCookiePolicyTests
 {
+    [Theory]
+    [InlineData("hange.jp", true)]
+    [InlineData("alpha-app-majak4.hange.jp", true)]
+    [InlineData("HANGE.JP", true)]
+    [InlineData("studio35app.net", false)]
+    [InlineData("fake-hange.jp", false)]
+    [InlineData("hange.jp.example.com", false)]
+    public void IsHangeServiceHost_MatchesOnlyHangeDomainBoundary(string host, bool expected)
+    {
+        Assert.Equal(expected, AuthEndpoints.IsHangeServiceHost(host));
+    }
+
     [Theory]
     [InlineData("http://localhost")]
     [InlineData("https://localhost")]

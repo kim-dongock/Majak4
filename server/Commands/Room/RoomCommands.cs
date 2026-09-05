@@ -57,7 +57,7 @@ public class PushOkButtonCommand : ICommand
             return;
         }
 
-        var room = _session.GetRoom(player.RoomId.Value);
+        var room = _session.GetRoom(player.ChannelId, player.RoomId.Value);
         if (room == null)
         {
             _log?.LogError("PushOkButton skipped: room not found. roomId={RoomId} memberNo={MemberNo} connectionId={ConnectionId}", player.RoomId.Value, player.MemberNo, ctx.ConnectionId);
@@ -148,7 +148,7 @@ public class PushOkButtonCommand : ICommand
         var okPayload = new Dictionary<string, object>();
         for (int i = 0; i < GameConst.PlayerMaxCount; i++)
             okPayload[$"{Key.OkButton}{i}"] = room.OkButtonStates[i] ? 1 : 0;
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.SendOkButton, okPayload);
 
         var okResp = new Dictionary<string, object>
@@ -219,7 +219,7 @@ public class RoomGetMembersCommand : ICommand
         var player = ctx.Player;
         if (player?.RoomId == null) return;
 
-        var room = _session.GetRoom(player.RoomId.Value);
+        var room = _session.GetRoom(player.ChannelId, player.RoomId.Value);
         if (room == null) return;
 
         await ctx.Caller.SendAsync(Cmd.MemberList, BuildMemberListPayload(room));
@@ -522,7 +522,7 @@ public class RoomEnterRoomCommand : ICommand
             return;
         }
 
-        var room = _session.GetRoom(requestRoomId);
+        var room = _session.GetRoom(player.ChannelId, requestRoomId);
         if (room == null)
         {
             await SendRoomConnectError(ctx, requestRoomId, "", LegacyErrorCode.MajAutoEnterRoomFailed);
@@ -603,9 +603,9 @@ public class RoomEnterRoomCommand : ICommand
         if (isContinuePlayer && _roomRegistry is not null)
             await _roomRegistry.ClearContinueRoomAsync(player.MemberNo);
 
-        await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, $"room_{requestRoomId}");
+        await ctx.Groups.AddToGroupAsync(ctx.ConnectionId, SignalRGroup.Room(player.ChannelId, requestRoomId));
 
-        var updatedRoom = _session.GetRoom(requestRoomId);
+        var updatedRoom = _session.GetRoom(player.ChannelId, requestRoomId);
         if (updatedRoom == null) return;
 
         var memberListPayload = RoomGetMembersCommand.BuildMemberListPayload(updatedRoom);
@@ -614,7 +614,7 @@ public class RoomEnterRoomCommand : ICommand
 
         if (!alreadyInRoom || shouldAnnounceRejoin)
         {
-            await ctx.Clients.Group($"room_{requestRoomId}")
+            await ctx.Clients.Group(SignalRGroup.Room(player.ChannelId, requestRoomId))
                 .SendAsync(Cmd.AddMember, RoomGetMembersCommand.BuildAddMemberPayload(
                     updatedRoom, player, GKey.ValuePlayer));
         }
@@ -688,7 +688,7 @@ public class RoomEnterRoomCommand : ICommand
             var okPayload = new Dictionary<string, object>();
             for (int i = 0; i < GameConst.PlayerMaxCount; i++)
                 okPayload[$"{Key.OkButton}{i}"] = room.OkButtonStates[i] ? 1 : 0;
-            await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.SendOkButton, okPayload);
+            await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId)).SendAsync(Cmd.SendOkButton, okPayload);
         }
         else
         {
@@ -742,21 +742,21 @@ public class RoomExitRoomCommand : ICommand
 
         int roomId = player.RoomId.Value;
         string channelId = player.ChannelId;
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(channelId, roomId);
         if (room == null)
         {
             player.RoomId = null;
-            await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, $"room_{roomId}");
+            await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, SignalRGroup.Room(channelId, roomId));
             return;
         }
 
         await HandleRoomExitAsync(ctx, player, room);
 
-        var roomState = _session.GetRoom(roomId) is { } afterRoom
+        var roomState = _session.GetRoom(channelId, roomId) is { } afterRoom
             ? RoomStatePayload.Build(afterRoom, "left")
             : RoomStatePayload.BuildEmpty(roomId, "left");
-        if (_session.GetRoom(roomId) == null)
-            _session.ExpirePendingMatch(roomId);
+        if (_session.GetRoom(channelId, roomId) == null)
+            _session.ExpirePendingMatch(channelId, roomId);
         roomState["memberNo"] = player.Pix;
         roomState["pix"] = player.Pix;
 
@@ -799,20 +799,20 @@ public class RoomExitRoomCommand : ICommand
                 .Select(s => s!.MemberNo)
                 .FirstOrDefault() ?? "";
 
-            await ctx.Clients.Group($"room_{roomId}")
+            await ctx.Clients.Group(SignalRGroup.Room(channelId, roomId))
                 .SendAsync(Cmd.DeleteMember, RoomGetMembersCommand.BuildDeleteMemberPayload(
                     newHost, player, GKey.ValuePlayer, seatPos));
 
-            await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, $"room_{roomId}");
+            await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, SignalRGroup.Room(channelId, roomId));
             player.RoomId = null;
 
-            var updatedRoom = _session.GetRoom(roomId);
+            var updatedRoom = _session.GetRoom(channelId, roomId);
             if (updatedRoom != null && _roomRegistry != null)
             {
                 if (updatedRoom.HasNoActiveMembers)
                 {
-                    _session.RemoveRoom(roomId);
-                    _session.ExpirePendingMatch(roomId);
+                    _session.RemoveRoom(channelId, roomId);
+                    _session.ExpirePendingMatch(channelId, roomId);
                     foreach (var continuedPlayer in updatedRoom.Seats.Where(seat => seat != null).Select(seat => seat!))
                     {
                         continuedPlayer.RoomId = null;
@@ -834,10 +834,10 @@ public class RoomExitRoomCommand : ICommand
             .FirstOrDefault() ?? "";
         string playerType = player.IsViewer ? GKey.ValueViewer : GKey.ValuePlayer;
 
-        _session.RemovePendingMatchMember(roomId, player.MemberNo);
+        _session.RemovePendingMatchMember(channelId, roomId, player.MemberNo);
         _session.LeaveRoom(player);
 
-        await ctx.Clients.Group($"room_{roomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(channelId, roomId))
             .SendAsync(Cmd.DeleteMember, RoomGetMembersCommand.BuildDeleteMemberPayload(
                 roomHost, player, playerType, seatPos));
 
@@ -847,12 +847,12 @@ public class RoomExitRoomCommand : ICommand
             var okPayload = new Dictionary<string, object>();
             for (int i = 0; i < GameConst.PlayerMaxCount; i++)
                 okPayload[$"{Key.OkButton}{i}"] = room.OkButtonStates[i] ? 1 : 0;
-            await ctx.Clients.Group($"room_{roomId}").SendAsync(Cmd.SendOkButton, okPayload);
+            await ctx.Clients.Group(SignalRGroup.Room(channelId, roomId)).SendAsync(Cmd.SendOkButton, okPayload);
         }
 
-        await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, $"room_{roomId}");
+        await ctx.Groups.RemoveFromGroupAsync(ctx.ConnectionId, SignalRGroup.Room(channelId, roomId));
 
-        var afterRoom = _session.GetRoom(roomId);
+        var afterRoom = _session.GetRoom(channelId, roomId);
         if (afterRoom == null)
             await _roomRegistry.RemoveRoomAsync(roomId, player.ChannelId);
         else
@@ -876,7 +876,7 @@ public class RoomAlterRoomCommand : ICommand
         var player = ctx.Player;
         if (player == null || player.RoomId == null) return;
 
-        var room = _session.GetRoom(player.RoomId.Value);
+        var room = _session.GetRoom(player.ChannelId, player.RoomId.Value);
         if (room == null) return;
 
 
@@ -891,7 +891,7 @@ public class RoomAlterRoomCommand : ICommand
         }
 
 
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.AlterRoom, new
             {
                 result    = 1,
@@ -917,7 +917,7 @@ public class RoomEmoticonCommand : ICommand
         var player = ctx.Player;
         if (player == null || player.RoomId == null) return;
 
-        var room = _session.GetRoom(player.RoomId.Value);
+        var room = _session.GetRoom(player.ChannelId, player.RoomId.Value);
         if (room == null) return;
 
         int emoticonId = ctx.GetInt(Key.EmoticonId);
@@ -1014,7 +1014,7 @@ public class TsumikomiCommand : ICommand
 
         if (!_testEnv) return;
 
-        var room = _session.GetRoom(player.RoomId.Value);
+        var room = _session.GetRoom(player.ChannelId, player.RoomId.Value);
         if (room == null) return;
 
         var paiCodes = ctx.GetIntArray("pai")
@@ -1043,7 +1043,7 @@ public class TsumikomiCommand : ICommand
             ["string"] = "tsumi",
         };
 
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.HanChatRelay, packet);
     }
 }

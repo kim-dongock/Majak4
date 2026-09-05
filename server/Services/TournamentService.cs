@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using MajakServer.Hubs;
+using MajakServer.Infrastructure;
 using MajakServer.Models.Game;
 using MajakServer.Models.Player;
 using MajakServer.Models.Protocol;
@@ -22,6 +23,8 @@ public class TournamentService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly PlayerSessionService _session;
     private readonly IHubContext<MajakGameHub> _hub;
+    private readonly RoomRegistryService _roomRegistry;
+    private readonly MasterCacheService _masterCache;
     private readonly ILogger<TournamentService> _logger;
 
     // インメモリ状態 — 原典: m_mapTournamentPlan / m_mapTournamentDetailAll
@@ -39,11 +42,15 @@ public class TournamentService
     public TournamentService(IServiceScopeFactory scopeFactory,
         PlayerSessionService session,
         IHubContext<MajakGameHub> hub,
+        RoomRegistryService roomRegistry,
+        MasterCacheService masterCache,
         ILogger<TournamentService> logger)
     {
         _scopeFactory = scopeFactory;
         _session      = session;
         _hub          = hub;
+        _roomRegistry = roomRegistry;
+        _masterCache  = masterCache;
         _logger       = logger;
     }
 
@@ -440,8 +447,12 @@ public class TournamentService
 
         using var scope = _scopeFactory.CreateScope();
         var repo = scope.ServiceProvider.GetRequiredService<TournamentRepository>();
+        var channels = await _masterCache.GetChannelListAsync();
         foreach (var plan in targets)
         {
+            int resultStartIndex = result.Count;
+            var createdRooms = new List<GameRoom>();
+            bool capacityUnavailable = false;
             plan.PlayStatus = TournamentPlanStatus.Play;
             await repo.UpdatePlanStatusAsync(plan);
 
@@ -499,6 +510,19 @@ public class TournamentService
                         maxMoney: long.MaxValue,
                         isPrivate: false,
                         subId: ExtractSubId(channelId));
+                    var channelInfo = channels.FirstOrDefault(channel => channel.ChanelId == channelId)
+                        ?? channels.FirstOrDefault(channel => channel.SubId == ExtractSubId(channelId));
+                    var registrationResult = await _roomRegistry.TryRegisterRoomAsync(
+                        room.RoomId, channelId, room.RoomTitle,
+                        room.IsPrivate, room.ActivePlayerCount, players.Count,
+                        room.ServerUrl, room.RoomOption, channelInfo?.MaxRoom ?? 48, room.MaxViewer);
+                    if (registrationResult != RoomRegistrationResult.Success)
+                    {
+                        _session.RemoveRoom(channelId, room.RoomId);
+                        capacityUnavailable = true;
+                        break;
+                    }
+                    createdRooms.Add(room);
                     room.TournamentSeqNo = plan.SeqNo;
                     room.TournamentSubId = detail.SubId;
                     room.LimitCnt = players.Count;
@@ -525,6 +549,23 @@ public class TournamentService
                     MemberNos  = players.Select(player => player.MemberNo).ToList(),
                 };
                 result.Add(info);
+            }
+
+            if (capacityUnavailable)
+            {
+                foreach (var room in createdRooms)
+                {
+                    _session.ExpirePendingMatch(room.ChannelId, room.RoomId);
+                    _session.RemoveRoom(room.ChannelId, room.RoomId);
+                    await _roomRegistry.RemoveRoomAsync(room.RoomId, room.ChannelId);
+                }
+                if (result.Count > resultStartIndex)
+                    result.RemoveRange(resultStartIndex, result.Count - resultStartIndex);
+                plan.PlayStatus = TournamentPlanStatus.Wait;
+                await repo.UpdatePlanStatusAsync(plan);
+                _logger.LogInformation(
+                    "Tournament {SeqNo}: room creation deferred because a channel reached max_room.",
+                    plan.SeqNo);
             }
         }
         return result;

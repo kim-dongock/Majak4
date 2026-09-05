@@ -93,8 +93,8 @@ description: "麻雀4プロジェクトの目的、現行構成、認証・ID・
 ## 6. レーティング / 称号システム
 
 - レーティングポイントが閾値を超えると段位/称号が上昇
-- 称号 (SLevel, `mj_sho_moji.png` 12 フレーム):
-  `無一文 → ぴよぴよ → 金欠 → 庶民 → 中流 → 上流 → 富豪 → 大富豪 → 貴族 → 大臣 → 王様 → 大王様`
+- GP資産称号 (`SLevel`) はAP-07と`RatingService`を正本とする11段階:
+  `無一文 → 金欠 → 庶民 → 平民 → 一般人 → 中流 → 上流 → 金持ち → 富豪 → 大富豪 → 財閥`
 - `CMJLevelupDlg` で称号上昇を演出
 
 ---
@@ -122,6 +122,13 @@ description: "麻雀4プロジェクトの目的、現行構成、認証・ID・
 | サーバー | ASP.NET Core / .NET 8 |
 | 永続化 | MySQL 8 (ゲームDB・ログDBを分離) |
 | キャッシュ | Redis |
+
+### 8-1. 起動時設定
+
+- サーバーは起動時、サービス登録より前に環境別のAWS Systems Manager Parameter Store SecureStringを復号してJSON設定として追加する。
+- pathはDevelopment=`/config/application_development/majak4`、Alpha=`/config/application_alpha/majak4`、Production=`/config/application_production/majak4`である。
+- DB、Redis、JWT、Google認証、CORS、Paifuなどの環境別runtime値はParameter Store JSONを正本とする。ローカル`.env`やdeploy scriptへruntime secretを保存しない。
+- deploy scriptはSSH接続先、user、key path、domain、port等の配備情報だけを持ち、remote processにはenvironment、listen URL、AWS regionだけを渡す。
 
 ---
 
@@ -170,3 +177,4 @@ description: "麻雀4プロジェクトの目的、現行構成、認証・ID・
 | AP-06-Resource | 静的リソース構成・公開ディレクトリ |
 | AP-15-Official-Web-Manual | 公式Webマニュアルに基づくゲーム仕様 |
 | AP-16-Currency-Economy | GP・MP・龍珠、商品、残高、購入の正本 |
+| AP-17-Tournament-System | トーナメント登録、ブラケット、NPC補完、状態遷移、結果・賞金処理 |

@@ -147,7 +147,7 @@ public class TournamentBackgroundService : BackgroundService
             var firstPlayer = _session.GetByMember(info.MemberNos[0]);
             if (firstPlayer?.RoomId != null)
             {
-                var room = _session.GetRoom(firstPlayer.RoomId.Value);
+                var room = _session.GetRoom(firstPlayer.ChannelId, firstPlayer.RoomId.Value);
                 if (room != null && room.TournamentSeqNo == 0)
                 {
                     room.TournamentSeqNo = info.SeqNo;

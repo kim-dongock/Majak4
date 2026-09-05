@@ -1,5 +1,5 @@
 # ============================================================
-# Majak2 開発環境 Docker Compose
+# Majak4 開発環境 Docker Compose
 # 使用方法:
 #   docker compose up -d          # バックグラウンド起動
 #   docker compose down           # 停止

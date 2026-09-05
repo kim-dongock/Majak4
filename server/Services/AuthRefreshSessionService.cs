@@ -8,7 +8,7 @@ namespace MajakServer.Services;
 
 public sealed class AuthRefreshSessionService
 {
-    public const string CookieName = "majak2_refresh";
+    public const string CookieName = "majak4_refresh";
     private const string KeyPrefix = "auth:refresh:";
     private readonly RedisService _redis;
     private readonly TimeSpan _ttl;

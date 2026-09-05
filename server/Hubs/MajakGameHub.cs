@@ -149,7 +149,7 @@ public class MajakGameHub : Hub
     private async Task HandleRoomDisconnectAsync(Models.Player.MajakPlayer player, bool removeMemberMapping = true)
     {
         int roomId = player.RoomId!.Value;
-        var room   = _session.GetRoom(roomId);
+        var room   = _session.GetRoom(player.ChannelId, roomId);
         if (room == null) return;
 
         int seatPos = (int)player.SeatPos;
@@ -161,10 +161,10 @@ public class MajakGameHub : Hub
             // Set the out-player flag (legacy: m_bIsOutPlayer = TRUE).
             player.IsOutPlayer = true;
 
-            var removedRoom = _session.RemovePlayingRoomIfNoActivePlayers(roomId);
+            var removedRoom = _session.RemovePlayingRoomIfNoActivePlayers(player.ChannelId, roomId);
             if (removedRoom != null)
             {
-                await Clients.Group($"room_{roomId}")
+                await Clients.Group(SignalRGroup.Room(player.ChannelId, roomId))
                     .SendAsync(Cmd.AutoExitRoom, new Dictionary<string, object?>
                     {
                         [GKey.Pix] = "",
@@ -183,9 +183,9 @@ public class MajakGameHub : Hub
                     viewer.RoomId = null;
                     viewer.IsViewer = false;
                     if (!string.IsNullOrWhiteSpace(viewer.ConnectionId))
-                        await Groups.RemoveFromGroupAsync(viewer.ConnectionId, $"room_{roomId}");
+                        await Groups.RemoveFromGroupAsync(viewer.ConnectionId, SignalRGroup.Room(player.ChannelId, roomId));
                 }
-                await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"room_{roomId}");
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, SignalRGroup.Room(player.ChannelId, roomId));
                 await _roomRegistry.RemoveRoomAsync(roomId, player.ChannelId);
                 await Clients.Group($"chanel_{player.ChannelId}")
                     .SendAsync(Cmd.RoomState, RoomStatePayload.BuildEmpty(roomId, "all_disconnected"));
@@ -193,7 +193,7 @@ public class MajakGameHub : Hub
                 return;
             }
 
-            if (!ReferenceEquals(_session.GetRoom(roomId), room))
+            if (!ReferenceEquals(_session.GetRoom(player.ChannelId, roomId), room))
             {
                 await _roomRegistry.ClearContinueRoomAsync(player.MemberNo);
                 _session.DisconnectFromRoom(player, Context.ConnectionId);
@@ -238,12 +238,12 @@ public class MajakGameHub : Hub
                 .Select(s => s!.MemberNo)
                 .FirstOrDefault() ?? "";
 
-            await Clients.Group($"room_{roomId}")
+            await Clients.Group(SignalRGroup.Room(player.ChannelId, roomId))
                 .SendAsync(Cmd.DeleteMember, Commands.Room.RoomGetMembersCommand.BuildDeleteMemberPayload(
                     newHost, player, GKey.ValuePlayer, seatPos));
 
             // Leave the SignalR group. During play, the seat is preserved and only the connection is detached.
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"room_{roomId}");
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, SignalRGroup.Room(player.ChannelId, roomId));
             if (removeMemberMapping)
             {
                 // Keep the seat reserved and disconnect only the connection so ReconnectToRoom can restore it.
@@ -254,7 +254,7 @@ public class MajakGameHub : Hub
                 player.RoomId = null;
             }
             // Redis: update active player count, and keep the room while the game can continue.
-            var updatedRoom = _session.GetRoom(roomId);
+            var updatedRoom = _session.GetRoom(player.ChannelId, roomId);
             if (updatedRoom != null && updatedRoom.HasNoActiveMembers)
             {
                 await _roomRegistry.UpdateMemberCountAsync(roomId, player.ChannelId, updatedRoom.ActivePlayerCount);
@@ -279,11 +279,11 @@ public class MajakGameHub : Hub
         string playerType = player.IsViewer ? GKey.ValueViewer : GKey.ValuePlayer;
 
         // Remove from PendingMatch (legacy: RemoveReservePlayer).
-        _session.RemovePendingMatchMember(roomId, player.MemberNo);
+        _session.RemovePendingMatchMember(player.ChannelId, roomId, player.MemberNo);
 
         _session.LeaveRoom(player);
 
-        await Clients.Group($"room_{roomId}")
+        await Clients.Group(SignalRGroup.Room(player.ChannelId, roomId))
             .SendAsync(Cmd.DeleteMember, Commands.Room.RoomGetMembersCommand.BuildDeleteMemberPayload(
                 roomHost, player, playerType, seatPos));
 
@@ -294,15 +294,15 @@ public class MajakGameHub : Hub
             var okPayload = new Dictionary<string, object>();
             for (int i = 0; i < GameConst.PlayerMaxCount; i++)
                 okPayload[$"{Key.OkButton}{i}"] = room.OkButtonStates[i] ? 1 : 0;
-            await Clients.Group($"room_{roomId}").SendAsync(Cmd.SendOkButton, okPayload);
+            await Clients.Group(SignalRGroup.Room(player.ChannelId, roomId)).SendAsync(Cmd.SendOkButton, okPayload);
         }
 
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"room_{roomId}");
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, SignalRGroup.Room(player.ChannelId, roomId));
 
-        var afterRoom = _session.GetRoom(roomId);
+        var afterRoom = _session.GetRoom(player.ChannelId, roomId);
         if (afterRoom == null)
         {
-            _session.ExpirePendingMatch(roomId);
+            _session.ExpirePendingMatch(player.ChannelId, roomId);
             await _roomRegistry.RemoveRoomAsync(roomId, player.ChannelId);
             await Clients.Group($"chanel_{player.ChannelId}")
                 .SendAsync(Cmd.RoomState, RoomStatePayload.BuildEmpty(roomId, "left"));
@@ -332,17 +332,17 @@ public class MajakGameHub : Hub
                 player?.RoomId);
             return;
         }
-        var roomBeforeReady = _session.GetRoom(roomId);
+        var roomBeforeReady = _session.GetRoom(player.ChannelId, roomId);
         bool isInitialStartupReady = roomBeforeReady?.State == GameRoomState.Playing
             && roomBeforeReady.PlayHistory.Count == 0;
         var gameLogic = _sp.GetRequiredService<GameLogicService>();
-        bool allReady = await gameLogic.MarkGameClientReadyAsync(roomId, Context.ConnectionId);
+        bool allReady = await gameLogic.MarkGameClientReadyAsync(player.ChannelId, roomId, Context.ConnectionId);
         log?.LogInformation("[GameReconnect] NotifyGameClientReady marked. connectionId={ConnectionId} roomId={RoomId} allReady={AllReady}",
             Context.ConnectionId,
             roomId,
             allReady);
 
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(player.ChannelId, roomId);
         if (isInitialStartupReady || room?.State != GameRoomState.Playing || room.PlayHistory.Count == 0)
         {
             log?.LogInformation("[GameReconnect] NotifyGameClientReady completed without snapshot. connectionId={ConnectionId} roomId={RoomId} roomFound={RoomFound} roomState={RoomState} playHistoryCount={PlayHistoryCount}",
@@ -415,7 +415,7 @@ public class MajakGameHub : Hub
         _sp.GetService<ILogger<MajakGameHub>>()?.LogInformation(
             "[GameStartTiming] NotifyGamePresentationReady received. roomId={RoomId} presentationId={PresentationId} connectionId={ConnectionId} receivedAt={ReceivedAt}",
             roomId, presentationId, Context.ConnectionId, DateTimeOffset.UtcNow);
-        await gameLogic.MarkGamePresentationReadyAsync(roomId, Context.ConnectionId, presentationId);
+        await gameLogic.MarkGamePresentationReadyAsync(player.ChannelId, roomId, Context.ConnectionId, presentationId);
     }
 
     public async Task<object?> GetWaitGuidePreview(int roomId, int discardBipaiIndex)
@@ -430,7 +430,7 @@ public class MajakGameHub : Hub
             || player.EngineOrder >= GameConst.PlayerMaxCount)
             return null;
 
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(player.ChannelId, roomId);
         if (room?.State != GameRoomState.Playing) return null;
         if (!await room.EngineLock.WaitAsync(TimeSpan.FromMilliseconds(500))) return null;
         try
@@ -455,7 +455,7 @@ public class MajakGameHub : Hub
             || player.EngineOrder >= GameConst.PlayerMaxCount)
             return null;
 
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(player.ChannelId, roomId);
         if (room?.State != GameRoomState.Playing || !room.IsTrainingChannel) return null;
         if (!await room.EngineLock.WaitAsync(TimeSpan.FromMilliseconds(500))) return null;
         try
@@ -491,7 +491,7 @@ public class MajakGameHub : Hub
     public async Task<object> GetGameStateFingerprint(int roomId)
     {
         var player = _session.GetByConn(Context.ConnectionId);
-        var room = player?.RoomId == roomId ? _session.GetRoom(roomId) : null;
+        var room = player?.RoomId == roomId ? _session.GetRoom(player.ChannelId, roomId) : null;
         if (room == null)
         {
             return new { valid = false, playing = false, roomId, kyokuCnt = -1, leftCount = -1 };
@@ -527,7 +527,7 @@ public class MajakGameHub : Hub
     {
         var log = _sp.GetService<ILogger<MajakGameHub>>();
         var player = _session.GetByConn(Context.ConnectionId);
-        var room = player?.RoomId == report.RoomId ? _session.GetRoom(report.RoomId) : null;
+        var room = player?.RoomId == report.RoomId ? _session.GetRoom(player.ChannelId, report.RoomId) : null;
         if (player == null || room == null || !_session.IsCurrentConnection(player.MemberNo, Context.ConnectionId))
         {
             log?.LogWarning(
@@ -628,7 +628,7 @@ public class MajakGameHub : Hub
                 player?.RoomId);
             return;
         }
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(player.ChannelId, roomId);
         if (room == null)
         {
             log?.LogWarning("[GameReconnect] RequestGameResync skipped: room not found. connectionId={ConnectionId} memberNo={MemberNo} requestedRoomId={RequestedRoomId}",
@@ -718,7 +718,7 @@ public class MajakGameHub : Hub
             player?.MemberNo ?? "",
             player?.RoomId,
             payload.TryGetValue("roomId", out var requestedRoomId) ? requestedRoomId : payload.GetValueOrDefault("k42e"),
-            player?.RoomId is int playerRoomId && _session.GetRoom(playerRoomId) != null);
+            player?.RoomId is int playerRoomId && _session.GetRoom(player.ChannelId, playerRoomId) != null);
         if (code == Cmd.GetMajItemList)
         {
             _sp.GetService<ILogger<MajakGameHub>>()?.LogInformation(

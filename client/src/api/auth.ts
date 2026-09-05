@@ -20,12 +20,13 @@ export function authApiUrl(path: string): string {
 }
 
 export function isHangeClientHost(hostname = window.location.hostname): boolean {
+  if (import.meta.env.VITE_AUTH_PROVIDER === 'hange') return true
   const normalized = hostname.toLowerCase().replace(/\.$/, '')
   return normalized === 'hange.jp' || normalized.endsWith('.hange.jp')
 }
 
 export function getHangeLoginUrl(currentUrl = window.location.href): string {
-  const url = new URL('https://alpha-top.hange.jp/login/index')
+  const url = new URL(import.meta.env.VITE_LOGIN_URL || 'https://top.hange.jp/login/index')
   url.searchParams.set('nexturl', currentUrl)
   return url.toString()
 }
@@ -57,8 +58,8 @@ export interface RegisteredPlayerCache {
   savedAt:               string
 }
 
-const REGISTERED_PLAYER_STORAGE_KEY = 'majak2.registeredPlayer.v1'
-const LOCAL_LOGOUT_STORAGE_KEY = 'majak2.localLogout.v1'
+const REGISTERED_PLAYER_STORAGE_KEY = 'majak4.registeredPlayer.v1'
+const LOCAL_LOGOUT_STORAGE_KEY = 'majak4.localLogout.v1'
 
 // Cache read/write
 

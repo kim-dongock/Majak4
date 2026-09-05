@@ -43,3 +43,4 @@ server/appsettings.json
 server/appsettings.Development.json
 server/appsettings.Alpha.json
 server/appsettings.Production.json
+server/.parameter-store/

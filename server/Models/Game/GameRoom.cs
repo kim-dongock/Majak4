@@ -130,7 +130,7 @@ public class GameRoom
     public MajakGameLogic Engine { get; } = new();
 
     /// <summary>
-    /// エンジン操作の排他制御 (PerformanceAnalysis §1-2)
+    /// エンジン操作の排他制御 (AP-04 §11)
     /// 複数プレイヤーが同時にアクションパケットを送信した場合の
     /// 並行アクセスを防ぐ。GamePlayProcessAsync で使用する。
     /// </summary>

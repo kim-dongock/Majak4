@@ -43,7 +43,7 @@ const ACT_RON = 5
 const ACT_RIC = 9
 const ACT_TSUMO = 11
 const FIXTURE_REQUIRED_TEXTURES = [
-  'hai_omote', 'hai_sute', 'hai_open_1', 'hai_open_2', 'hai_open_3',
+  'hai_omote', 'hai_sute', 'hai_ura_2', 'hai_open_1', 'hai_open_2', 'hai_open_3',
   'eff_roneff_11', 'eff_roneff_b_20', 'eff_roneff_c_27',
   'eff_tumoeff_12', 'eff_tumoeff_b_13', 'eff_tumoeff_c_15',
   'eff_rontumoeff_d_30', 'eff_rontumo_black', 'mj_ef_yakuman12',
@@ -54,18 +54,31 @@ const FIXTURE_REQUIRED_TEXTURES = [
 ]
 
 const HAND_CODES = [0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x21, 0x22, 0x23, 0x31]
+const MAX_MELD_COUNT = 4
+const MAX_DISCARD_COUNT = 18
 
-function hand(action: FixtureAction) {
-  const count = action === 'ron' ? HAND_CODES.length : 10
-  return HAND_CODES.slice(0, count).map((code, index) => ({ code, bipaiIndex: index, isSelected: false }))
+function hand() {
+  return HAND_CODES.map((code, index) => ({
+    code,
+    bipaiIndex: index,
+    isSelected: false,
+  }))
 }
 
-function calledMeld(action: Exclude<FixtureAction, 'ron'>, seatOrder: number) {
-  const tileCode = [0x11, 0x22, 0x33, 0x36][seatOrder]
+function discards(seatOrder: number) {
+  return Array.from({ length: MAX_DISCARD_COUNT }, (_, index) => ({
+    code: HAND_CODES[(seatOrder * 3 + index) % HAND_CODES.length],
+    bipaiIndex: 100 + seatOrder * MAX_DISCARD_COUNT + index,
+    isReach: false,
+  }))
+}
+
+function calledMeld(action: Exclude<FixtureAction, 'ron'>, seatOrder: number, meldIndex: number) {
+  const tileCode = [0x11, 0x22, 0x33, 0x36][(seatOrder + meldIndex) % 4]
   const tileCount = action === 'kan' ? 4 : 3
-  const calledColumn = seatOrder % 3
+  const calledColumn = (seatOrder + meldIndex) % 3
   if (action === 'chi') {
-    const startCode = [0x11, 0x21, 0x12, 0x22][seatOrder]
+    const startCode = [0x11, 0x21, 0x12, 0x22][(seatOrder + meldIndex) % 4]
     return {
       action: 2,
       tiles: Array.from({ length: tileCount }, (_, column) => ({
@@ -83,13 +96,26 @@ function calledMeld(action: Exclude<FixtureAction, 'ron'>, seatOrder: number) {
   }
 }
 
-function mountFixture(game: Phaser.Game, action: FixtureAction) {
+function mountFixture(game: Phaser.Game, action: FixtureAction, meldCounts: readonly number[]) {
   const scene = game.scene.getScene('GameScene') as (Phaser.Scene & { [key: string]: unknown }) | null
   if (!scene || !FIXTURE_REQUIRED_TEXTURES.every(texture => game.textures.exists(texture))) return false
   const players = scene['players'] as Array<Record<string, unknown>>
   if (!Array.isArray(players) || players.length !== 4) return false
+  scene['chicha'] = 0
+  scene['paifuGraphRound'] = {
+    kyokuCnt: 0,
+    left: 70,
+    ribo: 0,
+    renchan: 0,
+    dice: [2, 4],
+    waremeOdr: -1,
+    roomOption: '',
+    dora: [0x11],
+    uraDora: [],
+  }
 
   players.forEach((player, odr) => {
+    const meldCount = action === 'ron' ? 0 : Math.min(MAX_MELD_COUNT, Math.max(0, meldCounts[odr] ?? 0))
     Object.assign(player, {
       pix: `meld-fixture-${odr}`,
       name: `${PLAYER_NAMES[odr]} ${ACTION_LABELS[action]}`,
@@ -98,12 +124,12 @@ function mountFixture(game: Phaser.Game, action: FixtureAction) {
       sex: odr % 2 === 0 ? 'M' : 'F',
       avatarUrl: PLAYER_AVATARS[odr],
       fallbackAvatarUrl: PLAYER_AVATARS[odr],
-      hand: hand(action),
-      discards: action === 'ron'
-        ? [{ code: [0x11, 0x22, 0x33, 0x36][odr], bipaiIndex: 100 + odr, isReach: false }]
-        : [],
+      hand: hand(),
+      discards: discards(odr),
       flowers: [],
-      melds: action === 'ron' ? [] : [calledMeld(action, odr)],
+      melds: action === 'ron'
+        ? []
+        : Array.from({ length: meldCount }, (_, meldIndex) => calledMeld(action, odr, meldIndex)),
       isReach: false,
       reachDiscardCarry: false,
     })
@@ -114,6 +140,7 @@ function mountFixture(game: Phaser.Game, action: FixtureAction) {
     ;(scene['redrawDiscards'] as (seatOrder: number) => void)(odr)
     ;(scene['redrawMelds'] as (seatOrder: number) => void)(odr)
   }
+  ;(scene['redrawDeadWall'] as () => void)()
   const playerState = { players, viewOdr: 0 }
   scene.events.emit('stateUpdate', playerState)
   const refreshPlayerHud = () => {
@@ -290,11 +317,14 @@ export default function MeldLayoutFixtureScreen() {
       ? 'mobileLandscape'
       : outgameLayoutMode === 'desktop' ? 'responsiveDesktop' : 'mobileLandscape'
   const [action, setAction] = useState<FixtureAction>('chi')
+  const [meldCounts, setMeldCounts] = useState<[number, number, number, number]>([4, 4, 4, 4])
+  const [showControls, setShowControls] = useState(false)
   const [effect, setEffect] = useState<FixtureEffect>('ron')
   const [effectOdr, setEffectOdr] = useState(0)
   const [showLevelUp, setShowLevelUp] = useState(false)
   const [titleAwardAnnouncement, setTitleAwardAnnouncement] = useState<SlideAnnounceData | null>(null)
   const actionRef = useRef<FixtureAction>(action)
+  const meldCountsRef = useRef<[number, number, number, number]>(meldCounts)
   const [ready, setReady] = useState(false)
   const [chatText, setChatText] = useState('')
   const [autoPass, setAutoPass] = useState(false)
@@ -304,6 +334,7 @@ export default function MeldLayoutFixtureScreen() {
   const [mobileScale, setMobileScale] = useState(1)
 
   actionRef.current = action
+  meldCountsRef.current = meldCounts
 
   useEffect(() => {
     const container = containerRef.current
@@ -312,7 +343,7 @@ export default function MeldLayoutFixtureScreen() {
     let animationFrame = 0
     let game: Phaser.Game
     const initialize = () => {
-      if (mountFixture(game, actionRef.current)) {
+      if (mountFixture(game, actionRef.current, meldCountsRef.current)) {
         setReady(true)
         return
       }
@@ -321,6 +352,7 @@ export default function MeldLayoutFixtureScreen() {
     game = createGame(container, {
       mode: 'game',
       layoutMode: mode,
+      deadWallScale: 'topHand',
       roomId: 'meld-layout-fixture',
       roomName: 'Meld layout fixture',
       myOdr: 0,
@@ -345,7 +377,7 @@ export default function MeldLayoutFixtureScreen() {
     let animationFrame = 0
     const updateFixture = () => {
       if (gameRef.current !== game) return
-      if (mountFixture(game, action)) {
+      if (mountFixture(game, action, meldCounts)) {
         setReady(true)
         return
       }
@@ -353,7 +385,7 @@ export default function MeldLayoutFixtureScreen() {
     }
     animationFrame = requestAnimationFrame(updateFixture)
     return () => cancelAnimationFrame(animationFrame)
-  }, [action])
+  }, [action, meldCounts])
 
   const isMobile = mode === 'mobileLandscape'
 
@@ -394,6 +426,24 @@ export default function MeldLayoutFixtureScreen() {
     </>
   )
 
+  const meldCountControls = (
+    <>
+      {PLAYER_NAMES.map((name, odr) => (
+        <label key={name} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span>{name}</span>
+          <select
+            aria-label={`${name} 副露数`}
+            value={meldCounts[odr]}
+            disabled={action === 'ron'}
+            onChange={event => setMeldCounts(counts => counts.map((count, index) => index === odr ? Number(event.target.value) : count) as [number, number, number, number])}
+          >
+            {Array.from({ length: MAX_MELD_COUNT + 1 }, (_, count) => <option key={count} value={count}>{count}副露</option>)}
+          </select>
+        </label>
+      ))}
+    </>
+  )
+
   if (isMobile) {
     return (
       <main ref={mobileShellRef} className="majak-mobile-ingame-shell">
@@ -412,15 +462,21 @@ export default function MeldLayoutFixtureScreen() {
             <div ref={containerRef} style={{ position: 'absolute', inset: 0, width: GAME_WIDTH, height: GAME_HEIGHT }} />
           </div>
         </div>
-        <header style={{ position: 'absolute', zIndex: 300, top: 8, left: 8, right: 8, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', padding: 6, color: '#ffffff', background: 'rgba(0, 0, 0, 0.72)' }}>
-          <strong>Open Meld Layout Fixture</strong>
-          {(Object.keys(ACTION_LABELS) as FixtureAction[]).map(value => (
-            <button key={value} type="button" onClick={() => setAction(value)} disabled={action === value}>{ACTION_LABELS[value]}</button>
-          ))}
-          {action === 'ron' && <button type="button" onClick={() => gameRef.current && replayRonEffects(gameRef.current)}>ロン 4方向再生</button>}
-          {effectControls}
-          <span>{ready ? 'Fixture data rendered' : 'Loading scene...'}</span>
-        </header>
+        <button type="button" onClick={() => setShowControls(value => !value)} style={{ position: 'absolute', zIndex: 301, top: 8, left: 8 }}>
+          {showControls ? '閉じる' : '操作'}
+        </button>
+        {showControls && (
+          <header style={{ position: 'absolute', zIndex: 300, top: 42, left: 8, right: 8, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', padding: 6, color: '#ffffff', background: 'rgba(0, 0, 0, 0.72)' }}>
+            <strong>Open Meld Layout Fixture</strong>
+            {(Object.keys(ACTION_LABELS) as FixtureAction[]).map(value => (
+              <button key={value} type="button" onClick={() => setAction(value)} disabled={action === value}>{ACTION_LABELS[value]}</button>
+            ))}
+            {meldCountControls}
+            {action === 'ron' && <button type="button" onClick={() => gameRef.current && replayRonEffects(gameRef.current)}>ロン 4方向再生</button>}
+            {effectControls}
+            <span>{ready ? 'Fixture data rendered' : 'Loading scene...'}</span>
+          </header>
+        )}
         <div style={{ position: 'absolute', inset: 0, width: GAME_WIDTH, height: GAME_HEIGHT, pointerEvents: 'none', zIndex: 500, overflow: 'hidden' }}>
           <SlideAnnounce data={titleAwardAnnouncement} onDone={() => setTitleAwardAnnouncement(null)} />
         </div>
@@ -448,15 +504,21 @@ export default function MeldLayoutFixtureScreen() {
         <div className="majak-responsive-ingame-shell">
           <div className="majak-responsive-ingame-playfield">
             <div className="majak-responsive-ingame-world" ref={containerRef} />
-            <header style={{ position: 'absolute', zIndex: 20, top: 8, left: 8, right: 8, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: 8, color: '#ffffff', background: 'rgba(0, 0, 0, 0.62)' }}>
-              <strong>Open Meld Layout Fixture</strong>
-              {(Object.keys(ACTION_LABELS) as FixtureAction[]).map(value => (
-                <button key={value} type="button" onClick={() => setAction(value)} disabled={action === value}>{ACTION_LABELS[value]}</button>
-              ))}
-              {action === 'ron' && <button type="button" onClick={() => gameRef.current && replayRonEffects(gameRef.current)}>ロン 4方向再生</button>}
-              {effectControls}
-              <span>{ready ? 'Fixture data rendered' : 'Loading scene...'}</span>
-            </header>
+            <button type="button" onClick={() => setShowControls(value => !value)} style={{ position: 'absolute', zIndex: 21, top: 8, left: 8 }}>
+              {showControls ? '閉じる' : '操作'}
+            </button>
+            {showControls && (
+              <header style={{ position: 'absolute', zIndex: 20, top: 42, left: 8, right: 8, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', padding: 8, color: '#ffffff', background: 'rgba(0, 0, 0, 0.62)' }}>
+                <strong>Open Meld Layout Fixture</strong>
+                {(Object.keys(ACTION_LABELS) as FixtureAction[]).map(value => (
+                  <button key={value} type="button" onClick={() => setAction(value)} disabled={action === value}>{ACTION_LABELS[value]}</button>
+                ))}
+                {meldCountControls}
+                {action === 'ron' && <button type="button" onClick={() => gameRef.current && replayRonEffects(gameRef.current)}>ロン 4方向再生</button>}
+                {effectControls}
+                <span>{ready ? 'Fixture data rendered' : 'Loading scene...'}</span>
+              </header>
+            )}
             <p style={{ position: 'absolute', zIndex: 20, left: 8, bottom: 8, margin: 0, padding: '5px 8px', color: '#ffffff', background: 'rgba(0, 0, 0, 0.62)', fontSize: 14 }}>
               {action === 'ron'
                 ? 'Four discard sources are shown. Replay Ron to verify all four call positions.'

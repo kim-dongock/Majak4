@@ -153,7 +153,7 @@ public class GameLogicService
         }
         PrepareGameClientReadyGate(room);
 
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.AutoStart, BuildAutoStartPayload(room, gemGame));
         _log?.LogInformation("[GameStartTiming] AutoStart sent. roomId={RoomId} elapsedMs={ElapsedMs}", room.RoomId, startupTimer.ElapsedMilliseconds);
 
@@ -187,7 +187,7 @@ public class GameLogicService
 
         var hanchanInfo = BuildHanchanInfo(room);
         room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, hanchanInfo));
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.GamePlay, hanchanInfo);
         _log?.LogInformation("[GameStartTiming] MJPID_INIHAN sent. roomId={RoomId} elapsedMs={ElapsedMs}", room.RoomId, startupTimer.ElapsedMilliseconds);
 
@@ -198,9 +198,9 @@ public class GameLogicService
         _log?.LogInformation("[GameStartTiming] initial actions dispatch attempted. roomId={RoomId} elapsedMs={ElapsedMs}", room.RoomId, startupTimer.ElapsedMilliseconds);
     }
 
-    public Task<bool> MarkGameClientReadyAsync(int roomId, string connectionId)
+    public Task<bool> MarkGameClientReadyAsync(string channelId, int roomId, string connectionId)
     {
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetRoom(channelId, roomId);
         if (room == null || string.IsNullOrEmpty(connectionId)) return Task.FromResult(false);
 
         bool isAllReady;
@@ -223,9 +223,18 @@ public class GameLogicService
         return Task.FromResult(isAllReady);
     }
 
-    public Task<bool> MarkGamePresentationReadyAsync(int roomId, string connectionId, long presentationId)
+    [Obsolete("Use MarkGameClientReadyAsync(channelId, roomId, connectionId).")]
+    public Task<bool> MarkGameClientReadyAsync(int roomId, string connectionId)
     {
-        var room = _session.GetRoom(roomId);
+        var room = _session.GetAllRooms().SingleOrDefault(room => room.RoomId == roomId);
+        return room == null
+            ? Task.FromResult(false)
+            : MarkGameClientReadyAsync(room.ChannelId, roomId, connectionId);
+    }
+
+    public Task<bool> MarkGamePresentationReadyAsync(string channelId, int roomId, string connectionId, long presentationId)
+    {
+        var room = _session.GetRoom(channelId, roomId);
         if (room == null || string.IsNullOrEmpty(connectionId)) return Task.FromResult(false);
 
         bool isAllReady;
@@ -247,6 +256,15 @@ public class GameLogicService
         _log?.LogInformation("Game presentation ready. roomId={RoomId} presentationId={PresentationId} connectionId={ConnectionId} ready={ReadyCount}/{ExpectedCount} allReady={AllReady}",
             roomId, presentationId, connectionId, readyCount, expectedCount, isAllReady);
         return Task.FromResult(isAllReady);
+    }
+
+    [Obsolete("Use MarkGamePresentationReadyAsync(channelId, roomId, connectionId, presentationId).")]
+    public Task<bool> MarkGamePresentationReadyAsync(int roomId, string connectionId, long presentationId)
+    {
+        var room = _session.GetAllRooms().SingleOrDefault(room => room.RoomId == roomId);
+        return room == null
+            ? Task.FromResult(false)
+            : MarkGamePresentationReadyAsync(room.ChannelId, roomId, connectionId, presentationId);
     }
 
     public async Task StartGameActionsAsync(GameRoom room, CommandContext ctx)
@@ -482,7 +500,7 @@ public class GameLogicService
             return;
         }
 
-        // ── エンジン排他制御 (PerformanceAnalysis §1-2)
+        // ── エンジン排他制御 (AP-04 §11)
 
         await room.EngineLock.WaitAsync();
         try
@@ -562,7 +580,7 @@ public class GameLogicService
         long auditSeq = LogAuthoritativeDiscardAudit(room, order, act, actionSeq, "player");
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
         var actionInfo = BuildActionInfo(room, order, action, indices, actionSeq, auditSeq, isKyoConfirmation: isKyoConfirmation);
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.GamePlay, actionInfo);
         _log?.LogDebug("GamePlayProcess broadcast action. roomId={RoomId} order={Order} action={Action} leftCount={LeftCount}", room.RoomId, order, action, room.Engine.GetBipaiCount());
 
@@ -661,7 +679,7 @@ public class GameLogicService
 
         if (mode == Engine.PlayerMode.Turn)
         {
-            await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.GamePlay, new
+            await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId)).SendAsync(Cmd.GamePlay, new
             {
                 playType = "MJPID_ACTIONS",
                 seatOrder = order,
@@ -805,7 +823,7 @@ public class GameLogicService
         long auditSeq = LogAuthoritativeDiscardAudit(room, order, eAct, 0, useTrainingAi ? "training-ai" : "proxy");
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
         var actionInfo = BuildActionInfo(room, order, (int)eAct, bipaiIdx, auditSeq: auditSeq);
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.GamePlay, actionInfo);
         if (historyPaiInfo != null)
         {
@@ -1135,7 +1153,7 @@ public class GameLogicService
 
         if (room.Engine.Player[order].Mode is Engine.PlayerMode.Turn or Engine.PlayerMode.Kyo)
         {
-            await ctx.Clients.GroupExcept($"room_{room.RoomId}", targetConnectionIds)
+            await ctx.Clients.GroupExcept(SignalRGroup.Room(room.ChannelId, room.RoomId), targetConnectionIds)
                 .SendAsync(Cmd.GamePlay, new
                 {
                     playType = "MJPID_ACTIONS",
@@ -1201,7 +1219,7 @@ public class GameLogicService
         long auditSeq = LogAuthoritativeDiscardAudit(room, order, act, actionSeq, reason);
         var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
         var actionInfo = BuildActionInfo(room, order, (int)act, bipaiIdx, actionSeq, auditSeq);
-        await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.GamePlay, actionInfo);
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId)).SendAsync(Cmd.GamePlay, actionInfo);
         if (historyPaiInfo != null)
         {
             var historyPacket = WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo);
@@ -1543,7 +1561,7 @@ public class GameLogicService
                 long auditSeq = LogAuthoritativeDiscardAudit(room, order, timeoutAct, prompt.ActionSeq, "timeout");
                 var historyPaiInfo = await SendPaiInfoToAllAsync(room, ctx, isInit: false);
                 var actionInfo = BuildActionInfo(room, order, (int)timeoutAct, bipaiIdx, prompt.ActionSeq, auditSeq, autoConfirmed: prompt.PlayerMode == Engine.PlayerMode.Kyo, isKyoConfirmation: prompt.PlayerMode == Engine.PlayerMode.Kyo);
-                await ctx.Clients.Group($"room_{room.RoomId}").SendAsync(Cmd.GamePlay, actionInfo);
+                await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId)).SendAsync(Cmd.GamePlay, actionInfo);
                 if (historyPaiInfo != null)
                 {
                     var historyPacket = WrapHistoryPacket(Cmd.PaiInfoList, historyPaiInfo);
@@ -1777,7 +1795,7 @@ public class GameLogicService
             waremeOdr,
             riboCnt     = ki.RibouCount,
             renChanCnt  = room.Engine.HanchanInfo.RenchanCount,
-            dice        = ki.Dice,
+            dice        = ki.Dice.ToArray(),
             leftCount   = room.Engine.GetBipaiCount(),
             memberPoints = room.Engine.Player.Select(p => p.GamePoint).ToArray(),
             yakitori     = room.Engine.Player.Select(p => p.IsYakitori).ToArray(),
@@ -1790,7 +1808,7 @@ public class GameLogicService
         };
         room.PlayHistory.Add(kyokuInfo);
         room.PaifuHistory.Add(WrapHistoryPacket(Cmd.GamePlay, kyokuInfo));
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.GamePlay, kyokuInfo);
         _log?.LogInformation("OnInitKyoku sent MJPID_INIKYO. roomId={RoomId} oyaOrder={OyaOrder} waremeOdr={WaremeOdr} dice={Dice} memberPoints={MemberPoints}",
             room.RoomId,
@@ -1819,7 +1837,7 @@ public class GameLogicService
         UpdateEndKyokuTitleCounters(room);
 
 
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.GamePlay, BuildKyoResultPayload(room));
     }
 
@@ -2304,7 +2322,7 @@ public class GameLogicService
             _log?.LogError(ex, "GameReportProcess failed. roomId={RoomId} state={State}", room.RoomId, room.State);
             var failurePayload = BuildGameReportFailurePayload("exception");
             room.LastGameReportPayload = failurePayload;
-            await ctx.Clients.Group($"room_{room.RoomId}")
+            await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
                 .SendAsync(Cmd.GameReport, failurePayload);
             await ctx.Clients.Group($"chanel_{room.ChannelId}")
                 .SendAsync(Cmd.GameReport, failurePayload);
@@ -2347,7 +2365,7 @@ public class GameLogicService
                 string.Join(',', report.Users.Where(u => u != null).Select(u => $"{u!.MemberNo}:{u.MoneyChange}")));
             var failurePayload = BuildGameReportFailurePayload("money_validation_failed");
             room.LastGameReportPayload = failurePayload;
-            await ctx.Clients.Group($"room_{room.RoomId}")
+            await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
                 .SendAsync(Cmd.GameReport, failurePayload);
             await ctx.Clients.Group($"chanel_{room.ChannelId}")
                 .SendAsync(Cmd.GameReport, failurePayload);
@@ -2529,7 +2547,7 @@ public class GameLogicService
             }
         }
 
-        await ctx.Clients.Group($"room_{room.RoomId}")
+        await ctx.Clients.Group(SignalRGroup.Room(room.ChannelId, room.RoomId))
             .SendAsync(Cmd.GameReport, resultPayload);
         await ctx.Clients.Group($"chanel_{room.ChannelId}")
             .SendAsync(Cmd.GameReport, resultPayload);

@@ -47,7 +47,18 @@ internal static class AuthEndpoints
             }
 
             await refreshSessions.RevokeAsync(currentToken);
-            await gamePlayers.RefreshLoginAsync(account.MemberNo, account.DisplayName, false);
+            if (account.IsHangeAccount && IsHangeServiceHost(context.Request.Host.Host))
+            {
+                var refreshedHangeAccount = await TryRefreshHangeProfileAsync(context, gamePlayers, account);
+                if (refreshedHangeAccount is null)
+                {
+                    ClearRefreshCookie(context);
+                    return Results.Unauthorized();
+                }
+                account = refreshedHangeAccount;
+            }
+            else
+                await gamePlayers.RefreshLoginAsync(account.MemberNo, account.DisplayName, false);
             await playerRepository.SetDailyMissionAsync(account.MemberNo, conditionType: 1, progressIncrement: 1);
             var pix = sessions.IssuePix(account.MemberNo);
             if (await IssueRefreshCookieAsync(context, refreshSessions, account.MemberNo))
@@ -183,6 +194,8 @@ internal static class AuthEndpoints
             return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = account.DisplayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, password, isTestEnv = isTest, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
         });
 
+        if (app.Configuration.GetValue("Authentication:GoogleEnabled", true))
+        {
         app.MapPost("/auth/google-login-redirect", async Task<IResult> (HttpContext context, GamePlayerRepository gamePlayers, PlayerRepository playerRepository, LogRepository logRepository, IConfiguration configuration, ILogger<AuthEndpointsMarker> logger, PlayerSessionService sessions, AuthRefreshSessionService refreshSessions) =>
         {
             var clientAppUrl = configuration["ClientAppUrl"]?.TrimEnd('/') ?? $"{context.Request.Scheme}://{context.Request.Host}";
@@ -257,6 +270,7 @@ internal static class AuthEndpoints
             ClearPendingGoogleIdTokenCookie(context);
             return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(memberNo, pix), memberNo = pix, name = displayName, sex = existing?.SexCode ?? sexCode, birthYear = existing?.BirthYear ?? body.BirthYear, avatarId = existing?.AvatarId ?? body.AvatarId, requiresRegistration = false, accountStatus = existing?.AccountStatus ?? 1, termsAgreed = existing?.TermsAgreed ?? true });
         });
+        }
     }
 
     private static Task<GoogleJsonWebSignature.Payload> ValidateGoogleTokenAsync(string token, string clientId)
@@ -268,6 +282,48 @@ internal static class AuthEndpoints
         var digits = new string(birthday.Where(char.IsAsciiDigit).ToArray());
         if (digits.Length < 4 || !ushort.TryParse(digits[..4], out var year)) return null;
         return year >= 1900 && year <= DateTime.UtcNow.Year ? year : null;
+    }
+
+    internal static bool IsHangeServiceHost(string? host)
+        => string.Equals(host, "hange.jp", StringComparison.OrdinalIgnoreCase)
+            || host?.EndsWith(".hange.jp", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static async Task<GamePlayerAccount?> TryRefreshHangeProfileAsync(
+        HttpContext context,
+        GamePlayerRepository gamePlayers,
+        GamePlayerAccount refreshAccount)
+    {
+        var cookieValue = context.Request.Cookies["login"];
+        if (string.IsNullOrWhiteSpace(cookieValue)) return null;
+
+        var fields = HangameCookieDecryptor.ParseCookie(cookieValue);
+        if (fields is null) return null;
+        if (fields.TryGetValue("valid", out var valid)
+            && !string.IsNullOrWhiteSpace(valid)
+            && !string.Equals(valid, "Y", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var userNo = HangameCookieDecryptor.GetUserNo(fields);
+        if (string.IsNullOrWhiteSpace(userNo)) return null;
+        var hangeAccount = await gamePlayers.GetAccountByHangeUserNoAsync(userNo);
+        if (hangeAccount?.MemberNo != refreshAccount.MemberNo) return null;
+
+        fields.TryGetValue("sex", out var cookieSex);
+        fields.TryGetValue("birthday", out var birthday);
+        fields.TryGetValue("avatarid", out var cookieAvatarId);
+        var sexCode = cookieSex?.Trim().ToUpperInvariant() ?? string.Empty;
+        var avatarId = cookieAvatarId?.Trim() ?? string.Empty;
+        if (sexCode is not ("M" or "F") || string.IsNullOrWhiteSpace(avatarId) || avatarId.Length > 255)
+            return null;
+
+        await gamePlayers.RefreshHangeLoginAsync(
+            refreshAccount.MemberNo,
+            HangameCookieDecryptor.GetDisplayName(fields),
+            sexCode,
+            ParseHangeBirthYear(birthday),
+            avatarId,
+            cookieValue.TrimStart().StartsWith("hangametest=", StringComparison.OrdinalIgnoreCase));
+        return await gamePlayers.GetAccountAsync(refreshAccount.MemberNo) ?? refreshAccount;
     }
 
     private static void SetPendingGoogleIdTokenCookie(HttpContext context, string idToken)

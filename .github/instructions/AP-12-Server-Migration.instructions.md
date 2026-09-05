@@ -1,6 +1,6 @@
 ---
 applyTo: "server/**,server.tests/**"
-description: "C++レガシーサーバーをASP.NET Core/.NET 8へ移植する際の重要ポイント"
+description: "C++レガシーサーバーと麻雀エンジンをASP.NET Core/.NET 8へ移植し、既知のparity回帰を防ぐ際の重要ポイント"
 ---
 
 # AP-12 サーバー移植 効率化ガイド
@@ -400,3 +400,23 @@ with open("Majak4_legacy/server/server/HMajCommon.h", encoding="cp932", errors="
 | `HMajCommon.h` → `s_stEnterGradeModeCond[]` | 段位戦進入条件テキスト | `HMajChnlServer.cpp` のエラーメッセージ |
 | `HMajCommon.h` → `MAJAK_STR_*` マクロ | 通知メッセージ文字列 | `HMajChnlServer.cpp` の `SendNoticeToAll` 呼び出し |
 | `HMajDef.h` → 定数定義 | 数値定数 (読めることが多い) | 直接読めれば OK |
+
+---
+
+## 13. エンジンのレガシー互換回帰チェックリスト
+
+次の項目は、実際のparity修正で判明した再発しやすい契約である。関連コードを変更するときは、レガシー`CPaiCode`、`CBipai`、`HMajakPlayer`、`CHand`、`HMajakGameLogic`、`CEval`の実装と合わせて確認する。
+
+1. 一般役の評価前にhead pair countを復元し、`Churenpaotou`系とboolean `CheckYaku`のdecomposition順を維持する。
+2. open chiは`Sanankou`のconcealed winning-tile判定、wait fu、ron triplet判定から除外する。
+3. `GetValidActions`は役なしronを提示しない。normal ruleのfifth kanはレガシーのabortive-draw経路へ到達できるようにする。
+4. `Bipai.Open`は公開maskをORし、受信者ごとのsent bitを消去しない。
+5. 失敗した`Pon`/`MinKan`はpao状態を変更しない。`ChaKan`はponの存在を先に確認し、不一致時は`ErrPaiNotMatch`を返す。
+6. `Richi`とdiscardはtile codeではなく、選択したwall/bipai indexのphysical tile identityを保持する。重複physical indexは`ErrPaiAlreadyUsed`とする。
+7. chiのsort後もcalled tile identityを保持し、visible-tile countを変化させない。
+8. レガシーにないkuikae拒否を追加しない。chankanでrobされても完了済みadded-kan stateはレガシーどおり保持する。
+9. grade gameの特殊double-yakuman再評価はレガシーの`bRevaluate=false`契約に従う。
+10. `PaiCode.Invalid.GetSerial()`を防御的に変更せず、レガシーの算術値`41`を維持する。
+11. legacy training AIのdora評価は、tsumoでは元の14枚、ronでは元の先頭13枚と候補tileを使う。simulation用count arrayへ置き換えない。
+
+これらを変更するときは狭いregression testを先に追加し、protocol packet shapeやaction orderをWebの都合で変更しない。

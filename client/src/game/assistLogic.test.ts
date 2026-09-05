@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assistTileMask, decideAutoDiscardDelayMs, decideDiscardSource, decideTimedDiscardIndex, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, offsetDiscardSourceMarker, waitGuideWorldY } from './assistLogic'
+import { assistTileMask, decideAutoDiscardDelayMs, decideDiscardSource, decideTimedDiscardIndex, decideTouchTileAction, DISCARD_SOURCE_MARKER_DEPTH, isDrawnTilePosition, offsetDiscardSourceMarker, sortHandForDisplay, waitGuideWorldY } from './assistLogic'
 
 describe('DISCARD_SOURCE_MARKER_DEPTH', () => {
   it('keeps the marker behind hand tiles like legacy z=-1', () => {
@@ -113,5 +113,19 @@ describe('decideDiscardSource', () => {
 
   it('does not obfuscate a tsumogiri marker', () => {
     expect(decideDiscardSource(14, 13, false, true, 713)).toEqual({ isTedashi: false, displayIdx: 13 })
+  })
+})
+
+describe('hand display ordering', () => {
+  it('sorts the concealed hand while keeping the drawn tile in the final slot', () => {
+    const tiles = [3, 1, 2, 9].map(code => ({ code }))
+
+    expect(sortHandForDisplay(tiles, true).map(tile => tile.code)).toEqual([1, 2, 3, 9])
+    expect(sortHandForDisplay([{ code: 3 }, { code: 1 }, { code: 2 }], false).map(tile => tile.code)).toEqual([1, 2, 3])
+  })
+
+  it('does not mark the last tile as drawn immediately after chi or pon', () => {
+    expect(isDrawnTilePosition(14, 13, false)).toBe(true)
+    expect(isDrawnTilePosition(11, 10, true)).toBe(false)
   })
 })
