@@ -159,8 +159,9 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
       noAudio: true,
     },
     render: {
-      antialias: false,
-      pixelArt: true,
+      antialias: true,
+      antialiasGL: true,
+      pixelArt: false,
       roundPixels: true,
     },
     scene: [PreloadScene, GameScene, UIScene],
@@ -171,6 +172,7 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
     },
     callbacks: {
       postBoot: game => {
+        game.canvas.style.imageRendering = 'auto'
         game.registry.set(GAME_OPTIONS_REGISTRY_KEY, _gameOptions)
       },
     },

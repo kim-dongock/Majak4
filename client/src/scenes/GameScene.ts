@@ -147,6 +147,8 @@ const MOBILE_LEFT_SIDE_HAND_OUTER_OFFSET = 20
 const MOBILE_RIGHT_SIDE_HAND_OUTER_OFFSET = 8
 const MOBILE_TOP_MELD_OUTER_OFFSET_Y = 16
 const MOBILE_BOTTOM_MELD_OUTER_OFFSET_Y = 16
+const MOBILE_TOP_MELD_OUTER_OFFSET_X = -32
+const MOBILE_BOTTOM_MELD_OUTER_OFFSET_X = 32
 const MOBILE_DISCARD_LAYOUT_SCALE = 1.20
 const MOBILE_CONTENT_BASE_ASPECT = 375 / 667
 const MOBILE_CONTENT_SCALE_MIN = 0.68
@@ -161,6 +163,7 @@ const MOBILE_DEAD_WALL_AVATAR_Y_OFFSET = 14
 const MOBILE_SELF_HAND_BOTTOM_INSET = 12
 const MOBILE_SELF_HAND_FIXED_COUNT = 14
 const MOBILE_OTHER_HAND_FIXED_COUNT = 14
+const TOP_HAND_ANCHOR_TILE_COUNT = 13
 const MOBILE_SELF_HAND_DEPTH = 900
 const LEGACY_GEM_EFFECT_SIZE = { width: 345, height: 353 }
 const LEGACY_YAKUMAN_FINISH_SIZE = { width: 563, height: 435 }
@@ -168,8 +171,7 @@ const LEGACY_TSUMO_EFFECT_THICKNESS = 164
 const MATCH_START_SEAT_REVEAL_DURATION_MS = 3100
 const LEGACY_WAREME_PRESENTATION_DURATION_MS = 3700
 const RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP = 64
-const RESPONSIVE_DESKTOP_HORIZONTAL_HAND_OUTER_RATIO = 0.68
-const RESPONSIVE_DESKTOP_BOTTOM_HAND_OUTER_RATIO = 0.66
+const RESPONSIVE_DESKTOP_TOP_HAND_OFFSET_X = 25
 const MATCH_START_SEAT_POSITIONS = [
   { x: 379, y: 506 },
   { x: 627, y: 325 },
@@ -287,15 +289,22 @@ function odrToLoc(odr: number, viewOdr: number): 0 | 1 | 2 | 3 {
 
 function handPos(loc: 0 | 1 | 2 | 3, idx: number, isDrawTile: boolean, isOpenMode = false): { x: number; y: number } {
   const tableLoc = loc === 0 ? 4 : loc
-  const offset = isDrawTile ? MOH_OFS[tableLoc] : { x: 0, y: 0 }
+  const handIndex = loc === 2 ? TOP_HAND_ANCHOR_TILE_COUNT - 1 - idx : idx
+  const offset = isDrawTile
+    ? loc === 2 ? { x: -MOH_OFS[tableLoc].x, y: MOH_OFS[tableLoc].y } : MOH_OFS[tableLoc]
+    : { x: 0, y: 0 }
   const openOffset = isOpenMode ? OPN_OFS[tableLoc] : { x: 0, y: 0 }
   const point = {
-    x: TEH_POS[tableLoc].x + TEH_COL[tableLoc].x * idx + offset.x + openOffset.x,
-    y: TEH_POS[tableLoc].y + TEH_COL[tableLoc].y * idx + offset.y + openOffset.y,
+    x: TEH_POS[tableLoc].x + TEH_COL[tableLoc].x * handIndex + offset.x + openOffset.x,
+    y: TEH_POS[tableLoc].y + TEH_COL[tableLoc].y * handIndex + offset.y + openOffset.y,
   }
-  return CURRENT_INGAME_LAYOUT_MODE === 'responsiveDesktop'
-    ? boardLocalPoint(point)
-    : boardEdgePoint(point, loc, CURRENT_INGAME_LAYOUT_MODE)
+  if (CURRENT_INGAME_LAYOUT_MODE === 'responsiveDesktop') {
+    const position = boardLocalPoint(point)
+    if (loc === 0) return { x: position.x + X_PANEL - TEH_POS[4].x, y: position.y }
+    if (loc === 2) return { x: position.x + RESPONSIVE_DESKTOP_TOP_HAND_OFFSET_X, y: position.y }
+    return position
+  }
+  return boardEdgePoint(point, loc, CURRENT_INGAME_LAYOUT_MODE)
 }
 
 function mobileOuterHandPos(loc: 0 | 1 | 2 | 3, idx: number, _count: number, isDrawTile: boolean, scale: number): { x: number; y: number } | null {
@@ -313,7 +322,7 @@ function mobileOuterHandPos(loc: 0 | 1 | 2 | 3, idx: number, _count: number, isD
     const totalWidth = Math.max(0, layoutCount - 1) * step + tileWidth
     const startX = centerX - totalWidth / 2 + (loc === 2 ? step * MOBILE_TOP_HAND_TILE_OFFSET : 0)
     const x = loc === 2
-      ? startX + Math.max(0, layoutCount - 1 - idx) * step - drawGap
+      ? startX + idx * step + drawGap
       : startX + idx * step + drawGap
     const y = loc === 0
       ? bounds.bottom - 63 * scale - MOBILE_SELF_HAND_BOTTOM_INSET
@@ -408,7 +417,8 @@ function discardPos(loc: 0 | 1 | 2 | 3, idx: number, flag: number, mode: IngameL
 
 function mobileMeldBasePos(loc: 0 | 1 | 2 | 3, meldScale: number): { x: number; y: number } | null {
   const handScale = (loc === 0 ? MOBILE_SELF_HAND_TILE_SCALE : MOBILE_OTHER_HAND_TILE_SCALE) * mobileContentScale()
-  const handEnd = mobileOuterHandPos(loc, MOBILE_OTHER_HAND_FIXED_COUNT - 1, MOBILE_OTHER_HAND_FIXED_COUNT, false, handScale)
+  const handEndIndex = loc === 2 ? 0 : MOBILE_OTHER_HAND_FIXED_COUNT - 1
+  const handEnd = mobileOuterHandPos(loc, handEndIndex, MOBILE_OTHER_HAND_FIXED_COUNT, false, handScale)
   if (!handEnd) return null
 
   const desktopHandLoc = loc === 0 ? 4 : loc
@@ -420,26 +430,15 @@ function mobileMeldBasePos(loc: 0 | 1 | 2 | 3, meldScale: number): { x: number; 
   }
   const desktopMeldBase = DESKTOP_INGAME_LAYOUT.meldPosition[loc]
   return {
-    x: handEnd.x + (desktopMeldBase.x - desktopHandEnd.x) * meldScale,
+    x: handEnd.x + (desktopMeldBase.x - desktopHandEnd.x) * meldScale
+      + (loc === 2 ? MOBILE_TOP_MELD_OUTER_OFFSET_X : loc === 0 ? MOBILE_BOTTOM_MELD_OUTER_OFFSET_X : 0),
     y: handEnd.y + (desktopMeldBase.y - desktopHandEnd.y) * meldScale
       + (loc === 2 ? -MOBILE_TOP_MELD_OUTER_OFFSET_Y : loc === 0 ? MOBILE_BOTTOM_MELD_OUTER_OFFSET_Y : 0),
   }
 }
 
 function responsiveMeldBasePos(loc: 0 | 1 | 2 | 3): { x: number; y: number } {
-  const desktopHandLoc = loc === 0 ? 4 : loc
-  const desktopHandEnd = {
-    x: DESKTOP_INGAME_LAYOUT.handPosition[desktopHandLoc].x
-      + DESKTOP_INGAME_LAYOUT.handStep[desktopHandLoc].x * (MOBILE_OTHER_HAND_FIXED_COUNT - 1),
-    y: DESKTOP_INGAME_LAYOUT.handPosition[desktopHandLoc].y
-      + DESKTOP_INGAME_LAYOUT.handStep[desktopHandLoc].y * (MOBILE_OTHER_HAND_FIXED_COUNT - 1),
-  }
-  const handEnd = handPos(loc, MOBILE_OTHER_HAND_FIXED_COUNT - 1, false)
-  const desktopMeldBase = DESKTOP_INGAME_LAYOUT.meldPosition[loc]
-  return {
-    x: handEnd.x + desktopMeldBase.x - desktopHandEnd.x,
-    y: handEnd.y + desktopMeldBase.y - desktopHandEnd.y,
-  }
+  return boardLocalPoint(DESKTOP_INGAME_LAYOUT.meldPosition[loc])
 }
 
 function meldPos(loc: 0 | 1 | 2 | 3, row: number, col: number, flag: number, mode: IngameLayoutMode = 'desktop', scale = 1): { x: number; y: number } {
@@ -2499,15 +2498,7 @@ export default class GameScene extends Phaser.Scene {
 
   private resolveSkinTextureKey(key: string): string {
     const candidate = skinTextureCandidate(key)
-    const resolvedKey = this.textures.exists(candidate) ? candidate : key
-    if (key.startsWith('hai_') && this.textures.exists(resolvedKey)) {
-      this.textures.get(resolvedKey).setFilter(
-        this.layoutMode === 'mobileLandscape'
-          ? Phaser.Textures.FilterMode.LINEAR
-          : Phaser.Textures.FilterMode.NEAREST,
-      )
-    }
-    return resolvedKey
+    return this.textures.exists(candidate) ? candidate : key
   }
 
   private resolveSkinTexture(texture: { key: string; frame?: number }): { key: string; frame?: number } {

@@ -62,6 +62,6 @@ describe('mobile reach-stick ring', () => {
     expect(MOBILE_INGAME_LAYOUT.discardRowStep[0].y * layoutScale).toBe(32.4)
     expect(MOBILE_INGAME_LAYOUT.discardRowStep[1].x * layoutScale).toBeGreaterThan(45 * tileScale)
 
-    expect(MOBILE_DEAD_WALL_SHIFT_X).toBe(24)
+    expect(MOBILE_DEAD_WALL_SHIFT_X).toBe(0)
   })
 })

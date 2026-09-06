@@ -148,6 +148,8 @@ function mountFixture(game: Phaser.Game, action: FixtureAction, meldCounts: read
     const updatePlayerTexts = uiScene?.['updatePlayerTexts'] as ((states: Array<Record<string, unknown>>) => void) | undefined
     if (updatePlayerTexts) {
       updatePlayerTexts.call(uiScene, players)
+      const showChichaMarkerPreview = uiScene['showFixtureChichaMarkerPreview'] as (() => void) | undefined
+      showChichaMarkerPreview?.call(uiScene)
       return
     }
     scene.time.delayedCall(100, refreshPlayerHud)

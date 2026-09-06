@@ -118,8 +118,10 @@ const MOBILE_HUD_PANEL_PADDING_Y = 6
 const MOBILE_HUD_COMPACT_AVATAR_PADDING = 3
 const MOBILE_HUD_ICON_WIDTH = 44
 const MOBILE_HUD_ICON_HEIGHT = 66
+const MOBILE_CHICHA_MARKER_SCALE = 0.5
 const HUD_NAME_MIN_FONT_SIZE = 8
 const DESKTOP_HUD_INFO_Y_SHIFT = -24
+const DESKTOP_AVATAR_OUTER_OFFSET_Y = 6
 
 function cssPx(value: string): number {
   const match = value.match(/\d+/)
@@ -370,10 +372,10 @@ const CHICHA_POS = [
   { x:  57, y: 201 },
 ] as const
 const MOBILE_CHICHA_OFFSET = [
-  { x: 106, y: -40 },
-  { x: -129, y: -40 },
-  { x: -129, y:  75 },
-  { x: 106, y:  75 },
+  { x:  30, y: -27 },
+  { x: -14, y: -27 },
+  { x: -14, y:  66 },
+  { x:  30, y:  66 },
 ] as const
 const CALL_POS = [
   { x: 274, y: 390 },
@@ -420,6 +422,8 @@ export default class UIScene extends Phaser.Scene {
   private hostMark?: Phaser.GameObjects.Image
   private menFonSprites: Phaser.GameObjects.Image[] = []
   private chichaSprite?: Phaser.GameObjects.Image
+  private fixtureChichaMarkerSprites: Phaser.GameObjects.Image[] = []
+  private showFixtureChichaMarkers = false
   private reachSprites: Phaser.GameObjects.Image[] = []
   private reachAnimationSprites: Phaser.GameObjects.Image[] = []
   private chaFonSprite!: Phaser.GameObjects.Image
@@ -931,10 +935,11 @@ export default class UIScene extends Phaser.Scene {
     return DESKTOP_PLAYER_AVATAR_SIZE
   }
 
-  private desktopAvatarPoint(point: HudPoint): HudPoint {
+  private desktopAvatarPoint(point: HudPoint, loc: number): HudPoint {
+    const isBottom = loc === 0 || loc === 1
     return {
       x: point.x - (DESKTOP_PLAYER_AVATAR_SIZE.width - DESKTOP_HUD_METRICS.avatar.width) / 2,
-      y: point.y - (DESKTOP_PLAYER_AVATAR_SIZE.height - DESKTOP_HUD_METRICS.avatar.height) / 2,
+      y: point.y - (DESKTOP_PLAYER_AVATAR_SIZE.height - DESKTOP_HUD_METRICS.avatar.height) / 2 + (isBottom ? DESKTOP_AVATAR_OUTER_OFFSET_Y : -DESKTOP_AVATAR_OUTER_OFFSET_Y),
     }
   }
 
@@ -1182,7 +1187,7 @@ export default class UIScene extends Phaser.Scene {
       let avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(p)
       let avt = isMobileIngameLayout(this.layoutMode)
         ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
-        : this.desktopAvatarPoint(baseAvt)
+        : this.desktopAvatarPoint(baseAvt, loc)
       const mobileTextLeft = loc === 1 || loc === 2 ? avt.x - MOBILE_HUD_INFO_WIDTH - MOBILE_HUD_TEXT_GAP : avt.x + avatarSize.width + MOBILE_HUD_TEXT_GAP
       const mobileNameX = avt.x + (avatarSize.width - MOBILE_HUD_NAME_WIDTH) / 2
       const mobileNameY = avt.y + avatarSize.height + MOBILE_HUD_NAME_GAP
@@ -1212,7 +1217,7 @@ export default class UIScene extends Phaser.Scene {
         avatarSize = { width: avatarWidth, height: avatarHeight }
         avt = {
           x: desktopPanelName.left + inset,
-          y: contentTop + (contentHeight - avatarHeight) / 2,
+          y: contentTop + (contentHeight - avatarHeight) / 2 + (loc === 0 || loc === 1 ? DESKTOP_AVATAR_OUTER_OFFSET_Y : -DESKTOP_AVATAR_OUTER_OFFSET_Y),
         }
         textBounds = {
           left: avt.x + avatarSize.width + inset,
@@ -1296,7 +1301,7 @@ export default class UIScene extends Phaser.Scene {
     const avatarSize = this.layoutMode === 'mobileLandscape' ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc)) : this.desktopAvatarSize(this.players[hostOdr])
     const avt = isMobileIngameLayout(this.layoutMode)
       ? this.mobileAvatarPoint(loc, baseAvt, avatarSize)
-      : this.desktopAvatarPoint(baseAvt)
+      : this.desktopAvatarPoint(baseAvt, loc)
     const desktopHudBounds = this.layoutMode === 'responsiveDesktop' ? this.desktopHudBounds[loc] : undefined
     const point = desktopHudBounds
       ? { x: desktopHudBounds.left + 3, y: desktopHudBounds.top + 3 }
@@ -1355,7 +1360,28 @@ export default class UIScene extends Phaser.Scene {
       ?.setTexture(this.resolveSkinTextureKey(`mj_oyahuda_${chichaLoc}`))
       .setFrame(Math.floor(this.kyokuCnt / 4))
       .setPosition(chichaPoint.x, chichaPoint.y)
-      .setVisible(!this.replayGraphVisible)
+      .setScale(isMobileIngameLayout(this.layoutMode) ? MOBILE_CHICHA_MARKER_SCALE : 1)
+      .setVisible(!this.replayGraphVisible && !this.showFixtureChichaMarkers)
+    this.updateFixtureChichaMarkers()
+  }
+
+  private updateFixtureChichaMarkers() {
+    this.fixtureChichaMarkerSprites.forEach(sprite => sprite.destroy())
+    this.fixtureChichaMarkerSprites = []
+    if (!this.showFixtureChichaMarkers || this.replayGraphVisible) return
+
+    for (let loc = 0; loc < 4; loc++) {
+      const point = this.chichaMarkerPoint(loc)
+      this.fixtureChichaMarkerSprites.push(this.add.image(point.x, point.y, this.resolveSkinTextureKey(`mj_oyahuda_${loc}`), loc)
+        .setOrigin(0, 0)
+        .setScale(isMobileIngameLayout(this.layoutMode) ? MOBILE_CHICHA_MARKER_SCALE : 1)
+        .setDepth(302))
+    }
+  }
+
+  showFixtureChichaMarkerPreview() {
+    this.showFixtureChichaMarkers = true
+    this.updateWindMarkers()
   }
 
   private onPaifuGraphVisibilityChanged = (event: Event) => {
