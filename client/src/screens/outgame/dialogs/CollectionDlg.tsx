@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { equipCollectionTitle, getPlayerCollection, type CollectionTitle, type PlayerCollection } from '../../../api/collection'
 
-type CollectionCategory = 'majak' | 'trick'
+type CollectionCategory = 'majak' | 'title' | 'trick'
 
 interface Props {
   onClose: () => void
@@ -30,11 +30,11 @@ export default function CollectionDlg({ onClose, onEquipChange }: Props) {
     return () => { active = false }
   }, [])
 
-  const items = category === 'majak' ? collection?.majakTitles ?? [] : collection?.trickTitles ?? []
-  const equippedTitleId = category === 'majak'
-    ? collection?.equippedMajakTitle ?? ''
-    : collection?.equippedTrickTitle ?? ''
-
+  const items = category === 'majak'
+    ? collection?.majakTitles ?? []
+    : category === 'title'
+      ? collection?.titleTitles ?? []
+      : collection?.trickTitles ?? []
   const equip = async (titleId: string | null) => {
     if (pendingTitleId !== null) return
     setPendingTitleId(titleId ?? '__unequip__')
@@ -59,24 +59,31 @@ export default function CollectionDlg({ onClose, onEquipChange }: Props) {
         </header>
         <div className="majak-collection-tabs" role="tablist" aria-label="コレクション種別">
           <button type="button" role="tab" aria-selected={category === 'majak'} className={category === 'majak' ? 'is-active' : ''} onClick={() => setCategory('majak')}>麻雀称号</button>
+          <button type="button" role="tab" aria-selected={category === 'title'} className={category === 'title' ? 'is-active' : ''} onClick={() => setCategory('title')}>タイトル</button>
           <button type="button" role="tab" aria-selected={category === 'trick'} className={category === 'trick' ? 'is-active' : ''} onClick={() => setCategory('trick')}>技</button>
         </div>
         <div className="majak-popup-body majak-collection-content">
           {!collection && !error && <div className="majak-collection-status">読み込み中...</div>}
           {error && <div className="majak-collection-status is-error">{error}</div>}
-          {collection && items.length === 0 && <div className="majak-collection-status">獲得済みの{category === 'majak' ? '麻雀称号' : '技'}はありません。</div>}
+          {collection && items.length === 0 && <div className="majak-collection-status">獲得済みの{category === 'majak' ? '麻雀称号' : category === 'title' ? 'タイトル' : '技'}はありません。</div>}
           <div className="majak-collection-grid">
             {items.map(title => (
-              <article key={title.titleId} className={`majak-collection-item${title.isEquipped ? ' is-equipped' : ''}`}>
+              <article key={title.titleId} className={`majak-collection-item${title.isEquipped ? ' is-equipped' : ''}${title.isOwned ? '' : ' is-unowned'}`}>
                 <div className="majak-collection-image"><img src={titleImageUrl(title, category)} alt="" onError={event => { event.currentTarget.style.display = 'none' }} /></div>
-                <div className="majak-collection-item-copy"><strong>{title.titleName}</strong><span>{title.titleId}</span></div>
-                <button type="button" disabled={title.isEquipped || pendingTitleId !== null} onClick={() => void equip(title.titleId)}>{title.isEquipped ? '装着中' : '装着する'}</button>
+                <div className="majak-collection-item-copy"><strong>{title.titleName}</strong></div>
+                <button
+                  type="button"
+                  className={title.isEquipped ? 'is-unequipable' : category !== 'trick' && title.isOwned ? 'is-equipable' : undefined}
+                  disabled={!title.isOwned || pendingTitleId !== null}
+                  onClick={() => void equip(title.isEquipped ? null : title.titleId)}
+                >
+                  {title.isEquipped ? '解除' : title.isOwned ? '装着' : '未獲得'}
+                </button>
               </article>
             ))}
           </div>
         </div>
         <footer className="majak-popup-actions majak-collection-footer">
-          <button type="button" disabled={!equippedTitleId || pendingTitleId !== null} onClick={() => void equip(null)}>装着を外す</button>
           <button type="button" onClick={onClose}>閉じる</button>
         </footer>
       </section>

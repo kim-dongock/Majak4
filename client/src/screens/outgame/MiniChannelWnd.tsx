@@ -211,7 +211,7 @@ function MiniMemberList({
       }}>
         <div style={{ display: 'flex', height: 18, alignItems: 'center', background: '#f0f0f0', borderBottom: '1px solid #b8b8b8', fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(12px * var(--majak-type-scale))', color: '#000' }}>
           <span style={{ width: idWidth, paddingLeft: 4, boxSizing: 'border-box' }}>ニックネーム</span>
-          <span style={{ width: titleWidth }}>資産</span>
+          <span style={{ width: titleWidth }}>資産称号</span>
         </div>
         {members.map(member => {
           const selected = selectedPix === member.pix
@@ -274,7 +274,7 @@ function InviteMemberList({
         <button type="button" className="majak-invite-dialog__close" onClick={onClose} aria-label="閉じる">×</button>
       </header>
       <div className="majak-invite-dialog__list" role="listbox" aria-label="招待できるメンバー">
-        <div className="majak-invite-dialog__labels" aria-hidden="true"><span>ニックネーム</span><span>資産</span></div>
+        <div className="majak-invite-dialog__labels" aria-hidden="true"><span>ニックネーム</span><span>資産称号</span></div>
         {members.length === 0 ? (
           <p className="majak-invite-dialog__empty">招待できるメンバーがいません。</p>
         ) : members.map(member => {

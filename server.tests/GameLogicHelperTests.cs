@@ -799,6 +799,25 @@ public class ResultRecordUpdateTests
     }
 
     [Fact]
+    public void BuildGradeTitleId_AllGradeChanges_MapToSeededTitleRange()
+    {
+        for (int gradeLevel = 0; gradeLevel <= 18; gradeLevel++)
+        {
+            Assert.Equal($"mjkt{500 + gradeLevel:000}", InvokeBuildGradeTitleId(new GameReport.UserResult
+            {
+                GradeLevel = gradeLevel,
+                GradeUpDown = 1,
+            }));
+        }
+
+        Assert.Equal("mjkt512", InvokeBuildGradeTitleId(new GameReport.UserResult
+        {
+            GradeLevel = 12,
+            GradeUpDown = 2,
+        }));
+    }
+
+    [Fact]
     public void BuildGradeRankUpdates_CreatesAllGradeAndExtraRows()
     {
         var player = new MajakPlayer

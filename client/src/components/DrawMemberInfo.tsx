@@ -75,8 +75,8 @@ export default function DrawMemberInfo() {
         {gameMoneyText ? ` : ${gameMoneyText} GP` : ''}
       </span>
 
-      {/* i=1: "資産" / " : {SLevel}" */}
-      <span style={labelStyle(842, 74)}>資産</span>
+      {/* i=1: "資産称号" / " : {SLevel}" */}
+      <span style={labelStyle(842, 74)}>資産称号</span>
       <span style={valueStyle(890, 74)}>
         {gpData ? ` : ${gpData.slevel}` : ''}
       </span>

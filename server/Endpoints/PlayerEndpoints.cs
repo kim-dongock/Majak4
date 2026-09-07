@@ -125,8 +125,8 @@ internal static class PlayerEndpoints
             if (activePlayer is null && !await playerRepository.LoadCommonRatAsync(player))
                 return Results.NotFound(new { error = "PLAYER_PROFILE_NOT_FOUND" });
 
-            var (majakTitles, trickTitles) = await titleService.GetCollectionAsync(player);
-            return Results.Ok(new { majakTitles, trickTitles, equippedMajakTitle = player.MajakTitle, equippedTrickTitle = player.TrickTitle });
+            var (majakTitles, titleTitles, trickTitles) = await titleService.GetCollectionAsync(player);
+            return Results.Ok(new { majakTitles, titleTitles, trickTitles, equippedMajakTitle = player.MajakTitle, equippedTrickTitle = player.TrickTitle });
         });
 
         app.MapPost("/api/player/collection/equip", async (
@@ -139,19 +139,19 @@ internal static class PlayerEndpoints
         {
             var auth = gameAuth.Validate(context.Request.Headers.Authorization.FirstOrDefault());
             if (auth is null) return Results.Unauthorized();
-            var isTrick = string.Equals(body?.Category, "trick", StringComparison.Ordinal);
-            var isMajak = string.Equals(body?.Category, "majak", StringComparison.Ordinal);
-            if (!isTrick && !isMajak) return Results.BadRequest(new { error = "INVALID_TITLE_CATEGORY" });
+            string category = body?.Category ?? "";
+            if (category is not ("majak" or "title" or "trick"))
+                return Results.BadRequest(new { error = "INVALID_TITLE_CATEGORY" });
 
             var activePlayer = sessions.GetByMember(auth.MemberNo);
             var player = activePlayer ?? new MajakServer.Models.Player.MajakPlayer { MemberNo = auth.MemberNo };
             if (activePlayer is null && !await playerRepository.LoadCommonRatAsync(player))
                 return Results.NotFound(new { error = "PLAYER_PROFILE_NOT_FOUND" });
-            if (!await titleService.EquipOwnedTitleAsync(player, isTrick, body?.TitleId))
+            if (!await titleService.EquipOwnedTitleAsync(player, category, body?.TitleId))
                 return Results.BadRequest(new { error = "TITLE_NOT_OWNED" });
 
-            var (majakTitles, trickTitles) = await titleService.GetCollectionAsync(player);
-            return Results.Ok(new { majakTitles, trickTitles, equippedMajakTitle = player.MajakTitle, equippedTrickTitle = player.TrickTitle });
+            var (majakTitles, titleTitles, trickTitles) = await titleService.GetCollectionAsync(player);
+            return Results.Ok(new { majakTitles, titleTitles, trickTitles, equippedMajakTitle = player.MajakTitle, equippedTrickTitle = player.TrickTitle });
         });
 
         app.MapGet("/api/player/paifu", async (

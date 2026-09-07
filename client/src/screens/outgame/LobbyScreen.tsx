@@ -3476,7 +3476,7 @@ export default function LobbyScreen() {
         <CollectionDlg
           onClose={() => setShowCollection(false)}
           onEquipChange={collection => {
-            setMajakTitleName(collection.majakTitles.find(title => title.isEquipped)?.titleName ?? '')
+            setMajakTitleName([...collection.majakTitles, ...collection.titleTitles].find(title => title.isEquipped)?.titleName ?? '')
             setTrickTitleName(collection.trickTitles.find(title => title.isEquipped)?.titleName ?? '')
             setMajakTitleId(collection.equippedMajakTitle)
             setTrickTitleId(collection.equippedTrickTitle)
@@ -3738,7 +3738,7 @@ export default function LobbyScreen() {
               achievementTitleId={majakTitleId}
               trickTitle={trickTitleName}
               trickTitleId={trickTitleId}
-              showGrade
+              showTitleArt={false}
               loadProfile={false}
               className="majak-mobile-user-summary--lobby"
             />
@@ -3882,7 +3882,7 @@ export default function LobbyScreen() {
               achievementTitleId={majakTitleId}
               trickTitle={trickTitleName}
               trickTitleId={trickTitleId}
-              showGrade
+              showTitleArt={false}
               loadProfile={false}
               className="majak-mobile-user-summary--lobby"
             />
@@ -4252,12 +4252,12 @@ export default function LobbyScreen() {
       <div style={{ position: 'absolute', left: 864, top: 43, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>GP</div>
       <div style={{ position: 'absolute', left: 912, top: 43, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{` : ${gamMoney.toLocaleString()} GP`}</div>
 
-      {/* 資産 (X_TITLE=912,Y_TITLE=90) → content(912,59) */}
-      <div style={{ position: 'absolute', left: 864, top: 59, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>資産</div>
+      {/* 資産称号 (X_TITLE=912,Y_TITLE=90) → content(912,59) */}
+      <div style={{ position: 'absolute', left: 864, top: 59, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>資産称号</div>
       <div style={{ position: 'absolute', left: 912, top: 59, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{slevel ? ` : ${slevel}` : ' :'}</div>
 
-      {/* 実績称号 (X_RATING=912,Y_RATING=106) → content(912,75) */}
-      <div style={{ position: 'absolute', left: 864, top: 75, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>実績称号</div>
+      {/* 麻雀称号 (X_RATING=912,Y_RATING=106) → content(912,75) */}
+      <div style={{ position: 'absolute', left: 864, top: 75, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>麻雀称号</div>
       <div style={{ position: 'absolute', left: 912, top: 75, width: 96, fontSize: 'calc(11px * var(--majak-type-scale))', fontFamily: 'var(--majak-font-family-ui)', color: 'rgb(0,114,188)', pointerEvents: 'none' }}>{majakTitleName ? ` : ${majakTitleName}` : ' :'}</div>
 
       {/* 技 (X_TRICK=912,Y_TRICK=122) → content(912,91) */}

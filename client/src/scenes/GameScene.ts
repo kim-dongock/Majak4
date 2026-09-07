@@ -37,6 +37,7 @@ import {
   GAME_LOCAL_REACH_EVENT,
   getAutoControlDelayMs,
   resolveAutoControlAction,
+  resolveLegacyTimerMode,
   shouldSuspendAutoPassForPrompt,
   type AutoControlState,
 } from '../game/autoControl'
@@ -1583,6 +1584,8 @@ export default class GameScene extends Phaser.Scene {
           dice: dice.length > 0 ? dice : undefined,
           waremeOdr: Number(data.waremeOdr ?? -1),
           viewOdr: this.myOdr,
+          timeBankMs: Array.isArray(data.timeBankMs) ? Math.max(0, Number(data.timeBankMs[this.myOdr] ?? 0)) : 0,
+          timeFullMs: this.kyokuTimeFullMs,
           roundStart: true,
           roundPresentationDelayMs: waremeStartDelay,
           preserveTurnMark: this.isReplayApplyingHistory && !this.isReplay,
@@ -4691,6 +4694,12 @@ export default class GameScene extends Phaser.Scene {
       keepTimeMs: prompt?.keepTimeMs ?? 0,
       timeBankMs: prompt?.timeBankMs ?? 0,
       timeBankEnabled: prompt?.timeBankEnabled ?? false,
+      visualMode: resolveLegacyTimerMode(
+        prompt?.playerMode ?? '',
+        this.currentActionOffers,
+        prompt?.timeBankEnabled ?? false,
+        this.autoControl,
+      ),
       maxTimeMs: this.kyokuTimeFullMs,
       viewOdr: this.myOdr,
     }

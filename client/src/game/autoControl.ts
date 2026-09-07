@@ -13,6 +13,14 @@ export type TimeBankSegments = {
   keepMs: number
 }
 
+export type LegacyTimerMode = 'input' | 'extend' | 'auto'
+
+export type LegacyTimerColors = {
+  bank: number
+  turn: number
+  keep: number
+}
+
 export const GAME_AUTO_CONTROL_EVENT = 'majak:auto-control'
 export const GAME_KYOKU_STARTED_EVENT = 'majak:kyoku-started'
 export const GAME_AUTO_PASS_HOLD_EVENT = 'majak:auto-pass-hold'
@@ -83,6 +91,32 @@ export function calculateTimeBankSegments(
     bankMs: timeBankEnabled ? Math.max(0, bankMs - Math.max(0, elapsedMs - baseMs)) : bankMs,
     turnMs: Math.max(0, baseRemainingMs - keepMs),
     keepMs,
+  }
+}
+
+export function resolveLegacyTimerMode(
+  playerMode: string,
+  acts: string[],
+  timeBankEnabled: boolean,
+  autoControl: AutoControlState,
+): LegacyTimerMode {
+  if ((playerMode === 'Furo' || playerMode === 'Chan') && timeBankEnabled) return 'input'
+  const automaticAction = resolveAutoControlAction(autoControl, acts)
+  if (automaticAction === 'Tap' || automaticAction === 'Pass') return 'auto'
+  if (playerMode === 'Furo' || playerMode === 'Chan') {
+    if (!acts.includes('Ron')) return 'extend'
+  }
+  return 'input'
+}
+
+export function getLegacyTimerColors(mode: LegacyTimerMode): LegacyTimerColors {
+  const input = mode === 'input'
+  const extendOrInput = mode === 'extend' || input
+  const automatic = mode === 'auto'
+  return {
+    bank: !automatic && input ? 0x0000ff : 0xff0000,
+    turn: !automatic && extendOrInput ? 0x0080ff : 0xff8080,
+    keep: extendOrInput ? 0x00ffff : 0xffffff,
   }
 }
 

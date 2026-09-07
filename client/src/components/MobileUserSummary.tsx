@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { getPlayerCollection } from '../api/collection'
 import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
-import { gradeLevelName } from '../utils/grade'
 import { getAvatarUrl, getDefaultAvatarUrl } from '../utils/resources'
 import { getMajakTitleImageUrl, getTrickTitleImageUrl } from '../utils/titleImages'
 
@@ -13,8 +12,8 @@ interface MobileUserSummaryProps {
   achievementTitleId?: string
   trickTitle?: string
   trickTitleId?: string
-  showGrade?: boolean
   showAvatar?: boolean
+  showTitleArt?: boolean
   showName?: boolean
   showGameMoney?: boolean
   loadProfile?: boolean
@@ -28,8 +27,8 @@ export default function MobileUserSummary({
   achievementTitleId,
   trickTitle,
   trickTitleId,
-  showGrade = false,
   showAvatar = false,
+  showTitleArt = true,
   showName = true,
   showGameMoney = true,
   loadProfile = true,
@@ -48,8 +47,10 @@ export default function MobileUserSummary({
       void fetchProfile(player.pix)
       void getPlayerCollection().then(collection => {
         if (!active) return
+        const equippedMajakTitle = [...collection.majakTitles, ...collection.titleTitles]
+          .find(title => title.isEquipped)
         setProfileTitles({
-          achievement: collection.majakTitles.find(title => title.isEquipped)?.titleName ?? '',
+          achievement: equippedMajakTitle?.titleName ?? '',
           achievementId: collection.equippedMajakTitle,
           trick: collection.trickTitles.find(title => title.isEquipped)?.titleName ?? '',
           trickId: collection.equippedTrickTitle,
@@ -92,7 +93,7 @@ export default function MobileUserSummary({
           }}
         />
       )}
-      {(showAvatar || majakTitleImage || trickTitleImage) && (
+      {showTitleArt && (showAvatar || majakTitleImage || trickTitleImage) && (
         <span className="majak-mobile-user-summary__title-art" aria-hidden="true">
           {trickTitleImage && <img className="majak-mobile-user-summary__trick-title" src={trickTitleImage} alt="" />}
           {majakTitleImage && (
@@ -111,9 +112,8 @@ export default function MobileUserSummary({
       )}
       <div className="majak-mobile-user-summary__fields">
         {showGameMoney && <span><b>GP</b><em>{currentGameMoney?.toLocaleString('ja-JP') ?? '-'}</em></span>}
-        <span><b>資産</b><em>{currentAssetTitle || '-'}</em></span>
-        {showGrade && <span><b>段位</b><em>{gradeLevelName(profile?.gradeLevel)}</em></span>}
-        <span><b>実績</b><em>{currentAchievementTitle || '-'}</em></span>
+        <span><b>資産称号</b><em>{currentAssetTitle || '-'}</em></span>
+        <span><b>麻雀称号</b><em>{currentAchievementTitle || '-'}</em></span>
         <span><b>技</b><em>{currentTrickTitle || '-'}</em></span>
       </div>
     </div>

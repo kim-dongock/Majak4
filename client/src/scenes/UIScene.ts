@@ -21,7 +21,7 @@
  *   legacy/client/HgMajak2/MJTblDraw2.cpp CMJTblDraw::mempos
  */
 import Phaser from 'phaser'
-import { calculateTimeBankSegments, GAME_AUTO_PASS_HOLD_EVENT } from '../game/autoControl'
+import { calculateTimeBankSegments, GAME_AUTO_PASS_HOLD_EVENT, getLegacyTimerColors, type LegacyTimerMode } from '../game/autoControl'
 import { GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY } from '../game/gameLoadProgress'
 import { DESKTOP_REACH_POSITIONS, getIngameLayout, isMobileIngameLayout, MOBILE_REACH_POSITIONS, type IngameLayoutMode } from '../game/ingameLayout'
 import {
@@ -44,6 +44,7 @@ interface ActionPromptTimerData {
   keepTimeMs?: number
   timeBankMs?: number
   timeBankEnabled?: boolean
+  visualMode?: LegacyTimerMode
   maxTimeMs?: number
   viewOdr?: number
 }
@@ -451,6 +452,8 @@ export default class UIScene extends Phaser.Scene {
   private timerKeepTimeMs = 0
   private timerBankMs = 0
   private timerBankEnabled = false
+  private inactiveTimerBankMs = 0
+  private inactiveTimerMaxMs = 0
   private timerEvent?: Phaser.Time.TimerEvent
   private pendingTimer?: { data: ActionPromptTimerData; endAt: number }
   private flowTraceSerial = 0
@@ -636,13 +639,18 @@ export default class UIScene extends Phaser.Scene {
     /* ステート更新 */
     gs.events.on('stateUpdate', (data: {
       players: PlayerHudState[]
-      kyoku?: string; kyokuCnt?: number; chicha?: number; oyaOrder?: number; left?: number; ribo?: number; renchan?: number; dice?: number[]; waremeOdr?: number; viewOdr?: number; roundStart?: boolean; roundPresentationDelayMs?: number; activeTurnOdr?: number; preserveTurnMark?: boolean
+      kyoku?: string; kyokuCnt?: number; chicha?: number; oyaOrder?: number; left?: number; ribo?: number; renchan?: number; dice?: number[]; waremeOdr?: number; viewOdr?: number; timeBankMs?: number; timeFullMs?: number; roundStart?: boolean; roundPresentationDelayMs?: number; activeTurnOdr?: number; preserveTurnMark?: boolean
     }) => {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       if (data.chicha !== undefined) this.chicha = data.chicha
       if (data.oyaOrder !== undefined) this.oyaOrder = data.oyaOrder
       if (data.kyokuCnt !== undefined) this.kyokuCnt = data.kyokuCnt
       if (data.roundStart) this.clearRoundMarkers(Boolean(data.preserveTurnMark))
+      if (data.timeBankMs !== undefined && data.timeFullMs !== undefined) {
+        this.inactiveTimerBankMs = Math.max(0, data.timeBankMs)
+        this.inactiveTimerMaxMs = Math.max(1, data.timeFullMs)
+        this.showInactiveTimerBar()
+      }
       this.updatePlayerTexts(data.players)
       if (data.kyoku) this.updateKyoku(data.kyoku)
       this.updateWindMarkers()
@@ -672,6 +680,7 @@ export default class UIScene extends Phaser.Scene {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.traceUiFlow('turnChange event', data)
       this.updateTurnMarks(data.odr)
+      if (!this.timerEvent && !this.pendingTimer) this.showInactiveTimerBar()
     }, this)
 
     gs.events.on('actionPromptStart', (data: ActionPromptTimerData) => {
@@ -705,7 +714,7 @@ export default class UIScene extends Phaser.Scene {
 
     /* 局結果 → CMJKyoRes ダイアログへ (将来実装) */
     gs.events.on('kyoResult', (_data: Record<string, string>) => {
-      this.stopTimer()
+      this.stopTimer(false)
     }, this)
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -1817,7 +1826,7 @@ export default class UIScene extends Phaser.Scene {
     this.clearDiceRollTimers()
     this.diceSprites.forEach(sprite => sprite.setVisible(false))
     this.waremeSprite?.setVisible(false)
-    if (!preserveTurnMark) this.stopTimer()
+    if (!preserveTurnMark) this.stopTimer(false)
   }
 
   private clearDiceRollTimers() {
@@ -1907,10 +1916,17 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private showInactiveTimerBar() {
-    if (this.layoutMode !== 'mobileLandscape' || this.isViewer) return
+    if (this.isViewer || this.inactiveTimerMaxMs <= 0) {
+      this.timerBack.setVisible(false)
+      this.timerBar.setVisible(false)
+      this.timerTurnBar.setVisible(false)
+      this.timerKeepBar.setVisible(false)
+      return
+    }
     this.updateTimerLayout()
+    const width = Math.max(0, Math.round(this.inactiveTimerBankMs * W_TIMBAR / this.inactiveTimerMaxMs))
     this.timerBack.setVisible(true)
-    this.timerBar.setVisible(true).setDisplaySize(W_TIMBAR, H_TIMBAR).setFillStyle(0x203a8f)
+    this.timerBar.setVisible(width > 0).setDisplaySize(width, H_TIMBAR).setFillStyle(0xff0000)
     this.timerTurnBar.setVisible(false)
     this.timerKeepBar.setVisible(false)
   }
@@ -1937,14 +1953,11 @@ export default class UIScene extends Phaser.Scene {
 
   private startTimer(data: ActionPromptTimerData, endAt: number) {
     if (this.isViewer) {
-      this.timerBack.setVisible(false)
-      this.timerBar.setVisible(false)
-      this.timerTurnBar.setVisible(false)
-      this.timerKeepBar.setVisible(false)
+      this.stopTimer(false)
       return
     }
     if (this.timerEvent || this.timerBack.visible || this.timerBar.visible) {
-      this.stopTimer()
+      this.stopTimer(false)
     } else {
       this.timerEvent = undefined
       this.timerMaxMs = 0
@@ -1960,6 +1973,7 @@ export default class UIScene extends Phaser.Scene {
     this.timerKeepTimeMs = Math.max(0, Number(data.keepTimeMs ?? 0))
     this.timerBankMs = Math.max(0, Number(data.timeBankMs ?? 0))
     this.timerBankEnabled = Boolean(data.timeBankEnabled)
+    const colors = getLegacyTimerColors(data.visualMode ?? (this.timerBankEnabled ? 'input' : 'extend'))
     this.timerMaxMs = Math.max(1, Number(data.maxTimeMs ?? 0), this.timerBaseTimeMs + this.timerBankMs)
     this.timerEndAt = endAt
     this.traceUiFlow('timer start', { ...data, limitMs })
@@ -1974,18 +1988,20 @@ export default class UIScene extends Phaser.Scene {
         this.timerBankMs,
         this.timerBankEnabled,
       )
+      this.inactiveTimerBankMs = segments.bankMs
+      this.inactiveTimerMaxMs = this.timerMaxMs
       const scale = W_TIMBAR / this.timerMaxMs
       const turnWidth = Math.max(0, Math.round(segments.turnMs * scale))
       const bankWidth = Math.max(0, Math.round(segments.bankMs * scale))
       const keepWidth = Math.max(0, Math.round(segments.keepMs * scale))
       const x = this.timerBack.x
       const y = this.timerBack.y
-      this.timerBar.setPosition(x, y).setDisplaySize(bankWidth, H_TIMBAR)
-        .setFillStyle(this.timerBankEnabled ? 0x0000ff : 0xff0000).setVisible(bankWidth > 0)
-      this.timerTurnBar.setPosition(x + bankWidth, y).setDisplaySize(turnWidth, H_TIMBAR)
-        .setFillStyle(this.timerBankEnabled ? 0x0080ff : 0xff8080).setVisible(turnWidth > 0)
-      this.timerKeepBar.setPosition(x + bankWidth + turnWidth, y).setDisplaySize(keepWidth, H_TIMBAR)
-        .setFillStyle(0x00ffff).setVisible(keepWidth > 0)
+      this.timerKeepBar.setPosition(x, y).setDisplaySize(keepWidth, H_TIMBAR)
+        .setFillStyle(colors.keep).setVisible(keepWidth > 0)
+      this.timerTurnBar.setPosition(x + keepWidth, y).setDisplaySize(turnWidth, H_TIMBAR)
+        .setFillStyle(colors.turn).setVisible(turnWidth > 0)
+      this.timerBar.setPosition(x + keepWidth + turnWidth, y).setDisplaySize(bankWidth, H_TIMBAR)
+        .setFillStyle(colors.bank).setVisible(bankWidth > 0)
       if (remainMs <= 0) this.stopTimer()
     }
     redrawTimer()
@@ -1996,7 +2012,7 @@ export default class UIScene extends Phaser.Scene {
     })
   }
 
-  private stopTimer() {
+  private stopTimer(showInactive = true) {
     this.traceUiFlow('timer stop')
     this.pendingTimer = undefined
     this.timerEvent?.destroy()
@@ -2007,7 +2023,7 @@ export default class UIScene extends Phaser.Scene {
     this.timerKeepTimeMs = 0
     this.timerBankMs = 0
     this.timerBankEnabled = false
-    if (this.layoutMode === 'mobileLandscape' && !this.isViewer) {
+    if (showInactive && !this.isViewer) {
       this.showInactiveTimerBar()
     } else {
       this.timerBack.setVisible(false)

@@ -10,7 +10,7 @@ namespace MajakServer.Services;
 /// </summary>
 public class TitleService
 {
-    public sealed record CollectionTitle(string TitleId, string TitleName, bool IsEquipped);
+    public sealed record CollectionTitle(string TitleId, string TitleName, bool IsEquipped, bool IsOwned = true);
 
     private readonly PlayerRepository  _playerRepo;
     private readonly MasterCacheService _masterCache;
@@ -45,21 +45,49 @@ public class TitleService
         return _titleCache.TryGetValue(titleId, out var name) ? name : "";
     }
 
-    public async Task<(List<CollectionTitle> MajakTitles, List<CollectionTitle> TrickTitles)>
+    public async Task<(List<CollectionTitle> MajakTitles, List<CollectionTitle> TitleTitles, List<CollectionTitle> TrickTitles)>
         GetCollectionAsync(MajakPlayer player)
     {
-        var ownedTitleIds = await _playerRepo.GetTitleListAsync(player.MemberNo);
+        var ownedTitleIds = (await _playerRepo.GetTitleListAsync(player.MemberNo)).ToHashSet();
         var majakTitles = new List<CollectionTitle>();
+        var titleTitles = new List<CollectionTitle>();
         var trickTitles = new List<CollectionTitle>();
-        foreach (string titleId in ownedTitleIds.Distinct().OrderBy(titleId => titleId))
+        foreach ((string titleId, string titleName) in _titleCache.OrderBy(title => title.Key))
         {
-            if (!_titleCache.TryGetValue(titleId, out string? titleName)) continue;
             if (IsTrickTitle(titleId))
-                trickTitles.Add(new CollectionTitle(titleId, titleName, titleId == player.TrickTitle));
-            else if (IsMajakTitle(titleId))
-                majakTitles.Add(new CollectionTitle(titleId, titleName, titleId == player.MajakTitle));
+                trickTitles.Add(new CollectionTitle(
+                    titleId,
+                    titleName,
+                    titleId == player.TrickTitle,
+                    ownedTitleIds.Contains(titleId)));
+            else if (IsMajakTitle(titleId) && !IsCollectionTitle(titleId))
+                majakTitles.Add(new CollectionTitle(
+                    titleId,
+                    titleName,
+                    titleId == player.MajakTitle,
+                    ownedTitleIds.Contains(titleId)));
+            else if (IsCollectionTitle(titleId))
+                titleTitles.Add(new CollectionTitle(
+                    titleId,
+                    titleName,
+                    titleId == player.MajakTitle,
+                    ownedTitleIds.Contains(titleId)));
         }
-        return (majakTitles, trickTitles);
+        return (majakTitles, titleTitles, trickTitles);
+    }
+
+    public async Task<bool> EquipOwnedTitleAsync(MajakPlayer player, string category, string? titleId)
+    {
+        string normalizedTitleId = titleId?.Trim() ?? "";
+        bool isTrick = string.Equals(category, "trick", StringComparison.Ordinal);
+        bool validCategory = category switch
+        {
+            "trick" => normalizedTitleId.Length == 0 || IsTrickTitle(normalizedTitleId),
+            "title" => normalizedTitleId.Length == 0 || IsCollectionTitle(normalizedTitleId),
+            "majak" => normalizedTitleId.Length == 0 || IsMajakTitle(normalizedTitleId) && !IsCollectionTitle(normalizedTitleId),
+            _ => false,
+        };
+        return validCategory && await EquipOwnedTitleAsync(player, isTrick, normalizedTitleId);
     }
 
     public async Task<bool> EquipOwnedTitleAsync(MajakPlayer player, bool isTrick, string? titleId)
@@ -95,6 +123,9 @@ public class TitleService
         => titleId.StartsWith("mjkt", StringComparison.Ordinal)
             || titleId.StartsWith("mjkc", StringComparison.Ordinal);
 
+    private static bool IsCollectionTitle(string titleId)
+        => titleId.StartsWith("mjkc", StringComparison.Ordinal);
+
     private static int ToTitleCode(string titleId, string prefix)
         => titleId.StartsWith(prefix, StringComparison.Ordinal)
             && int.TryParse(titleId[prefix.Length..], out int code) ? code : 0;
@@ -113,20 +144,6 @@ public class TitleService
         await _playerRepo.InsertOrEnableTitleAsync(player.MemberNo, titleCode);
 
         string titleName = _titleCache.GetValueOrDefault(titleCode, "");
-
-        if (titleType == 1) // トリック称号 (mjks*)
-        {
-            player.TrickTitle = titleCode;
-            if (int.TryParse(titleCode.Replace("mjks", ""), out int t))
-                player.TrickTitleId = t;
-        }
-        else if (titleType == 2) // 麻雀称号 (mjkt* or mjkc*)
-        {
-            player.MajakTitle = titleCode;
-        }
-
-        // MJKCOMMONRAT.TRICKTITLE / MAJAKTITLE を更新
-        await UpdateTitlesInDbAsync(player);
 
         return (true, player.TrickTitle, player.MajakTitle, titleName);
     }

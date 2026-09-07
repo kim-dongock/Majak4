@@ -91,16 +91,13 @@ public class TitleServiceTests
         return svc;
     }
 
-    // シナリオ1: 有効な titleCode → result=true + TrickTitle 更新
+    // シナリオ1: 有効な titleCode → result=true + 所有タイトルへ追加
     [Fact]
-    public async Task GetTitleAsync_ValidTrickTitle_ReturnsOkAndUpdatesPlayer()
+    public async Task GetTitleAsync_ValidTrickTitle_ReturnsOkWithoutEquippingPlayer()
     {
         _playerRepoMock.Setup(r => r.InsertOrEnableTitleAsync(
                 It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
-        _playerRepoMock.Setup(r => r.UpdateCommonRatAsync(It.IsAny<MajakPlayer>()))
-            .Returns(Task.CompletedTask);
-
         var player = new MajakPlayer { MemberNo = "u1" };
         var svc    = BuildService();
 
@@ -108,22 +105,19 @@ public class TitleServiceTests
             await svc.GetTitleAsync(player, 1, "mjks013");
 
         Assert.True(ok);
-        Assert.Equal("mjks013", trickTitle);
+        Assert.Equal("", trickTitle);
         Assert.Equal("雀士", name);
         _playerRepoMock.Verify(r =>
             r.InsertOrEnableTitleAsync("u1", "mjks013"), Times.Once);
     }
 
-    // シナリオ2: titleType=2 → MajakTitle 更新
+    // シナリオ2: titleType=2 → 所有タイトルへ追加するが装着状態は維持
     [Fact]
-    public async Task GetTitleAsync_MajakTitle_UpdatesMajakTitle()
+    public async Task GetTitleAsync_MajakTitle_ReturnsOkWithoutEquippingPlayer()
     {
         _playerRepoMock.Setup(r => r.InsertOrEnableTitleAsync(
                 It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Task.CompletedTask);
-        _playerRepoMock.Setup(r => r.UpdateCommonRatAsync(It.IsAny<MajakPlayer>()))
-            .Returns(Task.CompletedTask);
-
         var player = new MajakPlayer { MemberNo = "u1" };
         var svc    = BuildService();
 
@@ -131,7 +125,7 @@ public class TitleServiceTests
             await svc.GetTitleAsync(player, 2, "mjkt100");
 
         Assert.True(ok);
-        Assert.Equal("mjkt100", majakTitle);
+        Assert.Equal("", majakTitle);
         Assert.Equal("初心者", name);
     }
 
@@ -197,20 +191,52 @@ public class TitleServiceTests
     public async Task GetCollectionAsync_SeparatesOwnedTitlesAndSkills()
     {
         _playerRepoMock.Setup(r => r.GetTitleListAsync("u1"))
-            .ReturnsAsync(["mjkt100", "mjks013", "unknown"]);
+            .ReturnsAsync(["mjkt006", "mjks013", "unknown"]);
         var player = new MajakPlayer
         {
             MemberNo = "u1",
-            MajakTitle = "mjkt100",
+            MajakTitle = "mjkt006",
             TrickTitle = "mjks013",
         };
 
-        var (majakTitles, trickTitles) = await BuildService().GetCollectionAsync(player);
+        var service = BuildService(new Dictionary<string, string>
+        {
+            ["mjkt006"] = "本格初参加",
+            ["mjkt026"] = "東の狼",
+            ["mjkt103"] = "玄人",
+            ["mjkt424"] = "20周年記念大会1位",
+            ["mjkt500"] = "10級",
+            ["mjkt600"] = "初主催☆感謝",
+            ["mjkc001"] = "初代麻王",
+            ["mjks003"] = "技レベル3",
+            ["mjks013"] = "風の技",
+        });
 
-        Assert.Equal("mjkt100", Assert.Single(majakTitles).TitleId);
+        var (majakTitles, titleTitles, trickTitles) = await service.GetCollectionAsync(player);
+
+        Assert.Equal(
+            ["mjkt006", "mjkt026", "mjkt103", "mjkt424", "mjkt500", "mjkt600"],
+            majakTitles.Select(title => title.TitleId));
         Assert.True(majakTitles[0].IsEquipped);
-        Assert.Equal("mjks013", Assert.Single(trickTitles).TitleId);
-        Assert.True(trickTitles[0].IsEquipped);
+        Assert.Equal("mjkc001", Assert.Single(titleTitles).TitleId);
+        Assert.False(titleTitles[0].IsOwned);
+        Assert.Equal(["mjks003", "mjks013"], trickTitles.Select(title => title.TitleId));
+        Assert.True(trickTitles[1].IsEquipped);
+    }
+
+    [Fact]
+    public async Task EquipOwnedTitleAsync_EquipsOwnedCollectionTitle()
+    {
+        _playerRepoMock.Setup(r => r.HasActiveTitleAsync("u1", "mjkc001")).ReturnsAsync(true);
+        _playerRepoMock.Setup(r => r.UpdateEquippedTitleAsync("u1", false, "mjkc001")).ReturnsAsync(true);
+        var player = new MajakPlayer { MemberNo = "u1" };
+
+        bool ok = await BuildService(new Dictionary<string, string> { ["mjkc001"] = "初代麻王" })
+            .EquipOwnedTitleAsync(player, "title", "mjkc001");
+
+        Assert.True(ok);
+        Assert.Equal("mjkc001", player.MajakTitle);
+        Assert.Equal(1001, player.MajakTitleId);
     }
 
     [Fact]

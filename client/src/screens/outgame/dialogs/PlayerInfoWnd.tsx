@@ -552,7 +552,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
         <div style={{ position: 'absolute', left: 240, top: 74, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${sexText}`}</div>
         <div style={{ position: 'absolute', left: 193, top: 90, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>地域</div>
         <div style={{ position: 'absolute', left: 240, top: 90, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${player.location ?? '-'}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 106, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>資産</div>
+        <div style={{ position: 'absolute', left: 193, top: 106, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>資産称号</div>
         <div style={{ position: 'absolute', left: 240, top: 106, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${player.slevel ?? '-'}`}</div>
         <div style={{ position: 'absolute', left: 193, top: 122, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>戦績</div>
         <div style={{ position: 'absolute', left: 240, top: 122, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : R${player.rating ?? '-'}`}</div>

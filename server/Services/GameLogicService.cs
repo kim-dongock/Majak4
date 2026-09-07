@@ -4598,6 +4598,7 @@ public class GameLogicService
             value(hi) * 100.0 / count(hi);
         int HoraYakuCnt(int yaku) => yaku >= 100 ? ym[yaku - 100] : yr[yaku];
         static int TrickCode(int atr, int lev) => atr * 3 + lev;
+        bool HasEquippedTrickLevel(int atr, int lev) => player.TrickTitleId == TrickCode(atr, lev);
         static string TitleId(int type, int code) => type == 1 && code >= 1000
             ? $"mjkc{code - 1000:000}"
             : $"mjk{(type == 0 ? 's' : 't')}{code:000}";
@@ -4611,7 +4612,7 @@ public class GameLogicService
                 && RegularSum(x => x.TobashiCnt) >= 2 && RegularSum(x => x.DoraCnt) >= 100)
                 AddTrickTitle(0, 1);
         }
-        else if (player.TrickLevel[0] == 1)
+        else if (player.TrickLevel[0] == 1 && HasEquippedTrickLevel(0, 1))
         {
             if (RegularSum(x => x.MatchCnt) >= 200 && RegularSum(x => x.WinCnt) >= 100
                 && RegularSum(x => x.DefeatCnt) >= 100 && RegularSum(x => x.TobashiCnt) >= 25
@@ -4627,7 +4628,7 @@ public class GameLogicService
                 && RegularAvr(x => x.HoraPoint, x => x.HoraCnt) >= 6000)
                 AddTrickTitle(1, 1);
         }
-        else if (player.TrickLevel[1] == 1)
+        else if (player.TrickLevel[1] == 1 && HasEquippedTrickLevel(1, 1))
         {
             if (hi.MatchCnt >= 600 && HoraYakuCnt((int)HoraYaku.Tsumo) >= 100
                 && HoraYakuCnt((int)HoraYaku.Richi) >= 200 && HoraYakuCnt((int)HoraYaku.Ippatsu) >= 50
@@ -4644,7 +4645,7 @@ public class GameLogicService
                 && RegularPer(x => x.RichiCnt, x => x.KyokuCnt) >= 15)
                 AddTrickTitle(2, 1);
         }
-        else if (player.TrickLevel[2] == 1)
+        else if (player.TrickLevel[2] == 1 && HasEquippedTrickLevel(2, 1))
         {
             if (hi.MatchCnt >= 400 && HoraYakuCnt((int)HoraYaku.Chitoitsu) >= 100
                 && HoraYakuCnt((int)HoraYaku.Tanyao) >= 300 && HoraYakuCnt((int)HoraYaku.Pinfu) >= 300
@@ -4661,7 +4662,7 @@ public class GameLogicService
                 && RegularAvr(x => x.HojuCnt, x => x.KyokuCnt) <= 18)
                 AddTrickTitle(3, 1);
         }
-        else if (player.TrickLevel[3] == 1)
+        else if (player.TrickLevel[3] == 1 && HasEquippedTrickLevel(3, 1))
         {
             if (hi.MatchCnt >= 500 && HoraYakuCnt((int)HoraYaku.Sanankou) >= 12
                 && HoraYakuCnt((int)HoraYaku.Toitoi) >= 70 && HoraYakuCnt((int)HoraYaku.Shosangen) >= 3
@@ -4677,7 +4678,7 @@ public class GameLogicService
                 && RegularSum(x => x.HoraCnt) >= 250 && RegularPer(x => x.DoraCnt, x => x.HoraCnt) >= 120)
                 AddTrickTitle(4, 1);
         }
-        else if (player.TrickLevel[4] == 1)
+        else if (player.TrickLevel[4] == 1 && HasEquippedTrickLevel(4, 1))
         {
             if (hi.MatchCnt >= 300
                 && HoraYakuCnt((int)HoraYaku.Rinshan) >= 2

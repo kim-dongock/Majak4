@@ -7,10 +7,12 @@ export interface CollectionTitle {
   titleId: string
   titleName: string
   isEquipped: boolean
+  isOwned: boolean
 }
 
 export interface PlayerCollection {
   majakTitles: CollectionTitle[]
+  titleTitles: CollectionTitle[]
   trickTitles: CollectionTitle[]
   equippedMajakTitle: string
   equippedTrickTitle: string
@@ -27,7 +29,7 @@ export async function getPlayerCollection(): Promise<PlayerCollection> {
   }))
 }
 
-export async function equipCollectionTitle(category: 'majak' | 'trick', titleId: string | null): Promise<PlayerCollection> {
+export async function equipCollectionTitle(category: 'majak' | 'title' | 'trick', titleId: string | null): Promise<PlayerCollection> {
   return readCollectionResponse(await fetch(`${API_BASE}/api/player/collection/equip`, {
     method: 'POST',
     headers: await refreshedGameAuthHeaders({ 'Content-Type': 'application/json' }),
