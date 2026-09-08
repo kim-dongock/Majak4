@@ -16,6 +16,8 @@ export interface ConvenienceShopItem {
   itemName: string
   cashPrice: number
   description: string
+  imageUrl: string
+  sortOrder: number
 }
 
 export async function getCashProducts(): Promise<CashProduct[]> {

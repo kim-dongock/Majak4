@@ -446,7 +446,7 @@ public class PushOkButtonCommandTests
     }
 
     [Fact]
-    public async Task Execute_BasicTableChargeFailure_ReturnsGpMessage()
+    public async Task Execute_BasicTableWithoutEnoughGp_BroadcastsReadyState()
     {
         var (_, player) = SetupRoom2(money: 499);
         var room = _session.GetRoom(player.RoomId!.Value)!;
@@ -456,12 +456,10 @@ public class PushOkButtonCommandTests
 
         await cmd.ExecuteAsync(ctx);
 
-        Assert.Single(sent);
-        Assert.Equal(Cmd.PushOkButton, sent[0].method);
-        var dict = CommandTestHelper.AsDict(sent[0].packet);
-        Assert.Equal(1L, (long)dict[Key.LackMoney]!);
-        Assert.Contains("場代 500 GP", (string)dict["message"]!);
-        Assert.False(room.OkButtonStates[0]);
+        Assert.Contains(sent, item => item.method == Cmd.SendOkButton);
+        var response = CommandTestHelper.ToDict(sent.First(item => item.method == Cmd.PushOkButton).packet);
+        Assert.Equal(0L, ((JsonElement)response[Key.LackMoney]!).GetInt64());
+        Assert.True(room.OkButtonStates[0]);
     }
 
     // シナリオ3: ゲーム進行中 → 無視

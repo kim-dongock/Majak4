@@ -287,7 +287,7 @@ public class RoomEnterRoomCommandTests
     }
 
     [Fact]
-    public async Task Execute_PaidWaitingRoomWithoutEnoughGp_ReturnsChargeMessage()
+    public async Task Execute_PaidWaitingRoomWithoutEnoughGp_EntersRoom()
     {
         var session = new PlayerSessionService();
         var host = new MajakPlayer { ConnectionId = "c1", MemberNo = "host", ChannelId = "ch1", GamMoney = 1_000 };
@@ -304,10 +304,8 @@ public class RoomEnterRoomCommandTests
 
         await cmd.ExecuteAsync(ctx);
 
-        var error = Assert.Single(sent, packet => packet.method == Cmd.ConnectTypeError);
-        var packet = CommandTestHelper.ToDict(error.packet);
-        Assert.Contains("場代 500 GP", ((JsonElement)packet[GKey.Message]!).GetString());
-        Assert.DoesNotContain(room.Seats, seat => seat?.MemberNo == player.MemberNo);
+        Assert.DoesNotContain(sent, packet => packet.method == Cmd.ConnectTypeError);
+        Assert.Contains(room.Seats, seat => seat?.MemberNo == player.MemberNo);
     }
 
     // シナリオ2: 進行中ルーム (履歴あり) → history + EnterRoomCmd

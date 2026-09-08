@@ -207,7 +207,7 @@ export default function LobbySelectScreen() {
               <div><dt>場代</dt><dd>{item.tableFee}</dd></div>
               <div><dt>レート</dt><dd>{item.rate}</dd></div>
               <div><dt>龍珠</dt><dd>{item.dragonBall}</dd></div>
-              <div className="majak-desktop-lobby-select__entry-condition"><dt>入場条件</dt><dd>{item.entryRequirement ?? '-'}</dd></div>
+              <div className="majak-desktop-lobby-select__entry-condition"><dt>入場条件</dt><dd>{item.entryRequirement ?? 'なし'}</dd></div>
             </dl>
           </div>
         ))}

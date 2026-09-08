@@ -2,6 +2,7 @@ import { api } from './client'
 import type {
   DashboardStats, PlayerSummary, PlayerDetail,
   CashProduct, DailyRevenue, AdminAccount,
+  ConvenienceItem,
   GameEconomyPolicy,
   GameAnnouncement,
   ChannelMaster,
@@ -84,6 +85,14 @@ export const cashApi = {
 
   getRevenue: (days = 30) =>
     api.get<DailyRevenue[]>(`/api/admin/cash/revenue?days=${days}`),
+}
+
+export const convenienceItemApi = {
+  list: () => api.get<ConvenienceItem[]>('/api/admin/convenience-items'),
+  update: (item: ConvenienceItem) =>
+    api.put<{ updated: boolean }>(
+      `/api/admin/convenience-items/${encodeURIComponent(item.itemCode)}/${encodeURIComponent(item.sellCode)}`,
+      item),
 }
 
 export type AdjustableCurrency = 'gp' | 'mp' | 'dragon_orb'

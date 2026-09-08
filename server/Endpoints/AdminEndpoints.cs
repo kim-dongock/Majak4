@@ -338,6 +338,32 @@ internal static class AdminEndpoints
                 return Results.Ok(await adminRepository.GetCashProductsAsync());
             }).RequireCors("AdminPolicy");
 
+            app.MapGet("/api/admin/convenience-items", async (HttpContext context, AdminAuthService adminAuth, ItemRepository itemRepository) =>
+            {
+                if (RequireAdminAuth(context, adminAuth) is { } error) return error;
+                return Results.Ok(await itemRepository.GetAdminBillingShopItemsAsync());
+            }).RequireCors("AdminPolicy");
+
+            app.MapPut("/api/admin/convenience-items/{itemCode}/{sellCode}", async (string itemCode, string sellCode, HttpContext context, AdminAuthService adminAuth, ItemRepository itemRepository, LogDbContext logDb) =>
+            {
+                if (RequireAdminAuth(context, adminAuth, "super_admin") is { } error) return error;
+                var body = await context.Request.ReadFromJsonAsync<BillingShopItemInfo>();
+                if (body is null || body.ItemCode != itemCode || body.SellCode != sellCode
+                    || string.IsNullOrWhiteSpace(body.ItemName) || body.ItemName.Length > 30
+                    || body.CashPrice < 0 || body.Description is null || body.Description.Length > 300
+                    || body.ImageUrl is null || body.ImageUrl.Length > 255)
+                    return Results.BadRequest(new { error = "invalid convenience item" });
+                var operatorNo = GetAdminNoClaim(context, adminAuth);
+                if (operatorNo is null) return Results.Unauthorized();
+                var before = await itemRepository.GetAdminBillingShopItemAsync(itemCode, sellCode);
+                if (before is null) return Results.NotFound();
+                if (!await itemRepository.UpdateBillingShopItemAsync(body)) return Results.NotFound();
+                await WriteAdminOperationAsync(
+                    context, adminAuth, logDb, operatorNo.Value,
+                    "UPDATE", "BILLING_ITEM_MASTER", $"{itemCode}:{sellCode}", before, body);
+                return Results.Ok(new { updated = true });
+            }).RequireCors("AdminPolicy");
+
             app.MapPut("/api/admin/cash/products/{productId}", async (string productId, HttpContext context, AdminAuthService adminAuth, AdminRepository adminRepository) =>
             {
                 if (RequireAdminAuth(context, adminAuth, "super_admin") is { } error) return error;

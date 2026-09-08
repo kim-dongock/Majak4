@@ -192,9 +192,6 @@ function ResponsiveMissionDialog({
       .mission-dialog { width: min(1050px, 100%); height: min(650px, 100%); max-height: calc(100dvh - 40px); min-height: 0; display: flex; flex-direction: column; overflow: hidden; color: #172323; background: var(--majak-popup-panel-color); border: 1px solid #7d8e80; box-shadow: 0 24px 72px rgba(0,0,0,.42); }
       .mission-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px 24px; color: #fff; background: #174b43; }
       .mission-dialog__header h2 { margin: 0; font-size: var(--majak-popup-font-title); font-weight: 700; line-height: var(--majak-popup-leading-title); letter-spacing: 0; }
-      .mission-dialog__header-actions { display: flex; gap: 8px; }
-      .mission-dialog__header button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); box-sizing: border-box; border: 1px solid rgba(255,255,255,.7); border-radius: 0; padding: 0 10px; color: #fff; background: transparent; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; }
-      .mission-dialog__header-actions button:last-child { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; font-size: var(--majak-popup-close-font-size); }
       .mission-dialog__summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: #c1cbc0; border-bottom: 1px solid #c1cbc0; }
       .mission-dialog__summary > div { min-width: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; align-items: center; padding: 11px 18px; background: #f7faf4; }
       .mission-dialog__summary span { color: #607069; font: 700 var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
@@ -217,16 +214,12 @@ function ResponsiveMissionDialog({
       .mission-dialog__reward-grid article.is-available { border-top: 4px solid #d19f35; background: #ecf0e4; }
       .mission-dialog__reward-grid span { color: #a06425; font: 700 var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
       .mission-dialog__reward-grid strong { color: #1f302b; font-size: var(--majak-popup-font-emphasis); font-weight: 400; }
-      .mission-dialog__reward-grid button, .mission-dialog footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); max-width: 100%; box-sizing: border-box; margin-top: auto; border: 0; border-radius: 3px; padding: 0 13px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; }
+      .mission-dialog__reward-grid button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); max-width: 100%; box-sizing: border-box; margin-top: auto; border: 0; border-radius: 3px; padding: 0 13px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; }
       .mission-dialog__reward-grid button:disabled { color: #87918c; background: #d7ddd5; cursor: not-allowed; }
-      .mission-dialog footer { display: flex; justify-content: flex-end; padding: 12px 24px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
-      .mission-dialog footer button { margin: 0; color: #32453e; border: 1px solid #839087; background: transparent; }
       .mission-dialog--mobileLandscape, .mission-dialog--mobilePortrait { width: 100%; height: 100%; }
       .mission-dialog-overlay--mobileLandscape, .mission-dialog-overlay--mobilePortrait { padding: 0; }
       .mission-dialog--mobileLandscape .mission-dialog__header, .mission-dialog--mobilePortrait .mission-dialog__header { padding: 8px 10px; }
       .mission-dialog--mobileLandscape .mission-dialog__header h2, .mission-dialog--mobilePortrait .mission-dialog__header h2 { margin: 0; font-size: var(--majak-popup-font-title); }
-      .mission-dialog--mobileLandscape .mission-dialog__header button, .mission-dialog--mobilePortrait .mission-dialog__header button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 7px; font-size: var(--majak-popup-font-emphasis); }
-      .mission-dialog--mobileLandscape .mission-dialog__header-actions button:last-child, .mission-dialog--mobilePortrait .mission-dialog__header-actions button:last-child { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); font-size: var(--majak-popup-close-font-size); }
       .mission-dialog--mobileLandscape .mission-dialog__summary, .mission-dialog--mobilePortrait .mission-dialog__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .mission-dialog--mobileLandscape .mission-dialog__summary > div, .mission-dialog--mobilePortrait .mission-dialog__summary > div { gap: 4px; padding: 7px 8px; }
       .mission-dialog--mobileLandscape .mission-dialog__summary span, .mission-dialog--mobilePortrait .mission-dialog__summary span { font-size: var(--majak-popup-font-body); }
@@ -243,8 +236,7 @@ function ResponsiveMissionDialog({
       .mission-dialog--mobileLandscape .mission-dialog__reward-grid article, .mission-dialog--mobilePortrait .mission-dialog__reward-grid article { min-height: 75px; gap: 4px; padding: 6px; }
       .mission-dialog--mobileLandscape .mission-dialog__reward-grid strong, .mission-dialog--mobilePortrait .mission-dialog__reward-grid strong { font-size: var(--majak-popup-font-emphasis); }
       .mission-dialog--mobileLandscape .mission-dialog__reward-grid span, .mission-dialog--mobilePortrait .mission-dialog__reward-grid span { font-size: var(--majak-popup-font-body); }
-      .mission-dialog--mobileLandscape .mission-dialog__reward-grid button, .mission-dialog--mobilePortrait .mission-dialog__reward-grid button, .mission-dialog--mobileLandscape .mission-dialog footer button, .mission-dialog--mobilePortrait .mission-dialog footer button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); padding: 0 7px; font-size: var(--majak-popup-font-emphasis); }
-      .mission-dialog--mobileLandscape .mission-dialog footer, .mission-dialog--mobilePortrait .mission-dialog footer { padding: 9px; }
+      .mission-dialog--mobileLandscape .mission-dialog__reward-grid button, .mission-dialog--mobilePortrait .mission-dialog__reward-grid button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); padding: 0 7px; font-size: var(--majak-popup-font-emphasis); }
       .mission-dialog--mobilePortrait .mission-dialog__content { grid-template-columns: 1fr; overflow: auto; }
     `}</style>
   </div>

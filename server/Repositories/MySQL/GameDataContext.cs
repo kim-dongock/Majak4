@@ -616,6 +616,8 @@ public sealed class GameDataContext : DbContext
             entity.Property(x => x.AgeLimit).HasColumnName("age_limit");
             entity.Property(x => x.SexCode).HasColumnName("sex_code").HasMaxLength(1);
             entity.Property(x => x.ItemDescription).HasColumnName("item_description").HasMaxLength(300);
+            entity.Property(x => x.ImageUrl).HasColumnName("image_url").HasMaxLength(255);
+            entity.Property(x => x.SortOrder).HasColumnName("sort_order");
             entity.Property(x => x.GiveResource).HasColumnName("give_resource").HasMaxLength(20);
             entity.Property(x => x.GiveMoneyType).HasColumnName("give_money_type").HasMaxLength(1);
             entity.Property(x => x.FunctionBox).HasColumnName("function_box").HasMaxLength(200);

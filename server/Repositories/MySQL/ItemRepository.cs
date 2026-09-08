@@ -215,7 +215,7 @@ public class ItemRepository
         await using var db = await RequireGameDb().CreateAsync();
         return await db.BillingItemMasters.AsNoTracking()
             .Where(item => item.IsOnSale && item.IsUsable && item.IsExposed == true)
-            .OrderBy(item => item.ItemCode)
+            .OrderBy(item => item.SortOrder)
             .ThenBy(item => item.SubCode)
             .Select(item => new BillingShopItemInfo
             {
@@ -224,8 +224,66 @@ public class ItemRepository
                 ItemName = item.ItemName,
                 CashPrice = checked((int)(item.UnitMoney ?? 0)),
                 Description = item.ItemDescription ?? item.InternalComment ?? string.Empty,
+                ImageUrl = item.ImageUrl,
+                SortOrder = item.SortOrder,
             })
             .ToListAsync();
+    }
+
+    public virtual async Task<List<BillingShopItemInfo>> GetAdminBillingShopItemsAsync()
+    {
+        await using var db = await RequireGameDb().CreateAsync();
+        return await db.BillingItemMasters.AsNoTracking()
+            .Where(item => item.IsExposed == true)
+            .OrderBy(item => item.SortOrder)
+            .ThenBy(item => item.SubCode)
+            .Select(item => new BillingShopItemInfo
+            {
+                ItemCode = item.ItemCode,
+                SellCode = item.SubCode,
+                ItemName = item.ItemName,
+                CashPrice = checked((int)(item.UnitMoney ?? 0)),
+                Description = item.ItemDescription ?? item.InternalComment ?? string.Empty,
+                ImageUrl = item.ImageUrl,
+                SortOrder = item.SortOrder,
+                IsOnSale = item.IsOnSale,
+            })
+            .ToListAsync();
+    }
+
+    public virtual async Task<BillingShopItemInfo?> GetAdminBillingShopItemAsync(string itemCode, string sellCode)
+    {
+        await using var db = await RequireGameDb().CreateAsync();
+        return await db.BillingItemMasters.AsNoTracking()
+            .Where(item => item.ItemCode == itemCode && item.SubCode == sellCode && item.IsExposed == true)
+            .Select(item => new BillingShopItemInfo
+            {
+                ItemCode = item.ItemCode,
+                SellCode = item.SubCode,
+                ItemName = item.ItemName,
+                CashPrice = checked((int)(item.UnitMoney ?? 0)),
+                Description = item.ItemDescription ?? item.InternalComment ?? string.Empty,
+                ImageUrl = item.ImageUrl,
+                SortOrder = item.SortOrder,
+                IsOnSale = item.IsOnSale,
+            })
+            .SingleOrDefaultAsync();
+    }
+
+    public virtual async Task<bool> UpdateBillingShopItemAsync(BillingShopItemInfo item)
+    {
+        await using var db = await RequireGameDb().CreateAsync();
+        var entity = await db.BillingItemMasters.FindAsync(item.ItemCode, item.SellCode);
+        if (entity is null || entity.IsExposed != true) return false;
+        entity.ItemName = item.ItemName.Trim();
+        entity.UnitMoney = checked((uint)item.CashPrice);
+        entity.ItemDescription = item.Description.Trim();
+        entity.ImageUrl = item.ImageUrl.Trim();
+        entity.SortOrder = item.SortOrder;
+        entity.IsOnSale = item.IsOnSale;
+        entity.ModifiedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return true;
     }
 
     /// <summary>
@@ -867,4 +925,7 @@ public sealed class BillingShopItemInfo
     public string ItemName { get; init; } = string.Empty;
     public int CashPrice { get; init; }
     public string Description { get; init; } = string.Empty;
+    public string ImageUrl { get; init; } = string.Empty;
+    public uint SortOrder { get; init; }
+    public bool IsOnSale { get; init; }
 }

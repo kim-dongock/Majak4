@@ -124,7 +124,7 @@ export default function CurrencyHistoryDlg({ onClose }: CurrencyHistoryDlgProps)
           <label>開始日<input type="date" value={from} max={to} onChange={event => setFrom(event.target.value)} /></label>
           <span>〜</span>
           <label>終了日<input type="date" value={to} min={from} onChange={event => setTo(event.target.value)} /></label>
-          <button type="button" onClick={() => reload()}>検索</button>
+          <button type="button" className="majak-currency-history__search" onClick={() => reload()}>検索</button>
         </div>
       </div>
       <div ref={listRef} className="majak-currency-history__list" aria-live="polite">

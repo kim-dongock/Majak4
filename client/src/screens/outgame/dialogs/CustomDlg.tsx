@@ -55,6 +55,8 @@ import * as SignalR from '../../../api/signalr'
 import { showError } from '../../../utils/msgbox'
 import { useAuthStore } from '../../../store/authStore'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
+import { normalizeRawMajItem, type RawMajItem } from './ConfirmItemDlg'
+import { SHOP_ITEM_DATA_BUY, SHOP_ITEM_DATA_EXC } from './shopItemData'
 
 const IMG      = '/assets/images/game'
 const IMG_ITEM = '/assets/images/game/items/custom'
@@ -66,6 +68,7 @@ const TAB_CHARA = 0
 const TAB_HAI   = 1
 const TAB_BG    = 2
 const TAB_OTHER = 3
+const TAB_GENERAL = 4
 
 /** アイテム情報 */
 interface CustomItem {
@@ -76,6 +79,21 @@ interface CustomItem {
   equipped: boolean
 }
 
+interface GeneralItem {
+  raw: RawMajItem
+  name: string
+  imagePath: string
+  canActivate: boolean
+}
+
+function formatGeneralItemTerm(item: RawMajItem) {
+  if (item.endDt >= new Date(2037, 0, 1).getTime() / 1000) return `残り：${item.qty}個`
+  const formatDate = (seconds: number) => new Date(seconds * 1000).toLocaleString('ja-JP', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  })
+  return `${formatDate(item.buyDt)} から ${formatDate(item.endDt)} まで`
+}
+
 interface Props {
   initialTab?: number
   hanCoin?: number
@@ -83,6 +101,8 @@ interface Props {
   currentCharaId?: number
   currentHaiId?: number
   currentBgId?: number
+  majItems?: RawMajItem[]
+  onMajItemsChange?: (items: RawMajItem[]) => void
   onEquipChange?: (item: { itemId: number; itemType: number }) => void
   onRequestShop?: () => void
   onClose: () => void
@@ -183,6 +203,9 @@ function ResponsiveCustomInventory({
   onSetItem,
   onPreviousPage,
   onNextPage,
+  generalPageItems,
+  generalPendingItemCode,
+  onSetGeneralItem,
   onOpenShop,
   onClose,
 }: {
@@ -195,12 +218,16 @@ function ResponsiveCustomInventory({
   onSetItem: (item: CustomItem) => void
   onPreviousPage: () => void
   onNextPage: () => void
+  generalPageItems: GeneralItem[]
+  generalPendingItemCode: string | null
+  onSetGeneralItem: (item: GeneralItem) => void
   onOpenShop: () => void
   onClose: () => void
 }) {
   const layoutMode = useOutgameLayoutMode()
   const mobileClass = layoutMode === 'desktop' ? '' : ` custom-inventory--${layoutMode}`
   const tabs = [
+    { value: TAB_GENERAL, label: 'ゲーム用' },
     { value: TAB_CHARA, label: 'キャラ' },
     { value: TAB_HAI, label: '牌' },
     { value: TAB_BG, label: '背景' },
@@ -217,7 +244,21 @@ function ResponsiveCustomInventory({
         {tabs.map(item => <button key={item.value} type="button" className={tab === item.value ? 'is-active' : ''} onClick={() => setTab(item.value)}>{item.label}</button>)}
       </nav>
       <main className="custom-inventory__content">
-        {pageItems.length === 0
+        {tab === TAB_GENERAL ? (
+          generalPageItems.length === 0
+            ? <p className="custom-inventory__empty">所持しているゲーム用アイテムはありません。</p>
+            : <div className="custom-inventory__grid">
+                {generalPageItems.map(item => {
+                  const active = item.raw.useFlag !== 0
+                  return <article className="custom-inventory__item" key={item.raw.itemCode}>
+                    <div className="custom-inventory__image">{item.imagePath && <img src={item.imagePath} alt="" />}</div>
+                    <h3>{item.name}</h3>
+                    <p className="custom-inventory__term">{formatGeneralItemTerm(item.raw)}</p>
+                    <button type="button" disabled={active || !item.canActivate || generalPendingItemCode === item.raw.itemCode} onClick={() => onSetGeneralItem(item)}>{active ? '使用中' : '使用する'}</button>
+                  </article>
+                })}
+              </div>
+        ) : pageItems.length === 0
           ? <p className="custom-inventory__empty">所持しているアイテムはありません。</p>
           : <div className="custom-inventory__grid">
               {pageItems.map(item => {
@@ -246,7 +287,7 @@ function ResponsiveCustomInventory({
       .custom-inventory__header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; color: #fff; background: #174b43; }
       .custom-inventory__header h2 { margin: 0; font-size: var(--majak-popup-font-title); font-weight: 700; letter-spacing: 0; line-height: var(--majak-popup-leading-title); }
       .custom-inventory__header button { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; box-sizing: border-box; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: var(--majak-popup-close-font-size); line-height: 1; cursor: pointer; }
-      .custom-inventory__tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #a5afa5; background: #dbe0d7; }
+      .custom-inventory__tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid #a5afa5; background: #dbe0d7; }
       .custom-inventory__tabs button { height: var(--majak-popup-tab-height); box-sizing: border-box; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 var(--majak-popup-tab-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
       .custom-inventory__tabs button.is-active { color: #fff; background: #b84228; }
       .custom-inventory__content { min-height: 0; flex: 1; padding: 18px; overflow: auto; }
@@ -255,6 +296,7 @@ function ResponsiveCustomInventory({
       .custom-inventory__image { height: 124px; display: grid; place-items: center; background: #f1eee4; }
       .custom-inventory__image img { max-width: 100%; max-height: 100%; object-fit: contain; }
       .custom-inventory__item h3 { margin: 10px 0; overflow: hidden; color: #1f302b; font-size: var(--majak-popup-font-emphasis); line-height: var(--majak-popup-leading-emphasis); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+      .custom-inventory__term { min-height: calc(var(--majak-popup-font-body) * var(--majak-popup-leading-body)); margin: -4px 0 8px; overflow: hidden; color: #5b6d66; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); text-align: center; text-overflow: ellipsis; white-space: nowrap; }
       .custom-inventory__item button { width: min(var(--majak-popup-command-width), 100%); height: var(--majak-popup-command-height); box-sizing: border-box; margin-top: auto; border: 0; border-radius: 3px; padding: 0 9px; color: #fff; background: #1c5a4d; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; }
       .custom-inventory__item button:disabled { color: #718078; background: #d7ddd5; cursor: default; }
       .custom-inventory__empty { padding: 48px; color: #647069; text-align: center; font: var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
@@ -288,12 +330,14 @@ function ResponsiveCustomInventory({
  * CMajakCustomDlg 本体
  * ==================================================================== */
 export default function CustomDlg({
-  initialTab = TAB_CHARA,
+  initialTab = TAB_GENERAL,
   hanCoin = 0,
   hanCoupon = 0,
   currentCharaId = 0,
   currentHaiId   = 0,
   currentBgId    = 0,
+  majItems = [],
+  onMajItemsChange,
   onEquipChange,
   onRequestShop,
   onClose,
@@ -302,6 +346,7 @@ export default function CustomDlg({
   const [tab,   setTab]   = useState(initialTab)
   const [items, setItems] = useState<CustomItem[]>([])
   const [page,  setPage]  = useState(1)
+  const [generalPendingItemCode, setGeneralPendingItemCode] = useState<string | null>(null)
   const [dialogScale, setDialogScale] = useState(1)
   const ITEMS_PER_PAGE = 10
 
@@ -377,6 +422,7 @@ export default function CustomDlg({
       // 現在のタブの kind でフィルタリング
       const filtered = raw.filter(x => {
         const itemType = Number(x.nKind ?? 0)
+        if (tab === TAB_GENERAL) return false
         if (tab === TAB_BG) return isBg(itemType)
         if (tab === TAB_HAI) return isHai(itemType)
         if (tab === TAB_CHARA) return isChara(itemType)
@@ -402,8 +448,37 @@ export default function CustomDlg({
     return () => SignalR.off('mjkc40e', handler)
   }, [tab, player?.pix, currentId])
 
-  const totalPages  = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE))
+  useEffect(() => {
+    const handler = (data: Record<string, unknown>) => {
+      const result = String(data.k1e ?? data.result ?? '')
+      if (result === 'v2e' || result === '-1') {
+        showError(String(data.message ?? data.k2e ?? data.failCode ?? 'アイテムの使用に失敗しました'))
+        setGeneralPendingItemCode(null)
+        return
+      }
+      const itemCodes = [data.mjkk58e0, data.mjkk58e1]
+      const useFlags = [data.mjkk61e0, data.mjkk61e1]
+      onMajItemsChange?.(majItems.map(item => {
+        const index = itemCodes.findIndex(code => String(code ?? '') === item.itemCode)
+        return index < 0 ? item : normalizeRawMajItem({ ...item, useFlag: useFlags[index] })
+      }))
+      setGeneralPendingItemCode(null)
+    }
+    SignalR.on('mjkc21e', handler)
+    return () => SignalR.off('mjkc21e', handler)
+  }, [majItems, onMajItemsChange])
+
+  const generalItems = majItems.flatMap(raw => {
+    const canActivate = raw.qty > 0 && raw.endDt > Date.now() / 1000
+    const buy = SHOP_ITEM_DATA_BUY.find(item => item.avCode === raw.itemCode)
+    if (buy) return [{ raw, name: buy.name, imagePath: buy.imagePath, canActivate }]
+    const exc = SHOP_ITEM_DATA_EXC.find(item => item.itemCode === raw.itemCode)
+    return exc ? [{ raw, name: exc.name, imagePath: exc.imagePath, canActivate }] : []
+  })
+  const activeItemCount = tab === TAB_GENERAL ? generalItems.length : items.length
+  const totalPages  = Math.max(1, Math.ceil(activeItemCount / ITEMS_PER_PAGE))
   const pageItems   = items.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+  const generalPageItems = generalItems.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
   const numItems    = pageItems.length  // nItemNumOfPage
 
   /**
@@ -420,6 +495,14 @@ export default function CustomDlg({
     } catch {
       showError('サーバーへの送信に失敗しました')
     }
+  }
+
+  const onSetGeneralItem = (item: GeneralItem) => {
+    setGeneralPendingItemCode(item.raw.itemCode)
+    SignalR.send('mjkc21e', { 'mjkk58e': item.raw.itemCode }).catch(() => {
+      showError('サーバーへの送信に失敗しました')
+      setGeneralPendingItemCode(null)
+    })
   }
 
   /** OnBtnShopClicked — カスタムアイテムショップを開く */
@@ -451,6 +534,9 @@ export default function CustomDlg({
       page={page}
       totalPages={totalPages}
       pageItems={pageItems}
+      generalPageItems={generalPageItems}
+      generalPendingItemCode={generalPendingItemCode}
+      onSetGeneralItem={onSetGeneralItem}
       currentId={currentId}
       onSetItem={onSetItem}
       onPreviousPage={() => setPage(current => current <= 1 ? totalPages : current - 1)}

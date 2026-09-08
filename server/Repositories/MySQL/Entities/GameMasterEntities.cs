@@ -355,6 +355,8 @@ public sealed class BillingItemMasterEntity
     public ushort? AgeLimit { get; set; }
     public string? SexCode { get; set; }
     public string? ItemDescription { get; set; }
+    public string ImageUrl { get; set; } = string.Empty;
+    public uint SortOrder { get; set; }
     public string? GiveResource { get; set; }
     public string? GiveMoneyType { get; set; }
     public string? FunctionBox { get; set; }

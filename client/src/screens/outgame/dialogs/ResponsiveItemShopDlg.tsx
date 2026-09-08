@@ -4,11 +4,11 @@ import { getCashProducts, getConvenienceItems } from '../../../api/shop'
 import type { CashProduct, ConvenienceShopItem } from '../../../api/shop'
 import { useAuthStore } from '../../../store/authStore'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
-import { SHOP_ITEM_DATA_BUY, SHOP_ITEM_DATA_EXC } from './shopItemData'
-import type { BuyItemData, ExcItemData } from './shopItemData'
+import { SHOP_ITEM_DATA_EXC } from './shopItemData'
+import type { ExcItemData } from './shopItemData'
 import BuyCustomItemDlg from './BuyCustomItemDlg'
 import BuyExchangeItemDlg from './BuyExchangeItemDlg'
-import BuyHanCoinItemDlg from './BuyHanCoinItemDlg'
+import BuyHanCoinItemDlg, { type HanCoinShopItemData } from './BuyHanCoinItemDlg'
 
 const IMG_CUSTOM_ITEM = '/assets/images/game/items/custom'
 
@@ -46,26 +46,12 @@ function customKindName(kind: number) {
   return 'その他'
 }
 
-function cashItemDescription(item: BuyItemData) {
-  return item.nameSub2
-    ? [
-        `獲得できる龍珠が${item.nameSub2}になります。`,
-        '龍珠2倍と龍珠3倍が同時に有効な場合は龍珠4倍になります。',
-        '対局終了時にアイテムの効果が有効である必要があります。',
-        `ボーナスとして${format(item.gameMoney, 'GP')}が付きます。`,
-      ]
-    : [
-        '残っている回数に応じて交流広場及び段位戦の場代が無料になります。',
-        'ハイ卓は対象外です。',
-        '対局終了時にアイテムの効果が有効である必要があります。',
-        `ボーナスとして${format(item.gameMoney, 'GP')}が付きます。`,
-      ]
+function customItemImageUrl(customId: number) {
+  return `${IMG_CUSTOM_ITEM}/mj_custom_${String(customId).padStart(2, '0')}.png`
 }
 
-function convenienceCardDescription(item: ConvenienceShopItem, legacyItem?: BuyItemData) {
-  if (legacyItem?.nameSub2) return `期間中、獲得龍珠が${legacyItem.nameSub2}になります。`
-  if (legacyItem) return '交流広場・段位戦の場代が無料になります。'
-  return item.description || '便利アイテム'
+function convenienceDescriptionLines(description: string) {
+  return description.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
 }
 
 export default function ResponsiveItemShopDlg({
@@ -85,7 +71,7 @@ export default function ResponsiveItemShopDlg({
   const [convenienceItems, setConvenienceItems] = useState<ConvenienceShopItem[]>([])
   const [customItems, setCustomItems] = useState<CustomShopItem[]>([])
   const [buyCustomTarget, setBuyCustomTarget] = useState<CustomShopItem | null>(null)
-  const [buyItemTarget, setBuyItemTarget] = useState<BuyItemData | null>(null)
+  const [buyItemTarget, setBuyItemTarget] = useState<HanCoinShopItemData | null>(null)
   const [exchangeTarget, setExchangeTarget] = useState<ExcItemData | null>(null)
   const [currentCash, setCurrentCash] = useState(cashCount)
   const [currentGem, setCurrentGem] = useState(gemCount)
@@ -150,7 +136,7 @@ export default function ResponsiveItemShopDlg({
             <div>
               <h2>麻雀ショップ</h2>
             </div>
-            <button className="responsive-shop__close majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
+            <button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
           </header>
 
           <nav className="responsive-shop__tabs" aria-label="ショップ分類">
@@ -195,7 +181,7 @@ export default function ResponsiveItemShopDlg({
                   const canBuy = !isPurchased && currentCash >= item.price
                   return (
                     <article className="shop-card" key={item.shopNo}>
-                      <div className="shop-card__image"><img src={`${IMG_CUSTOM_ITEM}/mj_custom_${item.customId}.png`} alt="" /></div>
+                      <div className="shop-card__image"><img src={customItemImageUrl(item.customId)} alt="" /></div>
                       <span className="shop-card__tag">{customKindName(item.kind)}</span>
                       <h3>{item.name}</h3>
                       <p>{item.description}</p>
@@ -212,16 +198,25 @@ export default function ResponsiveItemShopDlg({
 
             {tab === 'item' && (
               <div className="responsive-shop__grid">
-                {convenienceItems.filter(item => SHOP_ITEM_DATA_BUY.some(candidate => candidate.avCode === item.sellCode)).map(item => {
-                  const legacyItem = SHOP_ITEM_DATA_BUY.find(candidate => candidate.avCode === item.sellCode)
+                {convenienceItems.map(item => {
+                  const itemForPurchase: HanCoinShopItemData = {
+                    itemCode: item.itemCode,
+                    sellCode: item.sellCode,
+                    itemName: item.itemName,
+                    price: item.cashPrice,
+                    gameMoney: 0,
+                    description: convenienceDescriptionLines(item.description),
+                    imageUrl: item.imageUrl,
+                    isLottery: false,
+                  }
                   return <article className="shop-card" key={`${item.itemCode}-${item.sellCode}`}>
-                    <div className="shop-card__image">{legacyItem && <img src={legacyItem.imagePath} alt="" />}</div>
+                    <div className="shop-card__image">{item.imageUrl && <img src={item.imageUrl} alt="" />}</div>
                     <span className="shop-card__tag">便利アイテム</span>
                     <h3>{item.itemName}</h3>
-                    <p>{convenienceCardDescription(item, legacyItem)}</p>
+                    <p>{item.description || '便利アイテム'}</p>
                     <div className="shop-card__footer">
                       <strong>{cashPrice(item.cashPrice)}</strong>
-                      <button type="button" disabled={!legacyItem || currentCash < item.cashPrice} onClick={() => legacyItem && setBuyItemTarget({ ...legacyItem, name: item.itemName, hancoinPrice: item.cashPrice })}>購入</button>
+                      <button type="button" disabled={currentCash < item.cashPrice} onClick={() => setBuyItemTarget(itemForPurchase)}>購入</button>
                     </div>
                   </article>
                 })}
@@ -259,7 +254,7 @@ export default function ResponsiveItemShopDlg({
               <span className="responsive-shop__balance responsive-shop__balance--money"><i aria-hidden="true" /><span>GP</span><strong>{moneyPrice(currentMoney)}</strong></span>
             </div>
             <div className="responsive-shop__actions">
-              <button type="button" onClick={onConfirmItem}>所持アイテム</button>
+              <button type="button" onClick={onConfirmItem}>所持品</button>
               <button type="button" onClick={onClose}>閉じる</button>
             </div>
           </footer>
@@ -278,7 +273,7 @@ export default function ResponsiveItemShopDlg({
         }}
       />}
       {buyItemTarget && <BuyHanCoinItemDlg
-        item={{ itemCode: buyItemTarget.avCode, sellCode: buyItemTarget.sellCode, itemName: buyItemTarget.name, price: buyItemTarget.hancoinPrice, gameMoney: buyItemTarget.gameMoney, description: cashItemDescription(buyItemTarget), imageUrl: buyItemTarget.imagePath, isLottery: false }}
+        item={buyItemTarget}
         pix={pix} memberName={memberName} hanCoin={currentCash}
         onClose={() => setBuyItemTarget(null)}
         onBuyOK={(nextCash) => {
@@ -303,7 +298,6 @@ export default function ResponsiveItemShopDlg({
         .responsive-shop :is(button, input, select, textarea, option) { font-family: inherit; }
         .responsive-shop__header { display: flex; gap: 18px; align-items: center; justify-content: space-between; padding: 15px 24px; color: #fff; background: #174b43; }
         .responsive-shop__header h2 { margin: 0; font-size: var(--shop-font-title); font-weight: 700; line-height: var(--majak-popup-leading-title); letter-spacing: 0; }
-        .responsive-shop__close { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; box-sizing: border-box; border: 1px solid rgba(255,255,255,.7); border-radius: 0; color: #fff; background: transparent; font-size: var(--majak-popup-close-font-size); line-height: 1; cursor: pointer; }
         .responsive-shop__balances { flex: 1 1 auto; display: grid; min-width: 0; grid-template-columns: 74px repeat(3, minmax(0, 1fr)); align-items: stretch; overflow: hidden; border: 1px solid #c1cbc0; background: #f7faf4; color: #607069; white-space: nowrap; }
         .responsive-shop__balance-title { display: grid; place-items: center; padding: 0 8px; color: #f7f3e7; background: #315c50; font: 700 var(--shop-font-label)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); letter-spacing: 0; }
         .responsive-shop__balance { display: flex; min-width: 0; gap: 6px; align-items: center; justify-content: center; padding: 7px 8px; border-left: 1px solid #d7dfd4; font: 700 var(--shop-font-label)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
@@ -341,13 +335,11 @@ export default function ResponsiveItemShopDlg({
         .responsive-shop__empty { grid-column: 1 / -1; padding: 42px; text-align: center; color: #647069; font: var(--shop-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
         .responsive-shop__footer { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 12px 24px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
         .responsive-shop__actions { display: flex; gap: 10px; justify-content: flex-end; }
-        .responsive-shop__footer button:last-child { color: #32453e; background: transparent; border: 1px solid #839087; }
         .responsive-shop--mobileLandscape, .responsive-shop--mobilePortrait { --shop-font-title: var(--majak-text-lg); --shop-font-price: var(--majak-text-sm); --shop-font-card-title: var(--majak-text-sm); --shop-font-label: var(--majak-text-xs); --shop-font-body: var(--majak-text-xs); --shop-font-command: var(--majak-text-xs); width: 100%; height: 100%; max-height: 100%; }
         .responsive-shop-overlay--mobileLandscape, .responsive-shop-overlay--mobilePortrait { padding: 0; align-items: stretch; }
         .responsive-shop--mobileLandscape .responsive-shop__header, .responsive-shop--mobilePortrait .responsive-shop__header { gap: 8px; padding: 8px 10px; }
         .responsive-shop--mobileLandscape .responsive-shop__header h2, .responsive-shop--mobilePortrait .responsive-shop__header h2 { margin: 0; font-size: var(--majak-popup-font-title); }
         .responsive-shop--mobileLandscape .responsive-shop__eyebrow, .responsive-shop--mobilePortrait .responsive-shop__eyebrow { display: none; }
-        .responsive-shop--mobileLandscape .responsive-shop__close, .responsive-shop--mobilePortrait .responsive-shop__close { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); font-size: var(--majak-popup-close-font-size); }
         .responsive-shop--mobileLandscape .responsive-shop__balances, .responsive-shop--mobilePortrait .responsive-shop__balances { min-width: 0; flex: 1; }
         .responsive-shop--mobileLandscape .responsive-shop__balances, .responsive-shop--mobilePortrait .responsive-shop__balances { grid-template-columns: 54px repeat(3, minmax(0, 1fr)); }
         .responsive-shop--mobileLandscape .responsive-shop__balance-title, .responsive-shop--mobilePortrait .responsive-shop__balance-title { padding: 0 4px; font-size: var(--shop-font-label); }

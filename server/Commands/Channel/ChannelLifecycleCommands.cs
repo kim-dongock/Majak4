@@ -583,17 +583,6 @@ public class CreateRoomCommand : ICommand
             return;
         }
 
-        long roomCharge = GameLogicService.GetRoomCharge(subId);
-        if (player.GamMoney < roomCharge)
-        {
-            await SendRoomConnectError(
-                ctx,
-                requestRoomId,
-                $"場代 {roomCharge:N0} GPを支払うためのGPが不足しています。現在のGP: {player.GamMoney:N0} GP\nロビーの「無料GP補充」をご利用ください。",
-                LegacyErrorCode.MajAutoEnterRoomFailed);
-            return;
-        }
-
         var continueRoom = await _roomRegistry.GetContinueRoomAsync(player.MemberNo);
         if (continueRoom != null)
         {

@@ -6,7 +6,9 @@ import { getAvatarUrl, getDefaultAvatarUrl } from '../utils/resources'
 import { getMajakTitleImageUrl, getTrickTitleImageUrl } from '../utils/titleImages'
 
 interface MobileUserSummaryProps {
+  cashCount?: number
   gameMoney?: number
+  gemCount?: number
   assetTitle?: string
   achievementTitle?: string
   achievementTitleId?: string
@@ -21,7 +23,9 @@ interface MobileUserSummaryProps {
 }
 
 export default function MobileUserSummary({
+  cashCount,
   gameMoney,
+  gemCount,
   assetTitle,
   achievementTitle,
   achievementTitleId,
@@ -74,6 +78,8 @@ export default function MobileUserSummary({
   if (!player) return null
 
   const currentGameMoney = gameMoney ?? profile?.gamMoney
+  const currentCashCount = cashCount
+  const currentGemCount = gemCount ?? profile?.gemCount
   const currentAssetTitle = assetTitle ?? profile?.slevel
   const currentAchievementTitle = achievementTitle ?? profileTitles.achievement
   const currentTrickTitle = trickTitle ?? profileTitles.trick
@@ -111,7 +117,9 @@ export default function MobileUserSummary({
         </span>
       )}
       <div className="majak-mobile-user-summary__fields">
+        {typeof currentCashCount === 'number' && <span><b>MP</b><em>{currentCashCount.toLocaleString('ja-JP')}</em></span>}
         {showGameMoney && <span><b>GP</b><em>{currentGameMoney?.toLocaleString('ja-JP') ?? '-'}</em></span>}
+        {showGameMoney && <span className="majak-mobile-user-summary__gem"><b>龍珠</b><em>{currentGemCount?.toLocaleString('ja-JP') ?? '-'}</em></span>}
         <span><b>資産称号</b><em>{currentAssetTitle || '-'}</em></span>
         <span><b>麻雀称号</b><em>{currentAchievementTitle || '-'}</em></span>
         <span><b>技</b><em>{currentTrickTitle || '-'}</em></span>

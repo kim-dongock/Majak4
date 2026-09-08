@@ -6,7 +6,7 @@
 param(
     [string]$S3Bucket = "alpha-game-majak4-hange-jp",
     [string]$SiteUrl = "https://alpha-game-majak4.hange.jp",
-    [string]$AwsProfile = "majak4",
+    [string]$AwsProfile = "hange_majak4",
     [string]$Region = "ap-northeast-1",
     [string]$CloudFrontId = "ER8JDGPEYL97",
     [ValidateSet("auto", "always", "never")]

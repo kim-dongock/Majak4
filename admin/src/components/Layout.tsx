@@ -64,6 +64,7 @@ export default function AdminLayout() {
       label: 'マスターデータ',
       children: [
         { key: '/master/cash-products', label: 'キャッシュ商品マスター' },
+        { key: '/master/convenience-items', label: '便利アイテムマスター' },
         { key: '/master/channels',     label: 'チャンネル一覧' },
       ],
     },

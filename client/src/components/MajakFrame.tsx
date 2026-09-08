@@ -45,7 +45,7 @@ type LockableScreenOrientation = ScreenOrientation & {
   lock?: (orientation: 'landscape') => Promise<void>
 }
 
-function FramePlayerBalances({ name, mp, gp }: { name: string; mp?: number; gp?: number }) {
+function FramePlayerBalances({ name, mp, gp, gem }: { name: string; mp?: number; gp?: number; gem?: number }) {
   const [expanded, setExpanded] = useState(false)
   const amount = (value?: number) => typeof value === 'number' && Number.isFinite(value)
     ? value.toLocaleString('ja-JP')
@@ -56,6 +56,7 @@ function FramePlayerBalances({ name, mp, gp }: { name: string; mp?: number; gp?:
       <span className="majak-frame-player-balances__name"><b>ニックネーム</b><em title={name}>{name}</em></span>
       <span className="majak-frame-player-balances__detail majak-frame-player-balances__mp"><b>MP</b><em>{amount(mp)}</em></span>
       <span className="majak-frame-player-balances__detail majak-frame-player-balances__gp"><b>GP</b><em>{amount(gp)}</em></span>
+      <span className="majak-frame-player-balances__detail majak-frame-player-balances__gem"><b>龍珠</b><em>{amount(gem)}</em></span>
       <button
         type="button"
         className="majak-frame-player-balances__toggle"
@@ -296,7 +297,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
               <span className="majak-mobile-frame__brand-compact">麻雀4</span>
             </div>
             {showFramePlayerBalances && player && (
-              <FramePlayerBalances name={player.name} mp={gamePlayer?.cashCount} gp={gamePlayer?.gamMoney} />
+              <FramePlayerBalances name={player.name} mp={gamePlayer?.cashCount} gp={gamePlayer?.gamMoney} gem={gamePlayer?.gemCount} />
             )}
             <div className="majak-mobile-frame__tools">
               {isTitleScreen && !isHangeClient && <button type="button" onClick={() => setShowProfile(true)}>プロフィール</button>}
@@ -345,7 +346,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
         <header className="majak-responsive-desktop-frame__bar">
           <strong className="majak-type-lg">{screenTitle}</strong>
           {showFramePlayerBalances && player && (
-            <FramePlayerBalances name={player.name} mp={gamePlayer?.cashCount} gp={gamePlayer?.gamMoney} />
+            <FramePlayerBalances name={player.name} mp={gamePlayer?.cashCount} gp={gamePlayer?.gamMoney} gem={gamePlayer?.gemCount} />
           )}
           <div>
             {(isTitleScreen || isLobbySelectScreen) && !isHangeClient && <button type="button" className="majak-responsive-control-button" onClick={() => setShowProfile(true)}>プロフィール</button>}

@@ -556,6 +556,50 @@ VALUES
     ('MJ22', 'MJ2204', '龍珠3倍(30日)', 'C', 1, 3000, NULL, '30日の間、獲得できる龍珠が3倍になります。
 ※対局終了時にアイテムの効果が有効である必要があります。', NULL, TRUE, TRUE, NULL, 'A', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, TRUE, NULL, NULL, '2015-04-20 10:00:00');
 
+UPDATE billing_item_master
+SET item_description = CASE sub_code
+    WHEN 'MJ2001' THEN '交流広場及び段位戦の場代が無料になります。ハイ卓は対象外です。使用中に対局を終了すると残り回数が1回減ります。'
+    WHEN 'MJ2002' THEN '交流広場及び段位戦の場代が無料になります。ハイ卓は対象外です。使用中に対局を終了すると残り回数が1回減ります。'
+    WHEN 'MJ2003' THEN '交流広場及び段位戦の場代が無料になります。ハイ卓は対象外です。使用中に対局を終了すると残り回数が1回減ります。'
+    WHEN 'MJ2004' THEN '交流広場及び段位戦の場代が無料になります。ハイ卓は対象外です。使用中に対局を終了すると残り回数が1回減ります。'
+    WHEN 'MJ2101' THEN '1日の間、獲得できる龍珠が2倍になります。対局終了時に使用中である必要があります。'
+    WHEN 'MJ2102' THEN '3日の間、獲得できる龍珠が2倍になります。対局終了時に使用中である必要があります。'
+    WHEN 'MJ2103' THEN '7日の間、獲得できる龍珠が2倍になります。対局終了時に使用中である必要があります。'
+    WHEN 'MJ2104' THEN '30日の間、獲得できる龍珠が2倍になります。対局終了時に使用中である必要があります。'
+    WHEN 'MJ2201' THEN '1日の間、獲得できる龍珠が3倍になります。対局終了時に使用中である必要があります。'
+    WHEN 'MJ2202' THEN '3日の間、獲得できる龍珠が3倍になります。対局終了時に使用中である必要があります。'
+    WHEN 'MJ2203' THEN '7日の間、獲得できる龍珠が3倍になります。対局終了時に使用中である必要があります。'
+    WHEN 'MJ2204' THEN '30日の間、獲得できる龍珠が3倍になります。対局終了時に使用中である必要があります。'
+END,
+image_url = CASE sub_code
+    WHEN 'MJ100' THEN '/assets/images/game/items/lot_item_01.png'
+    WHEN 'MJ101' THEN '/assets/images/game/items/lot_item_02.png'
+    WHEN 'MJ102' THEN '/assets/images/game/items/lot_item_03.png'
+    WHEN 'MJ103' THEN '/assets/images/game/items/lot_item_01.png'
+    WHEN 'MJ104' THEN '/assets/images/game/items/lot_item_02.png'
+    WHEN 'MJ205' THEN '/assets/images/game/items/lot_item_03.png'
+    WHEN 'MJ2001' THEN '/assets/images/game/items/mj_shop_item_sell_coin_01.png'
+    WHEN 'MJ2002' THEN '/assets/images/game/items/mj_shop_item_sell_coin_01.png'
+    WHEN 'MJ2003' THEN '/assets/images/game/items/mj_shop_item_sell_coin_02.png'
+    WHEN 'MJ2004' THEN '/assets/images/game/items/mj_shop_item_sell_coin_03.png'
+    WHEN 'MJ2101' THEN '/assets/images/game/items/mj_shop_item_sell_ryu_01.png'
+    WHEN 'MJ2102' THEN '/assets/images/game/items/mj_shop_item_sell_ryu_03.png'
+    WHEN 'MJ2103' THEN '/assets/images/game/items/mj_shop_item_sell_ryu_05.png'
+    WHEN 'MJ2104' THEN '/assets/images/game/items/mj_shop_item_sell_ryu_07.png'
+    WHEN 'MJ2201' THEN '/assets/images/game/items/mj_shop_item_sell_ryu_02.png'
+    WHEN 'MJ2202' THEN '/assets/images/game/items/mj_shop_item_sell_ryu_04.png'
+    WHEN 'MJ2203' THEN '/assets/images/game/items/mj_shop_item_sell_ryu_06.png'
+    WHEN 'MJ2204' THEN '/assets/images/game/items/mj_shop_item_sell_ryu_08.png'
+END,
+sort_order = CASE sub_code
+    WHEN 'MJ100' THEN 10 WHEN 'MJ101' THEN 20 WHEN 'MJ102' THEN 30
+    WHEN 'MJ103' THEN 40 WHEN 'MJ104' THEN 50 WHEN 'MJ205' THEN 60
+    WHEN 'MJ2001' THEN 100 WHEN 'MJ2002' THEN 110 WHEN 'MJ2003' THEN 120 WHEN 'MJ2004' THEN 130
+    WHEN 'MJ2101' THEN 140 WHEN 'MJ2102' THEN 150 WHEN 'MJ2103' THEN 160 WHEN 'MJ2104' THEN 170
+    WHEN 'MJ2201' THEN 180 WHEN 'MJ2202' THEN 190 WHEN 'MJ2203' THEN 200 WHEN 'MJ2204' THEN 210
+END
+WHERE item_code IN ('MJ100', 'MJ101', 'MJ102', 'MJ103', 'MJ104', 'MJ105', 'MJ20', 'MJ21', 'MJ22');
+
 -- 初期データ: custom_item_master
 INSERT INTO custom_item_master
     (custom_id, kind, item_name, is_valid, created_at, updated_at)

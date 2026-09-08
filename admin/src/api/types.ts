@@ -42,6 +42,17 @@ export interface CashProduct {
   sortOrder: number
 }
 
+export interface ConvenienceItem {
+  itemCode: string
+  sellCode: string
+  itemName: string
+  cashPrice: number
+  description: string
+  imageUrl: string
+  sortOrder: number
+  isOnSale: boolean
+}
+
 export interface DailyRevenue {
   revenueDate: string
   platform: string

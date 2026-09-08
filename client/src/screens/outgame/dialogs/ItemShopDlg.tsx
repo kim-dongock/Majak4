@@ -54,6 +54,10 @@ import ResponsiveItemShopDlg from './ResponsiveItemShopDlg'
 
 const IMG = '/assets/images/game'
 const IMG_CUSTOM_ITEM = `${IMG}/items/custom`  // mj_custom_{customId}.png
+
+function customItemImageUrl(customId: number) {
+  return `${IMG_CUSTOM_ITEM}/mj_custom_${String(customId).padStart(2, '0')}.png`
+}
 const SHOP_W = 662
 const SHOP_H = 514
 
@@ -432,7 +436,7 @@ export function LegacyItemShopDlg({
         {/* ── BUY_CUSTOM タブ — L274-301 */}
         {tabNo === BUY_CUSTOM && customSlice.map((item, i) => {
           const x = ox(i), y = oy(i)
-          const imgUrl = `${IMG_CUSTOM_ITEM}/mj_custom_${item.customId}.png`
+          const imgUrl = customItemImageUrl(item.customId)
           const canBuy = cashCount >= item.price && item.purchased === 0
           return (
             <div key={`bc-${item.customId}`}>

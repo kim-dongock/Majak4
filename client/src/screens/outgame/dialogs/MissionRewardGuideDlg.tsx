@@ -56,8 +56,6 @@ export default function MissionRewardGuideDlg({ onClose }: Props) {
       .mission-reward-guide__rewards span { color: #8b6b20; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
       .mission-reward-guide__rewards strong { color: #a64a27; font-size: var(--majak-popup-font-emphasis); line-height: var(--majak-popup-leading-emphasis); }
       .mission-reward-guide__note { margin: 11px 0 0; color: #607069; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
-      .mission-reward-guide footer { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid #c8d0c2; background: #e8ede4; }
-      .mission-reward-guide footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); border: 1px solid #839087; border-radius: 3px; color: #32453e; background: transparent; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; }
       .mission-reward-guide--mobileLandscape, .mission-reward-guide--mobilePortrait { width: 100%; max-height: 100%; overflow: auto; }
       .mission-reward-guide-overlay--mobileLandscape, .mission-reward-guide-overlay--mobilePortrait { padding: 0; }
       .mission-reward-guide--mobileLandscape main, .mission-reward-guide--mobilePortrait main { gap: 5px; padding: 8px; }

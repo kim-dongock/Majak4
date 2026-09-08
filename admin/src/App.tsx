@@ -11,6 +11,7 @@ import PendingApprovalPage from './pages/users/PendingApprovalPage'
 import GemAdjustPage from './pages/gem/GemAdjustPage'
 import GemStatsPage from './pages/gem/GemStatsPage'
 import GemProductPage from './pages/master/GemProductPage'
+import ConvenienceItemPage from './pages/master/ConvenienceItemPage'
 import ChannelListPage from './pages/master/ChannelListPage'
 import NoticePage from './pages/operations/NoticePage'
 import AnnouncementPage from './pages/operations/AnnouncementPage'
@@ -36,6 +37,7 @@ export default function App() {
               <Route path="cash/stats" element={<GemStatsPage />} />
               {/* マスターデータ */}
               <Route path="master/cash-products" element={<GemProductPage />} />
+              <Route path="master/convenience-items" element={<ConvenienceItemPage />} />
               <Route path="master/channels" element={<ChannelListPage />} />
               {/* 運営ツール */}
               <Route path="operations/notice" element={<NoticePage />} />

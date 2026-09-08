@@ -83,18 +83,6 @@ public class PushOkButtonCommand : ICommand
         }
 
 
-        long roomCharge = GameLogicService.GetRoomCharge(room);
-        if (player.GamMoney < roomCharge)
-        {
-            var lackPayload = new Dictionary<string, object>
-            {
-                [Key.LackMoney] = 1L,
-                ["message"] = $"場代 {roomCharge:N0} GPを支払うためのGPが不足しています。現在のGP: {player.GamMoney:N0} GP\nロビーの「無料GP補充」をご利用ください。",
-            };
-            await ctx.Caller.SendAsync(Cmd.PushOkButton, lackPayload);
-            return;
-        }
-
         if ((room.IsBeginnerChannel && (player.RegularRecord.MatchCnt > 10 || player.GamMoney < 0))
             || (room.IsGradeChannel && !_ratingService.CheckEnterGradeMode(player.GradeRecord.Grade, player.GamMoney, room.SubId)))
         {
@@ -545,20 +533,6 @@ public class RoomEnterRoomCommand : ICommand
         bool isContinuePlayer = room.State == GameRoomState.Playing
             && _session.CanReconnectToRoom(room, player.MemberNo);
         bool shouldAnnounceRejoin = isContinuePlayer;
-
-        if (room.State == GameRoomState.Waiting && !alreadyInRoom)
-        {
-            long roomCharge = GameLogicService.GetRoomCharge(room);
-            if (player.GamMoney < roomCharge)
-            {
-                await SendRoomConnectError(
-                    ctx,
-                    requestRoomId,
-                    $"場代 {roomCharge:N0} GPを支払うためのGPが不足しています。現在のGP: {player.GamMoney:N0} GP\nロビーの「無料GP補充」をご利用ください。",
-                    LegacyErrorCode.MajAutoEnterRoomFailed);
-                return;
-            }
-        }
 
         if (!alreadyInRoom && !isPlayingSeatReconnect && !isContinuePlayer
             && !string.IsNullOrEmpty(room.Password) && room.Password != roomPassword)

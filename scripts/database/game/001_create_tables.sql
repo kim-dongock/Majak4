@@ -348,6 +348,8 @@ CREATE TABLE billing_item_master (
     age_limit       SMALLINT UNSIGNED NULL,
     sex_code        CHAR(1)         NULL,
     item_description VARCHAR(300)   NULL,
+    image_url       VARCHAR(255)   NOT NULL DEFAULT '',
+    sort_order      INT UNSIGNED   NOT NULL DEFAULT 0,
     give_resource   VARCHAR(20)     NULL,
     give_money_type CHAR(1)         NULL,
     function_box    VARCHAR(200)    NULL,

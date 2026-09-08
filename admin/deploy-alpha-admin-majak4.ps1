@@ -6,7 +6,7 @@
 param(
     [string]$S3Bucket = "alpha-admin-majak4-hange-jp",
     [string]$SiteUrl = "https://alpha-admin-majak4.hange.jp",
-    [string]$AwsProfile = "majak4",
+    [string]$AwsProfile = "hange_majak4",
     [string]$Region = "ap-northeast-1",
     [string]$CloudFrontId = "E73OKNEALFSPB",
     [switch]$SkipCertificateCheck

@@ -28,7 +28,7 @@ import OptDlg, { DEFAULT_OPTION, optionToString, type MJOption, type MJOptionMas
 import RoomCreateDlg, { type RoomCreateInfo } from './dialogs/RoomCreateDlg'
 import CfgDlg, { loadMajakConfig, saveMajakConfig, type MJConfig } from './dialogs/CfgDlg'
 import ItemShopDlg from './dialogs/ItemShopDlg'
-import ConfirmItemDlg, { normalizeRawMajItem, type RawMajItem } from './dialogs/ConfirmItemDlg'
+import { normalizeRawMajItem, type RawMajItem } from './dialogs/ConfirmItemDlg'
 import CustomDlg from './dialogs/CustomDlg'
 import MissionDlg from './dialogs/MissionDlg'
 import CollectionDlg from './dialogs/CollectionDlg'
@@ -1997,7 +1997,6 @@ export default function LobbyScreen() {
   const [showCollection, setShowCollection] = useState(false)
   const [showCurrencyHistory, setShowCurrencyHistory] = useState(false)
   const [showShop,     setShowShop]     = useState(false)
-  const [showConfirm,  setShowConfirm]  = useState(false)
   const [showMission,  setShowMission]  = useState(false)
   const [showAccuse,   setShowAccuse]   = useState(false)
   const [showTournamentRegist, setShowTournamentRegist] = useState(false)
@@ -3450,6 +3449,8 @@ export default function LobbyScreen() {
           currentCharaId={customEquipIds.charaId}
           currentHaiId={customEquipIds.haiId}
           currentBgId={customEquipIds.bgId}
+          majItems={majItems}
+          onMajItemsChange={setMajItems}
           onEquipChange={({ itemId, itemType }) => {
             setCustomEquipIds(prev => {
               const next = itemType >= 30 && itemType < 40
@@ -3498,16 +3499,10 @@ export default function LobbyScreen() {
             setGamMoney(gamMoney)
             setGemCount(gemCount)
           }}
-          onConfirmItem={() => setShowConfirm(true)}
-        />
-      )}
-
-      {/* CMJConfirmItemDlg: ItemShopDlg::OnBtnConfirmItem */}
-      {showConfirm && (
-        <ConfirmItemDlg
-          majItems={majItems}
-          onMajItemsChange={setMajItems}
-          onClose={() => setShowConfirm(false)}
+          onConfirmItem={() => {
+            setShowShop(false)
+            setShowCustom(true)
+          }}
         />
       )}
     </>
@@ -3732,7 +3727,9 @@ export default function LobbyScreen() {
           </div>
           {useResponsiveDesktopLayout && (
             <MobileUserSummary
+              cashCount={cashCount}
               gameMoney={gamMoney}
+              gemCount={gemCount}
               assetTitle={slevel}
               achievementTitle={majakTitleName}
               achievementTitleId={majakTitleId}
@@ -3876,7 +3873,9 @@ export default function LobbyScreen() {
           </div>
           {useResponsiveDesktopLayout && (
             <MobileUserSummary
+              cashCount={cashCount}
               gameMoney={gamMoney}
+              gemCount={gemCount}
               assetTitle={slevel}
               achievementTitle={majakTitleName}
               achievementTitleId={majakTitleId}
