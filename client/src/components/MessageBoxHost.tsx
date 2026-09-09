@@ -45,20 +45,20 @@ export default function MessageBoxHost() {
     fontFamily: FONT,
     fontSize: 'var(--majak-font-13)',
     fontWeight: 700,
-    color: '#fff',
-    background: '#1f6f5b',
-    border: 0,
+    color: 'var(--majak-dialog-header-text-color)',
+    background: 'var(--majak-popup-command-color)',
+    border: '1px solid var(--majak-popup-command-border-color)',
     borderRadius: 6,
-    boxShadow: '0 8px 18px rgba(31, 111, 91, 0.22)',
+    boxShadow: '0 8px 18px color-mix(in srgb, var(--majak-popup-command-color) 28%, transparent)',
     cursor: 'pointer',
   }
 
   const secondaryButtonStyle: React.CSSProperties = {
     ...buttonStyle,
-    color: '#26322f',
-    background: '#eef5f2',
+    color: 'var(--majak-dialog-panel-text-color)',
+    background: 'var(--majak-popup-panel-color)',
     boxShadow: 'none',
-    border: '1px solid #c8d8d2',
+    border: '1px solid var(--majak-popup-panel-border-color)',
   }
 
   return (

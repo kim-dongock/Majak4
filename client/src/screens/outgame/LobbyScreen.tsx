@@ -1193,6 +1193,7 @@ function MemberListPanel({
       <div className="majak-desktop-lobby-member-heading">メンバー一覧</div>
       {/* 背景 mj_userlist_bg.png (336×403) */}
       <img
+        className="majak-desktop-lobby-members__background"
         src={`${IMG}/mj_userlist_bg.png`}
         alt=""
         draggable={false}
@@ -1203,7 +1204,7 @@ function MemberListPanel({
       <div style={{
         position: 'absolute', left: 196, top: 8,
         width: 130,
-        fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(10px * var(--majak-type-scale))', color: '#000',
+        fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(10px * var(--majak-type-scale))',
         textAlign: 'right', lineHeight: '12px',
       }}>
         <div>全体:{totalMemberCount}名</div>
@@ -1265,9 +1266,9 @@ function MemberListPanel({
         position: 'absolute', left: 1, top: 43,
         width: 334, height: 18,
         display: 'flex', alignItems: 'center',
-        background: '#f0f0f0',
+        background: '#ffffff',
         fontFamily: 'var(--majak-font-family-ui)', fontSize: 'calc(11px * var(--majak-type-scale))', color: '#000',
-        border: '1px solid #b8b8b8',
+        border: '1px solid var(--majak-popup-panel-border-color)',
         boxSizing: 'border-box',
       }}>
         <span style={{ width: nicknameColumnWidth, paddingLeft: 4 }}>ニックネーム</span>
@@ -1283,8 +1284,8 @@ function MemberListPanel({
           height: 377,
           overflowY: 'auto',
           overflowX: 'hidden',
-          background: '#fff',
-          border: '1px solid #b8b8b8',
+          background: '#ffffff',
+          border: '1px solid var(--majak-popup-panel-border-color)',
           borderTop: 'none',
           boxSizing: 'border-box',
         }}
@@ -1292,6 +1293,7 @@ function MemberListPanel({
         {members.map((member, index) => (
           <div
             key={`${member.pix}-${index}`}
+            className={`majak-desktop-lobby-member${selectedMember === member.pix ? ' is-selected' : ''}`}
             onClick={() => onSelectMember(selectedMember === member.pix ? null : member.pix)}
             onDoubleClick={() => onViewProfile(member.pix)}
             style={{
@@ -1302,25 +1304,26 @@ function MemberListPanel({
               cursor: 'pointer',
               fontFamily: 'var(--majak-font-family-ui)',
               fontSize: 'calc(11px * var(--majak-type-scale))',
-              color: selectedMember === member.pix ? '#ffffff' : '#000',
-              borderBottom: '1px solid #ccc',
-              background: selectedMember === member.pix ? '#356246' : '#fff',
+              color: selectedMember === member.pix ? 'var(--majak-dialog-header-text-color)' : 'var(--majak-dialog-panel-text-color)',
+              borderBottom: '1px solid var(--majak-popup-panel-border-color)',
+              background: selectedMember === member.pix ? 'var(--majak-popup-command-color)' : '#ffffff',
             }}
           >
             {/* アバターサムネイル — AP-08: getShortAvatarUrl (接続者リスト用) */}
             <img
               src={getShortAvatarUrl(member.avatarId)}
+              className="majak-desktop-lobby-member__avatar"
               alt=""
               draggable={false}
               onError={event => { handleShortAvatarError(event.currentTarget, member.avatarId, member.sex === 'female' ? 'female' : 'male') }}
               style={{
-                width: 22,
-                height: 22,
+                width: 30,
+                height: 30,
                 objectFit: 'contain',
                 objectPosition: 'center',
                 imageRendering: 'pixelated',
                 flexShrink: 0,
-                marginLeft: 4,
+                marginLeft: 3,
               }}
             />
             <span style={{ width: nicknameColumnWidth - 28, paddingLeft: 2, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
@@ -1330,8 +1333,8 @@ function MemberListPanel({
             <span style={{ width: locationColumnWidth }}>{member.location}</span>
             {selectedMember === member.pix && (
               <span style={{ display: 'flex', flexBasis: '100%', justifyContent: 'flex-end', gap: 3, padding: '2px 3px 3px' }} onClick={event => event.stopPropagation()}>
-                <button type="button" onClick={() => onStartOneToOne(member.pix)} style={{ height: 23, border: '1px solid #b8b8b8', background: '#f6f6f6', color: '#12251a', fontFamily: 'inherit', fontSize: '10px', whiteSpace: 'nowrap' }}>1:1チャット</button>
-                <button type="button" onClick={() => onViewProfile(member.pix)} style={{ height: 23, border: '1px solid #b8b8b8', background: '#f6f6f6', color: '#12251a', fontFamily: 'inherit', fontSize: '10px', whiteSpace: 'nowrap' }}>プロフィール</button>
+                <button type="button" onClick={() => onStartOneToOne(member.pix)} style={{ height: 23, border: '1px solid var(--majak-popup-command-border-color)', background: 'var(--majak-popup-command-color)', color: 'var(--majak-dialog-header-text-color)', fontFamily: 'inherit', fontSize: '10px', whiteSpace: 'nowrap' }}>1:1チャット</button>
+                <button type="button" onClick={() => onViewProfile(member.pix)} style={{ height: 23, border: '1px solid var(--majak-popup-command-border-color)', background: 'var(--majak-popup-command-color)', color: 'var(--majak-dialog-header-text-color)', fontFamily: 'inherit', fontSize: '10px', whiteSpace: 'nowrap' }}>プロフィール</button>
               </span>
             )}
           </div>

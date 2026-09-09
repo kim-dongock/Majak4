@@ -1316,6 +1316,8 @@ export default function RoomScreen() {
         fatalRoomError: true,
       }))
       navigate(`/channel/${channelId ?? ''}/lobby`, { replace: true })
+      const isExistingRoomEntry = !createMode && locState.mode !== 'auto' && locState.mode !== 'view'
+      if (isExistingRoomEntry) return
       const rawMessage = data.k2e ?? data.message
       const message = typeof rawMessage === 'string' && rawMessage.trim() && rawMessage.trim() !== 'エラー'
         ? rawMessage.trim()

@@ -230,7 +230,6 @@ function ResponsiveCustomInventory({
     { value: TAB_GENERAL, label: 'ゲーム用' },
     { value: TAB_CHARA, label: 'キャラ' },
     { value: TAB_HAI, label: '牌' },
-    { value: TAB_BG, label: '背景' },
     { value: TAB_OTHER, label: 'その他' },
   ]
 
@@ -287,7 +286,7 @@ function ResponsiveCustomInventory({
       .custom-inventory__header { display: flex; align-items: center; justify-content: space-between; padding: 14px 22px; color: #fff; background: #174b43; }
       .custom-inventory__header h2 { margin: 0; font-size: var(--majak-popup-font-title); font-weight: 700; letter-spacing: 0; line-height: var(--majak-popup-leading-title); }
       .custom-inventory__header button { width: var(--majak-popup-close-size); height: var(--majak-popup-close-size); padding: 0; box-sizing: border-box; border: 1px solid rgba(255,255,255,.75); color: #fff; background: transparent; font-size: var(--majak-popup-close-font-size); line-height: 1; cursor: pointer; }
-      .custom-inventory__tabs { display: grid; grid-template-columns: repeat(5, 1fr); border-bottom: 1px solid #a5afa5; background: #dbe0d7; }
+      .custom-inventory__tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid #a5afa5; background: #dbe0d7; }
       .custom-inventory__tabs button { height: var(--majak-popup-tab-height); box-sizing: border-box; border: 0; border-right: 1px solid #b7c0b6; color: #31473f; background: transparent; font: 700 var(--majak-popup-tab-font-size)/1 var(--majak-font-family-ui); cursor: pointer; }
       .custom-inventory__tabs button.is-active { color: #fff; background: #b84228; }
       .custom-inventory__content { min-height: 0; flex: 1; padding: 18px; overflow: auto; }
@@ -343,7 +342,7 @@ export default function CustomDlg({
   onClose,
 }: Props) {
   const player = useAuthStore(state => state.player)
-  const [tab,   setTab]   = useState(initialTab)
+  const [tab,   setTab]   = useState(initialTab === TAB_BG ? TAB_GENERAL : initialTab)
   const [items, setItems] = useState<CustomItem[]>([])
   const [page,  setPage]  = useState(1)
   const [generalPendingItemCode, setGeneralPendingItemCode] = useState<string | null>(null)
@@ -363,7 +362,6 @@ export default function CustomDlg({
   /* 現在の装備 ID をタブに応じて選択 */
   const currentId = tab === TAB_CHARA ? currentCharaId
                   : tab === TAB_HAI   ? currentHaiId
-                  : tab === TAB_BG    ? currentBgId
                   : 0
 
   /* ドラッグ移動 (OnNcHitTest: pt.y < 31 → HTCAPTION 相当) */
@@ -423,7 +421,6 @@ export default function CustomDlg({
       const filtered = raw.filter(x => {
         const itemType = Number(x.nKind ?? 0)
         if (tab === TAB_GENERAL) return false
-        if (tab === TAB_BG) return isBg(itemType)
         if (tab === TAB_HAI) return isHai(itemType)
         if (tab === TAB_CHARA) return isChara(itemType)
         return !isBg(itemType) && !isHai(itemType) && !isChara(itemType)
@@ -522,7 +519,6 @@ export default function CustomDlg({
   const tabDefs = [
     { src: `${IMG}/mj_shp_tab_06.png`, x: 14,  tab: TAB_CHARA, label: 'キャラ' },
     { src: `${IMG}/mj_shp_tab_07.png`, x: 159, tab: TAB_HAI,   label: '牌'   },
-    { src: `${IMG}/mj_shp_tab_08.png`, x: 304, tab: TAB_BG,    label: '背景' },
     { src: `${IMG}/mj_shp_tab_09.png`, x: 449, tab: TAB_OTHER, label: 'その他' },
   ]
 

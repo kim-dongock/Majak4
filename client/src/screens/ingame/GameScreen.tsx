@@ -30,7 +30,8 @@ import { getTabSessionId } from '../../utils/tabSession'
 import { GAME_AUTO_CONTROL_EVENT, GAME_KYOKU_STARTED_EVENT } from '../../game/autoControl'
 import { getLegacyKyoResultDelayMs } from '../../game/legacyAnimations'
 import { playMajakChat, playMajakSfx, playMajakSid, SID_DRAW, SID_EXIT, SID_JOIN, stopMajakBgm } from '../../utils/majakSound'
-import { applyTengokuTextColor, getLegacyBoardSoundSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
+import { loadMajakConfig } from '../outgame/dialogs/CfgDlg'
+import { applyTengokuTextColor, getLegacyBoardSkinId, getLegacyBoardSoundSkinId, getLegacyFullUiSkinId, getLegacyRoomPalette, isTengokuBoardSkin } from '../../utils/legacySkinPalette'
 
 const CMD_GAME_PLAY = 'playing'
 const CMD_AUTO_START = 'mjkc4e'
@@ -902,6 +903,16 @@ export default function GameScreen() {
   const customBgId = routeCustomBgId > 0 ? routeCustomBgId : fallbackSkin.bgId
   const customBoardType = routeCustomBoardType > 0 ? routeCustomBoardType : fallbackSkin.bgType
   const customHaiId = routeCustomHaiId > 0 ? routeCustomHaiId : fallbackSkin.haiId
+  const themeConfig = loadMajakConfig()
+  const themeBoardColor = getLegacyBoardSkinId(customBgId, customBoardType) == null
+    ? themeConfig.themeBaseColor
+    : undefined
+  const themeUiColor = themeConfig.themeBaseColor
+  const fullUiSkinId = getLegacyFullUiSkinId(customBgId, customBoardType)
+  const fullUiSkinSuffix = String(fullUiSkinId ?? customBgId).padStart(2, '0')
+  const gameButtonSrc = (skinKey: string) => fullUiSkinId != null
+    ? `${IMG}/skin/${fullUiSkinId}/${skinKey}_${fullUiSkinSuffix}.png`
+    : `${IMG}/${skinKey}.png`
   const tengokuBoardSkin = isTengokuBoardSkin(customBgId, customBoardType)
   const legacyPalette = getLegacyRoomPalette(tengokuBoardSkin)
   const boardSoundSkinId = getLegacyBoardSoundSkinId(customBgId, customBoardType)
@@ -1165,13 +1176,15 @@ export default function GameScreen() {
       isViewer: Boolean(gameState?.isViewer),
       customBgId,
       customBoardType,
+      themeBoardColor,
+      themeUiColor,
       customHaiId,
       gemGame: asNumber(gameState?.gemGame ?? navState?.gemGame, 0),
       skipInitialRoomEnter: Boolean(gameState?.skipInitialRoomEnter || gameState?.players?.length),
       requestInitialGameResync: Boolean(gameState?.skipInitialRoomEnter),
     })
     return () => destroyGame()
-  }, [customBgId, customHaiId, roomId, signalReady])
+  }, [customBgId, customHaiId, roomId, signalReady, themeBoardColor, themeUiColor])
 
   useEffect(() => {
     if (!signalReady) return
@@ -2201,25 +2214,25 @@ export default function GameScreen() {
 
       {showGameControlButtons && (
         <div style={{ position: 'absolute', left: 0, top: 0, width: GAME_WIDTH, height: GAME_HEIGHT, pointerEvents: 'none', zIndex: 130, overflow: 'hidden' }}>
-          <GameSpriteButton src={`${IMG}/mj_btAutoPass.png`} frameW={71} frameH={28} x={802} y={677} checked={autoPass} disabled={!canUseAutoControl || proxyPlay} onClick={() => setAutoPass(prev => !prev)} title="オートパス" />
-          <GameSpriteButton src={`${IMG}/mj_btAutoHoura.png`} frameW={71} frameH={28} x={874} y={677} checked={autoHora} disabled={!canUseAutoControl || proxyPlay} onClick={() => setAutoHora(prev => !prev)} title="オート和了" />
-          <GameSpriteButton src={`${IMG}/mj_btDaiuchi.png`} frameW={71} frameH={56} x={946} y={677} checked={proxyPlay} disabled={!canUseAutoControl} onClick={onToggleProxyPlay} title="代打ち" />
-          <GameSpriteButton src={`${IMG}/mj_btTsumoGiri.png`} frameW={71} frameH={28} x={802} y={705} checked={autoTsumoGiri} disabled={!canUseAutoControl || proxyPlay} onClick={() => setAutoTsumoGiri(prev => !prev)} title="ツモ切り" />
+          <GameSpriteButton src={gameButtonSrc('mj_btAutoPass')} frameW={71} frameH={28} x={802} y={677} checked={autoPass} disabled={!canUseAutoControl || proxyPlay} onClick={() => setAutoPass(prev => !prev)} title="オートパス" />
+          <GameSpriteButton src={gameButtonSrc('mj_btAutoHoura')} frameW={71} frameH={28} x={874} y={677} checked={autoHora} disabled={!canUseAutoControl || proxyPlay} onClick={() => setAutoHora(prev => !prev)} title="オート和了" />
+          <GameSpriteButton src={gameButtonSrc('mj_btDaiuchi')} frameW={71} frameH={56} x={946} y={677} checked={proxyPlay} disabled={!canUseAutoControl} onClick={onToggleProxyPlay} title="代打ち" />
+          <GameSpriteButton src={gameButtonSrc('mj_btTsumoGiri')} frameW={71} frameH={28} x={802} y={705} checked={autoTsumoGiri} disabled={!canUseAutoControl || proxyPlay} onClick={() => setAutoTsumoGiri(prev => !prev)} title="ツモ切り" />
         </div>
       )}
 
       {isViewerUser && (
         <div style={{ position: 'absolute', left: 0, top: 0, width: GAME_WIDTH, height: GAME_HEIGHT, pointerEvents: 'none', zIndex: 130, overflow: 'hidden' }}>
-          <GameSpriteButton src={`${IMG}/mj_btPaifuRot3.png`} frameW={46} frameH={31} x={118} y={647} onClick={() => onViewerRotate(3)} title="回転3" hidden={!isViewerUser} />
-          <GameSpriteButton src={`${IMG}/mj_btPaifuRot1.png`} frameW={46} frameH={31} x={164} y={647} onClick={() => onViewerRotate(1)} title="回転1" hidden={!isViewerUser} />
-          <GameSpriteButton src={`${IMG}/mj_btLookSutehai.png`} frameW={116} frameH={40} x={435} y={647} onClick={() => {}} title="捨て牌表示" hidden={!isViewerUser} disabled />
-          <GameSpriteButton src={`${IMG}/mj_btExitGame.png`} frameW={116} frameH={40} x={558} y={647} onClick={() => { void exitGameToLobby() }} title="退室" hidden={!isViewerUser} />
-          <GameSpriteButton src={`${IMG}/mj_btPaifuHide.png`} frameW={92} frameH={25} x={118} y={676} checked={viewerHandHidden} disabled={!viewerHandOpenEnabled} onClick={onViewerHandToggle} title="手牌表示切替" hidden={!isViewerUser} />
+          <GameSpriteButton src={gameButtonSrc('mj_btPaifuRot3')} frameW={46} frameH={31} x={118} y={647} onClick={() => onViewerRotate(3)} title="回転3" hidden={!isViewerUser} />
+          <GameSpriteButton src={gameButtonSrc('mj_btPaifuRot1')} frameW={46} frameH={31} x={164} y={647} onClick={() => onViewerRotate(1)} title="回転1" hidden={!isViewerUser} />
+          <GameSpriteButton src={gameButtonSrc('mj_btLookSutehai')} frameW={116} frameH={40} x={435} y={647} onClick={() => {}} title="捨て牌表示" hidden={!isViewerUser} disabled />
+          <GameSpriteButton src={gameButtonSrc('mj_btExitGame')} frameW={116} frameH={40} x={558} y={647} onClick={() => { void exitGameToLobby() }} title="退室" hidden={!isViewerUser} />
+          <GameSpriteButton src={gameButtonSrc('mj_btPaifuHide')} frameW={92} frameH={25} x={118} y={676} checked={viewerHandHidden} disabled={!viewerHandOpenEnabled} onClick={() => onViewerHandToggle} title="手牌表示切替" hidden={!isViewerUser} />
         </div>
       )}
 
       <div style={{ position: 'absolute', left: 0, top: 0, width: GAME_WIDTH, height: GAME_HEIGHT, pointerEvents: 'none', zIndex: 131, overflow: 'hidden' }}>
-        <GameSpriteButton src={`${IMG}/mj_btInvite.png`} frameW={106} frameH={26} x={803} y={649} disabled={inviteDisabled} onClick={openInviteList} title="招待" />
+        <GameSpriteButton src={gameButtonSrc('mj_btInvite')} frameW={106} frameH={26} x={803} y={649} disabled={inviteDisabled} onClick={openInviteList} title="招待" />
       </div>
 
       {showInviteDialog && (

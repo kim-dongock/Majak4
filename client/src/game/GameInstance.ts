@@ -49,6 +49,10 @@ export interface CreateGameOptions {
   customBgId?: number
   /** 装備中カスタム背景タイプ (CUSTOM_ITEM_TYPE_BG_*) */
   customBoardType?: number
+  /** カスタム背景未装備時に標準卓背景へ適用するテーマ色 */
+  themeBoardColor?: string
+  /** 操作ボタンとタイマーに適用するテーマ色 */
+  themeUiColor?: string
   /** 装備中カスタム牌 (CUSTOMITEM_HAI) */
   customHaiId?: number
   /** 龍珠ゲーム開始演出 (0=なし, 1=通常, 2=大龍珠) */
@@ -92,6 +96,8 @@ function sameGameOptions(a: CreateGameOptions, b: CreateGameOptions): boolean {
     a.trainingRecommendations === b.trainingRecommendations &&
     a.customBgId === b.customBgId &&
     a.customBoardType === b.customBoardType &&
+    a.themeBoardColor === b.themeBoardColor &&
+    a.themeUiColor === b.themeUiColor &&
     a.customHaiId === b.customHaiId &&
     a.gemGame === b.gemGame &&
     a.skipInitialRoomEnter === b.skipInitialRoomEnter &&
@@ -103,6 +109,8 @@ function sameResourceOptions(a: CreateGameOptions, b: CreateGameOptions): boolea
   return a.layoutMode === b.layoutMode &&
     a.customBgId === b.customBgId &&
     a.customBoardType === b.customBoardType &&
+    a.themeBoardColor === b.themeBoardColor &&
+    a.themeUiColor === b.themeUiColor &&
     a.customHaiId === b.customHaiId
 }
 

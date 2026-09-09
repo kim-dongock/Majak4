@@ -1162,6 +1162,17 @@ button.majak-press-feedback {
   --majak-popup-command-color: #1c6b58;
   --majak-popup-command-hover-color: #247c67;
   --majak-popup-command-border-color: #255d4e;
+  --majak-frame-chrome-color: #1b5a4b;
+  --majak-frame-border-color: #255d4e;
+  --majak-frame-shadow-color: #0b3b32;
+  --majak-frame-header-color: #1c6b58;
+  --majak-frame-header-divider-color: #9b7a3c;
+  --majak-frame-label-color: #f5f0e4;
+  --majak-user-summary-color: #fff8e8;
+  --majak-user-summary-surface-color: #164f43;
+  --majak-user-summary-border-color: #9b7a3c;
+  --majak-user-summary-label-color: #f5f0e4;
+  --majak-user-summary-label-text-color: #26352f;
   --majak-dialog-panel-color: var(--majak-popup-panel-color);
   --majak-dialog-panel-border-color: var(--majak-popup-panel-border-color);
   --majak-dialog-panel-text-color: #244137;
@@ -1558,6 +1569,53 @@ button.majak-press-feedback {
   font-family: var(--majak-font-family-ui);
 }
 
+/* Keep all popup variants on the selected theme even when a dialog has legacy header colors. */
+:is(
+  .majak-popup-titlebar,
+  .majak-mobile-dialog-titlebar,
+  .majak-collection-header,
+  .majak-ranking-dialog__header,
+  .majak-player-profile__hero,
+  .majak-player-profile__titlebar,
+  .responsive-owned-items__header,
+  .custom-inventory__header,
+  .mission-dialog__header,
+  .mission-reward-guide header,
+  .responsive-shop__header,
+  .shop-transaction > header,
+  .registration-panel__header,
+  .majak-invite-request__header,
+  .majak-invite-dialog__header,
+  .majak-game-invite-dialog__header,
+  .majak-result-header
+) {
+  color: var(--majak-dialog-header-text-color) !important;
+  background: var(--majak-popup-title-color) !important;
+  border-color: var(--majak-popup-panel-border-color) !important;
+}
+
+:is(
+  .majak-popup-titlebar,
+  .majak-mobile-dialog-titlebar,
+  .majak-collection-header,
+  .majak-ranking-dialog__header,
+  .majak-player-profile__hero,
+  .majak-player-profile__titlebar,
+  .responsive-owned-items__header,
+  .custom-inventory__header,
+  .mission-dialog__header,
+  .mission-reward-guide header,
+  .responsive-shop__header,
+  .shop-transaction > header,
+  .registration-panel__header,
+  .majak-invite-request__header,
+  .majak-invite-dialog__header,
+  .majak-game-invite-dialog__header,
+  .majak-result-header
+) :is(h1, h2, h3, p, span, strong) {
+  color: inherit !important;
+}
+
 :is(
   .majak-popup-actions,
   .majak-collection-footer,
@@ -1633,7 +1691,7 @@ body {
 }
 
 .majak-screen-surface {
-  background-color: var(--majak-screen-surface-color);
+  background-color: var(--majak-screen-surface-color) !important;
   background-image: var(--majak-screen-surface-image);
   background-position: var(--majak-screen-surface-position);
   background-size: var(--majak-screen-surface-size);
@@ -1851,9 +1909,9 @@ body {
   inset: 0;
   z-index: 1000;
   content: '';
-  border: 2px solid #0b552a;
+  border: 2px solid var(--majak-frame-border-color);
   box-sizing: border-box;
-  box-shadow: inset 0 0 0 2px #063618;
+  box-shadow: inset 0 0 0 2px var(--majak-frame-shadow-color);
   pointer-events: none;
 }
 
@@ -1867,8 +1925,8 @@ body {
   padding: 12px 20px;
   box-sizing: border-box;
   color: #ffffff;
-  background: #176b2a;
-  border-bottom: 1px solid rgba(227, 255, 184, .42);
+  background: var(--majak-frame-header-color);
+  border-bottom: 1px solid var(--majak-frame-header-divider-color);
 }
 
 .majak-responsive-desktop-frame:has(.majak-inline-game-stage) > .majak-responsive-desktop-frame__bar {
@@ -2174,7 +2232,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0;
-  color: #f4f7e9;
+  color: var(--majak-user-summary-color);
   font-size: var(--majak-text-md);
   line-height: var(--majak-leading-tight);
 }
@@ -2217,7 +2275,7 @@ body {
   box-sizing: border-box;
   border: 0;
   border-radius: 0;
-  color: #bcd695;
+  color: var(--majak-frame-label-color);
   background: transparent;
   font-size: var(--majak-text-xs);
   font-weight: var(--majak-weight-strong);
@@ -2408,14 +2466,14 @@ body {
   min-height: 0;
   flex: none;
   overflow: hidden;
-  border: 1px solid #d8b46d;
+  border: 1px solid var(--majak-user-summary-border-color);
   background: #ffffff;
   box-shadow: inset 0 0 0 3px rgba(255, 251, 230, .72), 0 1px 0 rgba(0, 0, 0, .3);
 }
 
 .majak-desktop-channel-group .majak-mobile-user-summary__avatar,
 .majak-desktop-lobby-select .majak-mobile-user-summary__avatar {
-  border: 1px solid #d8b46d;
+  border: 1px solid var(--majak-user-summary-border-color);
   border-radius: 3px;
   box-sizing: border-box;
   background: #ffffff;
@@ -2782,9 +2840,10 @@ body {
   min-height: clamp(116px, 15vw, 148px);
   grid-template-columns: var(--majak-title-avatar-width) var(--majak-title-avatar-width) repeat(2, minmax(0, 1fr));
   grid-template-rows: repeat(3, minmax(28px, auto));
-  background: #123e2c;
-  border-color: #8cab72;
-  box-shadow: inset 0 0 0 3px #286044, inset 0 1px 0 4px rgba(224, 239, 194, .14), 0 8px 20px rgba(0, 0, 0, .28);
+  color: var(--majak-user-summary-color);
+  background: var(--majak-user-summary-surface-color);
+  border-color: var(--majak-user-summary-border-color);
+  box-shadow: inset 0 0 0 3px var(--majak-frame-shadow-color), inset 0 1px 0 4px rgba(255, 255, 255, .14), 0 8px 20px rgba(0, 0, 0, .28);
 }
 
 .majak-desktop-channel-group .majak-desktop-channel-group__user-summary::before,
@@ -2808,7 +2867,7 @@ body {
 .majak-desktop-lobby-select .majak-mobile-user-summary__name-label {
   display: inline-flex;
   flex: 0 0 auto;
-  color: #bcd695;
+  color: var(--majak-frame-label-color);
   font-weight: var(--majak-weight-strong);
 }
 
@@ -2823,7 +2882,7 @@ body {
 .majak-desktop-channel-group .majak-mobile-user-summary__name-value,
 .majak-desktop-lobby-select .majak-mobile-user-summary__name-value {
   overflow: visible;
-  color: #f4f7e9;
+  color: var(--majak-user-summary-color);
   font-size: var(--majak-user-summary-value-font);
   overflow-wrap: anywhere;
   text-overflow: clip;
@@ -2861,13 +2920,13 @@ body {
 .majak-desktop-channel-group .majak-mobile-user-summary__fields b,
 .majak-desktop-lobby-select .majak-mobile-user-summary__fields b {
   flex: 0 0 auto;
-  color: #bcd695;
+  color: var(--majak-frame-label-color);
 }
 
 .majak-desktop-channel-group .majak-mobile-user-summary__fields em,
 .majak-desktop-lobby-select .majak-mobile-user-summary__fields em {
   overflow: visible;
-  color: #f4f7e9;
+  color: var(--majak-user-summary-color);
   overflow-wrap: anywhere;
   text-overflow: clip;
   white-space: normal;
@@ -3914,8 +3973,8 @@ body:has(.majak-game-screen) {
   justify-content: space-between;
   gap: 8px;
   padding: 4px max(12px, env(safe-area-inset-right)) 4px max(12px, env(safe-area-inset-left));
-  background: rgba(8, 37, 18, 0.92);
-  border-bottom: 1px solid rgba(226, 255, 185, 0.28);
+  background: var(--majak-frame-header-color);
+  border-bottom: 1px solid var(--majak-frame-header-divider-color);
   box-sizing: border-box;
 }
 
@@ -3999,8 +4058,8 @@ body:has(.majak-game-screen) {
   gap: 5px;
   padding: 3px 0;
   box-sizing: border-box;
-  background: rgba(8, 37, 18, .96);
-  box-shadow: inset 1px 0 rgba(200, 223, 160, .5), inset -1px 0 rgba(200, 223, 160, .5);
+  background: var(--majak-user-summary-surface-color);
+  box-shadow: inset 1px 0 var(--majak-user-summary-border-color), inset -1px 0 var(--majak-user-summary-border-color);
   transform: none;
 }
 
@@ -4110,8 +4169,8 @@ body:has(.majak-game-screen) {
   padding: 4px 8px;
   box-sizing: border-box;
   border-radius: 4px;
-  color: #faffef;
-  background: rgba(8, 48, 20, 0.64);
+  color: var(--majak-user-summary-color);
+  background: var(--majak-user-summary-surface-color);
   font-size: var(--majak-text-xs);
   line-height: 1.1;
 }
@@ -4134,7 +4193,7 @@ body:has(.majak-game-screen) {
   height: 44px;
   flex: 0 0 44px;
   overflow: hidden;
-  border: 1px solid rgba(207, 232, 156, .72);
+  border: 1px solid var(--majak-user-summary-border-color);
   border-radius: 3px;
   box-sizing: border-box;
   background: #ffffff;
@@ -4198,7 +4257,7 @@ body:has(.majak-game-screen) {
   min-width: 0;
   flex: 1 1 auto;
   overflow: hidden;
-  color: #d9ff8a;
+  color: var(--majak-user-summary-color);
   font-size: var(--majak-user-summary-name-font);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4228,8 +4287,8 @@ body:has(.majak-game-screen) {
   justify-content: center;
   box-sizing: border-box;
   border-radius: 3px;
-  color: #173522;
-  background: #cfe89c;
+  color: var(--majak-user-summary-label-text-color);
+  background: var(--majak-user-summary-label-color);
   font-size: var(--majak-user-summary-label-font);
   white-space: nowrap;
 }
@@ -4546,9 +4605,9 @@ body:has(.majak-game-screen) {
 .majak-mobile-room-table,
 .majak-mobile-room-side {
   min-height: 0;
-  border: 1px solid rgba(235, 255, 204, 0.36);
+  border: 1px solid var(--majak-popup-panel-border-color);
   border-radius: 6px;
-  background: rgba(8, 48, 20, 0.72);
+  background: var(--majak-user-summary-surface-color);
   box-sizing: border-box;
 }
 
@@ -4579,7 +4638,7 @@ body:has(.majak-game-screen) {
 .majak-mobile-room-table__meta {
   display: flex;
   gap: 5px;
-  color: #062b12;
+  color: var(--majak-dialog-panel-text-color);
   font-size: var(--majak-font-11);
   font-weight: 800;
 }
@@ -4590,7 +4649,7 @@ body:has(.majak-game-screen) {
   align-items: center;
   padding: 0 8px;
   border-radius: 4px;
-  background: #d9ead1;
+  background: var(--majak-popup-panel-color);
 }
 
 .majak-mobile-room-seats {
@@ -4639,20 +4698,18 @@ body:has(.majak-game-screen) {
   align-items: center;
   gap: 7px;
   padding: 6px;
-  border: 1px solid rgba(231, 255, 189, 0.28);
+  border: 1px solid var(--majak-popup-panel-border-color);
   border-radius: 5px;
-  color: #faffef;
-  background: rgba(6, 38, 16, 0.74);
+  color: var(--majak-user-summary-color);
+  background: var(--majak-frame-shadow-color);
   box-sizing: border-box;
   overflow: hidden;
 }
 
 .majak-mobile-room-seat.is-ready {
-  border-color: #e7ff83;
-  background:
-    linear-gradient(90deg, rgba(235, 255, 131, 0.32) 0 5px, transparent 5px),
-    linear-gradient(135deg, rgba(87, 143, 35, 0.92), rgba(11, 68, 24, 0.86));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 222, 0.32), 0 0 12px rgba(217, 255, 138, 0.42);
+  border-color: var(--majak-popup-panel-border-color);
+  background: var(--majak-popup-command-color);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .32), 0 0 12px var(--majak-popup-command-hover-color);
 }
 
 .majak-mobile-room-seat.is-ready::after {
@@ -4664,10 +4721,10 @@ body:has(.majak-game-screen) {
   height: 17px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(28, 74, 21, 0.7);
+  border: 1px solid var(--majak-popup-command-border-color);
   border-radius: 3px;
-  color: #14320d;
-  background: #e7ff83;
+  color: var(--majak-dialog-panel-text-color);
+  background: var(--majak-popup-panel-color);
   font-size: var(--majak-font-10);
   font-weight: 900;
   line-height: 1;
@@ -4701,14 +4758,14 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-room-seat__info span {
-  color: #f3ffe2;
+  color: var(--majak-user-summary-color);
   font-size: var(--majak-font-11);
   font-weight: 700;
 }
 
 .majak-mobile-room-seat__info em,
 .majak-mobile-room-seat__empty {
-  color: #d9ff8a;
+  color: var(--majak-frame-label-color);
   font-size: var(--majak-font-11);
   font-style: normal;
   font-weight: 800;
@@ -4719,7 +4776,7 @@ body:has(.majak-game-screen) {
   display: grid;
   place-items: center;
   min-height: 100%;
-  border: 1px dashed rgba(231, 255, 189, 0.32);
+  border: 1px dashed var(--majak-popup-panel-border-color);
   border-radius: 4px;
 }
 
@@ -4800,10 +4857,10 @@ body:has(.majak-game-screen) {
   min-height: 0;
   padding: 5px 6px;
   overflow: auto;
-  border: 1px solid rgba(231, 255, 189, 0.28);
+  border: 1px solid var(--majak-popup-panel-border-color);
   border-radius: 5px;
-  color: #061f10;
-  background: #e4f9b0;
+  color: var(--majak-dialog-panel-text-color);
+  background: var(--majak-popup-panel-color);
   font-size: var(--majak-font-11);
   font-weight: 700;
   line-height: 1.35;
@@ -4838,10 +4895,10 @@ body:has(.majak-game-screen) {
   min-width: 0;
   min-height: 30px;
   padding: 0 7px;
-  border: 1px solid #6c8a67;
+  border: 1px solid var(--majak-popup-panel-border-color);
   border-radius: 4px;
-  color: #062b12;
-  background: #f7ffe9;
+  color: var(--majak-dialog-panel-text-color);
+  background: var(--majak-popup-panel-color);
   font-size: var(--majak-font-13);
   font-weight: 700;
   box-sizing: border-box;
@@ -4854,7 +4911,7 @@ body:has(.majak-game-screen) {
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting {
-  --majak-room-surface-color: #285d48;
+  --majak-room-surface-color: var(--majak-screen-surface-color);
   --majak-room-surface-pattern:
     linear-gradient(45deg, rgba(255, 255, 255, .09) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, .09) 75%),
     linear-gradient(-45deg, rgba(0, 42, 29, .16) 25%, transparent 25%, transparent 75%, rgba(0, 42, 29, .16) 75%);
@@ -4871,9 +4928,9 @@ body:has(.majak-game-screen) {
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-table,
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-side {
-  border-color: rgba(237, 250, 221, .58);
+  border-color: var(--majak-popup-panel-border-color);
   border-radius: 6px;
-  background: rgba(12, 69, 46, .86);
+  background: var(--majak-user-summary-surface-color);
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-table {
@@ -4949,11 +5006,11 @@ body:has(.majak-game-screen) {
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-primary-actions button,
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row button {
   min-height: 40px;
-  border: 2px solid #e6bd72;
+  border: 2px solid var(--majak-popup-command-border-color);
   border-radius: 5px;
-  color: #fff9ed;
-  background: #a56839;
-  box-shadow: inset 0 0 0 2px #714525, inset 0 2px 0 rgba(255, 235, 195, .2), inset 0 -3px 0 rgba(57, 25, 10, .32), 0 4px 10px rgba(0, 0, 0, .24);
+  color: var(--majak-dialog-header-text-color);
+  background: var(--majak-popup-command-color);
+  box-shadow: inset 0 0 0 2px var(--majak-popup-command-border-color), inset 0 2px 0 rgba(255, 255, 255, .2), inset 0 -3px 0 rgba(0, 0, 0, .2), 0 4px 10px rgba(0, 0, 0, .24);
   font-size: var(--majak-text-md);
   font-family: var(--majak-font-family-ui);
   font-weight: var(--majak-weight-strong);
@@ -4962,21 +5019,21 @@ body:has(.majak-game-screen) {
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-ready-button,
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row button {
-  border-color: #e6bd72;
-  color: #fff9ed;
-  background: #a56839;
+  border-color: var(--majak-popup-command-border-color);
+  color: var(--majak-dialog-header-text-color);
+  background: var(--majak-popup-command-color);
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-primary-actions button:hover:not(:disabled),
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row button:hover:not(:disabled) {
-  border-color: #ffe29a;
-  color: #fff9ed;
-  background: #c2824c;
+  border-color: var(--majak-popup-panel-border-color);
+  color: var(--majak-dialog-header-text-color);
+  background: var(--majak-popup-command-hover-color);
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-primary-actions button:focus-visible,
 .majak-responsive-desktop-frame .majak-responsive-desktop-room-waiting .majak-mobile-room-chat-row button:focus-visible {
-  outline: 2px solid rgba(255, 226, 154, .3);
+  outline: 2px solid var(--majak-popup-panel-border-color);
   outline-offset: 2px;
 }
 
@@ -5361,7 +5418,7 @@ body:has(.majak-game-screen) {
 }
   gap: 8px;
   padding: 5px 8px;
-  color: #fff3db;
+  color: var(--majak-user-summary-color);
 }
 
 .majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name {
@@ -5377,15 +5434,15 @@ body:has(.majak-game-screen) {
   align-items: center;
   justify-content: center;
   border-radius: 3px;
-  color: #173522;
-  background: #cfe89c;
+  color: var(--majak-user-summary-label-text-color);
+  background: var(--majak-user-summary-label-color);
   font-weight: var(--majak-weight-strong);
   line-height: var(--majak-leading-tight);
 }
 
 .majak-mobile-frame .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name-value {
   overflow: visible;
-  color: #ffffff;
+  color: var(--majak-user-summary-color);
   text-overflow: clip;
   white-space: nowrap;
 }
@@ -5783,7 +5840,7 @@ body:has(.majak-game-screen) {
   justify-content: space-between;
   gap: 0;
   padding: 5px 8px;
-  color: #fff3db;
+  color: var(--majak-user-summary-color);
 }
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name {
@@ -5799,8 +5856,8 @@ body:has(.majak-game-screen) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #173522;
-  background: #cfe89c;
+  color: var(--majak-user-summary-label-text-color);
+  background: var(--majak-user-summary-label-color);
   border-radius: 3px;
   font-size: var(--majak-text-xs);
   font-weight: var(--majak-weight-strong);
@@ -5809,7 +5866,7 @@ body:has(.majak-game-screen) {
 
 .majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-user-summary--lobby .majak-mobile-user-summary__name-value {
   overflow: visible;
-  color: #ffffff;
+  color: var(--majak-user-summary-color);
   text-overflow: clip;
   white-space: nowrap;
 }
@@ -6265,12 +6322,12 @@ body:has(.majak-game-screen) {
   gap: 4px;
   padding: 0 6px 0 0;
   color: #f8f7ed;
-  background: linear-gradient(110deg, #303938, #4b5653);
+  background: linear-gradient(110deg, var(--majak-frame-chrome-color), var(--majak-frame-header-color));
   box-shadow: inset 0 -1px 0 rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.08);
 }
 
 .is-playing .majak-lobby-room-card__head {
-  background: linear-gradient(110deg, #304c53, #48717a);
+  background: linear-gradient(110deg, var(--majak-popup-command-color), var(--majak-popup-command-hover-color));
 }
 
 .majak-lobby-room-card__number {
@@ -6278,8 +6335,8 @@ body:has(.majak-game-screen) {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #39352c;
-  background: linear-gradient(145deg, #e9dcaf, #c7ad70);
+  color: #ffffff;
+  background: linear-gradient(145deg, var(--majak-popup-command-hover-color), var(--majak-popup-command-color));
   box-shadow: inset -1px 0 0 rgba(77,67,40,.26), inset 1px 0 0 rgba(255,255,255,.32);
   font-size: var(--majak-mobile-lobby-body-font-size, var(--majak-font-10));
   font-weight: 800;
@@ -6486,9 +6543,34 @@ body:has(.majak-game-screen) {
 }
 
 .majak-desktop-lobby-members {
-  border: 1px solid #61776a;
+  border: 1px solid var(--majak-popup-panel-border-color);
+  color: var(--majak-dialog-panel-text-color);
+  background: #ffffff;
   box-shadow: 0 2px 0 rgba(17,49,40,.18);
   box-sizing: border-box;
+}
+
+.majak-desktop-lobby-members__background {
+  opacity: .12;
+}
+
+.majak-desktop-lobby-member__avatar {
+  border: 1px solid var(--majak-popup-panel-border-color);
+  border-radius: 3px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+}
+
+.majak-desktop-lobby-member.is-selected .majak-desktop-lobby-member__avatar {
+  border-color: var(--majak-dialog-header-text-color);
+}
+
+/* Member lists remain a neutral reading surface regardless of the selected theme. */
+:is(
+  .majak-mobile-lobby-members,
+  .majak-responsive-desktop-frame .majak-responsive-desktop-lobby .majak-mobile-lobby-members
+) {
+  background: #ffffff !important;
 }
 
 .majak-mobile-tournament-screen {
@@ -7270,6 +7352,10 @@ body:has(.majak-game-screen) {
   font-size: var(--majak-popup-font-body);
 }
 
+.majak-room-setup-dialog .majak-mobile-dialog-section {
+  background: color-mix(in srgb, var(--majak-popup-command-color) 10%, var(--majak-popup-panel-color));
+}
+
 .majak-room-setup-dialog .majak-mobile-dialog-field {
   color: #305548;
   gap: 6px;
@@ -7280,10 +7366,24 @@ body:has(.majak-game-screen) {
 .majak-room-setup-dialog .majak-mobile-dialog-field select,
 .majak-room-setup-dialog .majak-mobile-room-title-select,
 .majak-room-setup-dialog .majak-mobile-choice {
-  border-color: #b9cbbb;
+  border-color: color-mix(in srgb, var(--majak-popup-command-border-color) 48%, #ffffff);
   color: #244b3d;
-  background: #ffffff;
+  background: color-mix(in srgb, var(--majak-popup-command-color) 8%, var(--majak-popup-panel-color));
   font-size: var(--majak-popup-font-body);
+}
+
+.majak-room-setup-dialog .majak-mobile-choice:has(input[type='radio']:checked) {
+  outline-color: var(--majak-popup-command-border-color);
+  background: color-mix(in srgb, var(--majak-popup-command-color) 28%, var(--majak-popup-panel-color));
+}
+
+.majak-room-setup-dialog .majak-mobile-choice:not(:has(input:checked)) {
+  background: color-mix(in srgb, var(--majak-popup-command-color) 8%, var(--majak-popup-panel-color));
+}
+
+.majak-room-setup-dialog .majak-mobile-choice:has(input[type='checkbox']:checked) {
+  border-color: var(--majak-popup-command-border-color);
+  background: color-mix(in srgb, var(--majak-popup-command-color) 22%, var(--majak-popup-panel-color));
 }
 
 .majak-room-setup-dialog .majak-mobile-dialog-field input,
@@ -8006,13 +8106,13 @@ body:has(.majak-game-screen) {
   overflow: auto;
   border: 1px solid #7d8e80;
   border-radius: 0;
-  background: #e8ede4;
+  background: #ffffff;
 }
 
 .majak-member-filter {
   flex: 0 0 auto;
-  border: 1px solid #aeb9aa;
-  background: #f7f8f3;
+  border: 1px solid var(--majak-popup-panel-border-color);
+  background: #ffffff;
 }
 
 .majak-member-filter summary {
@@ -8068,7 +8168,7 @@ body:has(.majak-game-screen) {
   min-height: 34px;
   border: 1px solid #c8d0c2;
   border-radius: 2px;
-  color: #1f302b;
+  color: #111111;
   background: #fffdf8;
   text-align: left;
 }
@@ -8095,10 +8195,10 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-lobby-member.is-selected {
-  border-color: #315f3e;
-  color: #ffffff;
-  background: #356246;
-  box-shadow: inset 4px 0 #d4b34d;
+  border-color: var(--majak-popup-command-border-color);
+  color: #111111;
+  background: #ffffff;
+  box-shadow: inset 4px 0 var(--majak-popup-command-color);
 }
 
 .majak-mobile-lobby-member img {
@@ -8147,7 +8247,15 @@ body:has(.majak-game-screen) {
 
 .majak-mobile-lobby-member.is-selected .majak-mobile-lobby-member__title,
 .majak-mobile-lobby-member.is-selected .majak-mobile-lobby-member__location {
-  color: #e6f1df;
+  color: #111111;
+}
+
+.majak-mobile-lobby-member :is(
+  .majak-mobile-lobby-member__name,
+  .majak-mobile-lobby-member__title,
+  .majak-mobile-lobby-member__location
+) {
+  color: #111111;
 }
 
 .majak-mobile-lobby-member__actions {
@@ -9195,6 +9303,64 @@ body:has(.majak-result-overlay) {
 .majak-han-result-panel .majak-result-actions { justify-content: center; }
 .majak-han-result-panel .majak-result-actions > span { display: none; }
 
+/* Keep responsive game result bodies aligned with the selected popup theme. */
+.majak-result-overlay { background: var(--majak-popup-overlay-color); }
+.majak-result-panel { border-color: var(--majak-popup-panel-border-color); color: var(--majak-dialog-panel-text-color); background: var(--majak-popup-panel-color); }
+.majak-result-players { background: transparent; }
+.majak-result-players__head,
+.majak-result-player__identity small,
+.majak-result-player__status,
+.majak-result-player__settlement dt,
+.majak-han-result-detail,
+.majak-kyo-confirmation-progress__player,
+.majak-result-winner span,
+.majak-result-yaku p,
+.majak-result-total span,
+.majak-result-dora,
+.majak-result-draw,
+.majak-han-result-table__head,
+.majak-result-reward small,
+.majak-result-reward__breakdown { color: var(--majak-dialog-panel-text-color); }
+.majak-result-player { border-color: var(--majak-popup-panel-border-color); background: rgba(255, 255, 255, .54); }
+.majak-result-player.is-winner { border-color: var(--majak-popup-command-border-color); background: rgba(255, 255, 255, .82); }
+.majak-result-player.is-selected { outline-color: var(--majak-popup-command-color); }
+.majak-result-player__select { border-color: var(--majak-popup-command-border-color); color: #ffffff; background: var(--majak-popup-command-color); }
+.majak-result-player__value,
+.majak-result-player__settlement dd,
+.majak-result-reward__breakdown b { color: var(--majak-dialog-panel-text-color); }
+.majak-kyo-confirmation-progress { border-color: var(--majak-popup-panel-border-color); background: rgba(255, 255, 255, .38); }
+.majak-kyo-confirmation-progress__player > div { border-color: var(--majak-popup-panel-border-color); background: rgba(0, 0, 0, .12); }
+.majak-kyo-confirmation-progress__player i { background: var(--majak-popup-command-color); }
+.majak-kyo-confirmation-progress__player strong { color: var(--majak-dialog-panel-text-color); }
+.majak-result-yaku { border-color: var(--majak-popup-panel-border-color); }
+.majak-result-yaku div,
+.majak-result-dora { border-color: var(--majak-popup-panel-border-color); }
+.majak-result-total,
+.majak-result-reward { border-left-color: var(--majak-popup-command-color); background: rgba(255, 255, 255, .38); }
+.majak-result-actions { border-color: var(--majak-popup-panel-border-color); color: var(--majak-dialog-panel-text-color); background: var(--majak-popup-panel-color); }
+.majak-result-actions button { border-color: var(--majak-popup-command-border-color); color: #ffffff; background: var(--majak-popup-command-color); }
+
+/* Result tables use light themed panels, so legacy pale score colors need explicit contrast. */
+.majak-result-player__identity strong,
+.majak-han-result-player,
+.majak-han-result-detail,
+.majak-han-result-detail dd,
+.majak-result-player__settlement dd,
+.majak-result-reward__breakdown,
+.majak-result-reward__breakdown b { color: #203b30; }
+.majak-result-player__identity small,
+.majak-result-player__status,
+.majak-result-player__settlement dt,
+.majak-han-result-table__head,
+.majak-han-result-table__detail-head { color: #35584a; }
+.majak-result-player__value,
+.majak-han-result-row b { color: #b5413d; }
+.majak-result-player__change { color: #b5413d; }
+.majak-result-player__settlement > div:not(.majak-result-player__tags),
+.majak-han-result-detail > div,
+.majak-han-result-table__detail-head span { background: rgba(32, 59, 48, .16); }
+.majak-han-result-row.is-me { background: rgba(224, 191, 89, .18); }
+
 @media (max-width: 640px), (max-height: 540px) {
   .majak-result-panel {
     --result-font-caption: calc(var(--majak-font-label) * .82);
@@ -10016,6 +10182,8 @@ body:has(.majak-result-overlay) {
 
 :where(.majak-popup-panel :is(input:not([type='checkbox']):not([type='radio']), select, textarea, output, dd, td)) {
   font-size: var(--majak-dialog-body-font-size);
+  border-color: color-mix(in srgb, var(--majak-popup-command-border-color) 46%, #ffffff);
+  background-color: color-mix(in srgb, var(--majak-popup-command-color) 7%, var(--majak-popup-panel-color));
 }
 
 :where(.majak-popup-panel :is(small, .majak-dialog-caption)) {
@@ -10041,9 +10209,9 @@ body:has(.majak-result-overlay) {
   height: 34px;
   min-height: 34px;
   padding: 0 16px;
-  border: 1px solid #255d4e;
+  border: 1px solid var(--majak-popup-command-border-color);
   border-radius: 3px;
-  color: #255d4e;
+  color: var(--majak-popup-command-border-color);
   background: transparent;
   font-weight: var(--majak-popup-button-font-weight);
   line-height: 22px;
@@ -10052,14 +10220,14 @@ body:has(.majak-result-overlay) {
 
 :where(.majak-popup-panel :is([role='tab'][aria-selected='true'], .majak-player-profile__tabs button.is-active, .responsive-shop__tabs button.is-active, .custom-inventory__tabs button.is-active, .majak-collection-tabs button.is-active, .majak-mobile-config-tabs button.is-active)) {
   color: #ffffff;
-  background: #1c6b58;
+  background: var(--majak-popup-command-color);
   box-shadow: none;
 }
 
 /* Game settings keeps selection tabs balanced and avoids nested option-card borders. */
 .majak-popup-panel .majak-mobile-config-tabs {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   padding: 10px 18px 0;
 }
@@ -10182,9 +10350,14 @@ body:has(.majak-result-overlay) {
 }
 
 .majak-mobile-choice:has(input[type='radio']:checked) {
-  outline: 1px solid #8eb29b;
+  outline: 1px solid var(--majak-popup-command-border-color);
   outline-offset: -1px;
-  background: #e2eee5;
+  background: color-mix(in srgb, var(--majak-popup-command-color) 14%, var(--majak-popup-panel-color));
+}
+
+.majak-popup-panel .majak-mobile-choice:has(input[type='checkbox']:checked) {
+  border-color: var(--majak-popup-command-border-color);
+  background: color-mix(in srgb, var(--majak-popup-command-color) 10%, var(--majak-popup-panel-color));
 }
 
 .majak-popup-panel.mission-reward-guide > main.majak-popup-body .mission-reward-guide__flow > div > .mission-reward-guide__step-title {
@@ -10546,6 +10719,51 @@ body :is(
   font-weight: var(--majak-button-font-weight);
 }
 
+/* Theme standard HTML buttons while preserving legacy sprite buttons with inline styles. */
+#root button:not([style]):not(.majak-mobile-lobby-member__select):not(:disabled) {
+  border-color: var(--majak-popup-command-border-color) !important;
+  color: var(--majak-dialog-header-text-color) !important;
+  background: var(--majak-popup-command-color) !important;
+}
+
+#root button:not([style]):not(.majak-mobile-lobby-member__select):not(:disabled):hover,
+#root button:not([style]):not(.majak-mobile-lobby-member__select):not(:disabled):focus-visible {
+  background: var(--majak-popup-command-hover-color) !important;
+}
+
+#root button:not([style]):not(.majak-mobile-lobby-member__select):disabled {
+  border-color: var(--majak-popup-command-border-color) !important;
+  color: var(--majak-dialog-header-text-color) !important;
+  background: var(--majak-popup-command-color) !important;
+  opacity: .45;
+}
+
+/* Tabs are selection controls, not commands: keep the selected tab visibly distinct. */
+#root :is(
+  .majak-player-profile__tabs,
+  .responsive-shop__tabs,
+  .custom-inventory__tabs,
+  .majak-collection-tabs,
+  .majak-mobile-config-tabs
+) button:not(:disabled) {
+  border-color: var(--majak-popup-command-border-color) !important;
+  color: var(--majak-dialog-header-text-color) !important;
+  background: var(--majak-popup-title-color) !important;
+}
+
+#root :is(
+  .majak-player-profile__tabs,
+  .responsive-shop__tabs,
+  .custom-inventory__tabs,
+  .majak-collection-tabs,
+  .majak-mobile-config-tabs
+) button:is(.is-active, [aria-selected='true']):not(:disabled) {
+  border-color: var(--majak-popup-panel-border-color) !important;
+  color: var(--majak-dialog-panel-text-color) !important;
+  background: var(--majak-popup-panel-color) !important;
+  box-shadow: inset 0 -3px 0 var(--majak-popup-command-color);
+}
+
 /* Settings keeps every option visible while using a denser form layout. */
 .majak-popup-panel > .majak-mobile-config-body.majak-popup-body {
   gap: 4px;
@@ -10574,6 +10792,43 @@ body :is(
   padding: 7px 8px;
 }
 
+.majak-mobile-config-theme-section {
+  display: grid;
+  gap: 10px;
+}
+
+.majak-mobile-config-theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.majak-mobile-config-theme-option,
+.majak-mobile-config-theme-custom-color {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+}
+
+.majak-mobile-config-theme-swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid;
+}
+
+.majak-mobile-config-theme-custom-color {
+  justify-content: space-between;
+}
+
+.majak-mobile-config-theme-custom-color input[type='color'] {
+  width: 44px;
+  height: 28px;
+  padding: 1px;
+  border: 1px solid var(--majak-popup-panel-border-color);
+  background: transparent;
+}
+
 .majak-mobile-config-overlay--desktop .majak-mobile-config-dialog {
   width: min(860px, calc(100dvw - 32px));
 }
@@ -10595,7 +10850,8 @@ body :is(
   }
 
   .majak-mobile-config-section--wide,
-  .majak-mobile-config-assist {
+  .majak-mobile-config-assist,
+  .majak-mobile-config-theme-section {
     grid-column: 1 / -1;
   }
 
@@ -10730,6 +10986,147 @@ body :is(
 
 .majak-popup-panel > .majak-ranking-dialog__header > h2 {
   font-weight: 400;
+}
+
+/* User theme override for popup-specific legacy palettes. Keep result-status accents intact. */
+#root :is(
+  .majak-popup-panel,
+  .custom-inventory,
+  .mission-dialog,
+  .mission-reward-guide,
+  .responsive-owned-items,
+  .shop-transaction,
+  .responsive-shop,
+  .majak-collection-dialog,
+  .majak-lottery-result-panel,
+  .majak-lottery-game-panel,
+  .majak-game-invite-dialog,
+  .majak-debug-login-dialog,
+  .majak-welcome-dialog,
+  .majak-receipt-dialog,
+  .majak-item-popup-dialog,
+  .majak-levelup-dialog,
+  .majak-ask-end-dialog
+) {
+  border-color: var(--majak-popup-panel-border-color) !important;
+  color: var(--majak-dialog-panel-text-color) !important;
+  background-color: var(--majak-popup-panel-color) !important;
+}
+
+#root :is(
+  .majak-popup-titlebar,
+  .majak-mobile-dialog-titlebar,
+  .custom-inventory__header,
+  .mission-dialog__header,
+  .responsive-owned-items__header,
+  .responsive-shop__header,
+  .shop-transaction__header,
+  .majak-collection-header,
+  .majak-game-invite-dialog__header,
+  .majak-lottery-game-panel__header,
+  .majak-lottery-result-panel__header
+) {
+  color: var(--majak-dialog-header-text-color) !important;
+  background: var(--majak-dialog-header-color) !important;
+}
+
+#root :is(
+  .majak-popup-panel,
+  .custom-inventory,
+  .mission-dialog,
+  .mission-reward-guide,
+  .responsive-owned-items,
+  .shop-transaction,
+  .responsive-shop,
+  .majak-collection-dialog,
+  .majak-game-invite-dialog,
+  .majak-debug-login-dialog,
+  .majak-welcome-dialog,
+  .majak-receipt-dialog,
+  .majak-item-popup-dialog,
+  .majak-levelup-dialog,
+  .majak-ask-end-dialog
+) :is(input:not([type='checkbox']):not([type='radio']), select, textarea, output) {
+  border-color: color-mix(in srgb, var(--majak-popup-command-border-color) 48%, #ffffff) !important;
+  color: var(--majak-dialog-panel-text-color) !important;
+  background-color: color-mix(in srgb, var(--majak-popup-command-color) 8%, var(--majak-popup-panel-color)) !important;
+}
+
+#root :is(
+  .responsive-shop__tabs,
+  .custom-inventory__tabs,
+  .majak-collection-tabs
+) {
+  border-color: var(--majak-popup-panel-border-color) !important;
+  background: color-mix(in srgb, var(--majak-popup-command-color) 8%, var(--majak-popup-panel-color)) !important;
+}
+
+#root :is(
+  .responsive-shop__tabs,
+  .custom-inventory__tabs,
+  .majak-collection-tabs
+) button:is(.is-active, [aria-selected='true']) {
+  border-color: var(--majak-popup-command-border-color) !important;
+  color: var(--majak-dialog-header-text-color) !important;
+  background: var(--majak-popup-command-color) !important;
+}
+
+#root :is(
+  .majak-receipt-dialog__item,
+  .majak-welcome-dialog__notice,
+  .majak-item-popup-dialog__item,
+  .majak-levelup-dialog__level,
+  .responsive-owned-items__row,
+  .shop-transaction__balance,
+  .responsive-shop__balance
+) {
+  border-color: color-mix(in srgb, var(--majak-popup-command-border-color) 42%, #ffffff) !important;
+  color: var(--majak-dialog-panel-text-color) !important;
+  background: color-mix(in srgb, var(--majak-popup-command-color) 12%, var(--majak-popup-panel-color)) !important;
+}
+
+#root :is(
+  .majak-popup-actions,
+  .majak-mobile-dialog-actions,
+  .majak-game-invite-dialog__actions,
+  .majak-lottery-game-panel__actions,
+  .majak-lottery-result-panel__actions,
+  .majak-item-popup-dialog__item
+) > button:not(:disabled),
+#root :is(
+  .majak-game-invite-dialog__primary,
+  .majak-item-popup-dialog__item button,
+  .majak-ask-end-dialog__progress > div,
+  .mission-dialog__summary > b,
+  .mission-dialog__daily .is-complete .mission-dialog__check
+) {
+  border-color: var(--majak-popup-command-border-color) !important;
+  color: var(--majak-dialog-header-text-color) !important;
+  background: var(--majak-popup-command-color) !important;
+}
+
+#root :is(
+  .majak-popup-actions,
+  .majak-mobile-dialog-actions,
+  .majak-game-invite-dialog__actions,
+  .majak-lottery-game-panel__actions,
+  .majak-lottery-result-panel__actions
+) > button:hover:not(:disabled),
+#root :is(
+  .majak-game-invite-dialog__primary:hover,
+  .majak-item-popup-dialog__item button:hover
+) {
+  background: var(--majak-popup-command-hover-color) !important;
+}
+
+#root :is(
+  .majak-collection-footer,
+  .responsive-shop__footer,
+  .shop-transaction__footer,
+  .majak-mobile-dialog-actions
+) {
+  border-color: var(--majak-popup-panel-border-color) !important;
+  background: color-mix(in srgb, var(--majak-popup-command-color) 6%, var(--majak-popup-panel-color)) !important;
 }
 
 .majak-popup-panel > .majak-collection-header {

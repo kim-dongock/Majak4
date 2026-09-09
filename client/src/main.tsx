@@ -3,7 +3,10 @@ import ReactDOM from 'react-dom/client'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import App from './App'
 import { showError } from './utils/msgbox'
+import { applyMajakColorTheme, loadMajakConfig } from './screens/outgame/dialogs/CfgDlg'
 import './index.css'
+
+applyMajakColorTheme(loadMajakConfig())
 
 let lastGlobalErrorMessage = ''
 let lastGlobalErrorAt = 0

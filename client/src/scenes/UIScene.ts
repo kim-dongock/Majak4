@@ -434,6 +434,7 @@ export default class UIScene extends Phaser.Scene {
   private renchanNumber!: LegacyNumber
   private diceSprites: Phaser.GameObjects.Image[] = []
   private waremeSprite?: Phaser.GameObjects.Image
+  private timerFrame!: Phaser.GameObjects.Rectangle
   private timerBack!: Phaser.GameObjects.Rectangle
   private timerBar!: Phaser.GameObjects.Rectangle
   private timerTurnBar!: Phaser.GameObjects.Rectangle
@@ -464,6 +465,7 @@ export default class UIScene extends Phaser.Scene {
   private customBgId = 0
   private customBoardType = 0
   private boardSurroundColor?: number
+  private themeUiColor = 0x1b6b55
   private chicha = 0
   private oyaOrder = 0
   private kyokuCnt = 0
@@ -478,16 +480,19 @@ export default class UIScene extends Phaser.Scene {
     super({ key: 'UIScene' })
   }
 
-  init(data: { myOdr?: number; layoutMode?: IngameLayoutMode; isViewer?: boolean; customBgId?: number; customBoardType?: number; customHaiId?: number }) {
+  init(data: { myOdr?: number; layoutMode?: IngameLayoutMode; isViewer?: boolean; customBgId?: number; customBoardType?: number; customHaiId?: number; themeBoardColor?: string; themeUiColor?: string }) {
     this.myOdr = data.myOdr ?? 0
     this.layoutMode = data.layoutMode ?? 'desktop'
     this.isViewer = Boolean(data.isViewer)
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
-    const surroundColor = this.registry.get(GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY)
-    this.boardSurroundColor = typeof surroundColor === 'string'
+    const surroundColor = data.themeBoardColor ?? this.registry.get(GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY)
+    this.boardSurroundColor = typeof surroundColor === 'string' && /^#[0-9a-f]{6}$/i.test(surroundColor)
       ? Phaser.Display.Color.ValueToColor(surroundColor).color
       : undefined
+    this.themeUiColor = typeof data.themeUiColor === 'string' && /^#[0-9a-f]{6}$/i.test(data.themeUiColor)
+      ? Phaser.Display.Color.ValueToColor(data.themeUiColor).color
+      : 0x1b6b55
     this.activeTurnOdr = null
     this.waremeOdr = null
     this.lastMobileHudLayoutKey = ''
@@ -574,6 +579,7 @@ export default class UIScene extends Phaser.Scene {
       this.reachSprites[odr] = this.add.image(0, 0, this.resolveSkinTextureKey('mj_richbar_0'))
         .setOrigin(0, 0).setDepth(Z_REACH_STICK).setVisible(false)
     }
+    this.initializeDesktopHudPanels()
 
     this.hostMark = this.add.image(0, 0, this.resolveSkinTextureKey('mj_hostmark'))
       .setOrigin(0, 0).setDepth(11).setVisible(false)
@@ -612,13 +618,15 @@ export default class UIScene extends Phaser.Scene {
     ]
 
     /* ── タイマー (CMJObjTimBar: 493×6) ── */
-    this.timerBack = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, 0x000000)
+    this.timerFrame = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR + 4, H_TIMBAR + 4, this.timerColor(0x111111, 0.72))
+      .setOrigin(0.5, 0.5).setDepth(1000).setVisible(false)
+    this.timerBack = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, this.timerColor(0x111111, 0.82))
       .setOrigin(0, 0).setDepth(1001).setVisible(false).setInteractive()
-    this.timerBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, 0x0000ff)
+    this.timerBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, this.timerColor(0xffffff, 0.18))
       .setOrigin(0, 0).setDepth(1002).setVisible(false).setInteractive()
-    this.timerTurnBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, 0x0080ff)
+    this.timerTurnBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, this.timerColor(0xffffff, 0.4))
       .setOrigin(0, 0).setDepth(1003).setVisible(false).setInteractive()
-    this.timerKeepBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, 0x00ffff)
+    this.timerKeepBar = this.add.rectangle(BOARD_X + X_TIMBAR, BOARD_Y + Y_TIMBAR, W_TIMBAR, H_TIMBAR, this.timerColor(0xffffff, 0.72))
       .setOrigin(0, 0).setDepth(1004).setVisible(false).setInteractive()
     const holdAutoPass = () => window.dispatchEvent(new Event(GAME_AUTO_PASS_HOLD_EVENT))
     this.timerBack.on('pointerover', holdAutoPass)
@@ -680,7 +688,7 @@ export default class UIScene extends Phaser.Scene {
       if (data.viewOdr !== undefined) this.myOdr = data.viewOdr
       this.traceUiFlow('turnChange event', data)
       this.updateTurnMarks(data.odr)
-      if (!this.timerEvent && !this.pendingTimer) this.showInactiveTimerBar()
+      if (!this.timerEvent && !this.pendingTimer && this.isActionPresentationReady()) this.showInactiveTimerBar()
     }, this)
 
     gs.events.on('actionPromptStart', (data: ActionPromptTimerData) => {
@@ -694,6 +702,8 @@ export default class UIScene extends Phaser.Scene {
       this.traceUiFlow('actionPromptEnd event', data)
       this.stopTimer()
     }, this)
+
+    gs.events.on('actionPanelLayout', () => this.updateTimerLayout(), this)
 
     /* リーチ */
     gs.events.on('reach', (data: { odr: number; viewOdr?: number }) => {
@@ -722,9 +732,11 @@ export default class UIScene extends Phaser.Scene {
         gs.events.off(eventName, undefined, this)
       }
     })
+    gs.events.emit('uiSceneReady')
   }
 
   update() {
+    if (!this.isActionPresentationReady()) this.hideTimerDisplay()
     this.startPendingTimerIfReady()
     if (!isMobileIngameLayout(this.layoutMode) && this.layoutMode !== 'responsiveDesktop') return
     const bounds = mobileVisibleWorldBounds()
@@ -952,6 +964,21 @@ export default class UIScene extends Phaser.Scene {
     }
   }
 
+  private initializeDesktopHudPanels() {
+    if (this.layoutMode !== 'responsiveDesktop') return
+    for (let loc = 0; loc < 4; loc++) {
+      const pos = odrBoxPos(loc)
+      const avatar = this.desktopAvatarPoint(playerHudPoint(pos.avt, loc), loc)
+      const text = playerHudPoint(pos.txt, loc)
+      const textBounds = avatarTextBounds(loc)
+      const textY = Math.max(
+        text.y + DESKTOP_HUD_INFO_Y_SHIFT + RESPONSIVE_DESKTOP_PLAYER_INFO_OFFSET_Y,
+        avatar.y + HUD_METRICS.nameHeight + 6,
+      )
+      this.updateDesktopHudPanel(loc, avatar, DESKTOP_PLAYER_AVATAR_SIZE, textBounds.left, textY, textBounds.width, 4, 15)
+    }
+  }
+
   private mobileAvatarPoint(loc: number, fallback: HudPoint, size: { width: number; height: number }): HudPoint {
     if (!isMobileIngameLayout(this.layoutMode)) return fallback
     const bounds = mobileVisibleWorldBounds()
@@ -1162,6 +1189,7 @@ export default class UIScene extends Phaser.Scene {
       .setPosition(stripX, stripY)
       .setTexture(this.desktopTurnStripTextureKey())
       .setDisplaySize(stripWidth, stripHeight)
+      .setVisible(true)
     const stripBounds = turnStrip.getBounds()
     this.desktopHudBounds[loc] = {
       left: panelBounds.left,
@@ -1900,23 +1928,49 @@ export default class UIScene extends Phaser.Scene {
 
   private updateTimerLayout() {
     const bounds = isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
-    const responsiveLayout = this.layoutMode === 'responsiveDesktop' ? getIngameLayout(this.layoutMode) : null
-    const gameScene = this.scene.get('GameScene') as Phaser.Scene & { getActionPanelBounds?: () => Phaser.Geom.Rectangle | null }
-    const panelBounds = responsiveLayout ? gameScene.getActionPanelBounds?.() : null
-    const x = responsiveLayout && panelBounds
-      ? panelBounds.left + X_TIMBAR - responsiveLayout.panel.x
+    const gameScene = this.scene.get('GameScene') as Phaser.Scene & {
+      getActionPanelBounds?: () => Phaser.Geom.Rectangle | null
+      getActionButtonBounds?: () => Phaser.Geom.Rectangle | null
+    }
+    const panelBounds = gameScene.getActionPanelBounds?.()
+    const actionButtonBounds = gameScene.getActionButtonBounds?.()
+    const timerWidth = actionButtonBounds?.width ?? W_TIMBAR
+    const x = actionButtonBounds
+      ? actionButtonBounds.left
+      : panelBounds
+        ? panelBounds.centerX - timerWidth / 2
       : bounds ? (bounds.left + bounds.right - W_TIMBAR) / 2 + MOBILE_TIMBAR_X_SHIFT : BOARD_X + X_TIMBAR
-    const y = responsiveLayout && panelBounds
-      ? panelBounds.top + Y_TIMBAR - responsiveLayout.panel.y
+    const y = panelBounds
+      ? panelBounds.top + 12
       : bounds ? bounds.bottom - MOBILE_TIMBAR_BOTTOM_INSET : BOARD_Y + Y_TIMBAR
-    this.timerBack?.setPosition(x, y)
-    this.timerBar?.setPosition(x, y)
-    this.timerTurnBar?.setPosition(x, y)
-    this.timerKeepBar?.setPosition(x, y)
+    this.timerFrame?.setPosition(x + timerWidth / 2, y + H_TIMBAR / 2).setSize(timerWidth + 4, H_TIMBAR + 4).setDisplaySize(timerWidth + 4, H_TIMBAR + 4)
+    this.timerBack?.setPosition(x, y).setSize(timerWidth, H_TIMBAR).setDisplaySize(timerWidth, H_TIMBAR)
+    this.timerBar?.setPosition(x, y).setSize(timerWidth, H_TIMBAR).setDisplaySize(timerWidth, H_TIMBAR)
+    this.timerTurnBar?.setPosition(x, y).setSize(timerWidth, H_TIMBAR).setDisplaySize(timerWidth, H_TIMBAR)
+    this.timerKeepBar?.setPosition(x, y).setSize(timerWidth, H_TIMBAR).setDisplaySize(timerWidth, H_TIMBAR)
+  }
+
+  private timerTrackWidth() {
+    return this.timerBack?.displayWidth || W_TIMBAR
+  }
+
+  private timerColor(target: number, amount: number) {
+    const source = Phaser.Display.Color.IntegerToRGB(this.themeUiColor)
+    const destination = Phaser.Display.Color.IntegerToRGB(target)
+    return Phaser.Display.Color.GetColor(
+      Math.round(source.r + (destination.r - source.r) * amount),
+      Math.round(source.g + (destination.g - source.g) * amount),
+      Math.round(source.b + (destination.b - source.b) * amount),
+    )
   }
 
   private showInactiveTimerBar() {
+    if (!this.isActionPresentationReady()) {
+      this.hideTimerDisplay()
+      return
+    }
     if (this.isViewer || this.inactiveTimerMaxMs <= 0) {
+      this.timerFrame.setVisible(false)
       this.timerBack.setVisible(false)
       this.timerBar.setVisible(false)
       this.timerTurnBar.setVisible(false)
@@ -1924,11 +1978,20 @@ export default class UIScene extends Phaser.Scene {
       return
     }
     this.updateTimerLayout()
-    const width = Math.max(0, Math.round(this.inactiveTimerBankMs * W_TIMBAR / this.inactiveTimerMaxMs))
+    const width = Math.max(0, Math.round(this.inactiveTimerBankMs * this.timerTrackWidth() / this.inactiveTimerMaxMs))
+    this.timerFrame.setVisible(true)
     this.timerBack.setVisible(true)
     this.timerBar.setVisible(width > 0).setDisplaySize(width, H_TIMBAR).setFillStyle(0xff0000)
     this.timerTurnBar.setVisible(false)
     this.timerKeepBar.setVisible(false)
+  }
+
+  private hideTimerDisplay() {
+    this.timerFrame?.setVisible(false)
+    this.timerBack?.setVisible(false)
+    this.timerBar?.setVisible(false)
+    this.timerTurnBar?.setVisible(false)
+    this.timerKeepBar?.setVisible(false)
   }
 
   /* ======================================================================
@@ -1944,11 +2007,23 @@ export default class UIScene extends Phaser.Scene {
   private startPendingTimerIfReady() {
     const pending = this.pendingTimer
     if (!pending) return
-    const gameScene = this.scene.get('GameScene') as Phaser.Scene & { getActionPanelBounds?: () => Phaser.Geom.Rectangle | null }
+    const gameScene = this.scene.get('GameScene') as Phaser.Scene & {
+      getActionPanelBounds?: () => Phaser.Geom.Rectangle | null
+      isActionPresentationReady?: () => boolean
+    }
+    if (!gameScene.isActionPresentationReady?.()) {
+      this.hideTimerDisplay()
+      return
+    }
     const panelBounds = gameScene.getActionPanelBounds?.()
     if (!panelBounds || panelBounds.width <= 0 || panelBounds.height <= 0) return
     this.pendingTimer = undefined
     this.startTimer(pending.data, pending.endAt)
+  }
+
+  private isActionPresentationReady() {
+    const gameScene = this.scene.get('GameScene') as Phaser.Scene & { isActionPresentationReady?: () => boolean }
+    return gameScene.isActionPresentationReady?.() ?? true
   }
 
   private startTimer(data: ActionPromptTimerData, endAt: number) {
@@ -1973,11 +2048,17 @@ export default class UIScene extends Phaser.Scene {
     this.timerKeepTimeMs = Math.max(0, Number(data.keepTimeMs ?? 0))
     this.timerBankMs = Math.max(0, Number(data.timeBankMs ?? 0))
     this.timerBankEnabled = Boolean(data.timeBankEnabled)
-    const colors = getLegacyTimerColors(data.visualMode ?? (this.timerBankEnabled ? 'input' : 'extend'))
-    this.timerMaxMs = Math.max(1, Number(data.maxTimeMs ?? 0), this.timerBaseTimeMs + this.timerBankMs)
+    const legacyColors = getLegacyTimerColors(data.visualMode ?? (this.timerBankEnabled ? 'input' : 'extend'))
+    const colors = {
+      bank: legacyColors.bank,
+      turn: legacyColors.turn,
+      keep: legacyColors.keep,
+    }
+    this.timerMaxMs = Math.max(1, limitMs)
     this.timerEndAt = endAt
     this.traceUiFlow('timer start', { ...data, limitMs })
     this.updateTimerLayout()
+    this.timerFrame.setVisible(true)
     this.timerBack.setVisible(true)
     const redrawTimer = () => {
       const remainMs = Math.max(0, this.timerEndAt - performance.now())
@@ -1990,7 +2071,7 @@ export default class UIScene extends Phaser.Scene {
       )
       this.inactiveTimerBankMs = segments.bankMs
       this.inactiveTimerMaxMs = this.timerMaxMs
-      const scale = W_TIMBAR / this.timerMaxMs
+      const scale = this.timerTrackWidth() / this.timerMaxMs
       const turnWidth = Math.max(0, Math.round(segments.turnMs * scale))
       const bankWidth = Math.max(0, Math.round(segments.bankMs * scale))
       const keepWidth = Math.max(0, Math.round(segments.keepMs * scale))
@@ -2026,6 +2107,7 @@ export default class UIScene extends Phaser.Scene {
     if (showInactive && !this.isViewer) {
       this.showInactiveTimerBar()
     } else {
+      this.timerFrame.setVisible(false)
       this.timerBack.setVisible(false)
       this.timerBar.setVisible(false)
       this.timerTurnBar.setVisible(false)

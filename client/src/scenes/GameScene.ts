@@ -72,6 +72,7 @@ import {
 } from '../game/mobileIngameViewport'
 import { canCompleteGameResync, restoreVisiblePaiCodes, shouldUsePendingInitPaiInfo } from '../game/resyncState'
 import { buildInitialHandIndices, inferInitialDealStart } from '../game/replayInitialDeal'
+import { getLegacyBoardSkinId } from '../utils/legacySkinPalette'
 import {
   beginPaifuRecording,
   cancelPaifuRecording,
@@ -477,6 +478,36 @@ function skinTextureCandidate(key: string): string {
   return `${key}_skin`
 }
 
+function themeColorToTint(color: string | undefined): number | undefined {
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return undefined
+  return Number.parseInt(color.slice(1), 16)
+}
+
+function activeThemeBoardColor(): string | undefined {
+  if (typeof document === 'undefined') return undefined
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--majak-popup-command-color').trim()
+  return /^#[0-9a-f]{6}$/i.test(color) ? color : undefined
+}
+
+function darkenThemeTint(color: number): number {
+  const rgb = Phaser.Display.Color.IntegerToRGB(color)
+  return Phaser.Display.Color.GetColor(
+    Math.round(rgb.r * 0.48),
+    Math.round(rgb.g * 0.48),
+    Math.round(rgb.b * 0.48),
+  )
+}
+
+function mixThemeTint(color: number, target: number, amount: number): number {
+  const source = Phaser.Display.Color.IntegerToRGB(color)
+  const destination = Phaser.Display.Color.IntegerToRGB(target)
+  return Phaser.Display.Color.GetColor(
+    Math.round(source.r + (destination.r - source.r) * amount),
+    Math.round(source.g + (destination.g - source.g) * amount),
+    Math.round(source.b + (destination.b - source.b) * amount),
+  )
+}
+
 function mobileDeadWallBasePos(): { x: number; y: number } | null {
   const bounds = mobileVisibleWorldBounds()
   if (!bounds) return null
@@ -727,6 +758,12 @@ interface ActiveDiscardFlight {
   tween?: Phaser.Tweens.Tween
 }
 
+interface ActionButtonControl {
+  background: Phaser.GameObjects.Rectangle
+  sprite: Phaser.GameObjects.Sprite
+}
+
+
 interface PaiInfoMsgState {
   bIniKyo: boolean
   openPos: number
@@ -887,15 +924,19 @@ export default class GameScene extends Phaser.Scene {
   private initialDealInProgress = false
   private initialDealVisibleCounts = [0, 0, 0, 0]
   private initialDealSerial = 0
+  private initialActionPresentationReady = false
+  private deferInitialActionPresentation = false
+  private actionTimerAwaitingInitialDeal = false
   private mobileOpponentHandCountTexts: Array<Phaser.GameObjects.Text | undefined> = [undefined, undefined, undefined, undefined]
   private responsiveLocalHandOffsetY = 0
   private suteSprites: Phaser.GameObjects.Image[][] = [[], [], [], []]
   private meldSprites: Phaser.GameObjects.Image[][] = [[], [], [], []]
   private deadWallSprites: Phaser.GameObjects.Image[] = []
-  private actionPanelSprite?: Phaser.GameObjects.Image
-  private actionButtonSprites = new Map<string, Phaser.GameObjects.Sprite>()
+  private actionPanelBounds?: Phaser.Geom.Rectangle
+  private actionPanelFrame?: Phaser.GameObjects.Rectangle
+  private actionButtonSprites = new Map<string, ActionButtonControl>()
   private mobileActionButtonsVisible = false
-  private horaErrorSprite?: Phaser.GameObjects.Sprite
+  private horaErrorText?: Phaser.GameObjects.Text
   private boardEffectSprites: Phaser.GameObjects.Image[] = []
   private legacyEffectSprites: Phaser.GameObjects.Image[] = []
   private legacyBackdrop?: Phaser.GameObjects.GameObject
@@ -917,8 +958,11 @@ export default class GameScene extends Phaser.Scene {
   private boardMaskGraphics?: Phaser.GameObjects.Graphics
   private boardMask?: Phaser.Display.Masks.GeometryMask
   private boardBackground?: Phaser.GameObjects.Image
+  private themeBoardBackground?: Phaser.GameObjects.Rectangle
+  private themeSideBackground?: Phaser.GameObjects.Rectangle
   private dragonOverlayBg?: Phaser.GameObjects.Image
   private centerInfoBg?: Phaser.GameObjects.Image
+  private themeCenterInfoBackground?: Phaser.GameObjects.Rectangle
   private paifuGraphInitialHands: TileState[][] = [[], [], [], []]
   private paifuGraphDraws: PaifuGraphDrawState[][] = [[], [], [], []]
   private paifuGraphDiscards: DiscardState[][] = [[], [], [], []]
@@ -985,6 +1029,8 @@ export default class GameScene extends Phaser.Scene {
   private chicha = 0
   // currentOdr: 将来ターン演出に使用
   private roomId = ''
+  private isMeldLayoutFixture = false
+  private fixturePreviewApplied = false
   private isReplay = false
   private isViewer = false
   private viewerHistorySyncPending = false
@@ -1016,6 +1062,8 @@ export default class GameScene extends Phaser.Scene {
   private assistConfig: GameAssistConfig = { ...DEFAULT_GAME_ASSIST_CONFIG }
   private customBgId = 0
   private customBoardType = 0
+  private themeBoardTint: number | undefined
+  private themeUiTint = 0x1b6b55
   private gemGame = 0
   private currentBgmSkinId: number | undefined
   private currentRoundUsesTengokuBgm = false
@@ -1072,8 +1120,13 @@ export default class GameScene extends Phaser.Scene {
     this.mobileHandSummaryStateKey = ''
     this.mobileCenterInfoLayoutKey = ''
     this.responsiveActionPanelOffsetY = 0
+    this.initialActionPresentationReady = false
+    this.deferInitialActionPresentation = true
+    this.actionTimerAwaitingInitialDeal = false
     this.deadWallScaleOverride = data.deadWallScale
     this.roomId = data.roomId ?? ''
+    this.isMeldLayoutFixture = this.roomId === 'meld-layout-fixture'
+    this.fixturePreviewApplied = false
     this.paifuRoomName = data.roomName ?? this.roomId
     this.myOdr  = data.myOdr  ?? 0
     this.roomPosToOdr = [0, 1, 2, 3]
@@ -1084,6 +1137,10 @@ export default class GameScene extends Phaser.Scene {
     this.viewerHistorySyncPending = this.isViewer && !this.isReplay
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
+    this.themeUiTint = themeColorToTint(data.themeUiColor ?? activeThemeBoardColor()) ?? 0x1b6b55
+    this.themeBoardTint = getLegacyBoardSkinId(this.customBgId, this.customBoardType) == null
+      ? themeColorToTint(data.themeBoardColor ?? activeThemeBoardColor())
+      : undefined
     this.customHaiId = Number(data.customHaiId ?? 0)
     this.gemGame = Number(data.gemGame ?? 0)
     this.replayPaifuData = data.paifu
@@ -1147,6 +1204,12 @@ export default class GameScene extends Phaser.Scene {
 
     /* ── ボード背景 mj_board.png (789×704) at (5,31) ── */
     this.boardBackground = this.add.image(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, this.resolveSkinTextureKey('mj_board')).setDepth(-100)
+    if (this.themeBoardTint != null) {
+      this.boardBackground.setVisible(false)
+      this.themeBoardBackground = this.clipToBoard(this.add.rectangle(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, BOARD_W, BOARD_H, this.themeBoardTint)
+        .setOrigin(0.5, 0.5)
+        .setDepth(-99))
+    }
     if (this.textures.exists('mj_taku_dragon_skin')) {
       this.dragonOverlayBg = this.clipToBoard(this.add.image(BOARD_X + DRAGON_OVERLAY.x, BOARD_Y + DRAGON_OVERLAY.y, 'mj_taku_dragon_skin')
         .setOrigin(0, 0)
@@ -1156,28 +1219,40 @@ export default class GameScene extends Phaser.Scene {
 
     /* ── サイドバー mj_sideBg.png (225×704) at (794,31) ── */
     if (this.layoutMode !== 'responsiveDesktop') {
-      this.add.image(SIDE_PANEL.x + SIDE_PANEL.width / 2, SIDE_PANEL.y + SIDE_PANEL.height / 2, this.resolveSkinTextureKey('mj_sideBg')).setDepth(-100)
+      const sideBackground = this.add.image(SIDE_PANEL.x + SIDE_PANEL.width / 2, SIDE_PANEL.y + SIDE_PANEL.height / 2, this.resolveSkinTextureKey('mj_sideBg')).setDepth(-100)
+      if (this.themeBoardTint != null) {
+        sideBackground.setVisible(false)
+        this.themeSideBackground = this.add.rectangle(SIDE_PANEL.x + SIDE_PANEL.width / 2, SIDE_PANEL.y + SIDE_PANEL.height / 2, SIDE_PANEL.width, SIDE_PANEL.height, this.themeBoardTint)
+          .setOrigin(0.5, 0.5)
+          .setDepth(-99)
+      }
     }
 
     /* ── ゲーム情報エリア mj_h_bg.png (265×161) at board-local (262,275) ── */
     this.centerInfoBg = this.clipToBoard(this.add.image(BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2, BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2, this.resolveSkinTextureKey('mj_h_bg')).setDepth(-50))
+    if (this.themeBoardTint != null) {
+      this.centerInfoBg.setVisible(false)
+      this.themeCenterInfoBackground = this.clipToBoard(this.add.rectangle(BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2, BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2, CENTER_INFO.width, CENTER_INFO.height, darkenThemeTint(this.themeBoardTint))
+        .setOrigin(0.5, 0.5)
+        .setDepth(-49))
+    }
     this.updateCenterInfoLayout()
 
-    /* ── CMJGameWnd::PutPanel: PANELMODE_VIEW uses mj_watchBoard; PLAY uses mj_uiBoard ── */
     if (!this.isReplay) {
-      const panelKey = this.isViewer ? 'mj_watchBoard' : 'mj_uiBoard'
-      const panelOffset = this.layoutMode === 'responsiveDesktop'
-        ? responsiveDesktopCenterOffset(this.layoutMode)
-        : mobileCenterHudOffset(this.layoutMode)
-      this.actionPanelSprite = this.clipToBoard(this.add.image(BOARD_X + X_PANEL + panelOffset.x + W_PANEL / 2, BOARD_Y + Y_PANEL + panelOffset.y + H_PANEL / 2, this.resolveSkinTextureKey(panelKey))
-        .setDisplaySize(W_PANEL, H_PANEL)
-        .setDepth(Z_PANEL)
-        .setVisible(this.layoutMode !== 'mobileLandscape' && !(this.isViewer && this.layoutMode === 'responsiveDesktop')))
+      this.updateActionPanelBounds()
       if (!this.isViewer) this.createActionButtons()
     }
 
     /* ── UIScene 起動 ── */
-    this.scene.launch('UIScene', { gameScene: this, myOdr: this.myOdr, layoutMode: this.layoutMode, isViewer: this.isViewer, customBgId: this.customBgId, customBoardType: this.customBoardType, customHaiId: this.customHaiId })
+    this.events.once('uiSceneReady', () => {
+      this.events.emit('stateUpdate', { players: this.players, viewOdr: this.myOdr })
+    })
+    this.scene.launch('UIScene', { gameScene: this, myOdr: this.myOdr, layoutMode: this.layoutMode, isViewer: this.isViewer, customBgId: this.customBgId, customBoardType: this.customBoardType, customHaiId: this.customHaiId, themeBoardColor: this.themeBoardTint == null ? undefined : `#${this.themeBoardTint.toString(16).padStart(6, '0')}`, themeUiColor: `#${this.themeUiTint.toString(16).padStart(6, '0')}` })
+    if (this.isMeldLayoutFixture) {
+      this.time.delayedCall(300, () => {
+        this.showFixtureActionPreview()
+      })
+    }
 
     /* ── SignalR イベント登録 ── */
     this.acceptingSignalR = true
@@ -1273,6 +1348,12 @@ export default class GameScene extends Phaser.Scene {
         isMobileIngameLayout(this.layoutMode) ? centerY : BOARD_Y + BOARD_H / 2 + offset.y,
       )
       this.boardBackground.setScale(backgroundScale)
+      this.themeBoardBackground
+        ?.setPosition(
+          isMobileIngameLayout(this.layoutMode) ? centerX : BOARD_X + BOARD_W / 2 + offset.x,
+          isMobileIngameLayout(this.layoutMode) ? centerY : BOARD_Y + BOARD_H / 2 + offset.y,
+        )
+        .setDisplaySize(BOARD_W * backgroundScale, BOARD_H * backgroundScale)
     }
     if (this.dragonOverlayBg) {
       if (isMobileIngameLayout(this.layoutMode)) {
@@ -1290,15 +1371,8 @@ export default class GameScene extends Phaser.Scene {
     }
     if (!this.centerInfoBg) return
     this.centerInfoBg.setPosition(centerX, centerY)
-    if (this.actionPanelSprite) {
-      const actionOffset = this.layoutMode === 'responsiveDesktop'
-        ? responsiveDesktopCenterOffset(this.layoutMode)
-        : offset
-      this.actionPanelSprite.setPosition(
-        BOARD_X + X_PANEL + actionOffset.x + W_PANEL / 2,
-        BOARD_Y + Y_PANEL + actionOffset.y + H_PANEL / 2 + this.responsiveActionPanelOffsetY,
-      )
-    }
+    this.themeCenterInfoBackground?.setPosition(centerX, centerY)
+    this.updateActionPanelBounds()
     this.updateActionButtonPositions(new Set(this.currentActionOffers))
   }
 
@@ -1332,7 +1406,7 @@ export default class GameScene extends Phaser.Scene {
           })
         }
         return
-      }
+        }
       if (!this.isReplayApplyingHistory && !isResyncSnapshot) recordPaifuPacket('smmc4e', data)
       const openPos = Number(data.openPos ?? this.myOdr)
       const isPlayerOpenPos = openPos >= 0 && (openPos < this.players.length || openPos === VIEWER_OPEN_POS)
@@ -1343,8 +1417,8 @@ export default class GameScene extends Phaser.Scene {
         this.gameResyncSnapshotReceived = true
         this.logResyncProbe('authoritative smmc4e snapshot accepted', {
           openPos,
-          isInit,
-          paiCount: pai.length,
+        isInit,
+        paiCount: pai.length,
           currentHandCount: Array.isArray(data.currentHand) ? data.currentHand.length : null,
         })
       }
@@ -1513,6 +1587,8 @@ export default class GameScene extends Phaser.Scene {
         return
       }
       if (isInitKyokuPacket) {
+        this.initialActionPresentationReady = false
+        this.deferInitialActionPresentation = true
         this.kyoResultPendingOrders.clear()
         console.info('[GameStartTiming] MJPID_INIKYO received', {
           roomId: this.roomId,
@@ -1596,6 +1672,8 @@ export default class GameScene extends Phaser.Scene {
           this.time.delayedCall(waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS, () => this.redrawDeadWall())
         }
         this.animateInitialDeal(oyaOrder, dealStartDelay, () => {
+          this.initialActionPresentationReady = true
+          this.deferInitialActionPresentation = false
           if (!this.shouldSuppressLivePlayback()) this.playRoundBgm(data, kyokuCnt)
           if (!this.isReplay) {
             this.emitToUiScene('turnChange', {
@@ -1603,6 +1681,8 @@ export default class GameScene extends Phaser.Scene {
               viewOdr: this.myOdr,
             })
           }
+          this.resumeActionPromptTimerAfterInitialDeal()
+          if (this.currentActionOffers.length > 0) this.showActionButtons(this.currentActionOffers)
           if (isLiveRoundStart) this.notifyGamePresentationReady(Number(data.presentationId ?? 0))
         })
         if (!this.viewerHistorySyncPending) this.emitGameSync(false, 'initial-kyoku-ready')
@@ -1651,7 +1731,7 @@ export default class GameScene extends Phaser.Scene {
         }
         this.clearTimeWarningTimers()
         this.scheduleTimeWarnings(remainingMs, prompt.promptSerial)
-        this.emitToUiScene('actionPromptStart', this.buildActionPromptTimerPayload(remainingMs))
+        this.emitActionPromptTimerWhenReady(remainingMs)
         return
       }
 
@@ -1750,7 +1830,7 @@ export default class GameScene extends Phaser.Scene {
         if (isForLocalPlayer && remainingMs > 0 && hasInputWarningMode && !this.shouldSuppressLivePlayback()) this.scheduleTimeWarnings(remainingMs, actionPromptSerial)
         const shouldStartActionPromptTimer = isForLocalPlayer && remainingMs > 0 && hasInputWarningMode
         if (shouldStartActionPromptTimer && !isTurnMode) {
-          this.emitToUiScene('actionPromptStart', this.buildActionPromptTimerPayload(remainingMs))
+          this.emitActionPromptTimerWhenReady(remainingMs)
         }
         if (DEBUG_GAME) console.info('[GameScene] MJPID_ACTIONS resolved', {
           seatOrder,
@@ -1814,7 +1894,7 @@ export default class GameScene extends Phaser.Scene {
             viewOdr: this.myOdr,
           })
           if (shouldStartActionPromptTimer) {
-            this.emitToUiScene('actionPromptStart', this.buildActionPromptTimerPayload(remainingMs))
+            this.emitActionPromptTimerWhenReady(remainingMs)
           }
         }
         if (actionOffers.length > 0 && this.isLocalPlayerOdr(this.currentActionSeatOrder)) {
@@ -3071,7 +3151,7 @@ export default class GameScene extends Phaser.Scene {
             .on('pointerout', (pointer: Phaser.Input.Pointer) => this.onTilePointerOut(idx, pointer))
         }
         this.clipToBoard(spr)
-        if (isMe && isDrawTile) {
+        if (isMe && isDrawTile && this.initialActionPresentationReady) {
           this.drawnTileCursor = this.createLegacyReceivedTileCursor(spr)
         }
         if (isMe && tile.isSelected) {
@@ -3108,11 +3188,11 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private alignResponsiveLocalHandAbovePanel(odr: number, loc: 0 | 1 | 2 | 3) {
-    if (this.layoutMode !== 'responsiveDesktop' || loc !== 0 || !this.actionPanelSprite) return
+    if (this.layoutMode !== 'responsiveDesktop' || loc !== 0 || !this.actionPanelBounds) return
     const sprites = this.handSprites[odr].filter(sprite => sprite.active)
     if (sprites.length === 0) return
     const handBottom = Math.max(...sprites.map(sprite => sprite.getBounds().bottom))
-    const panelTop = this.actionPanelSprite.getBounds().top
+    const panelTop = this.actionPanelBounds.top
     const shiftY = Math.min(0, panelTop - handBottom)
     const meldShiftY = shiftY - this.responsiveLocalHandOffsetY
     this.responsiveLocalHandOffsetY = shiftY
@@ -3124,7 +3204,38 @@ export default class GameScene extends Phaser.Scene {
   }
 
   getActionPanelBounds() {
-    return this.actionPanelSprite?.getBounds() ?? null
+    return this.actionPanelBounds ?? null
+  }
+
+  getActionButtonBounds() {
+    const [first, ...rest] = [...this.actionButtonSprites.values()]
+      .filter(button => button.background.visible)
+      .map(button => button.background.getBounds())
+    if (!first) return null
+    return rest.reduce(
+      (bounds, buttonBounds) => Phaser.Geom.Rectangle.Union(bounds, buttonBounds, bounds),
+      first,
+    )
+  }
+
+  isActionPresentationReady() {
+    return this.initialActionPresentationReady && !this.deferInitialActionPresentation && !this.initialDealInProgress
+  }
+
+  private updateActionPanelBounds() {
+    if (this.layoutMode === 'mobileLandscape') {
+      this.actionPanelBounds = undefined
+      return
+    }
+    const offset = this.layoutMode === 'responsiveDesktop'
+      ? responsiveDesktopCenterOffset(this.layoutMode)
+      : mobileCenterHudOffset(this.layoutMode)
+    this.actionPanelBounds = new Phaser.Geom.Rectangle(
+      BOARD_X + X_PANEL + offset.x,
+      BOARD_Y + Y_PANEL + offset.y + this.responsiveActionPanelOffsetY,
+      W_PANEL,
+      H_PANEL,
+    )
   }
 
   private redrawDiscardSourceMarker(odr: number) {
@@ -4238,7 +4349,7 @@ export default class GameScene extends Phaser.Scene {
     this.setActionButtonsEnabled(visibleActs)
     for (const def of defs) {
       const btn = this.actionButtonSprites.get(def.act)
-      if (btn) btn.setFrame(def.act === selected.act ? 2 : 0)
+      if (btn) this.setActionButtonState(btn, def.act === selected.act ? 'hover' : 'normal')
     }
     return true
   }
@@ -4705,6 +4816,22 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  private emitActionPromptTimerWhenReady(remainingMs: number) {
+    if (!this.initialActionPresentationReady || this.deferInitialActionPresentation || this.initialDealInProgress) {
+      this.actionTimerAwaitingInitialDeal = true
+      return
+    }
+    this.actionTimerAwaitingInitialDeal = false
+    this.emitToUiScene('actionPromptStart', this.buildActionPromptTimerPayload(remainingMs))
+  }
+
+  private resumeActionPromptTimerAfterInitialDeal() {
+    if (!this.actionTimerAwaitingInitialDeal || !this.currentActionPrompt) return
+    const remainingMs = Math.max(0, this.currentActionPrompt.localDeadlineAt - performance.now())
+    if (remainingMs <= 0) return
+    this.emitActionPromptTimerWhenReady(remainingMs)
+  }
+
   private scheduleAutoDiscard(timeLimitSeconds: number, promptSerial = this.actionPromptSerial) {
     this.clearAutoDiscardTimer()
     if (this.isReplay || !this.canDiscardOnTileClick) return
@@ -4802,6 +4929,7 @@ export default class GameScene extends Phaser.Scene {
     this.currentActionOffers = []
     this.currentActionSeatOrder = null
     this.currentActionPrompt = null
+    this.actionTimerAwaitingInitialDeal = false
     this.timeBankExtensionInFlight = false
     this.canDiscardOnTileClick = false
     this.selectedIdx = -1
@@ -4864,6 +4992,7 @@ export default class GameScene extends Phaser.Scene {
     this.actionSendInFlight = false
     this.pendingAction = null
     this.currentActionPrompt = null
+    this.actionTimerAwaitingInitialDeal = false
     this.timeBankExtensionInFlight = false
     this.currentActionSeatOrder = null
     this.canDiscardOnTileClick = false
@@ -4904,38 +5033,92 @@ export default class GameScene extends Phaser.Scene {
   /* ======================================================================
    * 操作ボタン (CMJUserIF1 相当)
    * ====================================================================== */
-  private get ACT_BTNS(): { key: string; label: string; act: string; code: Act; x: number; y: number; w: number; h: number }[] {
+  private get ACT_BTNS(): { key: string; labelKey: string; label: string; act: string; code: Act; x: number; y: number; w: number; h: number }[] {
     return [
-      { key: 'btn_kan',   label: 'カン',  act: 'Kan',   code: Act.Kan, x: ACTION_BUTTON_LAYOUT.kan.x,   y: ACTION_BUTTON_LAYOUT.kan.y,   w: ACTION_BUTTON_LAYOUT.kan.width,   h: ACTION_BUTTON_LAYOUT.kan.height },
-      { key: 'btn_pon',   label: 'ポン',  act: 'Pon',   code: Act.Pon, x: ACTION_BUTTON_LAYOUT.pon.x,   y: ACTION_BUTTON_LAYOUT.pon.y,   w: ACTION_BUTTON_LAYOUT.pon.width,   h: ACTION_BUTTON_LAYOUT.pon.height },
-      { key: 'btn_chi',   label: 'チー',  act: 'Chi',   code: Act.Chi, x: ACTION_BUTTON_LAYOUT.chi.x,   y: ACTION_BUTTON_LAYOUT.chi.y,   w: ACTION_BUTTON_LAYOUT.chi.width,   h: ACTION_BUTTON_LAYOUT.chi.height },
-      { key: 'btn_reach', label: 'リーチ', act: 'Reach', code: Act.Ric, x: ACTION_BUTTON_LAYOUT.reach.x, y: ACTION_BUTTON_LAYOUT.reach.y, w: ACTION_BUTTON_LAYOUT.reach.width, h: ACTION_BUTTON_LAYOUT.reach.height },
-      { key: 'btn_ron',   label: 'ロン',  act: 'Ron',   code: Act.Ron, x: ACTION_BUTTON_LAYOUT.ron.x,   y: ACTION_BUTTON_LAYOUT.ron.y,   w: ACTION_BUTTON_LAYOUT.ron.width, h: ACTION_BUTTON_LAYOUT.ron.height },
-      { key: 'btn_tsumo', label: 'ツモ',  act: 'Tsumo', code: Act.Tsu, x: ACTION_BUTTON_LAYOUT.tsumo.x, y: ACTION_BUTTON_LAYOUT.tsumo.y, w: ACTION_BUTTON_LAYOUT.tsumo.width, h: ACTION_BUTTON_LAYOUT.tsumo.height },
-      { key: 'btn_pass',  label: 'パス',  act: 'Pass',  code: Act.Pas, x: ACTION_BUTTON_LAYOUT.pass.x,  y: ACTION_BUTTON_LAYOUT.pass.y,  w: ACTION_BUTTON_LAYOUT.pass.width,  h: ACTION_BUTTON_LAYOUT.pass.height },
-      { key: 'btn_flow',  label: '流局',  act: 'Tao',   code: Act.Tao, x: ACTION_BUTTON_LAYOUT.flow.x,  y: ACTION_BUTTON_LAYOUT.flow.y,  w: ACTION_BUTTON_LAYOUT.flow.width,  h: ACTION_BUTTON_LAYOUT.flow.height },
-      { key: 'btn_hua',   label: '花',    act: 'Hua',   code: Act.Hua, x: ACTION_BUTTON_LAYOUT.hua.x,   y: ACTION_BUTTON_LAYOUT.hua.y,   w: ACTION_BUTTON_LAYOUT.hua.width,   h: ACTION_BUTTON_LAYOUT.hua.height },
+      { key: 'btn_kan', labelKey: 'action_label_kan', label: 'カン', act: 'Kan', code: Act.Kan, x: ACTION_BUTTON_LAYOUT.kan.x, y: ACTION_BUTTON_LAYOUT.kan.y, w: ACTION_BUTTON_LAYOUT.kan.width, h: ACTION_BUTTON_LAYOUT.kan.height },
+      { key: 'btn_pon', labelKey: 'action_label_pon', label: 'ポン', act: 'Pon', code: Act.Pon, x: ACTION_BUTTON_LAYOUT.pon.x, y: ACTION_BUTTON_LAYOUT.pon.y, w: ACTION_BUTTON_LAYOUT.pon.width, h: ACTION_BUTTON_LAYOUT.pon.height },
+      { key: 'btn_chi', labelKey: 'action_label_chi', label: 'チー', act: 'Chi', code: Act.Chi, x: ACTION_BUTTON_LAYOUT.chi.x, y: ACTION_BUTTON_LAYOUT.chi.y, w: ACTION_BUTTON_LAYOUT.chi.width, h: ACTION_BUTTON_LAYOUT.chi.height },
+      { key: 'btn_reach', labelKey: 'action_label_reach', label: 'リーチ', act: 'Reach', code: Act.Ric, x: ACTION_BUTTON_LAYOUT.reach.x, y: ACTION_BUTTON_LAYOUT.reach.y, w: ACTION_BUTTON_LAYOUT.reach.width, h: ACTION_BUTTON_LAYOUT.reach.height },
+      { key: 'btn_ron', labelKey: 'action_label_ron', label: 'ロン', act: 'Ron', code: Act.Ron, x: ACTION_BUTTON_LAYOUT.ron.x, y: ACTION_BUTTON_LAYOUT.ron.y, w: ACTION_BUTTON_LAYOUT.ron.width, h: ACTION_BUTTON_LAYOUT.ron.height },
+      { key: 'btn_tsumo', labelKey: 'action_label_tsumo', label: 'ツモ', act: 'Tsumo', code: Act.Tsu, x: ACTION_BUTTON_LAYOUT.tsumo.x, y: ACTION_BUTTON_LAYOUT.tsumo.y, w: ACTION_BUTTON_LAYOUT.tsumo.width, h: ACTION_BUTTON_LAYOUT.tsumo.height },
+      { key: 'btn_pass', labelKey: 'action_label_pass', label: 'パス', act: 'Pass', code: Act.Pas, x: ACTION_BUTTON_LAYOUT.pass.x, y: ACTION_BUTTON_LAYOUT.pass.y, w: ACTION_BUTTON_LAYOUT.pass.width, h: ACTION_BUTTON_LAYOUT.pass.height },
+      { key: 'btn_flow', labelKey: 'action_label_flow', label: '流局', act: 'Tao', code: Act.Tao, x: ACTION_BUTTON_LAYOUT.flow.x, y: ACTION_BUTTON_LAYOUT.flow.y, w: ACTION_BUTTON_LAYOUT.flow.width, h: ACTION_BUTTON_LAYOUT.flow.height },
+      { key: 'btn_hua', labelKey: 'action_label_hua', label: '花', act: 'Hua', code: Act.Hua, x: ACTION_BUTTON_LAYOUT.hua.x, y: ACTION_BUTTON_LAYOUT.hua.y, w: ACTION_BUTTON_LAYOUT.hua.width, h: ACTION_BUTTON_LAYOUT.hua.height },
     ]
   }
   private readonly DEFAULT_ACTION_BUTTONS = new Set(['Kan', 'Pon', 'Chi', 'Reach', 'Ron', 'Pass'])
   private readonly MOBILE_HAND_ACTION_BUTTONS = new Set(['Kan', 'Pon', 'Chi', 'Reach', 'Ron', 'Pass'])
 
+  private actionButtonDisplaySize(def: { w: number; h: number }) {
+    const scale = this.layoutMode === 'mobileLandscape' ? 1 : 1.1
+    return { width: Math.round(def.w * scale), height: Math.round(def.h * scale) }
+  }
+
   private createActionButtons() {
+    this.actionPanelFrame = this.clipToBoard(this.add.rectangle(0, 0, 1, 1, mixThemeTint(this.themeUiTint, 0x000000, 0.3), 1)
+      .setStrokeStyle(2, mixThemeTint(this.themeUiTint, 0xffffff, 0.62), 1)
+      .setDepth(Z_PANEL + 9)
+      .setVisible(false))
     for (const def of this.ACT_BTNS) {
       const pos = boardLocalPoint({ x: def.x, y: def.y })
-      const btn = this.clipToBoard(this.add.sprite(pos.x + def.w / 2, pos.y + def.h / 2, this.resolveSkinTextureKey(def.key), 1)
-        .setDisplaySize(def.w, def.h)
+      const size = this.actionButtonDisplaySize(def)
+      const x = pos.x + size.width / 2
+      const y = pos.y + size.height / 2
+      const background = this.clipToBoard(this.add.rectangle(x, y, size.width, size.height, mixThemeTint(this.themeUiTint, 0x000000, 0.12), 1)
+        .setStrokeStyle(1, mixThemeTint(this.themeUiTint, 0xffffff, 0.5), 1)
         .setDepth(Z_PANEL + 10)
         .setVisible(true))
-      this.actionButtonSprites.set(def.act, btn)
+      const sprite = this.clipToBoard(this.add.sprite(x, y, def.labelKey, 1)
+        .setDisplaySize(size.width, size.height)
+        .setDepth(Z_PANEL + 11)
+        .setVisible(true))
+      this.actionButtonSprites.set(def.act, { background, sprite })
     }
     const horaErrorLayout = ACTION_BUTTON_LAYOUT.horaError
     const horaPos = boardLocalPoint({ x: horaErrorLayout.x, y: horaErrorLayout.y })
-    this.horaErrorSprite = this.clipToBoard(this.add.sprite(horaPos.x + horaErrorLayout.width / 2, horaPos.y + horaErrorLayout.height / 2, this.resolveSkinTextureKey('btn_fury'), 0)
-      .setDisplaySize(horaErrorLayout.width, horaErrorLayout.height)
+    this.horaErrorText = this.clipToBoard(this.add.text(horaPos.x + horaErrorLayout.width / 2, horaPos.y + horaErrorLayout.height / 2, '', {
+      fontFamily: 'sans-serif',
+      fontSize: '13px',
+      color: '#fff2cc',
+      align: 'center',
+      wordWrap: { width: horaErrorLayout.width },
+    }).setOrigin(0.5)
       .setDepth(Z_PANEL + 11)
       .setVisible(false))
     this.setActionButtonsEnabled(new Set())
+  }
+
+  private setActionButtonPosition(button: ActionButtonControl, x: number, y: number) {
+    button.background.setPosition(x, y)
+    button.sprite.setPosition(x, y)
+  }
+
+  private setActionButtonVisible(button: ActionButtonControl, visible: boolean) {
+    button.background.setVisible(visible)
+    button.sprite.setVisible(visible)
+  }
+
+  private setActionButtonState(button: ActionButtonControl, state: 'disabled' | 'normal' | 'hover' | 'pressed') {
+    button.sprite.setFrame(state === 'disabled' ? 1 : state === 'hover' ? 2 : state === 'pressed' ? 3 : 0)
+    const fill = state === 'disabled'
+      ? mixThemeTint(this.themeUiTint, 0x000000, 0.5)
+      : state === 'hover'
+        ? mixThemeTint(this.themeUiTint, 0xffffff, 0.12)
+        : state === 'pressed'
+          ? mixThemeTint(this.themeUiTint, 0x000000, 0.25)
+          : mixThemeTint(this.themeUiTint, 0x000000, 0.12)
+    button.background
+      .setFillStyle(fill, state === 'disabled' ? 0.7 : 1)
+      .setStrokeStyle(1, mixThemeTint(this.themeUiTint, 0xffffff, state === 'disabled' ? 0.22 : 0.5), state === 'disabled' ? 0.6 : 1)
+  }
+
+  private updateActionPanelFrame(left: number, top: number, width: number, height: number, visible: boolean) {
+    this.actionPanelFrame?.setPosition(left + width / 2, top + height / 2)
+      .setSize(width, height)
+      .setDisplaySize(width, height)
+      .setFillStyle(mixThemeTint(this.themeUiTint, 0x000000, 0.3), 1)
+      .setStrokeStyle(2, mixThemeTint(this.themeUiTint, 0xffffff, 0.62), 1)
+      .setVisible(visible)
   }
 
   private visibleActionButtonDefs(visibleActs: Set<string>) {
@@ -4964,11 +5147,40 @@ export default class GameScene extends Phaser.Scene {
         const btn = this.actionButtonSprites.get(def.act)
         if (!btn) continue
         const pos = boardLocalPoint({ x: def.x, y: def.y })
-        btn.setPosition(pos.x + offset.x + def.w / 2, pos.y + offset.y + def.h / 2)
+        const size = this.actionButtonDisplaySize(def)
+        this.setActionButtonPosition(btn, pos.x + offset.x + size.width / 2, pos.y + offset.y + size.height / 2)
+      }
+      if (!this.isViewer) {
+        const handSprites = this.handSprites[this.myOdr].filter(sprite => sprite.active && sprite.visible)
+        if (handSprites.length > 0) {
+          const handBounds = handSprites.slice(1).reduce(
+            (bounds, sprite) => Phaser.Geom.Rectangle.Union(bounds, sprite.getBounds(), bounds),
+            handSprites[0].getBounds(),
+          )
+          const displayedDefs = this.ACT_BTNS.filter(def => visibleActs.has(def.act) || this.DEFAULT_ACTION_BUTTONS.has(def.act))
+          const gap = 4
+          const frameTop = handBounds.bottom + 10
+          const frameHeight = 90
+          const frameWidth = 501
+          const totalWidth = displayedDefs.reduce((sum, def) => sum + this.actionButtonDisplaySize(def).width, 0) + gap * Math.max(0, displayedDefs.length - 1)
+          let x = handBounds.left + frameWidth / 2 - totalWidth / 2
+          const y = frameTop + 54
+          for (const def of displayedDefs) {
+            const btn = this.actionButtonSprites.get(def.act)
+            const size = this.actionButtonDisplaySize(def)
+            if (btn) this.setActionButtonPosition(btn, x + size.width / 2, y)
+            x += size.width + gap
+          }
+          this.updateActionPanelFrame(handBounds.left, frameTop, frameWidth, frameHeight, displayedDefs.length > 0)
+          this.actionPanelBounds = new Phaser.Geom.Rectangle(handBounds.left, frameTop, frameWidth, frameHeight)
+          this.events.emit('actionPanelLayout')
+        } else if (visibleActs.size === 0) {
+          this.actionPanelFrame?.setVisible(false)
+        }
       }
       const horaErrorLayout = ACTION_BUTTON_LAYOUT.horaError
       const horaPos = boardLocalPoint({ x: horaErrorLayout.x, y: horaErrorLayout.y })
-      this.horaErrorSprite?.setPosition(
+      this.horaErrorText?.setPosition(
         horaPos.x + offset.x + horaErrorLayout.width / 2,
         horaPos.y + offset.y + horaErrorLayout.height / 2,
       )
@@ -4976,7 +5188,10 @@ export default class GameScene extends Phaser.Scene {
     }
 
     const displayedDefs = this.displayedActionButtonDefs(visibleActs)
-    if (displayedDefs.length === 0) return
+    if (displayedDefs.length === 0) {
+      this.actionPanelFrame?.setVisible(false)
+      return
+    }
     const replaceHand = this.shouldReplaceMobileHandWithActions(visibleActs)
     const gap = 4
     const totalWidth = displayedDefs.reduce((sum, def) => sum + def.w, 0) + gap * Math.max(0, displayedDefs.length - 1)
@@ -4984,29 +5199,41 @@ export default class GameScene extends Phaser.Scene {
     const handCount = MOBILE_SELF_HAND_FIXED_COUNT
     const handScale = MOBILE_SELF_HAND_TILE_SCALE * mobileContentScale()
     const handStart = mobileOuterHandPos(0, 0, handCount, false, handScale) ?? handPos(0, 0, false)
-    const tileWidth = 37 * handScale
-    const handWidth = Math.max(0, handCount - 1) * tileWidth + tileWidth
     const handHeight = 63 * handScale
-    let x = handStart.x + handWidth / 2 - totalWidth / 2
+    const framePadding = 6
+    const frameWidth = totalWidth
+    const frameLeft = handStart.x + (37 * handScale * handCount) / 2 - frameWidth / 2
+    let x = frameLeft + frameWidth / 2 - totalWidth / 2
     const y = replaceHand
       ? handStart.y + Math.max(0, (handHeight - maxHeight) / 2) - 2
       : handStart.y - maxHeight - 8
 
+    this.updateActionPanelFrame(
+      frameLeft - framePadding,
+      y - framePadding,
+      frameWidth + framePadding * 2,
+      maxHeight + framePadding * 2,
+      replaceHand,
+    )
+
     for (const def of displayedDefs) {
       const btn = this.actionButtonSprites.get(def.act)
-      if (btn) btn.setPosition(x + def.w / 2, y + def.h / 2)
+      if (btn) this.setActionButtonPosition(btn, x + def.w / 2, y + def.h / 2)
       x += def.w + gap
     }
   }
 
   private setHoraErrorVisible(reason: string) {
-    if (!this.horaErrorSprite) return
-    const frame = reason === 'furiten' ? 1 : reason === 'sameTurnFuriten' ? 2 : reason === 'invalid' ? 0 : -1
-    if (frame < 0) {
-      this.horaErrorSprite.setVisible(false)
+    if (!this.horaErrorText) return
+    const message = reason === 'furiten' ? 'フリテンです'
+      : reason === 'sameTurnFuriten' ? '同巡フリテンです'
+        : reason === 'invalid' ? '和了できません'
+          : ''
+    if (!message) {
+      this.horaErrorText.setVisible(false)
       return
     }
-    this.horaErrorSprite.setFrame(frame).setVisible(true)
+    this.horaErrorText.setText(message).setVisible(true)
   }
 
   private setActionButtonsEnabled(visibleActs: Set<string>) {
@@ -5014,6 +5241,13 @@ export default class GameScene extends Phaser.Scene {
     const passAlternateVisible = visibleActs.has('Tao') || visibleActs.has('Hua')
     const replaceMobileHand = this.shouldReplaceMobileHandWithActions(visibleActs)
     const displayedMobileActs = new Set(this.displayedActionButtonDefs(visibleActs).map(def => def.act))
+    if (!this.initialActionPresentationReady || this.deferInitialActionPresentation || this.initialDealInProgress) {
+      this.actionPanelFrame?.setVisible(false)
+      this.actionButtonSprites.forEach(button => this.setActionButtonVisible(button, false))
+      this.mobileActionButtonsVisible = false
+      this.updateMobileActionHandVisibility()
+      return
+    }
     this.updateActionButtonPositions(visibleActs)
     for (const def of this.ACT_BTNS) {
       const btn = this.actionButtonSprites.get(def.act)
@@ -5023,28 +5257,28 @@ export default class GameScene extends Phaser.Scene {
         && !(def.act === 'Ron' && tsumoVisible)
         && !(def.act === 'Pass' && passAlternateVisible)
       const mobileVisible = replaceMobileHand && displayedMobileActs.has(def.act)
-      btn.removeAllListeners()
-      btn.disableInteractive()
-      btn.setFrame(enabled ? 0 : 1)
+      btn.sprite.removeAllListeners()
+      btn.sprite.disableInteractive()
+      this.setActionButtonState(btn, enabled ? 'normal' : 'disabled')
       if (!enabled && !defaultVisible && !mobileVisible) {
-        btn.setVisible(false)
+        this.setActionButtonVisible(btn, false)
         continue
       }
-      btn.setVisible(true)
+      this.setActionButtonVisible(btn, true)
       if (!enabled) continue
-      btn.setFrame(0)
+      btn.sprite
         .setInteractive({ useHandCursor: true })
-        .on('pointerover', () => btn.setFrame(2))
-        .on('pointerout',  () => btn.setFrame(0))
-        .on('pointerdown', () => btn.setFrame(3))
+        .on('pointerover', () => this.setActionButtonState(btn, 'hover'))
+        .on('pointerout',  () => this.setActionButtonState(btn, 'normal'))
+        .on('pointerdown', () => this.setActionButtonState(btn, 'pressed'))
         .on('pointerup', async () => {
-          btn.setFrame(2)
+          this.setActionButtonState(btn, 'hover')
           await this.sendAction(def, [...visibleActs])
         })
     }
-      this.actionPanelSprite?.setVisible(this.layoutMode !== 'mobileLandscape' && !(this.isViewer && this.layoutMode === 'responsiveDesktop'))
-      this.mobileActionButtonsVisible = replaceMobileHand
-      this.updateMobileActionHandVisibility()
+    this.mobileActionButtonsVisible = replaceMobileHand
+    this.updateMobileActionHandVisibility()
+    this.events.emit('actionPanelLayout')
   }
 
   showActionButtons(acts: string[]) {
@@ -5151,6 +5385,9 @@ export default class GameScene extends Phaser.Scene {
   }
 
   update() {
+    if (this.isMeldLayoutFixture && !this.fixturePreviewApplied && this.handSprites[this.myOdr].some(sprite => sprite.active && sprite.visible)) {
+      this.showFixtureActionPreview()
+    }
     const centerInfoLayoutKey = mobileVisibleWorldLayoutKey(this.layoutMode)
     if (centerInfoLayoutKey !== this.mobileCenterInfoLayoutKey) {
       this.mobileCenterInfoLayoutKey = centerInfoLayoutKey
@@ -5179,6 +5416,18 @@ export default class GameScene extends Phaser.Scene {
       void loc
       this.redrawHand(odr)
     })
+  }
+
+  private showFixtureActionPreview() {
+    if (!this.isMeldLayoutFixture || this.fixturePreviewApplied) return
+    if (!this.handSprites[this.myOdr].some(sprite => sprite.active && sprite.visible)) return
+    const actions = ['Kan', 'Pon', 'Chi', 'Reach', 'Ron', 'Pass']
+    this.currentActionOffers = actions
+    this.showActionButtons(actions)
+    const uiScene = this.scene.get('UIScene') as Phaser.Scene & { startTimer?: (data: Record<string, number | boolean>, endAt: number) => void }
+    const timerData = { timeLimit: 60000, baseTimeMs: 20000, keepTimeMs: 20000, timeBankMs: 40000, timeBankEnabled: true, maxTimeMs: 60000 }
+    uiScene.startTimer?.(timerData, performance.now() + timerData.timeLimit)
+    this.fixturePreviewApplied = true
   }
 
   private applyActionPacket(data: Record<string, unknown>) {

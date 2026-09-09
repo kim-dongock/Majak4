@@ -126,7 +126,6 @@ export default class PreloadScene extends Phaser.Scene {
       { frameWidth: 31, frameHeight: 55 })
 
     /* ── UI パーツ ── */
-    this.load.image('mj_uiBoard',   `${IMG}/mj_uiBoard.png`)
     this.load.image('mj_resBtBoard',`${IMG}/mj_resBtBoard.png`)
     this.load.image('mj_watchBoard', `${IMG}/mj_watchBoard.png`)
     this.load.image('mj_myTurn',    `${IMG}/mj_myTurn.png`)
@@ -155,7 +154,6 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.image('mj_rkey',      `${IMG}/mj_rkey.png`)
     this.load.image('cursor_mouse', `${IMG}/mj_crsMouse_2(6).png`)
     this.load.image('cursor_keyboard', `${IMG}/mj_crsKybrd.png`)
-    loadBgSkinImage('mj_uiBoard')
     loadBgSkinImage('mj_resBtBoard')
     loadBgSkinImage('mj_watchBoard')
     loadBgSkinImage('mj_myTurn')
@@ -238,6 +236,24 @@ export default class PreloadScene extends Phaser.Scene {
     this.load.spritesheet('mj_optwar', `${IMG}/mj_optwar.png`, { frameWidth: 17, frameHeight: 17 })
     this.load.spritesheet('mj_opttip', `${IMG}/mj_opttip.png`, { frameWidth: 17, frameHeight: 17 })
     this.load.spritesheet('mj_optron', `${IMG}/mj_optron.png`, { frameWidth: 17, frameHeight: 17 })
+    this.load.spritesheet('btn_ron', `${IMG}/mj_btRon.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('btn_tsumo', `${IMG}/mj_btTsumo.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('btn_chi', `${IMG}/mj_btChi.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('btn_pon', `${IMG}/mj_btPon.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('btn_kan', `${IMG}/mj_btKan.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('btn_pass', `${IMG}/mj_btPass.png`, { frameWidth: 76, frameHeight: 40 })
+    this.load.spritesheet('btn_flow', `${IMG}/mj_btFlow.png`, { frameWidth: 76, frameHeight: 40 })
+    this.load.spritesheet('btn_hua', `${IMG}/mj_BtHua.png`, { frameWidth: 58, frameHeight: 17 })
+    this.load.spritesheet('btn_reach', `${IMG}/mj_btRichi.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('action_label_kan', `${IMG}/mj_actionLabelKan.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('action_label_pon', `${IMG}/mj_actionLabelPon.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('action_label_chi', `${IMG}/mj_actionLabelChi.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('action_label_reach', `${IMG}/mj_actionLabelRichi.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('action_label_ron', `${IMG}/mj_actionLabelRon.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('action_label_tsumo', `${IMG}/mj_actionLabelTsumo.png`, { frameWidth: 66, frameHeight: 40 })
+    this.load.spritesheet('action_label_pass', `${IMG}/mj_actionLabelPass.png`, { frameWidth: 76, frameHeight: 40 })
+    this.load.spritesheet('action_label_flow', `${IMG}/mj_actionLabelFlow.png`, { frameWidth: 76, frameHeight: 40 })
+    this.load.spritesheet('action_label_hua', `${IMG}/mj_actionLabelHua.png`, { frameWidth: 58, frameHeight: 17 })
     loadBgSkinImage('mj_recBg')
     loadBgSkinSheet('mj_recPaeFt', { frameWidth: 20, frameHeight: 29 })
     loadBgSkinSheet('mj_recPaeSd', { frameWidth: 28, frameHeight: 22 })
@@ -246,32 +262,6 @@ export default class PreloadScene extends Phaser.Scene {
       loadBgSkinImage(key)
     }
     loadBgSkinSheet('mj_num_rh', { frameWidth: 10, frameHeight: 14 })
-
-    /* ── 操作ボタン (4フレーム スプライト) ── */
-    this.load.spritesheet('btn_ron',   `${IMG}/mj_btRon.png`,   { frameWidth: 66, frameHeight: 40 })
-    this.load.spritesheet('btn_tsumo', `${IMG}/mj_btTsumo.png`, { frameWidth: 66, frameHeight: 40 })
-    this.load.spritesheet('btn_chi',   `${IMG}/mj_btChi.png`,   { frameWidth: 66, frameHeight: 40 })
-    this.load.spritesheet('btn_pon',   `${IMG}/mj_btPon.png`,   { frameWidth: 66, frameHeight: 40 })
-    this.load.spritesheet('btn_kan',   `${IMG}/mj_btKan.png`,   { frameWidth: 66, frameHeight: 40 })
-    this.load.spritesheet('btn_pass',  `${IMG}/mj_btPass.png`,  { frameWidth: 76, frameHeight: 40 })
-    this.load.spritesheet('btn_flow',  `${IMG}/mj_btFlow.png`,  { frameWidth: 76, frameHeight: 40 })
-    this.load.spritesheet('btn_hua',   `${IMG}/mj_BtHua.png`,   { frameWidth: 58, frameHeight: 17 })
-    this.load.spritesheet('btn_reach', `${IMG}/mj_btRichi.png`, { frameWidth: 66, frameHeight: 40 })
-    this.load.spritesheet('btn_fury',  `${IMG}/mj_btFuriten.png`, { frameWidth: 66, frameHeight: 40 })
-    const skinButtonSheets: Array<[string, string, number]> = [
-      ['btn_ron', 'mj_btRon', 66],
-      ['btn_tsumo', 'mj_btTsumo', 66],
-      ['btn_chi', 'mj_btChi', 66],
-      ['btn_pon', 'mj_btPon', 66],
-      ['btn_kan', 'mj_btKan', 66],
-      ['btn_pass', 'mj_btPass', 76],
-      ['btn_flow', 'mj_btFlow', 76],
-      ['btn_reach', 'mj_btRichi', 66],
-      ['btn_fury', 'mj_btFuriten', 66],
-    ]
-    for (const [key, file, frameWidth] of skinButtonSheets) {
-      if (hasFullCustomBg) this.load.spritesheet(`${key}_skin`, `${fullUiSkinBase}/${file}_${fullUiSkinSuffix}.png`, { frameWidth, frameHeight: 40 })
-    }
 
     const btns: [string, string][] = [
       ['btn_ok',    'mj_btOk.png'],

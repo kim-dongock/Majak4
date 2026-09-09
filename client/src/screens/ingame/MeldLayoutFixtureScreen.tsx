@@ -42,6 +42,7 @@ const ACT_KAN = 4
 const ACT_RON = 5
 const ACT_RIC = 9
 const ACT_TSUMO = 11
+const FIXTURE_ACTIONS = ['Kan', 'Pon', 'Chi', 'Reach', 'Ron', 'Pass']
 const FIXTURE_REQUIRED_TEXTURES = [
   'hai_omote', 'hai_sute', 'hai_ura_2', 'hai_open_1', 'hai_open_2', 'hai_open_3',
   'eff_roneff_11', 'eff_roneff_b_20', 'eff_roneff_c_27',
@@ -98,7 +99,7 @@ function calledMeld(action: Exclude<FixtureAction, 'ron'>, seatOrder: number, me
 
 function mountFixture(game: Phaser.Game, action: FixtureAction, meldCounts: readonly number[]) {
   const scene = game.scene.getScene('GameScene') as (Phaser.Scene & { [key: string]: unknown }) | null
-  if (!scene || !FIXTURE_REQUIRED_TEXTURES.every(texture => game.textures.exists(texture))) return false
+  if (!scene?.scene.isActive() || !FIXTURE_REQUIRED_TEXTURES.every(texture => game.textures.exists(texture))) return false
   const players = scene['players'] as Array<Record<string, unknown>>
   if (!Array.isArray(players) || players.length !== 4) return false
   scene['chicha'] = 0
@@ -140,16 +141,36 @@ function mountFixture(game: Phaser.Game, action: FixtureAction, meldCounts: read
     ;(scene['redrawDiscards'] as (seatOrder: number) => void)(odr)
     ;(scene['redrawMelds'] as (seatOrder: number) => void)(odr)
   }
+  const handSprites = scene['handSprites'] as Array<Array<Phaser.GameObjects.Image>>
+  const discardSprites = scene['suteSprites'] as Array<Array<Phaser.GameObjects.Image>>
+  const meldSprites = scene['meldSprites'] as Array<Array<Phaser.GameObjects.Image>>
+  handSprites?.forEach(sprites => sprites.forEach(sprite => sprite.setVisible(true)))
+  discardSprites?.forEach(sprites => sprites.forEach(sprite => sprite.setVisible(true)))
+  meldSprites?.forEach(sprites => sprites.forEach(sprite => sprite.setVisible(true)))
   ;(scene['redrawDeadWall'] as () => void)()
   const playerState = { players, viewOdr: 0 }
-  scene.events.emit('stateUpdate', playerState)
   const refreshPlayerHud = () => {
     const uiScene = scene.scene.get('UIScene') as Phaser.Scene & { [key: string]: unknown }
     const updatePlayerTexts = uiScene?.['updatePlayerTexts'] as ((states: Array<Record<string, unknown>>) => void) | undefined
-    if (updatePlayerTexts) {
+    if (updatePlayerTexts && uiScene['timerBack'] && scene['actionPanelFrame']) {
+      scene.events.emit('stateUpdate', playerState)
       updatePlayerTexts.call(uiScene, players)
       const showChichaMarkerPreview = uiScene['showFixtureChichaMarkerPreview'] as (() => void) | undefined
       showChichaMarkerPreview?.call(uiScene)
+      scene['currentActionOffers'] = FIXTURE_ACTIONS
+      ;(scene['showActionButtons'] as ((actions: string[]) => void) | undefined)?.(FIXTURE_ACTIONS)
+      ;(scene['updateActionButtonPositions'] as ((actions: Set<string>) => void) | undefined)?.(new Set(FIXTURE_ACTIONS))
+      const timerData = {
+        viewOdr: 0,
+        timeLimit: 60000,
+        baseTimeMs: 20000,
+        keepTimeMs: 20000,
+        timeBankMs: 40000,
+        timeBankEnabled: true,
+        maxTimeMs: 60000,
+      }
+      scene.events.emit('actionPromptStart', timerData)
+      ;(uiScene['startTimer'] as ((data: typeof timerData, endAt: number) => void) | undefined)?.(timerData, performance.now() + timerData.timeLimit)
       return
     }
     scene.time.delayedCall(100, refreshPlayerHud)
@@ -388,6 +409,28 @@ export default function MeldLayoutFixtureScreen() {
     animationFrame = requestAnimationFrame(updateFixture)
     return () => cancelAnimationFrame(animationFrame)
   }, [action, meldCounts])
+
+  useEffect(() => {
+    if (!ready) return
+    let attempts = 0
+    const showPreview = () => {
+      const game = gameRef.current
+      const scene = game?.scene.getScene('GameScene') as (Phaser.Scene & { [key: string]: unknown }) | undefined
+      const uiScene = game?.scene.getScene('UIScene') as (Phaser.Scene & { [key: string]: unknown }) | undefined
+      if (!scene || !uiScene || !scene.scene.isActive() || !uiScene.scene.isActive() || !uiScene['timerBack']) return false
+      scene['currentActionOffers'] = FIXTURE_ACTIONS
+      ;(scene['showActionButtons'] as ((actions: string[]) => void) | undefined)?.(FIXTURE_ACTIONS)
+      ;(scene['updateActionButtonPositions'] as ((actions: Set<string>) => void) | undefined)?.(new Set(FIXTURE_ACTIONS))
+      const timerData = { timeLimit: 60000, baseTimeMs: 20000, keepTimeMs: 20000, timeBankMs: 40000, timeBankEnabled: true, maxTimeMs: 60000 }
+      ;(uiScene['startTimer'] as ((data: typeof timerData, endAt: number) => void) | undefined)?.(timerData, performance.now() + timerData.timeLimit)
+      return true
+    }
+    const timer = window.setInterval(() => {
+      attempts++
+      if (showPreview() || attempts >= 30) window.clearInterval(timer)
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [ready])
 
   const isMobile = mode === 'mobileLandscape'
 

@@ -20,7 +20,7 @@
 import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { useLocation, useNavigate } from 'react-router-dom'
-import CfgDlg, { loadMajakConfig, saveMajakConfig, type MJConfig } from '../screens/outgame/dialogs/CfgDlg'
+import CfgDlg, { applyMajakColorTheme, loadMajakConfig, saveMajakConfig, type MJConfig } from '../screens/outgame/dialogs/CfgDlg'
 import { configureMajakSound } from '../utils/majakSound'
 import { useCustomSkinStore } from '../store/customSkinStore'
 import { getLegacyFullUiSkinId } from '../utils/legacySkinPalette'
@@ -173,8 +173,8 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
   const borderSrc = roomSkinSrc('mj_border')
   const borderFallbackSrc = roomSkinFallbackSrc('mj_border')
   const borderBackgroundImage = borderFallbackSrc ? `url(${borderSrc}), url(${borderFallbackSrc})` : `url(${borderSrc})`
-  const frameChromeColor = useRoomBoardSkin ? '#151515' : '#2c9827'
-  const frameChromeShadow = useRoomBoardSkin ? '#333333' : '#147d1f'
+  const frameChromeColor = useRoomBoardSkin ? '#151515' : 'var(--majak-frame-chrome-color)'
+  const frameChromeShadow = useRoomBoardSkin ? '#333333' : 'var(--majak-frame-shadow-color)'
   const frameBottomColor = useRoomBoardSkin ? '#e8e8e8' : frameChromeColor
   const layoutMode = useOutgameLayoutMode()
   const desktopScale = useDesktopScreenScale(layoutMode === 'desktop' && !isResponsiveDesktopScreen)
@@ -184,6 +184,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
 
   useEffect(() => {
     configureMajakSound(cfg)
+    applyMajakColorTheme(cfg)
   }, [cfg])
 
   useEffect(() => {
@@ -332,11 +333,11 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: frameChromeColor,
-      border: isResponsiveDesktopScreen ? '2px solid #0b552a' : undefined,
+      border: isResponsiveDesktopScreen ? '2px solid var(--majak-frame-border-color)' : undefined,
       boxSizing: isResponsiveDesktopScreen ? 'border-box' : undefined,
       outline: isResponsiveDesktopScreen ? undefined : `2px solid ${frameChromeColor}`,
       boxShadow: isResponsiveDesktopScreen
-        ? 'inset 0 0 0 2px #063618, 0 0 0 1px rgba(84, 168, 91, 0.48)'
+        ? 'inset 0 0 0 2px var(--majak-frame-shadow-color), 0 0 0 1px var(--majak-frame-border-color)'
         : `inset 0 0 0 2px ${frameChromeShadow}`,
       transform: desktopScale === 1 ? undefined : `scale(${desktopScale})`,
       transformOrigin: 'center center',
@@ -489,7 +490,10 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
           initial={cfg}
           onOK={c => { saveMajakConfig(c); setCfg(c); setShowCfg(false) }}
           onCancel={() => setShowCfg(false)}
-          onModify={configureMajakSound}
+          onModify={nextConfig => {
+            configureMajakSound(nextConfig)
+            applyMajakColorTheme(nextConfig)
+          }}
         />
       )}
       {showExitConfirm && <EndingPopupWnd onOK={() => { void handleExitConfirm() }} onCancel={() => setShowExitConfirm(false)} />}
