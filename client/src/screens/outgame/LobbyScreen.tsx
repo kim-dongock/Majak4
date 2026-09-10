@@ -1365,6 +1365,7 @@ interface TournamentEntry {
   roomOption: string
   maxViewer: number
   planPix: string
+  organizerName: string
   resultMember1: string
   resultMember2: string
   resultMember3: string
@@ -1404,6 +1405,7 @@ function readTournamentEntry(raw: Record<string, unknown>): TournamentEntry {
     roomOption: String(raw.roomOption ?? ''),
     maxViewer: Number(raw.maxViewer ?? 0),
     planPix: String(raw.planPix ?? raw['plan' + 'Member' + 'Id'] ?? ''),
+    organizerName: String(raw.organizerName ?? raw.organizer ?? ''),
     resultMember1: String(raw.resultMember1 ?? ''),
     resultMember2: String(raw.resultMember2 ?? ''),
     resultMember3: String(raw.resultMember3 ?? ''),
@@ -1568,7 +1570,7 @@ function getTournamentDetailLines(tournament: TournamentEntry | null, memberName
   return tournament ? [
     '【概要】',
     `大会名：${tournament.playName}`,
-    `開催者：${memberNameByPix.get(tournament.planPix) || tournament.planPix}`,
+    `開催者：${tournament.organizerName || memberNameByPix.get(tournament.planPix) || tournament.planPix || '不明'}`,
     `パスワード：${tournament.hasPassword === 0 ? 'なし' : 'あり'}`,
     `日付：${tournament.playStartDt.slice(5, 10)}`,
     `開始時間：${tournament.playStartDt.slice(11, 16)}`,
@@ -1615,7 +1617,11 @@ function MobileTournamentMatchPanel({
   }, [size.width])
 
   return (
-    <div ref={viewportRef} className="majak-mobile-tournament-bracket">
+    <div
+      ref={viewportRef}
+      className="majak-mobile-tournament-bracket"
+      style={{ backgroundColor: 'var(--majak-screen-surface-color)' }}
+    >
       <div style={{ position: 'relative', width: size.width * scale, height: size.height * scale, margin: '0 auto' }}>
         <div style={{ position: 'absolute', left: 0, top: 0, width: size.width, height: size.height, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
           <img
@@ -2102,6 +2108,7 @@ export default function LobbyScreen() {
   const [tournamentJoinSeqNo, setTournamentJoinSeqNo] = useState(0)
   const [selectedTournamentSeqNo, setSelectedTournamentSeqNo] = useState<number | null>(null)
   const [tournamentPage, setTournamentPage] = useState<'list' | 'match'>('list')
+  const [showTournamentBracket, setShowTournamentBracket] = useState(false)
   const [tournamentDetailPlan, setTournamentDetailPlan] = useState<TournamentEntry | null>(null)
   const [tournamentDetails, setTournamentDetails] = useState<TournamentDetailEntry[]>([])
   const tournamentDetailActionRef = useRef<'select' | 'page' | null>(null)
@@ -2431,8 +2438,7 @@ export default function LobbyScreen() {
         }
         setTournamentDetails(details)
         if (tournamentDetailActionRef.current === 'page') {
-          setTournamentPage('match')
-          SignalR.send('c7e', buildGetMemberListPayload(channelId ?? '')).catch(() => {})
+          setShowTournamentBracket(true)
         }
         tournamentDetailActionRef.current = null
       }
@@ -3672,6 +3678,18 @@ export default function LobbyScreen() {
         />
       )}
 
+      {showTournamentBracket && selectedTournament && (
+        <div className="majak-tournament-bracket-dialog-overlay" role="presentation">
+          <section className="majak-tournament-bracket-dialog" role="dialog" aria-modal="true" aria-labelledby="tournament-bracket-title">
+            <header>
+              <h2 id="tournament-bracket-title">トーナメント対戦表</h2>
+              <button className="majak-popup-titlebar__close" type="button" onClick={() => setShowTournamentBracket(false)} aria-label="閉じる">×</button>
+            </header>
+            <MobileTournamentMatchPanel tournament={selectedTournament} details={tournamentDetails} memberNameByPix={memberNameByPix} onWatch={onTournamentWatch} />
+          </section>
+        </div>
+      )}
+
       {showTournamentJoin && selectedTournament && (
         <div className="majak-tournament-entry-overlay" role="presentation">
           <section className="majak-tournament-entry-dialog" role="dialog" aria-modal="true" aria-labelledby="tournament-entry-title">
@@ -3725,7 +3743,7 @@ export default function LobbyScreen() {
       <div className={`majak-mobile-screen majak-mobile-lobby-screen majak-mobile-tournament-screen${useResponsiveDesktopLayout ? ' majak-responsive-desktop-lobby' : ''}`}>
         <section className={`majak-mobile-lobby-toolbar${useResponsiveDesktopLayout ? ' majak-mobile-lobby-toolbar--with-user' : ''}`}>
           <div>
-            <div className="majak-mobile-eyebrow">TOURNAMENT</div>
+            <div className="majak-mobile-eyebrow">大会</div>
             <h1>{mobileTitle}</h1>
           </div>
           {useResponsiveDesktopLayout && (
@@ -3821,7 +3839,21 @@ export default function LobbyScreen() {
               <div className="majak-mobile-tournament-detail__content">
                 {tournamentDetailLines.length === 0
                   ? <p>大会を選択してください。</p>
-                  : tournamentDetailLines.map((line, index) => <div key={`${index}-${line}`}>{line || '\u00a0'}</div>)}
+                  : tournamentDetailLines.map((line, index) => {
+                    if (line.startsWith('【') && line.endsWith('】')) {
+                      return <h2 key={`${index}-${line}`} className="majak-mobile-tournament-detail__heading">{line.slice(1, -1)}</h2>
+                    }
+                    const separatorIndex = line.indexOf('：')
+                    if (separatorIndex >= 0) {
+                      return (
+                        <div key={`${index}-${line}`} className="majak-mobile-tournament-detail__row">
+                          <span>{line.slice(0, separatorIndex)}</span>
+                          <strong>{line.slice(separatorIndex + 1)}</strong>
+                        </div>
+                      )
+                    }
+                    return <div key={`${index}-${line}`} className="majak-mobile-tournament-detail__spacer">{line || '\u00a0'}</div>
+                  })}
               </div>
               <div className="majak-mobile-tournament-actions">
                 {!isTournamentJoined ? (
@@ -3839,7 +3871,7 @@ export default function LobbyScreen() {
                     setShowTournamentRegist(true)
                   }}
                 >新規大会登録</button>
-                <button type="button" onClick={() => void onTournamentPage()} disabled={!selectedTournament}>トーナメントページ</button>
+                <button type="button" onClick={() => void onTournamentPage()} disabled={!selectedTournament}>トーナメント対戦表</button>
               </div>
             </aside>
           </div>

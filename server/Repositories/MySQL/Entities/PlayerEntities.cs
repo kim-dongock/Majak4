@@ -9,6 +9,7 @@ public sealed class PlayerAccountEntity
     public string SexCode { get; set; } = "U";
     public ushort? BirthYear { get; set; }
     public string AvatarId { get; set; } = string.Empty;
+    public string UserColor { get; set; } = "#1b6b55";
     public DateTime? TermsAgreedAt { get; set; }
     public DateTime? ApprovedAt { get; set; }
     public ulong? ApprovedBy { get; set; }

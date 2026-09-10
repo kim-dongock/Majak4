@@ -14,6 +14,7 @@ public class MajakPlayer
     public string Pix          { get; set; } = "";
     public string NickName     { get; set; } = "";
     public string AvatarId     { get; set; } = "";
+    public string UserColor    { get; set; } = "#1b6b55";
     public string Sex          { get; set; } = "";
     public int    Age          { get; set; }
     public string TabId        { get; set; } = "";

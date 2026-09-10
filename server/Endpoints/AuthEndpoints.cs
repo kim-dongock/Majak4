@@ -8,6 +8,10 @@ namespace MajakServer.Endpoints;
 internal static class AuthEndpoints
 {
     private const string PendingGoogleIdTokenCookieName = "mj_pending_google_id_token";
+    internal const string DefaultUserColor = "#1b6b55";
+
+    internal static bool IsValidUserColor(string? value)
+        => value is not null && System.Text.RegularExpressions.Regex.IsMatch(value, "^#[0-9a-fA-F]{6}$");
 
     internal static void MapAuthEndpoints(this WebApplication app)
     {
@@ -73,6 +77,7 @@ internal static class AuthEndpoints
                 sex = account.SexCode,
                 birthYear = account.BirthYear,
                 avatarId = account.AvatarId,
+                userColor = account.UserColor,
                 requiresRegistration = false,
                 accountStatus = account.AccountStatus,
                 termsAgreed = account.TermsAgreed,
@@ -148,7 +153,7 @@ internal static class AuthEndpoints
             }
             await playerRepository.SetDailyMissionAsync(account.MemberNo, conditionType: 1, progressIncrement: 1);
             var pix = sessions.IssuePix(account.MemberNo);
-            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = displayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, isTestEnv = isTest, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
+            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = displayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, userColor = account.UserColor, isTestEnv = isTest, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
         });
 
         app.MapPost("/auth/majak-login", async Task<IResult> (HttpContext context, HttpRequest request, GamePlayerRepository gamePlayers, PlayerRepository playerRepository, GameMoneyService moneyService, LogRepository logRepository, PlayerSessionService sessions, AuthRefreshSessionService refreshSessions, GameAuthTokenService gameAuth) =>
@@ -191,7 +196,7 @@ internal static class AuthEndpoints
             var pix = sessions.IssuePix(account.MemberNo);
             if (!await IssueRefreshCookieAsync(context, refreshSessions, account.MemberNo)) return Results.Problem("Hange refresh session could not be issued.");
             await InsertLoginLogOnceAsync(context, logRepository, account.MemberNo, 0);
-            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = account.DisplayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, password, isTestEnv = isTest, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
+            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = account.DisplayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, userColor = account.UserColor, password, isTestEnv = isTest, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
         });
 
         if (app.Configuration.GetValue("Authentication:GoogleEnabled", true))
@@ -238,7 +243,7 @@ internal static class AuthEndpoints
             var pix = sessions.IssuePix(account.MemberNo);
             if (await IssueRefreshCookieAsync(context, refreshSessions, account.MemberNo)) await InsertLoginLogOnceAsync(context, logRepository, account.MemberNo, 0);
             ClearPendingGoogleIdTokenCookie(context);
-            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = account.DisplayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
+            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(account.MemberNo, pix), memberNo = pix, name = account.DisplayName, sex = account.SexCode, birthYear = account.BirthYear, avatarId = account.AvatarId, userColor = account.UserColor, requiresRegistration = false, accountStatus = account.AccountStatus, termsAgreed = account.TermsAgreed });
         });
 
         app.MapPost("/auth/google-register", async Task<IResult> (HttpContext context, GooglePlayerRegisterRequest body, GamePlayerRepository gamePlayers, PlayerRepository playerRepository, LogRepository logRepository, GameMoneyService moneyService, IConfiguration configuration, ILogger<AuthEndpointsMarker> logger, PlayerSessionService sessions, AuthRefreshSessionService refreshSessions, GameAuthTokenService gameAuth) =>
@@ -260,7 +265,9 @@ internal static class AuthEndpoints
             if (sexCode is not ("M" or "F")) return Results.BadRequest(new { error = "INVALID_SEX" });
             if (body.BirthYear is null || body.BirthYear < 1900 || body.BirthYear > DateTime.UtcNow.Year) return Results.BadRequest(new { error = "INVALID_BIRTH_YEAR" });
             if (string.IsNullOrWhiteSpace(body.AvatarId) || !AvatarCatalog.IsValid(sexCode, body.AvatarId)) return Results.BadRequest(new { error = "INVALID_AVATAR" });
-            var memberNo = existing?.MemberNo ?? (await gamePlayers.RegisterGoogleAsync(payload.Subject, email, nickname, sexCode, (ushort)body.BirthYear.Value, body.AvatarId!)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (!IsValidUserColor(body.UserColor)) return Results.BadRequest(new { error = "INVALID_USER_COLOR" });
+            var userColor = body.UserColor!.ToLowerInvariant();
+            var memberNo = existing?.MemberNo ?? (await gamePlayers.RegisterGoogleAsync(payload.Subject, email, nickname, sexCode, (ushort)body.BirthYear.Value, body.AvatarId!, userColor)).ToString(System.Globalization.CultureInfo.InvariantCulture);
             var displayName = existing?.DisplayName ?? nickname;
             if (existing is null) await moneyService.SetNewPlayerInitialMoneyWithHistoryAsync(memberNo, context.Connection.RemoteIpAddress?.ToString() ?? string.Empty);
             else await gamePlayers.RefreshLoginAsync(memberNo, displayName, false);
@@ -268,7 +275,7 @@ internal static class AuthEndpoints
             var pix = sessions.IssuePix(memberNo);
             if (await IssueRefreshCookieAsync(context, refreshSessions, memberNo)) await InsertLoginLogOnceAsync(context, logRepository, memberNo, existing is null ? (byte)2 : (byte)0);
             ClearPendingGoogleIdTokenCookie(context);
-            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(memberNo, pix), memberNo = pix, name = displayName, sex = existing?.SexCode ?? sexCode, birthYear = existing?.BirthYear ?? body.BirthYear, avatarId = existing?.AvatarId ?? body.AvatarId, requiresRegistration = false, accountStatus = existing?.AccountStatus ?? 1, termsAgreed = existing?.TermsAgreed ?? true });
+            return Results.Ok(new { pix, accessToken = gameAuth.IssueAccessToken(memberNo, pix), memberNo = pix, name = displayName, sex = existing?.SexCode ?? sexCode, birthYear = existing?.BirthYear ?? body.BirthYear, avatarId = existing?.AvatarId ?? body.AvatarId, userColor = existing?.UserColor ?? userColor, requiresRegistration = false, accountStatus = existing?.AccountStatus ?? 1, termsAgreed = existing?.TermsAgreed ?? true });
         });
         }
     }

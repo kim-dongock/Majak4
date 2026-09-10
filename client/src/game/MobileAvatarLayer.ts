@@ -20,6 +20,20 @@ interface MobileCallAvatarState {
 
 const imageLoadCache = new Map<string, Promise<void>>()
 
+const COSTUME_AVATAR_BOUNDS: Record<number, { x: number; y: number; width: number; height: number }> = {
+  9: { x: 7, y: 37, width: 36, height: 52 },
+  10: { x: 2, y: 34, width: 35, height: 55 },
+  11: { x: 5, y: 32, width: 35, height: 57 },
+}
+
+const COSTUME_IMAGE_WIDTH = 45
+const COSTUME_IMAGE_HEIGHT = 102
+
+function costumeBounds(url: string) {
+  const costumeId = Number(url.match(/\/skin\/(\d+)\//)?.[1])
+  return COSTUME_AVATAR_BOUNDS[costumeId]
+}
+
 function preloadImage(url: string): Promise<void> {
   const cached = imageLoadCache.get(url)
   if (cached) return cached
@@ -39,9 +53,11 @@ function preloadImage(url: string): Promise<void> {
 }
 
 interface MobileAvatarSlot {
+  frame: HTMLDivElement
   image: HTMLImageElement
   requestId: number
   url: string
+  pendingUrl: string
   fallbackUrl: string
 }
 
@@ -64,6 +80,13 @@ export default class MobileAvatarLayer {
     })
 
     this.slots = Array.from({ length: 4 }, (_, loc) => {
+      const frame = document.createElement('div')
+      Object.assign(frame.style, {
+        position: 'absolute',
+        display: 'none',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+      })
       const image = document.createElement('img')
       image.alt = ''
       image.decoding = 'async'
@@ -78,8 +101,9 @@ export default class MobileAvatarLayer {
         cursor: 'pointer',
       })
       image.addEventListener('click', () => onActivate(loc))
-      this.root.appendChild(image)
-      return { image, requestId: 0, url: '', fallbackUrl: '' }
+      frame.appendChild(image)
+      this.root.appendChild(frame)
+      return { frame, image, requestId: 0, url: '', pendingUrl: '', fallbackUrl: '' }
     })
 
     parent.appendChild(this.root)
@@ -89,38 +113,67 @@ export default class MobileAvatarLayer {
     const slot = this.slots[loc]
     if (!slot) return
 
-    Object.assign(slot.image.style, {
+    const bounds = costumeBounds(state.url)
+    if (state.visible && !bounds && (costumeBounds(slot.url) || costumeBounds(slot.pendingUrl))) return
+
+    Object.assign(slot.frame.style, {
       left: `${Math.round(state.x)}px`,
       top: `${Math.round(state.y)}px`,
       width: `${Math.round(state.width)}px`,
       height: `${Math.round(state.height)}px`,
     })
+    if (bounds) {
+      const scale = Math.min(state.width / bounds.width, state.height / bounds.height)
+      Object.assign(slot.image.style, {
+        left: `${(state.width - bounds.width * scale) / 2 - bounds.x * scale}px`,
+        top: `${(state.height - bounds.height * scale) / 2 - bounds.y * scale}px`,
+        width: `${COSTUME_IMAGE_WIDTH * scale}px`,
+        height: `${COSTUME_IMAGE_HEIGHT * scale}px`,
+        objectFit: 'fill',
+        objectPosition: 'initial',
+      })
+    } else {
+      Object.assign(slot.image.style, {
+        left: '0',
+        top: '0',
+        width: '100%',
+        height: '100%',
+        objectFit: 'contain',
+        objectPosition: 'center bottom',
+      })
+    }
     slot.image.alt = state.alt
     slot.fallbackUrl = state.fallbackUrl
 
     if (!state.visible || !state.url) {
       slot.requestId += 1
-      slot.image.style.display = 'none'
+      slot.pendingUrl = ''
+      slot.frame.style.display = 'none'
       return
     }
 
     const showLoadedImage = (url: string) => {
       slot.url = url
+      slot.pendingUrl = ''
       slot.image.src = url
-      slot.image.style.display = 'block'
+      slot.frame.style.display = 'block'
     }
     if (slot.url === state.url && slot.image.complete && slot.image.naturalWidth > 0) {
-      slot.image.style.display = 'block'
+      slot.frame.style.display = 'block'
       return
     }
 
+    if (slot.pendingUrl === state.url) return
+
     const requestId = ++slot.requestId
-    slot.image.style.display = 'none'
+    slot.pendingUrl = state.url
+    if (!slot.url) slot.frame.style.display = 'none'
     void preloadImage(state.url).then(() => {
       if (slot.requestId !== requestId) return
       showLoadedImage(state.url)
     }).catch(() => {
       if (slot.requestId !== requestId || !state.fallbackUrl) return
+      slot.pendingUrl = state.fallbackUrl
       void preloadImage(state.fallbackUrl).then(() => {
         if (slot.requestId === requestId) showLoadedImage(state.fallbackUrl)
       }).catch(() => {})

@@ -139,14 +139,14 @@ export default function ResponsiveItemShopDlg({
             <button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
           </header>
 
-          <nav className="responsive-shop__tabs" aria-label="ショップ分類">
+          <nav className="responsive-shop__tabs" role="tablist" aria-label="ショップ分類">
             {([
               ['cash', 'MP購入'],
               ['custom', 'カスタム'],
               ['item', '便利アイテム'],
               ['exchange', '龍珠交換'],
             ] as const).map(([id, label]) => (
-              <button key={id} type="button" className={tab === id ? 'is-active' : ''} onClick={() => setTab(id)}>
+              <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'is-active' : ''} onClick={() => setTab(id)}>
                 {label}
               </button>
             ))}
@@ -250,8 +250,8 @@ export default function ResponsiveItemShopDlg({
             <div className="responsive-shop__balances" aria-label="所持残高">
               <span className="responsive-shop__balance-title">所持残高</span>
               <span className="responsive-shop__balance responsive-shop__balance--cash"><i aria-hidden="true" /><span>MP</span><strong>{cashPrice(currentCash)}</strong></span>
-              <span className="responsive-shop__balance responsive-shop__balance--gem"><i aria-hidden="true" /><span>龍珠</span><strong>{format(currentGem, '個')}</strong></span>
               <span className="responsive-shop__balance responsive-shop__balance--money"><i aria-hidden="true" /><span>GP</span><strong>{moneyPrice(currentMoney)}</strong></span>
+              <span className="responsive-shop__balance responsive-shop__balance--gem"><i aria-hidden="true" /><span>龍珠</span><strong>{format(currentGem, '個')}</strong></span>
             </div>
             <div className="responsive-shop__actions">
               <button type="button" onClick={onConfirmItem}>所持品</button>
@@ -299,7 +299,7 @@ export default function ResponsiveItemShopDlg({
         .responsive-shop__header { display: flex; gap: 18px; align-items: center; justify-content: space-between; padding: 15px 24px; color: #fff; background: #174b43; }
         .responsive-shop__header h2 { margin: 0; font-size: var(--shop-font-title); font-weight: 700; line-height: var(--majak-popup-leading-title); letter-spacing: 0; }
         .responsive-shop__balances { flex: 1 1 auto; display: grid; min-width: 0; grid-template-columns: 74px repeat(3, minmax(0, 1fr)); align-items: stretch; overflow: hidden; border: 1px solid #c1cbc0; background: #f7faf4; color: #607069; white-space: nowrap; }
-        .responsive-shop__balance-title { display: grid; place-items: center; padding: 0 8px; color: #f7f3e7; background: #315c50; font: 700 var(--shop-font-label)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); letter-spacing: 0; }
+        .responsive-shop__balance-title { display: grid; place-items: center; padding: 0 8px; color: var(--majak-dialog-header-text-color); background: var(--majak-popup-command-color); font: 700 var(--shop-font-label)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); letter-spacing: 0; }
         .responsive-shop__balance { display: flex; min-width: 0; gap: 6px; align-items: center; justify-content: center; padding: 7px 8px; border-left: 1px solid #d7dfd4; font: 700 var(--shop-font-label)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
         .responsive-shop__balance i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: #1c5a4d; box-shadow: 0 0 0 2px rgba(28,90,77,.12); }
         .responsive-shop__balance--gem i { background: #b84228; box-shadow: 0 0 0 2px rgba(184,66,40,.12); }

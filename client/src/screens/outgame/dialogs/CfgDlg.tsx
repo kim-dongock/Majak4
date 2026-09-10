@@ -55,6 +55,7 @@ import { useEffect, useState } from 'react'
 import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 import { GAME_ASSIST_CONFIG_EVENT, toGameAssistConfig } from '../../../game/assistConfig'
 import { GAME_PAIFU_RECORDING_CONFIG_EVENT } from '../../../game/paifuRecording'
+import { useAuthStore } from '../../../store/authStore'
 
 export const UI_COLOR_THEMES = {
   jade: { label: '翡翠', screen: '#0b3b32', panel: '#f5f0e4', border: '#9b7a3c', title: '#164f43', command: '#1b6b55', commandHover: '#278064', commandBorder: '#145040', text: '#26352f', headerText: '#fff8e8', overlay: 'rgba(5, 24, 20, .72)' },
@@ -72,6 +73,10 @@ export const UI_COLOR_THEMES = {
 } as const
 
 export type UiColorTheme = keyof typeof UI_COLOR_THEMES
+export const USER_COLOR_THEME_KEYS = [
+  'jade', 'vermilion', 'indigo', 'charcoal', 'whiteTiger',
+  'gold', 'amethyst', 'teal', 'sakura', 'lapis',
+] as const satisfies readonly UiColorTheme[]
 
 const COLOR_HEX_PATTERN = /^#[0-9a-fA-F]{6}$/
 
@@ -214,7 +219,8 @@ export function loadMajakConfig(): MJConfig {
 export function saveMajakConfig(cfg: MJConfig): void {
   if (typeof window === 'undefined') return
   const normalized = normalizeConfig(cfg)
-  applyMajakColorTheme(normalized)
+  const userColor = useAuthStore.getState().player?.userColor
+  applyMajakColorTheme({ ...normalized, themeBaseColor: userColor || normalized.themeBaseColor })
   try {
     window.localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(normalized))
   } catch {
@@ -240,23 +246,14 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
   const layoutMode = useOutgameLayoutMode()
   const [cfg, setCfg] = useState<MJConfig>({ ...initial })
   const [activeTab, setActiveTab] = useState(0)
+  const userColor = useAuthStore(state => state.player?.userColor)
 
   useEffect(() => {
-    applyMajakColorTheme(cfg)
-  }, [cfg])
+    applyMajakColorTheme({ ...cfg, themeBaseColor: userColor || cfg.themeBaseColor })
+  }, [cfg, userColor])
 
   const set = <K extends keyof MJConfig>(k: K, v: MJConfig[K]) => {
     const next = { ...cfg, [k]: v }
-    setCfg(next)
-    onModify?.(next)
-  }
-
-  const setColorTheme = (uiColorTheme: UiColorTheme) => {
-    const next = {
-      ...cfg,
-      uiColorTheme,
-      themeBaseColor: UI_COLOR_THEMES[uiColorTheme].command,
-    }
     setCfg(next)
     onModify?.(next)
   }
@@ -269,10 +266,12 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
             <button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button>
           </header>
           <div className="majak-mobile-config-tabs" role="tablist" aria-label="設定">
-            {(['環境設定', 'アシスト', '配色'] as const).map((label, index) => (
+            {(['環境設定', 'アシスト'] as const).map((label, index) => (
               <button
                 key={label}
                 type="button"
+                role="tab"
+                aria-selected={activeTab === index}
                 className={activeTab === index ? 'is-active' : undefined}
                 onClick={() => setActiveTab(index)}
               >{label}</button>
@@ -321,40 +320,22 @@ export default function CfgDlg({ initial, onOK, onCancel, onModify }: Props) {
                   </div>
                 </fieldset>
               </>
-            ) : activeTab === 1 ? (
+            ) : (
               <div className="majak-mobile-config-assist">
                 <label className="majak-mobile-config-assist-row"><span><input type="checkbox" checked={cfg.bChkTap} onChange={event => set('bChkTap', event.target.checked)} />手出し/自摸切り表示</span><small>手出しと自摸切りの区別を手牌に残します</small></label>
                 <label className="majak-mobile-config-assist-row"><span><input type="checkbox" checked={cfg.bChkPai} onChange={event => set('bChkPai', event.target.checked)} />隣接牌表示</span><small>マウスでポイントしている牌と隣接牌を強調表示します</small></label>
                 <label className="majak-mobile-config-assist-row"><span><input type="checkbox" checked={cfg.bChkTnp} onChange={event => set('bChkTnp', event.target.checked)} />聴牌表示</span><small>捨てたときに聴牌になる牌にマークを表示します</small></label>
                 <label className="majak-mobile-config-assist-row"><span><input type="checkbox" checked={cfg.bChkHor} onChange={event => set('bChkHor', event.target.checked)} />和了表示</span><small>カーソルが合っている牌を捨てたときの各待ち牌の残り枚数と確定翻数を表示します</small></label>
               </div>
-            ) : (
-              <fieldset className="majak-mobile-dialog-section majak-mobile-config-section majak-mobile-config-theme-section">
-                <legend>配色</legend>
-                <div className="majak-mobile-config-theme-options" role="radiogroup" aria-label="配色テーマ">
-                  {(Object.entries(UI_COLOR_THEMES) as [UiColorTheme, typeof UI_COLOR_THEMES[UiColorTheme]][]).map(([key, theme]) => (
-                    <label className="majak-mobile-config-theme-option" key={key}>
-                      <input
-                        type="radio"
-                        name="uiColorTheme"
-                        checked={cfg.uiColorTheme === key}
-                        onChange={() => setColorTheme(key)}
-                      />
-                      <span className="majak-mobile-config-theme-swatch" style={{ background: theme.screen, borderColor: theme.border }} aria-hidden="true" />
-                      {theme.label}
-                    </label>
-                  ))}
-                </div>
-                <label className="majak-mobile-config-theme-custom-color">
-                  テーマカラー
-                  <input type="color" value={cfg.themeBaseColor} onChange={event => set('themeBaseColor', event.target.value)} aria-label="テーマカラー" />
-                </label>
-              </fieldset>
             )}
           </div>
           <div className="majak-mobile-dialog-actions majak-popup-actions">
-            <button type="button" className="is-primary" onClick={() => onOK(cfg)}>OK</button>
-            <button type="button" onClick={() => { applyMajakColorTheme(initial); onModify?.(initial); onCancel() }}>キャンセル</button>
+            <button type="button" onClick={() => {
+              applyMajakColorTheme({ ...initial, themeBaseColor: userColor || initial.themeBaseColor })
+              onModify?.(initial)
+              onCancel()
+            }}>キャンセル</button>
+            <button type="button" className="is-primary" onClick={() => onOK(cfg)}>確認</button>
           </div>
         </div>
       </div>

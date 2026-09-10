@@ -125,7 +125,7 @@ export default function GameInviteDialog({
               </label>
             </div>
             <footer className="majak-game-invite-dialog__actions">
-              <button type="button" className="majak-game-invite-dialog__primary" disabled={!message.trim()} onClick={send}>OK</button>
+              <button type="button" className="majak-game-invite-dialog__primary" disabled={!message.trim()} onClick={send}>確認</button>
               <button type="button" onClick={onBackToMembers}>キャンセル</button>
             </footer>
           </>
@@ -147,7 +147,7 @@ export default function GameInviteDialog({
           <>
             <header className="majak-game-invite-dialog__header"><h2>ゲームの申し込み</h2></header>
             <div className="majak-game-invite-dialog__body majak-game-invite-dialog__result"><p>{resultText}</p></div>
-            <footer className="majak-game-invite-dialog__actions"><button type="button" className="majak-game-invite-dialog__primary" onClick={onClose}>OK</button></footer>
+            <footer className="majak-game-invite-dialog__actions"><button type="button" className="majak-game-invite-dialog__primary" onClick={onClose}>確認</button></footer>
           </>
         )}
       </section>

@@ -1,7 +1,7 @@
 import { refreshedGameAuthHeaders } from './authHeaders'
 
 declare const __API_BASE__: string | undefined
-const API_BASE: string = (typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '') ?? ''
+const API_BASE: string = ((typeof __API_BASE__ !== 'undefined' ? __API_BASE__ : '') ?? '').replace(/\/$/, '')
 
 export interface CashProduct {
   productId: string

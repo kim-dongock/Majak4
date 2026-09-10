@@ -466,7 +466,7 @@ public class ItemRepository
                     -gemPrice,
                     cashWalletBefore.CashCount,
                     cashWalletBefore.CashCount - gemPrice,
-                    "カスタムアイテム購入");
+                    product.Master.ItemName);
                 await RequireLog().InsertItemPurchaseHistAsync(
                     memberNo,
                     product.Master.CustomId.ToString(),

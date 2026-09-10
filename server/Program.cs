@@ -278,7 +278,7 @@ internal sealed record MajakRegisterRequest(
 );
 
 internal sealed record CollectionEquipRequest(string Category, string? TitleId);
-internal sealed record AccountProfileUpdateRequest(int? BirthYear, string? AvatarId);
+internal sealed record AccountProfileUpdateRequest(int? BirthYear, string? AvatarId, string? UserColor);
 
 internal static partial class LegacyLaunchPassword
 {
@@ -345,4 +345,6 @@ internal sealed record GooglePlayerRegisterRequest(
     [property: System.Text.Json.Serialization.JsonPropertyName("birthYear")]
     int? BirthYear,
     [property: System.Text.Json.Serialization.JsonPropertyName("avatarId")]
-    string? AvatarId);
+    string? AvatarId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("userColor")]
+    string? UserColor);

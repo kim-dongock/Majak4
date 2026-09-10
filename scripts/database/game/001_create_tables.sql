@@ -12,6 +12,7 @@ CREATE TABLE player_account (
     sex_code           CHAR(1)      NOT NULL DEFAULT 'U',
     birth_year         SMALLINT UNSIGNED NULL,
     avatar_id          VARCHAR(255) NOT NULL DEFAULT '',
+    user_color         CHAR(7)      NOT NULL DEFAULT '#1b6b55',
     terms_agreed_at    DATETIME(3)  NULL,
     approved_at        DATETIME(3)  NULL,
     approved_by        BIGINT UNSIGNED NULL,

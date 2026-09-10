@@ -23,18 +23,21 @@ internal static class PlayerEndpoints
             if (account is null) return Results.NotFound(new { error = "PLAYER_ACCOUNT_NOT_FOUND" });
             if (string.IsNullOrWhiteSpace(body.AvatarId) || !AvatarCatalog.IsValid(account.SexCode, body.AvatarId))
                 return Results.BadRequest(new { error = "INVALID_AVATAR" });
+            if (!AuthEndpoints.IsValidUserColor(body.UserColor))
+                return Results.BadRequest(new { error = "INVALID_USER_COLOR" });
 
-            if (!await gamePlayers.UpdateAccountProfileAsync(auth.MemberNo, (ushort)body.BirthYear.Value, body.AvatarId))
+            if (!await gamePlayers.UpdateAccountProfileAsync(auth.MemberNo, (ushort)body.BirthYear.Value, body.AvatarId, body.UserColor!))
                 return Results.NotFound(new { error = "PLAYER_ACCOUNT_NOT_FOUND" });
 
             var activePlayer = sessions.GetByMember(auth.MemberNo);
             if (activePlayer is not null)
             {
                 activePlayer.AvatarId = body.AvatarId;
+                activePlayer.UserColor = body.UserColor!;
                 activePlayer.Age = Math.Max(0, DateTime.UtcNow.Year - body.BirthYear.Value);
             }
 
-            return Results.Ok(new { birthYear = body.BirthYear.Value, avatarId = body.AvatarId });
+            return Results.Ok(new { birthYear = body.BirthYear.Value, avatarId = body.AvatarId, userColor = body.UserColor });
         });
 
         app.MapGet("/api/player/profile", async (

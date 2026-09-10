@@ -105,6 +105,12 @@ const BOARD_X = 5
 const BOARD_Y = 31
 const CUSTOM_DEFAULT_ID_COSTUME = 100011
 const AVAILABLE_COSTUME_IDS = new Set([9, 10, 11])
+const COSTUME_AVATAR_BOUNDS: Record<number, { x: number; y: number; width: number; height: number }> = {
+  9: { x: 7, y: 37, width: 36, height: 52 },
+  10: { x: 2, y: 34, width: 35, height: 55 },
+  11: { x: 5, y: 32, width: 35, height: 57 },
+}
+const COSTUME_AVATAR_SOURCE_SIZE = { width: 45, height: 102 }
 const HUD_TEXT_RESOLUTION = typeof window === 'undefined'
   ? 1
   : Math.min(2, Math.max(1, window.devicePixelRatio || 1))
@@ -418,6 +424,7 @@ export default class UIScene extends Phaser.Scene {
   private desktopHudBounds: Array<{ left: number; top: number; width: number; height: number } | undefined> = []
   private avatarBounds: Array<{ x: number; y: number; width: number; height: number } | undefined> = []
   private avatarSprites: Phaser.GameObjects.Image[] = []
+  private pendingCostumeTextureKeys = new Set<string>()
   private majakTitleSprites: Phaser.GameObjects.Image[] = []
   private trickTitleSprites: Phaser.GameObjects.Image[] = []
   private hostMark?: Phaser.GameObjects.Image
@@ -462,6 +469,7 @@ export default class UIScene extends Phaser.Scene {
   private myOdr = 0
   private layoutMode: IngameLayoutMode = 'desktop'
   private isViewer = false
+  private isReplay = false
   private customBgId = 0
   private customBoardType = 0
   private boardSurroundColor?: number
@@ -480,10 +488,11 @@ export default class UIScene extends Phaser.Scene {
     super({ key: 'UIScene' })
   }
 
-  init(data: { myOdr?: number; layoutMode?: IngameLayoutMode; isViewer?: boolean; customBgId?: number; customBoardType?: number; customHaiId?: number; themeBoardColor?: string; themeUiColor?: string }) {
+  init(data: { myOdr?: number; layoutMode?: IngameLayoutMode; isViewer?: boolean; isReplay?: boolean; customBgId?: number; customBoardType?: number; customHaiId?: number; themeBoardColor?: string; themeUiColor?: string }) {
     this.myOdr = data.myOdr ?? 0
     this.layoutMode = data.layoutMode ?? 'desktop'
     this.isViewer = Boolean(data.isViewer)
+    this.isReplay = Boolean(data.isReplay)
     this.customBgId = Number(data.customBgId ?? 0)
     this.customBoardType = Number(data.customBoardType ?? 0)
     const surroundColor = data.themeBoardColor ?? this.registry.get(GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY)
@@ -1209,9 +1218,18 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private updatePlayerTexts(players: PlayerHudState[]) {
-    this.players = players
+    const resolvedPlayers = players.map((player, odr) => {
+      const previousPlayer = this.players[odr]
+      if (player.customCostume !== undefined || previousPlayer?.customCostume === undefined) return player
+      return {
+        ...player,
+        customCostume: previousPlayer.customCostume,
+        customCostumeType: player.customCostumeType ?? previousPlayer.customCostumeType,
+      }
+    })
+    this.players = resolvedPlayers
     const hudVisible = !this.replayGraphVisible
-    players.forEach((p, odr) => {
+    resolvedPlayers.forEach((p, odr) => {
       const loc = this.odrToLoc(odr)
       const pos = odrBoxPos(loc)
       const baseAvt = playerHudPoint(pos.avt, loc)
@@ -1281,8 +1299,8 @@ export default class UIScene extends Phaser.Scene {
       }
       this.levelTexts[loc].setPosition(textBounds.left, textY).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(levelText).setVisible(mobileInfoVisible && !compactInfo && hudVisible)
       this.scoreTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? 0 : infoRowHeight)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatPointText(p)).setVisible(mobileInfoVisible && hudVisible)
-      this.rankTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight : infoRowHeight * 2)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatRankText(players, odr)).setVisible(mobileInfoVisible && hudVisible)
-      this.diffTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight * 2 : infoRowHeight * 3)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatDiffText(players, odr)).setVisible(mobileInfoVisible && hudVisible)
+      this.rankTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight : infoRowHeight * 2)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatRankText(resolvedPlayers, odr)).setVisible(mobileInfoVisible && hudVisible)
+      this.diffTexts[loc].setPosition(textBounds.left, textY + (compactInfo ? infoRowHeight * 2 : infoRowHeight * 3)).setFixedSize(textBounds.width, infoRowHeight).setAlign(textAlign).setText(this.formatDiffText(resolvedPlayers, odr)).setVisible(mobileInfoVisible && hudVisible)
       this.updateMobileHudPanel(loc, avt, avatarSize, nameLayout.x, nameY, nameLayout.width, textBounds.left, textY, textBounds.width, infoRows, infoRowHeight)
       const costumeFrame = this.costumeFrameResource(odr, p)
       const costumeUrl = this.costumeAvatarUrl(p)
@@ -1290,7 +1308,7 @@ export default class UIScene extends Phaser.Scene {
       if (this.mobileAvatarLayer) {
         this.avatarSprites[loc].setVisible(false)
         this.mobileAvatarLayer.update(loc, {
-          url: avatarUrl || `${IMG}/mj_aiAvtrL.png`,
+          url: costumeUrl || p.avatarUrl || p.fallbackAvatarUrl || `${IMG}/mj_aiAvtrL.png`,
           fallbackUrl: p.fallbackAvatarUrl || `${IMG}/mj_aiAvtrL.png`,
           x: avt.x,
           y: avt.y,
@@ -1300,7 +1318,7 @@ export default class UIScene extends Phaser.Scene {
           alt: displayName,
         })
       } else {
-        const avatarFit = costumeFrame || costumeUrl ? 'cover' : 'contain'
+        const avatarFit = costumeFrame || costumeUrl ? 'costume' : 'contain'
         this.setDynamicImage(this.avatarSprites[loc], costumeFrame?.key ?? this.avatarKey(odr, p), avatarUrl, avt.x, avt.y, 10, 'mj_aiAvtrL', true, avatarSize, avatarFit)
       }
       if (!hudVisible) {
@@ -1558,13 +1576,27 @@ export default class UIScene extends Phaser.Scene {
         frame: 0,
         oneShot: false,
       }
-      state.frame++
-      if (state.frame >= LEGACY_COSTUME_FRAME_COUNTS[typedCostumeId][state.action]) {
-        state.action = state.oneShot ? state.returnAction : state.action
-        state.frame = 0
-        state.oneShot = false
+      const nextState = { ...state, frame: state.frame + 1 }
+      if (nextState.frame >= LEGACY_COSTUME_FRAME_COUNTS[typedCostumeId][nextState.action]) {
+        nextState.action = nextState.oneShot ? nextState.returnAction : nextState.action
+        nextState.frame = 0
+        nextState.oneShot = false
       }
-      this.costumeAnimationStates[odr] = state
+      const suffix = String(costumeId).padStart(2, '0')
+      const frameKey = `mj_costume_${nextState.action}_${suffix}_${String(nextState.frame).padStart(2, '0')}`
+      if (!this.textures.exists(frameKey)) {
+        if (!this.pendingCostumeTextureKeys.has(frameKey)) {
+          this.pendingCostumeTextureKeys.add(frameKey)
+          this.load.image(frameKey, `${IMG}/skin/${costumeId}/${frameKey}.png`)
+          this.load.once(`filecomplete-image-${frameKey}`, () => {
+            this.pendingCostumeTextureKeys.delete(frameKey)
+            if (this.sys.isActive()) this.updatePlayerTexts(this.players)
+          })
+          this.load.start()
+        }
+        return
+      }
+      this.costumeAnimationStates[odr] = nextState
       changed = true
     })
     if (changed) this.updatePlayerTexts(this.players)
@@ -1596,7 +1628,7 @@ export default class UIScene extends Phaser.Scene {
     return value.replace(/[^a-z0-9_]/gi, '_').slice(-80)
   }
 
-  private setDynamicImage(sprite: Phaser.GameObjects.Image, key: string, url: string, x: number, y: number, depth: number, fallbackKey?: string, visible = true, displaySize?: { width: number; height: number }, fit: 'stretch' | 'contain' | 'cover' = 'stretch') {
+  private setDynamicImage(sprite: Phaser.GameObjects.Image, key: string, url: string, x: number, y: number, depth: number, fallbackKey?: string, visible = true, displaySize?: { width: number; height: number }, fit: 'stretch' | 'contain' | 'cover' | 'costume' = 'stretch') {
     sprite.setPosition(x, y).setDepth(depth)
     const dynamicSize = displaySize ?? (this.avatarSprites.includes(sprite) ? HUD_METRICS.avatar : null)
     const showTexture = (textureKey: string) => {
@@ -1626,6 +1658,20 @@ export default class UIScene extends Phaser.Scene {
           .setCrop(cropX, cropY, cropWidth, cropHeight)
           .setPosition(x, y)
           .setDisplaySize(dynamicSize.width, dynamicSize.height)
+      } else if (dynamicSize && fit === 'costume') {
+        const costumeId = Number(key.match(/mj_costume_[a-z]+_(\d{2})/)?.[1] ?? url.match(/\/skin\/(\d+)\//)?.[1])
+        const bounds = COSTUME_AVATAR_BOUNDS[costumeId]
+        if (!bounds) {
+          sprite.setPosition(x, y).setDisplaySize(dynamicSize.width, dynamicSize.height)
+        } else {
+          const scale = Math.min(dynamicSize.width / bounds.width, dynamicSize.height / bounds.height)
+          const contentWidth = bounds.width * scale
+          const contentHeight = bounds.height * scale
+          sprite
+            .setCrop(bounds.x, bounds.y, bounds.width, bounds.height)
+            .setPosition(x + (dynamicSize.width - contentWidth) / 2 - bounds.x * scale, y + (dynamicSize.height - contentHeight) / 2 - bounds.y * scale)
+            .setDisplaySize(COSTUME_AVATAR_SOURCE_SIZE.width * scale, COSTUME_AVATAR_SOURCE_SIZE.height * scale)
+        }
       } else if (dynamicSize && fit === 'contain') {
         const source = this.textures.get(textureKey).getSourceImage() as { width?: number; height?: number }
         const sourceWidth = Number(source.width ?? 0)
@@ -1643,7 +1689,10 @@ export default class UIScene extends Phaser.Scene {
       }
       sprite.setVisible(visible)
     }
+    const previousKey = sprite.getData('dynamicImageKey') as string | undefined
+    const previousIsCostume = sprite.getData('dynamicImageIsCostume') === true
     sprite.setData('dynamicImageKey', key)
+    sprite.setData('dynamicImageIsCostume', fit === 'costume')
     if (!key || !url) {
       if (fallbackKey && this.textures.exists(fallbackKey)) {
         showTexture(fallbackKey)
@@ -1656,7 +1705,11 @@ export default class UIScene extends Phaser.Scene {
       showTexture(key)
       return
     }
-    if (fallbackKey && this.textures.exists(fallbackKey)) {
+    if (previousKey === key) {
+      sprite.setVisible(visible)
+      return
+    }
+    if (fallbackKey && this.textures.exists(fallbackKey) && !(fit === 'costume' && previousIsCostume)) {
       showTexture(fallbackKey)
     } else {
       sprite.setVisible(false)
@@ -1969,7 +2022,7 @@ export default class UIScene extends Phaser.Scene {
       this.hideTimerDisplay()
       return
     }
-    if (this.isViewer || this.inactiveTimerMaxMs <= 0) {
+    if (this.isReplay || this.isViewer || this.inactiveTimerMaxMs <= 0) {
       this.timerFrame.setVisible(false)
       this.timerBack.setVisible(false)
       this.timerBar.setVisible(false)
@@ -1998,6 +2051,7 @@ export default class UIScene extends Phaser.Scene {
    * タイマー (CMJRoomWnd WM_TIMER 相当)
    * ======================================================================*/
   private queueTimer(data: ActionPromptTimerData) {
+    if (this.isReplay) return
     const limitMs = Math.max(0, Math.trunc(Number(data.timeLimit ?? 0)))
     this.stopTimer()
     if (limitMs <= 0) return
@@ -2027,7 +2081,7 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private startTimer(data: ActionPromptTimerData, endAt: number) {
-    if (this.isViewer) {
+    if (this.isReplay || this.isViewer) {
       this.stopTimer(false)
       return
     }
@@ -2104,7 +2158,7 @@ export default class UIScene extends Phaser.Scene {
     this.timerKeepTimeMs = 0
     this.timerBankMs = 0
     this.timerBankEnabled = false
-    if (showInactive && !this.isViewer) {
+    if (showInactive && !this.isReplay && !this.isViewer) {
       this.showInactiveTimerBar()
     } else {
       this.timerFrame.setVisible(false)

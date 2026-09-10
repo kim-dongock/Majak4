@@ -403,3 +403,51 @@
   .registration-avatar-grid button { display: grid; place-items: center; }
   .registration-avatar-grid button.is-selected::after { top: 3px; right: 3px; width: 20px; height: 20px; font-size: 14px; }
 }
+
+.registration-user-color {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 var(--registration-terms-gutter) 14px;
+  color: #274e41;
+  font-size: var(--majak-popup-font-emphasis);
+  font-weight: 800;
+}
+
+.registration-user-color__presets {
+  display: grid;
+  grid-template-columns: repeat(10, 24px);
+  gap: 5px;
+}
+
+.registration-user-color__presets button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.registration-user-color__presets button.is-selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #26352f;
+}
+
+.registration-user-color__custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--majak-popup-font-body);
+  font-weight: var(--majak-weight-regular);
+}
+
+.registration-user-color__custom input {
+  width: 44px;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid #8b9c94;
+  border-radius: 4px;
+  background: #fffef6;
+}

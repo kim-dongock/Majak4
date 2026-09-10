@@ -86,7 +86,7 @@ export default function CustomReceiptDlg({
           <p>{msg7}</p>
         </div>
         <footer className="majak-popup-actions">
-          <button type="button" className="is-primary" onClick={onClose}>OK</button>
+          <button type="button" className="is-primary" onClick={onClose}>確認</button>
         </footer>
       </section>
     </div>

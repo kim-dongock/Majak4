@@ -206,9 +206,9 @@ function renderPreview(id: PreviewId, onClose: () => void) {
     case 'legacyItemShop':
       return <ItemShopDlg cashCount={500} gemCount={24} gamMoney={1200} onClose={onClose} />
     case 'registration':
-      return <RegistrationDlg idToken="popup-preview" googleInfo={{ pix: 'preview-user', name: 'プレビュー雀士', sex: 'M', birthYear: null, avatarId: '', password: '', isTestEnv: true, requiresRegistration: true }} onComplete={() => onClose()} onAuthExpired={onClose} />
+      return <RegistrationDlg idToken="popup-preview" googleInfo={{ pix: 'preview-user', name: 'プレビュー雀士', sex: 'M', birthYear: null, avatarId: '', userColor: '#1b6b55', password: '', isTestEnv: true, requiresRegistration: true }} onComplete={() => onClose()} onAuthExpired={onClose} />
     case 'profileEdit':
-      return <ProfileEditDlg player={{ pix: 'preview-user', name: 'プレビュー雀士', sex: 'F', birthYear: 1994, avatarId: '/assets/images/characters/thumbnail_05f.png', password: '', isTestEnv: true, requiresRegistration: false }} onSave={async profile => profile} onComplete={onClose} onClose={onClose} />
+      return <ProfileEditDlg player={{ pix: 'preview-user', name: 'プレビュー雀士', sex: 'F', birthYear: 1994, avatarId: '/assets/images/characters/thumbnail_05f.png', userColor: '#1b6b55', password: '', isTestEnv: true, requiresRegistration: false }} onSave={async profile => profile} onComplete={onClose} onClose={onClose} />
     case 'shopTransaction':
       return <ResponsiveItemShopDlg cashCount={500} gemCount={24} gamMoney={1200} onClose={onClose} />
     case 'paifuSave':

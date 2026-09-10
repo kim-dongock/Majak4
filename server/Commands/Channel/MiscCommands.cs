@@ -453,9 +453,13 @@ public class TournamentListCommand : ICommand
 {
     private readonly TournamentService  _tournament;
     private readonly TournamentRepository _tournRepo;
+    private readonly GamePlayerRepository? _playerRepo;
 
     public TournamentListCommand(TournamentService t, TournamentRepository r)
     { _tournament = t; _tournRepo = r; }
+
+    public TournamentListCommand(TournamentService t, TournamentRepository r, GamePlayerRepository playerRepo)
+    { _tournament = t; _tournRepo = r; _playerRepo = playerRepo; }
 
     public async Task ExecuteAsync(CommandContext ctx)
     {
@@ -475,7 +479,9 @@ public class TournamentListCommand : ICommand
             .OrderBy(p => p.SeqNo)
             .ToList();
 
-        var list = plans.Select(p => BuildPlanDto(p, joinSeqNo, _tournament)).ToList();
+        var list = new List<object>(plans.Count);
+        foreach (var plan in plans)
+            list.Add(await BuildPlanDtoAsync(plan, joinSeqNo, _tournament, _playerRepo));
 
 
         var registBase = now.AddHours(TournamentConst.JoinOpenHours)
@@ -495,8 +501,13 @@ public class TournamentListCommand : ICommand
         });
     }
 
-    private static object BuildPlanDto(TournamentPlan p, long myJoinSeqNo, TournamentService tournament)
+    private static async Task<object> BuildPlanDtoAsync(
+        TournamentPlan p,
+        long myJoinSeqNo,
+        TournamentService tournament,
+        GamePlayerRepository? playerRepo)
     {
+        var organizer = playerRepo is null ? null : await playerRepo.GetAccountAsync(p.PlanMemberNo);
         return new
         {
             seqNo         = p.SeqNo,
@@ -519,6 +530,7 @@ public class TournamentListCommand : ICommand
             roomOption    = p.RoomOption,
             maxViewer     = p.MaxViewer,
             planMemberNo  = tournament.GetPixForMemberNo(p.PlanMemberNo),
+            organizerName = organizer?.DisplayName ?? string.Empty,
             resultMember1 = tournament.GetPixForMemberNo(p.ResultMemberNo[0]),
             resultMember2 = tournament.GetPixForMemberNo(p.ResultMemberNo[1]),
             resultMember3 = tournament.GetPixForMemberNo(p.ResultMemberNo[2]),

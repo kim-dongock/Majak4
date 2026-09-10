@@ -287,8 +287,8 @@ export default function OptDlg({ initial, mask = {}, viewerEnable = true, onOK, 
             </fieldset>
           </div>
           <div className="majak-mobile-dialog-actions majak-popup-actions">
-            <button type="button" className="majak-standard-dialog__primary is-primary" onClick={() => onOK(applyOptionMask(opt, mask, viewerEnable))}>OK</button>
             <button type="button" className="majak-standard-dialog__secondary" onClick={onCancel}>キャンセル</button>
+            <button type="button" className="majak-standard-dialog__primary is-primary" onClick={() => onOK(applyOptionMask(opt, mask, viewerEnable))}>確認</button>
           </div>
         </div>
       </div>

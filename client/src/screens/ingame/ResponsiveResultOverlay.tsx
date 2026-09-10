@@ -61,8 +61,8 @@ function playerAvatar(player: { avatarId?: string; sex?: string }) {
 }
 
 function resultLabel(data: KyoResData): string {
-  if (data.pinType === 0) return 'RON'
-  if (data.pinType === 1) return 'TSUMO'
+  if (data.pinType === 0) return 'ロン'
+  if (data.pinType === 1) return 'ツモ'
   if (data.pinType === 9) return '流し満貫'
   return '流局'
 }
@@ -172,7 +172,7 @@ export function ResponsiveKyoResult({ data, myOdr, isViewer = false, canContinue
       <section className={`majak-result-panel majak-kyo-result-panel${isHora ? ' is-hora' : ' is-draw'}`}>
         <header className="majak-result-header">
           <div>
-            <span className="majak-result-kicker">HAND RESULT</span>
+            <span className="majak-result-kicker">局結果</span>
             <h2>{resultLabel(data)}</h2>
           </div>
           <div className="majak-result-round">{data.kyoNum != null ? `${Math.floor(data.kyoNum / 4) + 1}場 ${data.kyoNum % 4 + 1}局` : '局結果'}</div>
@@ -287,8 +287,8 @@ export function ResponsiveHanResult({ players, hasTor, hasTip, isViewer, isTourn
     <div className="majak-result-overlay" role="dialog" aria-modal="true" aria-label="最終結果">
       <section className="majak-result-panel majak-han-result-panel">
         <header className="majak-result-header">
-          <div><span className="majak-result-kicker">FINAL RESULT</span><h2>対局結果</h2></div>
-          <span className="majak-result-round">{isTournament ? 'TOURNAMENT' : 'MATCH COMPLETE'}</span>
+          <div><span className="majak-result-kicker">最終結果</span><h2>対局結果</h2></div>
+          <span className="majak-result-round">{isTournament ? '大会' : '対局終了'}</span>
         </header>
 
         <div className={`majak-han-result-table${showRoomCharge ? ' has-room-charge' : ''}`} role="table" aria-label="最終順位">
@@ -326,7 +326,7 @@ export function ResponsiveHanResult({ players, hasTor, hasTip, isViewer, isTourn
             {me.coinNeed != null && <small>次の資産ランクまで <AnimatedNumber value={me.coinNeed} delay={660} suffix="GP" /></small>}
           </div>
         )}
-        <footer className="majak-result-actions"><span>{isViewer ? '観戦モード' : '最終順位が確定しました'}</span><button type="button" onClick={onClose}>OK</button></footer>
+        <footer className="majak-result-actions"><span>{isViewer ? '観戦モード' : '最終順位が確定しました'}</span><button type="button" onClick={onClose}>確認</button></footer>
       </section>
     </div>
   )

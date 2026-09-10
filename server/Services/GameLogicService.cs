@@ -1876,7 +1876,7 @@ public class GameLogicService
                 if (!room.IsTrainingChannel)
                     await _historyRepo.InsertYakuHistAsync(player.MemberNo, GameConst.ServiceId, yakuCode);
 
-                yakumanNames.Add(GetYakumanName(info.Name));
+                yakumanNames.Add(GetHoraYakuDisplayName(info.Name));
             }
 
             int yakumanBonusRate = GetYakumanBonusRate(room, _testEnvironment);
@@ -2008,8 +2008,36 @@ public class GameLogicService
         return playerPos >= 0 && playerPos < room.Seats.Length ? room.Seats[playerPos] : null;
     }
 
-    private static string GetYakumanName(HoraYaku yaku) => yaku switch
+    private static string GetHoraYakuDisplayName(HoraYaku yaku) => yaku switch
     {
+        HoraYaku.Haitei       => "海底撈月",
+        HoraYaku.Houtei       => "河底撈魚",
+        HoraYaku.Rinshan      => "嶺上開花",
+        HoraYaku.Tsumo        => "門前清自摸和",
+        HoraYaku.Richi        => "立直",
+        HoraYaku.Ippatsu      => "一発",
+        HoraYaku.Yakuhai      => "役牌",
+        HoraYaku.Pinfu        => "平和",
+        HoraYaku.Tanyao       => "断幺九",
+        HoraYaku.Iipeikou     => "一盃口",
+        HoraYaku.Chitoitsu    => "七対子",
+        HoraYaku.Ittsuu       => "一気通貫",
+        HoraYaku.Toitoi       => "対々和",
+        HoraYaku.Sanshokudoujun => "三色同順",
+        HoraYaku.Isosanjun    => "一色三順",
+        HoraYaku.Sanshokudoukou => "三色同刻",
+        HoraYaku.Chankan      => "搶槓",
+        HoraYaku.Sanankou     => "三暗刻",
+        HoraYaku.Sankantsu    => "三槓子",
+        HoraYaku.Shosangen    => "小三元",
+        HoraYaku.Honroutou    => "混老頭",
+        HoraYaku.Chanta       => "混全帯幺九",
+        HoraYaku.Junchan      => "純全帯幺九",
+        HoraYaku.Ryanpeikou   => "二盃口",
+        HoraYaku.Honisou      => "混一色",
+        HoraYaku.Chinisou     => "清一色",
+        HoraYaku.Wrichi       => "ダブル立直",
+        HoraYaku.Dora         => "ドラ",
         HoraYaku.Daisangen     => "大三元",
         HoraYaku.Suuankou      => "四暗刻",
         HoraYaku.Suukantsu     => "四槓子",
@@ -2041,7 +2069,7 @@ public class GameLogicService
             var yaku = engine.Player[i].Yaku;
             yakuByPlayer[i] = yaku.List.Select(y => new
             {
-                name = y.Name.ToString(),
+                name = GetHoraYakuDisplayName(y.Name),
                 fan = y.Han,
                 code = yaku.IsYakuman ? (int)y.Name - 100 : (int)y.Name,
                 isYakuman = yaku.IsYakuman,

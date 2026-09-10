@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { MajakPlayer } from '../../../api/auth'
 import { updateAccountProfile, type AccountProfileUpdate } from '../../../api/accountProfile'
 import { FEMALE_AVATARS, MALE_AVATARS, normalizeAvatarUrl } from '../../../utils/resources'
+import { applyMajakColorTheme, loadMajakConfig, UI_COLOR_THEMES, USER_COLOR_THEME_KEYS } from './CfgDlg'
 import './ProfileEditDlg.css'
 
 type Props = {
@@ -19,8 +20,10 @@ export default function ProfileEditDlg({ player, onComplete, onClose, onSave = u
   const [birthDecade, setBirthDecade] = useState(initialBirthYear ? String(Math.floor(Number(initialBirthYear) / 10) * 10) : '')
   const [birthYear, setBirthYear] = useState(initialBirthYear)
   const [avatarIndex, setAvatarIndex] = useState(initialAvatarIndex >= 0 ? initialAvatarIndex : 0)
+  const [userColor, setUserColor] = useState(player.userColor || '#1b6b55')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const savedRef = useRef(false)
 
   const currentYear = new Date().getFullYear()
   const currentDecade = Math.floor(currentYear / 10) * 10
@@ -38,7 +41,8 @@ export default function ProfileEditDlg({ player, onComplete, onClose, onSave = u
     setSaving(true)
     setError('')
     try {
-      const updated = await onSave({ birthYear: Number(birthYear), avatarId: avatars[avatarIndex] })
+      const updated = await onSave({ birthYear: Number(birthYear), avatarId: avatars[avatarIndex], userColor })
+      savedRef.current = true
       onComplete({ ...player, ...updated })
     } catch {
       setError('プロフィールの保存に失敗しました。もう一度お試しください。')
@@ -46,12 +50,24 @@ export default function ProfileEditDlg({ player, onComplete, onClose, onSave = u
     }
   }
 
+  const previewUserColor = (color: string) => {
+    setUserColor(color)
+    applyMajakColorTheme({ ...loadMajakConfig(), themeBaseColor: color })
+  }
+
+  const close = () => {
+    if (!savedRef.current) {
+      applyMajakColorTheme({ ...loadMajakConfig(), themeBaseColor: player.userColor || '#1b6b55' })
+    }
+    onClose()
+  }
+
   return (
     <div className="majak-popup-overlay majak-profile-edit-overlay">
       <section className="majak-popup-panel majak-profile-edit" role="dialog" aria-modal="true" aria-labelledby="majak-profile-edit-title">
         <header className="majak-popup-titlebar">
           <h2 id="majak-profile-edit-title">プロフィール編集</h2>
-          <button type="button" className="majak-popup-titlebar__close" onClick={onClose} aria-label="閉じる">×</button>
+          <button type="button" className="majak-popup-titlebar__close" onClick={close} aria-label="閉じる">×</button>
         </header>
 
         <div className="majak-popup-body majak-profile-edit__body">
@@ -81,6 +97,29 @@ export default function ProfileEditDlg({ player, onComplete, onClose, onSave = u
             </div>
           </section>
 
+          <section className="majak-profile-edit__color" aria-labelledby="majak-profile-edit-color-title">
+            <span id="majak-profile-edit-color-title">ユーザーカラー</span>
+            <div className="majak-profile-edit__color-presets" role="radiogroup" aria-label="ユーザーカラーのプリセット">
+              {USER_COLOR_THEME_KEYS.map(key => {
+                const theme = UI_COLOR_THEMES[key]
+                return <button
+                  key={key}
+                  type="button"
+                  className={userColor === theme.command ? 'is-selected' : undefined}
+                  style={{ backgroundColor: theme.command }}
+                  title={theme.label}
+                  aria-label={theme.label}
+                  aria-pressed={userColor === theme.command}
+                  onClick={() => previewUserColor(theme.command)}
+                />
+              })}
+            </div>
+            <label className="majak-profile-edit__color-custom">
+              自由選択
+              <input type="color" value={userColor} onChange={event => previewUserColor(event.currentTarget.value)} aria-label="ユーザーカラーを自由選択" />
+            </label>
+          </section>
+
           <section className="majak-profile-edit__avatars">
             <div className="majak-profile-edit__avatar-grid">
               {avatars.map((avatar, index) => (
@@ -102,7 +141,7 @@ export default function ProfileEditDlg({ player, onComplete, onClose, onSave = u
         </div>
 
         <footer className="majak-popup-actions">
-          <button type="button" onClick={onClose} disabled={saving}>キャンセル</button>
+          <button type="button" onClick={close} disabled={saving}>キャンセル</button>
           <button type="button" className="is-primary" onClick={() => void submit()} disabled={saving || birthYear === ''}>
             {saving ? '保存中...' : '保存する'}
           </button>

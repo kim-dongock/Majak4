@@ -45,10 +45,10 @@ function legacyNameByteLength(value: string) {
 export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
   const [name, setName] = useState('')
   const [dateTime, setDateTime] = useState(defaultStartDateTime)
-  const [hanTon, setHanTon] = useState(0)
-  const [matchTime, setMatchTime] = useState(0)
-  const [matchCount, setMatchCount] = useState(0)
-  const [matchFormat, setMatchFormat] = useState(0)
+  const [hanTon, setHanTon] = useState(1)
+  const [matchTime, setMatchTime] = useState(2)
+  const [matchCount, setMatchCount] = useState(1)
+  const [matchFormat, setMatchFormat] = useState(1)
   const [joinMoney, setJoinMoney] = useState('0')
   const [prize1, setPrize1] = useState('0')
   const [prize2, setPrize2] = useState('0')
@@ -140,18 +140,6 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
               <label><span>1試合の時間</span><select value={matchTime} onChange={event => setMatchTime(Number(event.target.value))}><option value={0}>選択</option><option value={1}>30分</option><option value={2}>40分</option><option value={3}>50分</option><option value={4}>60分</option></select></label>
               <label><span>試合数</span><select value={matchCount} onChange={event => setMatchCount(Number(event.target.value))}><option value={0}>選択</option><option value={1}>1半荘</option><option value={2}>2半荘</option></select></label>
               <label><span>大会形式</span><select value={matchFormat} onChange={event => setMatchFormat(Number(event.target.value))}><option value={0}>選択</option>{TOURNAMENT_FORMATS.map((format, index) => <option key={format.label} value={index + 1}>{format.label}</option>)}</select></label>
-              <section className="majak-tournament-regist-conditions majak-mobile-tournament-regist__wide" aria-live="polite">
-                <div><strong>開催条件</strong><button type="button" onClick={() => setShowBracketPreview(true)} disabled={!selectedFormat}>対戦表を確認</button></div>
-                {selectedFormat ? (
-                  <ul>
-                    <li>開催最低人数：{minimumPlayers}人</li>
-                    <li>定員に満たない場合、残りの席はNPCが参加します。</li>
-                    <li>最低人数に満たない場合は中止となり、参加費を返却します。</li>
-                    <li>組み合わせは開始5分前にランダムで決定されます。</li>
-                    <li>賞金合計の110%は主催者のGPから登録時に預かり、中止時は返却します。</li>
-                  </ul>
-                ) : <p>大会形式を選択すると開催条件と対戦表を確認できます。</p>}
-              </section>
             </fieldset>
 
             <fieldset className="majak-mobile-dialog-section">
@@ -181,10 +169,20 @@ export default function TournamentRegistDlg({ onOK, onCancel }: Props) {
                 <label><span>パスワード</span><input type="password" value={password} disabled={!usePassword} maxLength={8} onChange={event => setPassword(event.target.value.slice(0, 8))} /></label>
               </div>
             </fieldset>
+            <section className="majak-tournament-regist-conditions majak-mobile-tournament-regist__conditions" aria-live="polite">
+              <div><strong>開催条件</strong><button type="button" onClick={() => setShowBracketPreview(true)}>対戦表を確認</button></div>
+              <ul>
+                <li>開催最低人数：{minimumPlayers}人</li>
+                <li>定員に満たない場合、残りの席はNPCが参加します。</li>
+                <li>最低人数に満たない場合は中止となり、参加費を返却します。</li>
+                <li>組み合わせは開始5分前にランダムで決定されます。</li>
+                <li>賞金合計の110%は主催者のGPから登録時に預かり、中止時は返却します。</li>
+              </ul>
+            </section>
           </div>
           <footer className="majak-mobile-dialog-actions majak-popup-actions">
-            <button type="submit" className="majak-standard-dialog__primary is-primary">大会登録</button>
             <button type="button" className="majak-standard-dialog__secondary" onClick={onCancel}>キャンセル</button>
+            <button type="submit" className="majak-standard-dialog__primary is-primary">大会登録</button>
           </footer>
         </form>
         {showBracketPreview && selectedFormat && (

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import type { MajakPlayer } from '../../../api/auth'
 import { googleRegister, checkNickname, AuthError } from '../../../api/auth'
 import { FEMALE_AVATARS, MALE_AVATARS } from '../../../utils/resources'
+import { UI_COLOR_THEMES, USER_COLOR_THEME_KEYS } from './CfgDlg'
 import './RegistrationDlg.css'
 
 // ── ステップ定義 ────────────────────────────────────────────────────
@@ -24,6 +25,7 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
   const [birthDecade,  setBirthDecade]  = useState('')
   const [birthYear,    setBirthYear]    = useState('')
   const [avatarIdx,    setAvatarIdx]    = useState(0)
+  const [userColor,    setUserColor]    = useState('#1b6b55')
   const [submitting,   setSubmitting]   = useState(false)
   const [error,        setError]        = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -80,7 +82,7 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
     setSubmitting(true)
     setError('')
     try {
-      const player = await googleRegister(idToken, nickname, sex, Number(birthYear), avatars[avatarIdx])
+      const player = await googleRegister(idToken, nickname, sex, Number(birthYear), avatars[avatarIdx], userColor)
       onComplete(player)
     } catch (err: unknown) {
       if (err instanceof AuthError && err.message === 'GOOGLE_REGISTRATION_AUTH_EXPIRED') {
@@ -323,6 +325,29 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
             </div>
           </fieldset>
         </div>
+
+        <section className="registration-user-color" aria-labelledby="registration-user-color-title">
+          <span id="registration-user-color-title">ユーザーカラー</span>
+          <div className="registration-user-color__presets" role="radiogroup" aria-label="ユーザーカラーのプリセット">
+            {USER_COLOR_THEME_KEYS.map(key => {
+              const theme = UI_COLOR_THEMES[key]
+              return <button
+                key={key}
+                type="button"
+                className={userColor === theme.command ? 'is-selected' : undefined}
+                style={{ backgroundColor: theme.command }}
+                title={theme.label}
+                aria-label={theme.label}
+                aria-pressed={userColor === theme.command}
+                onClick={() => setUserColor(theme.command)}
+              />
+            })}
+          </div>
+          <label className="registration-user-color__custom">
+            自由選択
+            <input type="color" value={userColor} onChange={event => setUserColor(event.currentTarget.value)} aria-label="ユーザーカラーを自由選択" />
+          </label>
+        </section>
 
         {/* アバターグリッド
             モバイル: 自然高さ・正方形セル / デスクトップ: 3/4 縦長セル */}

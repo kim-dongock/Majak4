@@ -148,8 +148,8 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, train
             )}
           </div>
           <div className="majak-mobile-dialog-actions majak-popup-actions">
-            <button type="button" className="majak-standard-dialog__primary is-primary" onClick={submit}>OK</button>
             <button type="button" className="majak-standard-dialog__secondary" onClick={onCancel}>キャンセル</button>
+            <button type="button" className="majak-standard-dialog__primary is-primary" onClick={submit}>確認</button>
           </div>
         </div>
       </div>
@@ -312,7 +312,7 @@ export default function RoomCreateDlg({ initialTitle, viewerEnable = true, train
             </fieldset>
           )}
 
-          <button onClick={submit} style={{ ...btnStyle, left: px(20), top: py(169) - 115 + viewerHeight, width: px(50), height: py(17) }}>OK</button>
+          <button onClick={submit} style={{ ...btnStyle, left: px(20), top: py(169) - 115 + viewerHeight, width: px(50), height: py(17) }}>確認</button>
           <button onClick={onCancel} style={{ ...btnStyle, left: px(75), top: py(169) - 115 + viewerHeight, width: px(50), height: py(17) }}>キャンセル</button>
         </div>
       </div>

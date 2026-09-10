@@ -239,8 +239,8 @@ function ResponsiveCustomInventory({
         <div><h2>所持品</h2></div>
         <button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
       </header>
-      <nav className="custom-inventory__tabs" aria-label="所持品の種類">
-        {tabs.map(item => <button key={item.value} type="button" className={tab === item.value ? 'is-active' : ''} onClick={() => setTab(item.value)}>{item.label}</button>)}
+      <nav className="custom-inventory__tabs" role="tablist" aria-label="所持品の種類">
+        {tabs.map(item => <button key={item.value} type="button" role="tab" aria-selected={tab === item.value} className={tab === item.value ? 'is-active' : ''} onClick={() => setTab(item.value)}>{item.label}</button>)}
       </nav>
       <main className="custom-inventory__content">
         {tab === TAB_GENERAL ? (
@@ -334,7 +334,6 @@ export default function CustomDlg({
   hanCoupon = 0,
   currentCharaId = 0,
   currentHaiId   = 0,
-  currentBgId    = 0,
   majItems = [],
   onMajItemsChange,
   onEquipChange,

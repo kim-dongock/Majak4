@@ -4,6 +4,7 @@ import { refreshedGameAuthHeaders } from './authHeaders'
 export interface AccountProfileUpdate {
   birthYear: number
   avatarId: string
+  userColor: string
 }
 
 export async function updateAccountProfile(profile: AccountProfileUpdate): Promise<AccountProfileUpdate> {

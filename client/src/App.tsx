@@ -34,6 +34,7 @@ import { useCustomSkinStore } from './store/customSkinStore'
 import { useOutgameLayoutMode } from './hooks/useOutgameLayoutMode'
 import { forceDuplicateConnectionLogout } from './utils/msgbox'
 import { signInWithNativeGoogle } from './utils/nativeGoogleAuth'
+import { applyMajakColorTheme, loadMajakConfig } from './screens/outgame/dialogs/CfgDlg'
 
 const ROUTER_STATE_STORAGE_KEY = 'majak:last-router-state'
 const SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY = 'majak:showWelcomeAfterRegistration'
@@ -294,6 +295,11 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [refreshChecked, setRefreshChecked] = useState(false)
   const [registrationRequest, setRegistrationRequest] = useState<{ idToken: string; player: MajakPlayer } | null>(null)
 
+  useEffect(() => {
+    if (!player?.userColor) return
+    applyMajakColorTheme({ ...loadMajakConfig(), themeBaseColor: player.userColor })
+  }, [player?.userColor])
+
   const completeRegistration = useCallback((registeredPlayer: MajakPlayer) => {
     window.sessionStorage.setItem(SHOW_WELCOME_AFTER_REGISTRATION_STORAGE_KEY, '1')
     setRegistrationRequest(null)
@@ -335,7 +341,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     setRegistrationRequest({
       idToken: '',
       player: {
-        pix: '', name: '', sex: '', avatarId: '', password: '', isTestEnv: false,
+        pix: '', name: '', sex: '', avatarId: '', userColor: '#1b6b55', password: '', isTestEnv: false,
         requiresRegistration: true, accountStatus: 0, termsAgreed: false,
       },
     })

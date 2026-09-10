@@ -756,6 +756,7 @@ export default function GameScreen() {
   const [gameState]  = useState<GameLocationState | null>(() => navState ?? readStoredGameState(roomId))
   const [signalReady, setSignalReady] = useState(false)
   const [syncLoading, setSyncLoading] = useState(true)
+  const player = useAuthStore(state => state.player)
 
   /** CMJHanRes 表示状態 */
   const [hanResData, setHanResData] = useState<HanResPlayer[] | null>(null)
@@ -904,10 +905,11 @@ export default function GameScreen() {
   const customBoardType = routeCustomBoardType > 0 ? routeCustomBoardType : fallbackSkin.bgType
   const customHaiId = routeCustomHaiId > 0 ? routeCustomHaiId : fallbackSkin.haiId
   const themeConfig = loadMajakConfig()
+  const themeBaseColor = player?.userColor || themeConfig.themeBaseColor
   const themeBoardColor = getLegacyBoardSkinId(customBgId, customBoardType) == null
-    ? themeConfig.themeBaseColor
+    ? themeBaseColor
     : undefined
-  const themeUiColor = themeConfig.themeBaseColor
+  const themeUiColor = themeBaseColor
   const fullUiSkinId = getLegacyFullUiSkinId(customBgId, customBoardType)
   const fullUiSkinSuffix = String(fullUiSkinId ?? customBgId).padStart(2, '0')
   const gameButtonSrc = (skinKey: string) => fullUiSkinId != null

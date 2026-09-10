@@ -959,7 +959,6 @@ export default class GameScene extends Phaser.Scene {
   private boardMask?: Phaser.Display.Masks.GeometryMask
   private boardBackground?: Phaser.GameObjects.Image
   private themeBoardBackground?: Phaser.GameObjects.Rectangle
-  private themeSideBackground?: Phaser.GameObjects.Rectangle
   private dragonOverlayBg?: Phaser.GameObjects.Image
   private centerInfoBg?: Phaser.GameObjects.Image
   private themeCenterInfoBackground?: Phaser.GameObjects.Rectangle
@@ -1222,19 +1221,22 @@ export default class GameScene extends Phaser.Scene {
       const sideBackground = this.add.image(SIDE_PANEL.x + SIDE_PANEL.width / 2, SIDE_PANEL.y + SIDE_PANEL.height / 2, this.resolveSkinTextureKey('mj_sideBg')).setDepth(-100)
       if (this.themeBoardTint != null) {
         sideBackground.setVisible(false)
-        this.themeSideBackground = this.add.rectangle(SIDE_PANEL.x + SIDE_PANEL.width / 2, SIDE_PANEL.y + SIDE_PANEL.height / 2, SIDE_PANEL.width, SIDE_PANEL.height, this.themeBoardTint)
+        this.add.rectangle(SIDE_PANEL.x + SIDE_PANEL.width / 2, SIDE_PANEL.y + SIDE_PANEL.height / 2, SIDE_PANEL.width, SIDE_PANEL.height, this.themeBoardTint)
           .setOrigin(0.5, 0.5)
           .setDepth(-99)
       }
     }
 
     /* ── ゲーム情報エリア mj_h_bg.png (265×161) at board-local (262,275) ── */
-    this.centerInfoBg = this.clipToBoard(this.add.image(BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2, BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2, this.resolveSkinTextureKey('mj_h_bg')).setDepth(-50))
+    const centerInfoTexture = this.resolveSkinTextureKey('mj_h_bg')
+    const centerInfoDisplayTexture = this.themeBoardTint == null
+      ? centerInfoTexture
+      : this.createTransparentCenterInfoTexture(centerInfoTexture)
+    this.centerInfoBg = this.clipToBoard(this.add.image(BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2, BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2, centerInfoDisplayTexture).setDepth(-50))
     if (this.themeBoardTint != null) {
-      this.centerInfoBg.setVisible(false)
       this.themeCenterInfoBackground = this.clipToBoard(this.add.rectangle(BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2, BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2, CENTER_INFO.width, CENTER_INFO.height, darkenThemeTint(this.themeBoardTint))
         .setOrigin(0.5, 0.5)
-        .setDepth(-49))
+        .setDepth(-51))
     }
     this.updateCenterInfoLayout()
 
@@ -1247,7 +1249,7 @@ export default class GameScene extends Phaser.Scene {
     this.events.once('uiSceneReady', () => {
       this.events.emit('stateUpdate', { players: this.players, viewOdr: this.myOdr })
     })
-    this.scene.launch('UIScene', { gameScene: this, myOdr: this.myOdr, layoutMode: this.layoutMode, isViewer: this.isViewer, customBgId: this.customBgId, customBoardType: this.customBoardType, customHaiId: this.customHaiId, themeBoardColor: this.themeBoardTint == null ? undefined : `#${this.themeBoardTint.toString(16).padStart(6, '0')}`, themeUiColor: `#${this.themeUiTint.toString(16).padStart(6, '0')}` })
+    this.scene.launch('UIScene', { gameScene: this, myOdr: this.myOdr, layoutMode: this.layoutMode, isViewer: this.isViewer, isReplay: this.isReplay, customBgId: this.customBgId, customBoardType: this.customBoardType, customHaiId: this.customHaiId, themeBoardColor: this.themeBoardTint == null ? undefined : `#${this.themeBoardTint.toString(16).padStart(6, '0')}`, themeUiColor: `#${this.themeUiTint.toString(16).padStart(6, '0')}` })
     if (this.isMeldLayoutFixture) {
       this.time.delayedCall(300, () => {
         this.showFixtureActionPreview()
@@ -1324,6 +1326,31 @@ export default class GameScene extends Phaser.Scene {
       (obj as T & { setMask: (mask: Phaser.Display.Masks.GeometryMask) => T }).setMask(this.boardMask)
     }
     return obj
+  }
+
+  private createTransparentCenterInfoTexture(sourceKey: string): string {
+    const textureKey = `${sourceKey}_theme_transparent`
+    const sourceImage = this.textures.get(sourceKey).getSourceImage() as HTMLImageElement
+    const existingTexture = this.textures.exists(textureKey)
+      ? this.textures.get(textureKey) as Phaser.Textures.CanvasTexture | null
+      : null
+    const canvasTexture = existingTexture
+      ?? this.textures.createCanvas(textureKey, sourceImage.width, sourceImage.height)
+    if (!canvasTexture) return sourceKey
+    const context = canvasTexture.context
+    context.clearRect(0, 0, sourceImage.width, sourceImage.height)
+    context.drawImage(sourceImage, 0, 0)
+
+    const imageData = context.getImageData(0, 0, sourceImage.width, sourceImage.height)
+    for (let index = 0; index < imageData.data.length; index += 4) {
+      const red = imageData.data[index]
+      const green = imageData.data[index + 1]
+      const blue = imageData.data[index + 2]
+      if (green > 36 && green > red * 1.15 && green > blue * 1.15) imageData.data[index + 3] = 0
+    }
+    context.putImageData(imageData, 0, 0)
+    canvasTexture.refresh()
+    return textureKey
   }
 
   private updateCenterInfoLayout() {
@@ -2690,8 +2717,9 @@ export default class GameScene extends Phaser.Scene {
     const avatarId = data.k7e ?? data.avatarId
     const sex = String(data.k11e ?? data.sex ?? '')
     const fallbackSex = sex === 'F' || sex === 'female' ? 'female' : 'male'
-    const customCostume = Number(data.mjkk136e ?? data.customCostume ?? data.charaId ?? player.customCostume ?? 0)
-    const customCostumeType = Number(data.mjkk137e ?? data.customCostumeType ?? data.charaType ?? player.customCostumeType ?? 0)
+    const isNpc = data.isNpc === true
+    const customCostume = isNpc ? 0 : Number(data.mjkk136e ?? data.customCostume ?? data.charaId ?? player.customCostume ?? 0)
+    const customCostumeType = isNpc ? 0 : Number(data.mjkk137e ?? data.customCostumeType ?? data.charaType ?? player.customCostumeType ?? 0)
     player.pix = pix || player.pix
     player.name = String(data.mjkk34e ?? data.k8e ?? data.nickName ?? data.nickname ?? data.name ?? player.name ?? pix)
     player.level = String(data.k32e ?? data.slevel ?? data.dan ?? player.level ?? '')
@@ -2706,8 +2734,13 @@ export default class GameScene extends Phaser.Scene {
     const proxyValue = asBoolean(data.isProxy ?? data.proxy ?? data.isOutPlayer)
     if (proxyValue !== undefined) player.isProxy = proxyValue
     if (hostPix) this.applyHostPix(hostPix)
-    if (Number.isFinite(customCostume) && customCostume > 0) player.customCostume = customCostume
-    if (Number.isFinite(customCostumeType) && customCostumeType > 0) player.customCostumeType = customCostumeType
+    if (isNpc) {
+      player.customCostume = 0
+      player.customCostumeType = 0
+    } else {
+      if (Number.isFinite(customCostume) && customCostume > 0) player.customCostume = customCostume
+      if (Number.isFinite(customCostumeType) && customCostumeType > 0) player.customCostumeType = customCostumeType
+    }
     if (sex) player.sex = sex
     if (avatarId != null && String(avatarId) !== '') {
       player.avatarId = String(avatarId)
@@ -3467,15 +3500,17 @@ export default class GameScene extends Phaser.Scene {
     const controlY = (origin.y + target.y) / 2 + (centerY - (origin.y + target.y) / 2) * 0.08
     const tiltDirection = odrToLoc(odr, this.myOdr) % 2 === 0 ? 1 : -1
 
+    sprite.setPosition(origin.x, origin.y + tiltDirection * 4)
     flight.tween = this.tweens.add({
       targets: progress,
       value: 1,
-      duration: 167,
-      ease: 'Cubic.Out',
+      delay: 42,
+      duration: 235,
+      ease: 'Quart.Out',
       onUpdate: () => {
         const t = progress.value
         const inverse = 1 - t
-        const lift = Math.sin(Math.PI * t)
+        const lift = Math.sin(Math.PI * t) * 1.28
         sprite.setPosition(
           inverse * inverse * origin.x + 2 * inverse * t * controlX + t * t * target.x,
           inverse * inverse * origin.y + 2 * inverse * t * controlY + t * t * target.y,
@@ -3484,7 +3519,7 @@ export default class GameScene extends Phaser.Scene {
           Phaser.Math.Linear(origin.scaleX, target.scaleX, t) * (1 + 0.06 * lift),
           Phaser.Math.Linear(origin.scaleY, target.scaleY, t) * (1 + 0.06 * lift),
         )
-        sprite.setAngle(tiltDirection * 6 * lift)
+        sprite.setAngle(tiltDirection * 9 * lift)
       },
       onComplete: () => {
         if (this.activeDiscardFlights[odr] !== flight) return
@@ -3674,8 +3709,7 @@ export default class GameScene extends Phaser.Scene {
         const visibleCount = (round + 1) * 4
         this.time.delayedCall(startDelay + step++ * 100, () => {
           if (!this.initialDealInProgress || serial !== this.initialDealSerial) return
-          this.initialDealVisibleCounts[revealOdr] = visibleCount
-          this.applyInitialDealVisibility(revealOdr)
+          this.revealInitialDealTiles(revealOdr, visibleCount)
         })
         odr = (odr + 1) % this.players.length
       }
@@ -3684,8 +3718,7 @@ export default class GameScene extends Phaser.Scene {
       const revealOdr = odr
       this.time.delayedCall(startDelay + step++ * 100, () => {
         if (!this.initialDealInProgress || serial !== this.initialDealSerial) return
-        this.initialDealVisibleCounts[revealOdr] = 13
-        this.applyInitialDealVisibility(revealOdr)
+        this.revealInitialDealTiles(revealOdr, 13)
       })
       odr = (odr + 1) % this.players.length
     }
@@ -3702,6 +3735,38 @@ export default class GameScene extends Phaser.Scene {
     const visibleCount = this.initialDealVisibleCounts[odr] ?? 0
     this.handSprites[odr].forEach((sprite, idx) => {
       if (sprite.active) sprite.setVisible(idx < visibleCount)
+    })
+  }
+
+  private revealInitialDealTiles(odr: number, visibleCount: number) {
+    const previousCount = this.initialDealVisibleCounts[odr] ?? 0
+    this.initialDealVisibleCounts[odr] = visibleCount
+    this.applyInitialDealVisibility(odr)
+
+    const bounds = isCenteredIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
+    const centerX = bounds ? (bounds.left + bounds.right) / 2 : BOARD_X + BOARD_W / 2
+    const centerY = bounds ? (bounds.top + bounds.bottom) / 2 : BOARD_Y + BOARD_H / 2
+    const loc = odrToLoc(odr, this.myOdr)
+    const direction = [{ x: 0, y: 1 }, { x: -1, y: 0 }, { x: 0, y: -1 }, { x: 1, y: 0 }][loc]
+
+    this.handSprites[odr].slice(previousCount, visibleCount).forEach((sprite, index) => {
+      if (!sprite.active) return
+      const targetX = sprite.x
+      const targetY = sprite.y
+      sprite.setPosition(centerX + direction.x * 34, centerY + direction.y * 24)
+      sprite.setAlpha(0.35)
+      sprite.setScale(sprite.scaleX * 0.94, sprite.scaleY * 0.94)
+      this.tweens.add({
+        targets: sprite,
+        x: targetX,
+        y: targetY,
+        alpha: 1,
+        scaleX: sprite.scaleX / 0.94,
+        scaleY: sprite.scaleY / 0.94,
+        duration: 185,
+        delay: index * 18,
+        ease: 'Cubic.Out',
+      })
     })
   }
 

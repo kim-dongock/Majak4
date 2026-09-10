@@ -208,7 +208,7 @@ export default function ItemPopupDlg({
           </div>
         </div>
         <footer className="majak-popup-actions">
-          <button type="button" className="is-primary" onClick={onClose}>OK</button>
+          <button type="button" className="is-primary" onClick={onClose}>確認</button>
         </footer>
       </section>
 

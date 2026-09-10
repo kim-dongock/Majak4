@@ -184,8 +184,8 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
 
   useEffect(() => {
     configureMajakSound(cfg)
-    applyMajakColorTheme(cfg)
-  }, [cfg])
+    applyMajakColorTheme({ ...cfg, themeBaseColor: player?.userColor || cfg.themeBaseColor })
+  }, [cfg, player?.userColor])
 
   useEffect(() => {
     if (!showFramePlayerBalances || !player?.pix) return
@@ -489,10 +489,13 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
         <CfgDlg
           initial={cfg}
           onOK={c => { saveMajakConfig(c); setCfg(c); setShowCfg(false) }}
-          onCancel={() => setShowCfg(false)}
+          onCancel={() => {
+            applyMajakColorTheme({ ...cfg, themeBaseColor: player?.userColor || cfg.themeBaseColor })
+            setShowCfg(false)
+          }}
           onModify={nextConfig => {
             configureMajakSound(nextConfig)
-            applyMajakColorTheme(nextConfig)
+            applyMajakColorTheme({ ...nextConfig, themeBaseColor: player?.userColor || nextConfig.themeBaseColor })
           }}
         />
       )}

@@ -48,6 +48,53 @@
   background: #e1e5e2;
 }
 
+.majak-profile-edit__color {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--majak-dialog-panel-text-color);
+  font-size: var(--majak-text-sm);
+  font-weight: var(--majak-weight-strong);
+}
+
+.majak-profile-edit__color-presets {
+  display: grid;
+  grid-template-columns: repeat(10, 24px);
+  gap: 5px;
+}
+
+.majak-profile-edit__color-presets button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.majak-profile-edit__color-presets button.is-selected {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #26352f;
+}
+
+.majak-profile-edit__color-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--majak-text-xs);
+  font-weight: var(--majak-weight-regular);
+}
+
+.majak-profile-edit__color-custom input {
+  width: 48px;
+  height: 32px;
+  padding: 2px;
+  border: 1px solid #8b9c94;
+  border-radius: 4px;
+  background: #fffef6;
+}
+
 .majak-profile-edit__avatars {
   min-height: 0;
 }

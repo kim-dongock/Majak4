@@ -101,7 +101,7 @@ export default function ResponsiveShopTransactionDlg({
         .shop-transaction dt { color: #5a6e66; font: var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); } .shop-transaction dd { margin: 0; color: #173f36; font: 700 var(--majak-popup-font-emphasis)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); text-align: right; }
         .shop-transaction select { min-width: 70px; padding: 3px; border: 1px solid #8e9c90; background: #fff; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); }
         .shop-transaction footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; border-top: 1px solid #c8d0c2; background: #e7ede4; }
-        .shop-transaction footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 15px; box-sizing: border-box; border: 0; border-radius: 3px; font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
+        .shop-transaction footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 15px; box-sizing: border-box; border: 0; border-radius: 3px; font: var(--majak-weight-strong) var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
         .shop-transaction__cancel { color: #3e5249; background: transparent; border: 1px solid #87958a; }
         .shop-transaction__primary { color: #fff; background: #1b5b4d; } .shop-transaction__primary:disabled { color: #84908a; background: #d6ddd5; cursor: not-allowed; }
         @media (max-width: 700px), (max-height: 560px) {

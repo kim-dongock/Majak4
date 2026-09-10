@@ -404,7 +404,7 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
             </div>
           </div>
           <div className="majak-player-profile__rating">
-            <span>RATING</span>
+            <span>レーティング</span>
             <strong>{(player.rating ?? 0).toLocaleString()}</strong>
             <small>{sexText}</small>
           </div>

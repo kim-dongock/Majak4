@@ -106,7 +106,7 @@ describe('ResponsiveKyoResult', () => {
     )
 
     expect(html).toContain('majak-kyo-result-panel is-hora')
-    expect(html).toContain('TSUMO')
+    expect(html).toContain('ツモ')
     expect(html).toContain('aria-label="和了詳細"')
     expect(html).toContain('門前清自摸和')
     expect(html).toContain('majak-result-player__animated-status is-tsumo')
@@ -123,7 +123,7 @@ describe('ResponsiveKyoResult', () => {
       <ResponsiveKyoResult data={RON_RESULT} canContinue onClose={vi.fn()} />,
     )
 
-    expect(html).toContain('RON')
+    expect(html).toContain('ロン')
     expect(html).toContain('majak-result-player__animated-status is-ron')
     expect(html).toContain('aria-label="栄和了"')
     expect(html).toContain('majak-result-player__animated-status is-hoju')

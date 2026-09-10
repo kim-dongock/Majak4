@@ -88,7 +88,7 @@ export default function LevelupDlg({ level, lentMoney, onClose }: Props) {
           <p className="majak-levelup-dialog__note">積み立てられた保険金は、麻雀マネーが0円になった時、自動補充されます。</p>
         </div>
         <footer className="majak-popup-actions">
-          <button type="button" className="is-primary" onClick={onClose}>OK</button>
+          <button type="button" className="is-primary" onClick={onClose}>確認</button>
         </footer>
       </section>
     </div>

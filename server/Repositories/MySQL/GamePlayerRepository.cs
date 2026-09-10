@@ -83,7 +83,8 @@ public class GamePlayerRepository
     public virtual async Task<bool> UpdateAccountProfileAsync(
         string memberNo,
         ushort birthYear,
-        string avatarId)
+        string avatarId,
+        string userColor)
     {
         if (!TryParseMemberNo(memberNo, out var memberNoValue)) return false;
         await using var db = await _db.CreateAsync();
@@ -93,6 +94,7 @@ public class GamePlayerRepository
             .ExecuteUpdateAsync(update => update
                 .SetProperty(account => account.BirthYear, birthYear)
                 .SetProperty(account => account.AvatarId, avatarId)
+                .SetProperty(account => account.UserColor, userColor)
                 .SetProperty(account => account.UpdatedAt, now));
         return updated == 1;
     }
@@ -136,7 +138,8 @@ public class GamePlayerRepository
         string displayName,
         string sexCode,
         ushort birthYear,
-        string avatarId)
+        string avatarId,
+        string userColor)
     {
         await using var strategyDb = await _db.CreateAsync();
         var strategy = strategyDb.Database.CreateExecutionStrategy();
@@ -144,7 +147,7 @@ public class GamePlayerRepository
         {
             await using var db = await _db.CreateAsync();
             await using var tx = await db.Database.BeginTransactionAsync();
-            var account = CreateGoogleAccount(displayName, sexCode, birthYear, avatarId, GoogleAuthPrefix + googleSub, email);
+            var account = CreateGoogleAccount(displayName, sexCode, birthYear, avatarId, userColor, GoogleAuthPrefix + googleSub, email);
             db.PlayerAccounts.Add(account);
             await db.SaveChangesAsync();
             AddRelatedPlayerRows(db, account.MemberNo);
@@ -194,6 +197,7 @@ public class GamePlayerRepository
         string sexCode,
         ushort birthYear,
         string avatarId,
+        string userColor,
         string externalAuthId,
         string? email)
     {
@@ -206,6 +210,7 @@ public class GamePlayerRepository
             SexCode = sexCode,
             BirthYear = birthYear,
             AvatarId = avatarId,
+            UserColor = userColor,
             TermsAgreedAt = now,
             AccountStatus = 1,
             SourceEnvironment = "google",
@@ -274,6 +279,7 @@ public class GamePlayerRepository
             account.SexCode,
             account.BirthYear,
             account.AvatarId,
+            account.UserColor,
             account.AccountStatus,
             account.TermsAgreedAt)
         {
@@ -301,6 +307,7 @@ public sealed record GamePlayerAccount(
     string SexCode,
     ushort? BirthYear,
     string AvatarId,
+    string UserColor,
     int AccountStatus,
     DateTime? TermsAgreedAt)
 {

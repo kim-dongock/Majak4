@@ -38,6 +38,7 @@ export interface MajakPlayer {
   sex:       '' | 'M' | 'F'
   birthYear?: number | null
   avatarId:  string
+  userColor: string
   password:  string       // Legacy Hangame compatibility field; empty for Google auth.
   isTestEnv: boolean
   requiresRegistration: boolean
@@ -53,6 +54,7 @@ export interface RegisteredPlayerCache {
   sex:                   'M' | 'F'
   birthYear?:            number | null
   avatarId:              string
+  userColor:             string
   isTestEnv:             boolean
   accountStatus?:        number
   savedAt:               string
@@ -123,6 +125,7 @@ export function saveRegisteredPlayerCache(player: MajakPlayer): void {
     sex:        player.sex,
     birthYear:  player.birthYear,
     avatarId:   player.avatarId,
+    userColor:   player.userColor,
     isTestEnv:  player.isTestEnv,
     accountStatus: player.accountStatus,
     savedAt:    new Date().toISOString(),
@@ -143,6 +146,7 @@ export function cachedToPlayer(cache: RegisteredPlayerCache): MajakPlayer {
     sex:                 cache.sex,
     birthYear:           cache.birthYear,
     avatarId:            cache.avatarId,
+    userColor:           cache.userColor || '#1b6b55',
     password:            '',
     isTestEnv:           cache.isTestEnv,
     requiresRegistration: false,
@@ -250,6 +254,7 @@ export async function googleRegister(
   sex:         'M' | 'F',
   birthYear:   number,
   avatarId:    string,
+  userColor:   string,
 ): Promise<MajakPlayer> {
   let res: Response
   try {
@@ -257,7 +262,7 @@ export async function googleRegister(
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body:    JSON.stringify({ idToken, displayName, sex, birthYear, avatarId }),
+      body:    JSON.stringify({ idToken, displayName, sex, birthYear, avatarId, userColor }),
     })
   } catch (err) {
     throw new AuthError('network', String(err))
