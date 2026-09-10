@@ -114,7 +114,6 @@ export default class MobileAvatarLayer {
     if (!slot) return
 
     const bounds = costumeBounds(state.url)
-    if (state.visible && !bounds && (costumeBounds(slot.url) || costumeBounds(slot.pendingUrl))) return
 
     Object.assign(slot.frame.style, {
       left: `${Math.round(state.x)}px`,
@@ -156,9 +155,11 @@ export default class MobileAvatarLayer {
       slot.url = url
       slot.pendingUrl = ''
       slot.image.src = url
+      slot.image.style.display = 'block'
       slot.frame.style.display = 'block'
     }
     if (slot.url === state.url && slot.image.complete && slot.image.naturalWidth > 0) {
+      slot.image.style.display = 'block'
       slot.frame.style.display = 'block'
       return
     }

@@ -3251,6 +3251,18 @@ export default class GameScene extends Phaser.Scene {
     )
   }
 
+  getInitialLocalHandBounds() {
+    const initialHandSprites = this.handSprites[this.myOdr]
+      .filter(sprite => sprite.active && sprite.visible)
+      .slice(0, 13)
+    const [first, ...rest] = initialHandSprites
+    if (!first) return null
+    return rest.reduce(
+      (bounds, sprite) => Phaser.Geom.Rectangle.Union(bounds, sprite.getBounds(), bounds),
+      first.getBounds(),
+    )
+  }
+
   isActionPresentationReady() {
     return this.initialActionPresentationReady && !this.deferInitialActionPresentation && !this.initialDealInProgress
   }
@@ -4870,12 +4882,14 @@ export default class GameScene extends Phaser.Scene {
       keepTimeMs: prompt?.keepTimeMs ?? 0,
       timeBankMs: prompt?.timeBankMs ?? 0,
       timeBankEnabled: prompt?.timeBankEnabled ?? false,
-      visualMode: resolveLegacyTimerMode(
-        prompt?.playerMode ?? '',
-        this.currentActionOffers,
-        prompt?.timeBankEnabled ?? false,
-        this.autoControl,
-      ),
+      visualMode: prompt?.playerMode === 'Turn'
+        ? 'input'
+        : resolveLegacyTimerMode(
+          prompt?.playerMode ?? '',
+          this.currentActionOffers,
+          prompt?.timeBankEnabled ?? false,
+          this.autoControl,
+        ),
       maxTimeMs: this.kyokuTimeFullMs,
       viewOdr: this.myOdr,
     }

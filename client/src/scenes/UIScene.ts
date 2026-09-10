@@ -1308,8 +1308,8 @@ export default class UIScene extends Phaser.Scene {
       if (this.mobileAvatarLayer) {
         this.avatarSprites[loc].setVisible(false)
         this.mobileAvatarLayer.update(loc, {
-          url: costumeUrl || p.avatarUrl || p.fallbackAvatarUrl || `${IMG}/mj_aiAvtrL.png`,
-          fallbackUrl: p.fallbackAvatarUrl || `${IMG}/mj_aiAvtrL.png`,
+          url: costumeFrame?.url || costumeUrl || p.avatarUrl || p.fallbackAvatarUrl || `${IMG}/mj_aiAvtrL.png`,
+          fallbackUrl: costumeUrl || p.fallbackAvatarUrl || `${IMG}/mj_aiAvtrL.png`,
           x: avt.x,
           y: avt.y,
           width: avatarSize.width,
@@ -1329,7 +1329,7 @@ export default class UIScene extends Phaser.Scene {
       }
       const majakTitleDepth = isMobileIngameLayout(this.layoutMode) ? 9 : 2
       const trickTitleDepth = isMobileIngameLayout(this.layoutMode) ? 8 : 1
-      const titleVisible = (isMobileIngameLayout(this.layoutMode) || mobileInfoVisible) && hudVisible
+      const titleVisible = !isMobileIngameLayout(this.layoutMode) && mobileInfoVisible && hudVisible
       const desktopTitleOffsetY = this.layoutMode === 'responsiveDesktop' ? RESPONSIVE_DESKTOP_TITLE_OFFSET_Y : 0
       this.setDynamicImage(this.majakTitleSprites[loc], this.majakTitleKey(p.majakTitle), this.majakTitleUrl(p.majakTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : ttl.x, (isMobileIngameLayout(this.layoutMode) ? avt.y : ttl.y) + desktopTitleOffsetY, majakTitleDepth, undefined, titleVisible)
       this.setDynamicImage(this.trickTitleSprites[loc], this.trickTitleKey(p.trickTitle), this.trickTitleUrl(p.trickTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : trk.x, (isMobileIngameLayout(this.layoutMode) ? avt.y - 2 : trk.y) + desktopTitleOffsetY, trickTitleDepth, undefined, titleVisible)
@@ -1984,11 +1984,17 @@ export default class UIScene extends Phaser.Scene {
     const gameScene = this.scene.get('GameScene') as Phaser.Scene & {
       getActionPanelBounds?: () => Phaser.Geom.Rectangle | null
       getActionButtonBounds?: () => Phaser.Geom.Rectangle | null
+      getInitialLocalHandBounds?: () => Phaser.Geom.Rectangle | null
     }
     const panelBounds = gameScene.getActionPanelBounds?.()
     const actionButtonBounds = gameScene.getActionButtonBounds?.()
-    const timerWidth = actionButtonBounds?.width ?? W_TIMBAR
-    const x = actionButtonBounds
+    const localHandBounds = isMobileIngameLayout(this.layoutMode)
+      ? gameScene.getInitialLocalHandBounds?.()
+      : null
+    const timerWidth = localHandBounds?.width ?? actionButtonBounds?.width ?? W_TIMBAR
+    const x = localHandBounds
+      ? localHandBounds.left
+      : actionButtonBounds
       ? actionButtonBounds.left
       : panelBounds
         ? panelBounds.centerX - timerWidth / 2
@@ -2063,6 +2069,7 @@ export default class UIScene extends Phaser.Scene {
     if (!pending) return
     const gameScene = this.scene.get('GameScene') as Phaser.Scene & {
       getActionPanelBounds?: () => Phaser.Geom.Rectangle | null
+      getInitialLocalHandBounds?: () => Phaser.Geom.Rectangle | null
       isActionPresentationReady?: () => boolean
     }
     if (!gameScene.isActionPresentationReady?.()) {
@@ -2070,7 +2077,12 @@ export default class UIScene extends Phaser.Scene {
       return
     }
     const panelBounds = gameScene.getActionPanelBounds?.()
-    if (!panelBounds || panelBounds.width <= 0 || panelBounds.height <= 0) return
+    const localHandBounds = isMobileIngameLayout(this.layoutMode)
+      ? gameScene.getInitialLocalHandBounds?.()
+      : null
+    const hasTimerAnchor = (panelBounds?.width ?? 0) > 0 && (panelBounds?.height ?? 0) > 0
+      || (localHandBounds?.width ?? 0) > 0 && (localHandBounds?.height ?? 0) > 0
+    if (!hasTimerAnchor) return
     this.pendingTimer = undefined
     this.startTimer(pending.data, pending.endAt)
   }
