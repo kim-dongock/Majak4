@@ -41,7 +41,7 @@ function EventDialogShell({ title, children, onClose, actions }: {
   actions?: ReactNode
 }) {
   return (
-    <div className="majak-popup-overlay event-dialog-overlay">
+    <div className="majak-popup-overlay">
       <section className="majak-popup-panel event-dialog" role="dialog" aria-modal="true" aria-label={title}>
         <header className="majak-popup-titlebar event-dialog__header">
           <h2>{title}</h2>
@@ -50,40 +50,6 @@ function EventDialogShell({ title, children, onClose, actions }: {
         <main className="majak-popup-body event-dialog__body">{children}</main>
         {actions && <footer className="majak-popup-actions event-dialog__actions">{actions}</footer>}
       </section>
-      <style>{`
-        .event-dialog-overlay { position: absolute; inset: 0; z-index: 350; display: grid; place-items: center; padding: 20px; overflow: hidden; box-sizing: border-box; }
-        .event-dialog { width: min(620px, 100%); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; overflow: hidden; color: #244137; }
-        .event-dialog__header { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; }
-        .event-dialog__header h2 { margin: 0; color: inherit; font-size: var(--majak-popup-font-title); line-height: var(--majak-popup-leading-title); }
-        .event-dialog__body { min-height: 0; display: grid; gap: 18px; padding: 20px; overflow: auto; }
-        .event-dialog__summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-        .event-dialog__summary div { padding: 13px 14px; border: 1px solid #c8d6c9; background: #edf4ec; }
-        .event-dialog__summary span, .event-dialog__scores span, .event-dialog__notice, .event-dialog__intro p, .event-dialog__skip { font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
-        .event-dialog__summary span { display: block; color: #526b5d; }
-        .event-dialog__summary strong { display: block; margin-top: 4px; color: #1b5a4b; font-size: var(--majak-popup-font-title); line-height: var(--majak-popup-leading-title); }
-        .event-dialog__scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr)); gap: 8px; }
-        .event-dialog__scores div { display: grid; gap: 3px; min-width: 0; padding: 10px 8px; border: 1px solid #d3ded2; background: #fffdf8; text-align: center; }
-        .event-dialog__scores span { color: #607568; }
-        .event-dialog__scores strong { color: #244137; font-size: var(--majak-popup-font-emphasis); line-height: var(--majak-popup-leading-emphasis); }
-        .event-dialog__notice { margin: 0; padding: 11px 13px; color: #735923; border-left: 3px solid #c99f3e; background: #faf3de; }
-        .event-dialog__intro { display: grid; gap: 10px; }
-        .event-dialog__intro h3 { margin: 0; color: #1b5a4b; font-size: var(--majak-popup-font-emphasis); line-height: var(--majak-popup-leading-emphasis); }
-        .event-dialog__intro p { margin: 0; color: #52645d; }
-        .event-dialog__skip { display: flex; align-items: center; gap: 8px; color: #52645d; }
-        .event-dialog__actions { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 14px; }
-        .event-dialog__actions button { min-width: var(--majak-popup-command-width); }
-        .event-dialog__actions .event-dialog__secondary { color: #244137; border-color: #7f9687; background: #f6f8f1; }
-        @media (max-width: 600px), (max-height: 560px) {
-          .event-dialog-overlay { padding: 0; }
-          .event-dialog { width: 100%; max-height: 100dvh; }
-          .event-dialog__body { gap: 10px; padding: 12px; }
-          .event-dialog__summary { gap: 4px; }
-          .event-dialog__summary div { padding: 9px; }
-          .event-dialog__scores { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
-          .event-dialog__scores div { padding: 7px 4px; }
-          .event-dialog__actions { padding: 8px 12px; }
-        }
-      `}</style>
     </div>
   )
 }

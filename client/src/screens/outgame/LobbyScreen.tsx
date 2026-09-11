@@ -3457,7 +3457,6 @@ export default function LobbyScreen() {
         <CustomDlg
           currentCharaId={customEquipIds.charaId}
           currentHaiId={customEquipIds.haiId}
-          currentBgId={customEquipIds.bgId}
           majItems={majItems}
           onMajItemsChange={setMajItems}
           onEquipChange={({ itemId, itemType }) => {

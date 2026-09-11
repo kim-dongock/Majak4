@@ -35,6 +35,7 @@ Write-Host "`n[1/3] Building the production client..." -ForegroundColor Yellow
 Push-Location $PROJECT_DIR
 try {
     npm run build -- --mode production
+    Assert-AwsSuccess "building the production client"
 } finally {
     Pop-Location
 }
@@ -52,6 +53,7 @@ aws s3 sync $DIST_PATH "s3://$S3_BUCKET" `
     --region $S3_REGION `
     --delete `
     --exclude "*.html" `
+    --exclude "assets" `
     --exclude "assets/*" `
     --cache-control "public,max-age=31536000,immutable"
 Assert-AwsSuccess "syncing static files"

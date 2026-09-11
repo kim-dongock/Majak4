@@ -50,7 +50,7 @@ export default function AnnouncementListScreen() {
     return () => observer.disconnect()
   }, [articles.length, hasMore])
 
-  return <main className="majak-announcement-list majak-screen-surface">
+  return <main className="majak-announcement-list">
     <section className="majak-announcement-list__intro">
       <h1>お知らせ</h1>
       <p>最新のお知らせから順に表示しています。</p>

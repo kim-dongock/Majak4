@@ -51,9 +51,9 @@ export default function TournamentBracketPreviewDlg({
   const playerPositions = getFirstRoundLabelPositions(selectedFormat)
 
   return (
-    <div className="majak-tournament-bracket-preview-overlay" role="presentation">
-      <section className="majak-tournament-bracket-preview" role="dialog" aria-modal="true" aria-labelledby="tournament-bracket-preview-title">
-        <header>
+    <div className="majak-popup-overlay majak-tournament-bracket-preview-overlay" role="presentation">
+      <section className="majak-popup-panel majak-tournament-bracket-preview" role="dialog" aria-modal="true" aria-labelledby="tournament-bracket-preview-title">
+        <header className="majak-popup-titlebar">
           <div>
             <h2 id="tournament-bracket-preview-title">対戦表プレビュー</h2>
             {selectable ? (
@@ -64,7 +64,7 @@ export default function TournamentBracketPreviewDlg({
           </div>
           <button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
         </header>
-        <div className="majak-tournament-bracket-preview__image">
+        <div className="majak-popup-body majak-tournament-bracket-preview__image">
           <div className="majak-tournament-bracket-preview__canvas" style={{ aspectRatio: `633 / ${selectedFormat.imageHeight}` }}>
             <img src={`${IMG}/${selectedFormat.imageName}`} alt={`${selectedFormat.label}の対戦表`} draggable={false} />
             {playerPositions.map(([left, top, width], index) => (
@@ -78,7 +78,7 @@ export default function TournamentBracketPreviewDlg({
             ))}
           </div>
         </div>
-        <footer><button type="button" onClick={onClose}>閉じる</button></footer>
+        <footer className="majak-popup-actions"><button type="button" onClick={onClose}>閉じる</button></footer>
       </section>
     </div>
   )

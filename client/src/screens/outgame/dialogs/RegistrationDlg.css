@@ -380,11 +380,11 @@
   .registration-steps { gap: 7px; margin-bottom: 6px; }
   .registration-step { gap: 4px; font-size: var(--majak-popup-font-body); }
   .registration-heading { margin-bottom: 5px; font-size: var(--majak-popup-font-title); }
-  .registration-panel--terms { display: flex; flex-direction: column; overflow: hidden; padding: 12px 16px; }
+  .registration-panel--terms { display: block; overflow-y: auto; padding: 12px 16px; }
   .registration-panel--flow .registration-steps { gap: 3px; margin-bottom: 6px; padding: 3px 5px 0; }
   .registration-panel--flow .registration-step { gap: 6px; min-height: 42px; padding: 4px 8px 6px; font-size: var(--majak-popup-font-emphasis); }
   .registration-panel--flow .registration-heading { margin-bottom: 8px; font-size: var(--majak-popup-font-title); }
-  .registration-terms { flex: 1 1 auto; overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 14px 16px 18px; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
+  .registration-terms { overflow: visible; padding: 14px 16px 18px; font-size: var(--majak-popup-font-body); line-height: var(--majak-popup-leading-body); }
   .registration-terms h2 { margin-bottom: 14px; padding-bottom: 8px; font-size: var(--majak-popup-font-title); }
   .registration-terms section + section { margin-top: 16px; }
   .registration-terms h3 { margin-bottom: 4px; font-size: var(--majak-popup-font-emphasis); }

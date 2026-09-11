@@ -349,8 +349,8 @@ export default function ResponsiveItemShopDlg({
         .responsive-shop--mobileLandscape .responsive-shop__tabs, .responsive-shop--mobilePortrait .responsive-shop__tabs { overflow-x: auto; grid-template-columns: repeat(4, minmax(94px, 1fr)); }
         .responsive-shop--mobileLandscape .responsive-shop__tabs button, .responsive-shop--mobilePortrait .responsive-shop__tabs button { height: var(--majak-popup-tab-height); font-size: var(--shop-font-label); }
         .responsive-shop--mobileLandscape .responsive-shop__content, .responsive-shop--mobilePortrait .responsive-shop__content { padding: 9px; }
-        .responsive-shop--mobileLandscape .responsive-shop__grid, .responsive-shop--mobilePortrait .responsive-shop__grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
-        .responsive-shop--mobileLandscape .responsive-shop__grid--cash, .responsive-shop--mobilePortrait .responsive-shop__grid--cash { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .responsive-shop--mobileLandscape .responsive-shop__grid, .responsive-shop--mobilePortrait .responsive-shop__grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+        .responsive-shop--mobileLandscape .responsive-shop__grid--cash, .responsive-shop--mobilePortrait .responsive-shop__grid--cash { grid-template-columns: repeat(5, minmax(0, 1fr)); }
         .responsive-shop--mobileLandscape .shop-card, .responsive-shop--mobilePortrait .shop-card { min-height: 176px; padding: 9px; }
         .responsive-shop--mobileLandscape .shop-card { min-height: 152px; }
         .responsive-shop--mobileLandscape .shop-card--cash, .responsive-shop--mobilePortrait .shop-card--cash { min-height: 126px; }

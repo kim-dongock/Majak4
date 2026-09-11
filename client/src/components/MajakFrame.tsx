@@ -33,6 +33,7 @@ import * as SignalR from '../api/signalr'
 import { useAuthStore } from '../store/authStore'
 import { useGamePlayerStore } from '../store/gamePlayerStore'
 import EndingPopupWnd from '../screens/outgame/dialogs/EndingPopupWnd'
+import MobileWebDownloadScreen from './MobileWebDownloadScreen'
 import ProfileEditDlg from '../screens/outgame/dialogs/ProfileEditDlg'
 
 const MAJAK3 = '/assets/images/game'
@@ -272,6 +273,7 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
       || isLobbyScreen
 
     if (layoutMode === 'mobilePortrait') {
+      if (!IS_NATIVE_APP) return <MobileWebDownloadScreen />
       return (
         <main className="majak-mobile-portrait-notice majak-screen-surface" aria-live="polite">
           <img
@@ -307,7 +309,6 @@ export default function MajakFrame({ onOpenSettings, onOpenAnnouncements, onGoHo
               ) : <>
                 {onGoHome && <button type="button" onClick={onGoHome}>閉じる</button>}
                 {onOpenAnnouncements && <button type="button" onClick={onOpenAnnouncements}>お知らせ</button>}
-                {!IS_NATIVE_APP && <button type="button" onClick={enterFullscreen} title="全画面表示">全画面</button>}
                 <button type="button" onClick={handleOpenSettings}>設定</button>
                 {showMobileExit && <button type="button" onClick={handleClose}>ログアウト</button>}
                 {accBox && <button type="button" onClick={handleAccuse}>通報</button>}

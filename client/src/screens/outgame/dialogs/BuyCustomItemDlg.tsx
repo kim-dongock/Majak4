@@ -41,15 +41,9 @@
 import { useRef, useEffect, useState } from 'react'
 import * as SignalR from '../../../api/signalr'
 import { showError, showMessage } from '../../../utils/msgbox'
-import CustomReceiptDlg from './CustomReceiptDlg'
-import { useOutgameLayoutMode } from '../../../hooks/useOutgameLayoutMode'
 import ResponsiveShopTransactionDlg from './ResponsiveShopTransactionDlg'
 
-const IMG      = '/assets/images/game'
 const IMG_ITEM = '/assets/images/game/items/custom'
-const SHOP_RECEIPT_BUY_BTN = `${IMG}/_ShopReceiptBuyBtn.png?v=opaque`
-const DIALOG_W = 389
-const DIALOG_H = 500
 
 /** エラーコード (CUSTOM_ERROR_CODE_*) */
 const ERROR_CODE: Record<number, string> = {
@@ -81,52 +75,13 @@ interface Props {
 }
 
 /** ====================================================================
- * CMJBmpButton 相当 — AP-06 §2 4フレームスプライトボタン
- * ==================================================================== */
-function SpriteButton({
-  src, frameW, frameH, x, y, onClick, disabled = false, title,
-}: {
-  src: string; frameW: number; frameH: number
-  x: number; y: number; onClick: () => void
-  disabled?: boolean; title?: string
-}) {
-  const [fi, setFi] = useState(disabled ? 1 : 0)
-  useEffect(() => { setFi(disabled ? 1 : 0) }, [disabled])
-  return (
-    <button
-      title={title}
-      disabled={disabled}
-      onClick={disabled ? undefined : onClick}
-      onMouseEnter={() => !disabled && setFi(2)}
-      onMouseLeave={() => setFi(disabled ? 1 : 0)}
-      onMouseDown={() => !disabled && setFi(3)}
-      onMouseUp={() => !disabled && setFi(2)}
-      style={{
-        position: 'absolute', left: x, top: y,
-        width: frameW, height: frameH,
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-fi * frameW}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none', padding: 0,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        outline: 'none', imageRendering: 'pixelated',
-      }}
-    />
-  )
-}
-
-/** ====================================================================
  * CMJBuyCustomItemDlg 本体
  * ==================================================================== */
 export default function BuyCustomItemDlg({
-  item, pix, memberName, hanCoin, onClose, onBuyOK,
+  item, pix, hanCoin, onClose, onBuyOK,
 }: Props) {
   const [yesDis, setYesDis] = useState(false)
   const [coinBalance] = useState(hanCoin)
-  const layoutMode = useOutgameLayoutMode()
-  const isMobile = layoutMode !== 'desktop'
-  const useResponsiveDialog = isMobile || layoutMode === 'desktop'
-  const [dialogScale, setDialogScale] = useState(1)
   const [receipt, setReceipt] = useState<{
     coinBefore: number
     coinAfter: number
@@ -149,46 +104,6 @@ export default function BuyCustomItemDlg({
   useEffect(() => {
     setYesDis(false)
   }, [])
-
-  /* ドラッグ移動 (OnNcHitTest: pt.y < 41 → HTCAPTION) */
-  const [pos, setPos]   = useState({ x: 0, y: 0 })
-  const dragging        = useRef(false)
-  const dragOffset      = useRef({ dx: 0, dy: 0 })
-
-  const onDragStart = (e: React.MouseEvent) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    if (e.clientY - rect.top >= 41) return
-    dragging.current   = true
-    dragOffset.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y }
-    e.preventDefault()
-  }
-  useEffect(() => {
-    const onMove = (e: MouseEvent) => {
-      if (!dragging.current) return
-      setPos({ x: e.clientX - dragOffset.current.dx, y: e.clientY - dragOffset.current.dy })
-    }
-    const onUp = () => { dragging.current = false }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup',   onUp)
-    return () => {
-      window.removeEventListener('mousemove', onMove)
-      window.removeEventListener('mouseup',   onUp)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isMobile) {
-      setDialogScale(1)
-      return
-    }
-    const updateScale = () => {
-      const margin = 16
-      setDialogScale(Math.min(1, (window.innerWidth - margin) / DIALOG_W, (window.innerHeight - margin) / DIALOG_H))
-    }
-    updateScale()
-    window.addEventListener('resize', updateScale)
-    return () => window.removeEventListener('resize', updateScale)
-  }, [isMobile])
 
   /**
    * OnOK() 相当 — ProcessCommandBuyCustomItem(shopNo) → mjkc41e 送信
@@ -233,167 +148,30 @@ export default function BuyCustomItemDlg({
     void showMessage('MP購入機能は準備中です。')
   }
 
-  const textStyle = {
-    fontFamily: 'var(--majak-font-family-ui)' as const,
-    fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold' as const,
-    color: '#000', pointerEvents: 'none' as const,
-    overflow: 'hidden' as const, whiteSpace: 'nowrap' as const,
-  }
   const yen = (value: number) => value >= 0 ? `${Math.trunc(value).toLocaleString('ja-JP')} MP` : '---'
 
-  if (useResponsiveDialog) {
-    if (receipt) {
-      return <ResponsiveShopTransactionDlg
-        title="購入完了"
-        itemName={item.itemName}
-        itemKind={item.itemType}
-        imageUrl={`${IMG_ITEM}/mj_custom_${String(item.itemId).padStart(2, '0')}.png`}
-        costs={[{ label: '購入価格', value: yen(item.price) }]}
-        balances={[{ label: '購入後のMP', value: yen(receipt.coinAfter) }]}
-        complete
-        onCancel={() => { onBuyOK?.(receipt.coinAfter); onClose() }}
-      />
-    }
+  if (receipt) {
     return <ResponsiveShopTransactionDlg
-      title="購入しますか？"
+      title="購入完了"
       itemName={item.itemName}
       itemKind={item.itemType}
-      description={[item.itemDesc]}
       imageUrl={`${IMG_ITEM}/mj_custom_${String(item.itemId).padStart(2, '0')}.png`}
-      costs={[{ label: '価格', value: yen(item.price) }]}
-      balances={[{ label: '所持MP', value: yen(coinBalance) }, { label: '購入後のMP', value: yen(Math.max(0, coinBalance - item.price)) }]}
-      confirmDisabled={yesDis}
-      onConfirm={handleYes}
-      onCancel={onClose}
+      costs={[{ label: '購入価格', value: yen(item.price) }]}
+      balances={[{ label: '購入後のMP', value: yen(receipt.coinAfter) }]}
+      complete
+      onCancel={() => { onBuyOK?.(receipt.coinAfter); onClose() }}
     />
   }
-
-  return (
-    <>
-      {!receipt && (
-        /* モーダルオーバーレイ */
-        <div style={{
-          position: isMobile ? 'fixed' : 'absolute', inset: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'transparent', zIndex: 400,
-        }}>
-      <div style={{ width: DIALOG_W * dialogScale, height: DIALOG_H * dialogScale }}>
-      {/* CMJBuyCustomItemDlg クライアント領域: 389×500px */}
-      <div
-        style={{
-          position: 'relative',
-          width: DIALOG_W, height: DIALOG_H,
-          left: isMobile ? 0 : pos.x, top: isMobile ? 0 : pos.y,
-          transform: `scale(${dialogScale})`,
-          transformOrigin: 'top left',
-        }}
-        onMouseDown={isMobile ? undefined : onDragStart}
-      >
-
-        {/* ── 背景 mj_shp_window_exchange_05.png (389×500) ── */}
-        <img
-          src={`${IMG}/mj_shp_window_exchange_05.png`}
-          alt=""
-          draggable={false}
-          style={{ position: 'absolute', left: 0, top: 0, width: 389, height: 500, userSelect: 'none' }}
-        />
-
-        {/* ── アイテム画像 at (129, 73) ── */}
-        <img
-          src={`${IMG_ITEM}/mj_custom_${String(item.itemId).padStart(2, '0')}.png`}
-          alt={item.itemName}
-          draggable={false}
-          style={{ position: 'absolute', left: 129, top: 73, pointerEvents: 'none' }}
-          onError={e => { (e.currentTarget as HTMLImageElement).style.visibility = 'hidden' }}
-        />
-
-        {/* ── タイトル CRect(56,53,334,64) DT_CENTER ── */}
-        <div style={{ ...textStyle, position: 'absolute', left: 56, top: 53, width: 278, textAlign: 'center' }}>
-          &quot;{memberName || pix}&quot;さんが購入するアイテム
-        </div>
-
-        {/* ── アイテム名 CRect(167,154,351,180) DT_RIGHT ── */}
-        <div style={{ ...textStyle, position: 'absolute', left: 167, top: 154, width: 184, textAlign: 'right', whiteSpace: 'normal' as const }}>
-          {item.itemName}
-        </div>
-
-        {/* ── アイテムタイプ CRect(167,193,351,204) DT_RIGHT ── */}
-        <div style={{ ...textStyle, position: 'absolute', left: 167, top: 193, width: 184, textAlign: 'right' }}>
-          {item.itemType}
-        </div>
-
-        {/* ── アイテム説明 CRect(150,216,351,259) DT_WORDBREAK ── */}
-        <div style={{
-          ...textStyle,
-          position: 'absolute', left: 150, top: 216, width: 201, height: 43,
-          whiteSpace: 'pre-wrap' as const, overflow: 'hidden' as const,
-          textAlign: 'left',
-        }}>
-          {item.itemDesc}
-        </div>
-
-        {/* ── 価格 CRect(167,271,351,281) DT_RIGHT ── */}
-        <div style={{ ...textStyle, position: 'absolute', left: 167, top: 271, width: 184, textAlign: 'right' }}>
-          {yen(item.price)}
-        </div>
-
-        {/* ── 保有者名 CRect(57,305,333,316) DT_RIGHT ── */}
-        <div style={{ ...textStyle, position: 'absolute', left: 57, top: 305, width: 276, textAlign: 'right' }}>
-          &quot;{memberName || pix}&quot;さんの保有状況
-        </div>
-
-        {/* ── キャッシュ残高 CRect(167,328,351,339) DT_RIGHT ── */}
-        <div style={{ ...textStyle, position: 'absolute', left: 167, top: 328, width: 184, textAlign: 'right' }}>
-          {yen(coinBalance)}
-        </div>
-
-        {/* ── キャッシュで購入ボタン _ShopReceiptBuyBtn.png (492×20, 4フレーム 123×20) at (235, 377) ── */}
-        <SpriteButton
-          src={SHOP_RECEIPT_BUY_BTN}
-          frameW={123} frameH={20}
-          x={235} y={377}
-          onClick={handleBuy}
-          title="MPで購入"
-        />
-
-        {/* ── Yes ボタン mj_shp_btn_yes.png (340×29, 4フレーム 85×29) at (99, 458) ── */}
-        <SpriteButton
-          src={`${IMG}/mj_shp_btn_yes.png`}
-          frameW={85} frameH={29}
-          x={99} y={458}
-          onClick={handleYes}
-          disabled={yesDis}
-          title="購入する"
-        />
-
-        {/* ── No ボタン mj_shp_btn_no.png (340×29, 4フレーム 85×29) at (206, 458) ── */}
-        <SpriteButton
-          src={`${IMG}/mj_shp_btn_no.png`}
-          frameW={85} frameH={29}
-          x={206} y={458}
-          onClick={onClose}
-          title="キャンセル"
-        />
-        </div>
-        </div>
-        </div>
-      )}
-      {receipt && (
-        <CustomReceiptDlg
-          pix={pix}
-          memberName={memberName}
-          itemId={item.itemId}
-          itemName={item.itemName}
-          price={item.price}
-          gameMoney={item.gameMoney}
-          coinBefore={receipt.coinBefore}
-          coinAfter={receipt.coinAfter}
-          onClose={() => {
-            onBuyOK?.(receipt.coinAfter)
-            onClose()
-          }}
-        />
-      )}
-    </>
-  )
+  return <ResponsiveShopTransactionDlg
+    title="購入しますか？"
+    itemName={item.itemName}
+    itemKind={item.itemType}
+    description={[item.itemDesc]}
+    imageUrl={`${IMG_ITEM}/mj_custom_${String(item.itemId).padStart(2, '0')}.png`}
+    costs={[{ label: '価格', value: yen(item.price) }]}
+    balances={[{ label: '所持MP', value: yen(coinBalance) }, { label: '購入後のMP', value: yen(Math.max(0, coinBalance - item.price)) }]}
+    confirmDisabled={yesDis}
+    onConfirm={handleYes}
+    onCancel={onClose}
+  />
 }

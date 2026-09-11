@@ -246,6 +246,7 @@ const BIPAI_MAX_COUNT = 136
 const VIEWER_OPEN_POS = 4
 const DEAD_WALL_COUNT = 14
 const DEAD_WALL_START = BIPAI_MAX_COUNT - DEAD_WALL_COUNT
+const DEAD_WALL_TILE_WIDTH = 31
 let WAN_POS = INGAME_LAYOUT.deadWall.position
 let WAN_EXPOSE_OFFSET_Y = INGAME_LAYOUT.deadWall.exposeOffsetY
 let BOARD_EFFECT_POS = INGAME_LAYOUT.boardEffectPosition
@@ -511,7 +512,7 @@ function mixThemeTint(color: number, target: number, amount: number): number {
 function mobileDeadWallBasePos(): { x: number; y: number } | null {
   const bounds = mobileVisibleWorldBounds()
   if (!bounds) return null
-  const tileStep = TEH_COL[0].x * MOBILE_NON_SELF_TILE_SCALE * mobileContentScale()
+  const tileStep = DEAD_WALL_TILE_WIDTH * MOBILE_NON_SELF_TILE_SCALE * mobileContentScale()
   const groupWidth = tileStep * 7
   const rightAvatarLeft = bounds.right - MOBILE_HUD_AVATAR_WIDTH - MOBILE_HUD_AVATAR_INSET_X
   return {
@@ -525,8 +526,9 @@ function mobileDeadWallBasePos(): { x: number; y: number } | null {
 function deadWallPos(idx: number, mode: IngameLayoutMode): { x: number; y: number } {
   const base = isMobileIngameLayout(mode) ? mobileDeadWallBasePos() ?? WAN_POS : WAN_POS
   const tileScale = isMobileIngameLayout(mode) ? MOBILE_NON_SELF_TILE_SCALE * mobileContentScale() : 1
+  const tileStep = isMobileIngameLayout(mode) ? DEAD_WALL_TILE_WIDTH : TEH_COL[0].x
   return boardLocalPoint({
-    x: base.x + (6 - Math.floor(idx / 2)) * TEH_COL[0].x * tileScale,
+    x: base.x + (6 - Math.floor(idx / 2)) * tileStep * tileScale,
     y: base.y - (idx % 2 === 0 ? WAN_EXPOSE_OFFSET_Y * tileScale : 0),
   })
 }
@@ -1035,6 +1037,7 @@ export default class GameScene extends Phaser.Scene {
   private viewerHistorySyncPending = false
   private layoutMode: IngameLayoutMode = 'desktop'
   private customHaiId = 0
+  private usesHighDensityHaiTextures = false
   private replayPaifuData: unknown
   private replayPaifuApplied = false
   private isReplayApplyingHistory = false
@@ -1078,6 +1081,10 @@ export default class GameScene extends Phaser.Scene {
 
   private tileScale(): number {
     return this.layoutMode === 'mobileLandscape' ? MOBILE_TILE_SCALE * mobileContentScale() : 1
+  }
+
+  private tileRenderScale(scale: number): number {
+    return this.usesHighDensityHaiTextures ? scale / 2 : scale
   }
 
   private handTileScale(odr: number, loc: 0 | 1 | 2 | 3): number {
@@ -1141,6 +1148,7 @@ export default class GameScene extends Phaser.Scene {
       ? themeColorToTint(data.themeBoardColor ?? activeThemeBoardColor())
       : undefined
     this.customHaiId = Number(data.customHaiId ?? 0)
+    this.usesHighDensityHaiTextures = true
     this.gemGame = Number(data.gemGame ?? 0)
     this.replayPaifuData = data.paifu
     this.replayPaifuApplied = false
@@ -3174,7 +3182,7 @@ export default class GameScene extends Phaser.Scene {
         const frame = paiToFrame(tile.code)
         spr = this.add.image(x, y, texture.key, frame)
           .setOrigin(0, 0)
-          .setScale(handScale)
+          .setScale(this.tileRenderScale(handScale))
           .setDepth(depth)
         if (isMe) {
           spr.setInteractive({ useHandCursor: true })
@@ -3196,18 +3204,18 @@ export default class GameScene extends Phaser.Scene {
         const frame = paiToFrame(tile.code)
         spr = this.clipToBoard(this.add.image(x, y, this.resolveSkinTextureKey(openHandTexture(loc)), frame)
           .setOrigin(0, 0)
-          .setScale(handScale)
+          .setScale(this.tileRenderScale(handScale))
           .setDepth(depth))
       } else if (this.isViewer) {
         spr = this.clipToBoard(this.add.image(x, y, this.resolveSkinTextureKey(downTexture(loc)))
           .setOrigin(0, 0)
-          .setScale(handScale)
+          .setScale(this.tileRenderScale(handScale))
           .setDepth(depth))
       } else {
         /* 他家の手牌: レガシー方向別 tachi 画像 */
         spr = this.clipToBoard(this.add.image(x, y, concealedTexture.key)
           .setOrigin(0, 0)
-          .setScale(handScale)
+          .setScale(this.tileRenderScale(handScale))
           .setDepth(depth))
       }
       this.handSprites[odr].push(spr)
@@ -3306,7 +3314,7 @@ export default class GameScene extends Phaser.Scene {
     const texture = loc % 2 === 0 ? 'mj_tapai_0' : 'mj_tapai_1'
     this.discardSourceMarkerSprites[odr] = this.clipToBoard(this.add.image(position.x, position.y, texture, state.isTedashi ? 0 : 1)
       .setOrigin(0, 0)
-      .setScale(scale)
+      .setScale(this.tileRenderScale(scale))
       .setAlpha(32 / 256)
       .setDepth(DISCARD_SOURCE_MARKER_DEPTH))
   }
@@ -3343,7 +3351,7 @@ export default class GameScene extends Phaser.Scene {
       const y = start.y + step.y * idx
       const sprite = this.clipToBoard(this.add.image(x, y, textureKey)
         .setOrigin(0, 0)
-        .setScale(MOBILE_OPPONENT_SUMMARY_TILE_SCALE)
+        .setScale(this.tileRenderScale(MOBILE_OPPONENT_SUMMARY_TILE_SCALE))
         .setDepth(handDepth(y, idx)))
       this.handSprites[odr].push(sprite)
     }
@@ -3443,7 +3451,7 @@ export default class GameScene extends Phaser.Scene {
       const frame = paiToFrame(discard.code)
       const spr = this.add.image(x, y, this.resolveSkinTextureKey(discardTexture(loc, flag)), frame)
         .setOrigin(0, 0)
-        .setScale(this.discardTileScale())
+        .setScale(this.tileRenderScale(this.discardTileScale()))
         .setDepth(y)
       this.clipToBoard(spr)
       this.bindAssistTileInput(spr, discard.code)
@@ -3461,11 +3469,11 @@ export default class GameScene extends Phaser.Scene {
     const discards = this.suteSprites[this.lastDiscardOdr]
     const target = discards[discards.length - 1]
     if (!target?.active) return
-    const scale = target.scaleX
+    const scale = this.discardTileScale()
     const texture = loc % 2 === 0 ? 'mj_throw_0' : 'mj_throw_1'
     this.latestDiscardFrame = this.clipToBoard(this.add.image(target.x - 4 * scale, target.y - 4 * scale, texture, 0)
       .setOrigin(0, 0)
-      .setScale(scale)
+      .setScale(this.tileRenderScale(scale))
       .setDepth(1002))
   }
 
@@ -3571,7 +3579,7 @@ export default class GameScene extends Phaser.Scene {
       const adjustedY = y + (this.layoutMode === 'responsiveDesktop' && loc === 0 ? this.responsiveLocalHandOffsetY : 0)
       const frame = paiToFrame(tile.code)
       const texture = this.resolveSkinTexture(meldTexture(loc, 0, false))
-      const spr = this.clipToBoard(this.add.image(x, adjustedY, texture.key, frame).setOrigin(0, 0).setScale(meldScale).setDepth(adjustedY))
+      const spr = this.clipToBoard(this.add.image(x, adjustedY, texture.key, frame).setOrigin(0, 0).setScale(this.tileRenderScale(meldScale)).setDepth(adjustedY))
       this.bindAssistTileInput(spr, tile.code)
       this.meldSprites[odr].push(spr)
     })
@@ -3583,7 +3591,7 @@ export default class GameScene extends Phaser.Scene {
         const adjustedY = y + (this.layoutMode === 'responsiveDesktop' && loc === 0 ? this.responsiveLocalHandOffsetY : 0)
         const texture = this.resolveSkinTexture(meldTexture(loc, tile.flag, Boolean(tile.isDown)))
         const frame = texture.frame ?? paiToFrame(tile.code)
-        const spr = this.clipToBoard(this.add.image(x, adjustedY, texture.key, frame).setOrigin(0, 0).setScale(meldScale).setDepth(adjustedY))
+        const spr = this.clipToBoard(this.add.image(x, adjustedY, texture.key, frame).setOrigin(0, 0).setScale(this.tileRenderScale(meldScale)).setDepth(adjustedY))
         if (!tile.isDown) this.bindAssistTileInput(spr, tile.code)
         this.meldSprites[odr].push(spr)
       })
@@ -3637,7 +3645,7 @@ export default class GameScene extends Phaser.Scene {
       const point = seatPoint(loc, offset)
       const sprite = this.clipToBoard(this.add.image(point.x, point.y, this.resolveSkinTextureKey(downTexture(loc)))
         .setOrigin(0, 0)
-        .setScale(scale)
+        .setScale(this.tileRenderScale(scale))
         .setDepth(1000 + loc))
       this.legacyEffectSprites.push(sprite)
       return { sprite, loc, odr }
@@ -3693,11 +3701,11 @@ export default class GameScene extends Phaser.Scene {
       const { x, y } = deadWallPos(idx, this.layoutMode)
       const code = exposed.get(idx)
       const sprite = code
-        ? this.add.image(x, y, this.resolveSkinTextureKey('hai_sute'), paiToFrame(code))
+        ? this.add.image(x, y, this.resolveSkinTextureKey('hai_open_2'), paiToFrame(code))
         : this.add.image(x, y, this.resolveSkinTextureKey('hai_ura_2'))
       this.clipToBoard(sprite
         .setOrigin(0, 0)
-        .setScale(this.deadWallTileScale())
+        .setScale(this.tileRenderScale(this.deadWallTileScale()))
         .setDepth(y + (idx % 2 === 0 ? WAN_EXPOSE_OFFSET_Y * 2 : 0)))
       if (code) this.bindAssistTileInput(sprite, code)
       this.deadWallSprites.push(sprite)
@@ -3796,7 +3804,7 @@ export default class GameScene extends Phaser.Scene {
       playMajakSid(SID_EXPOSE, this.soundSkinOptions())
       this.time.delayedCall(100, () => {
         if (!sprite.active) return
-        sprite.setTexture(this.resolveSkinTextureKey('hai_sute'), paiToFrame(code)).setY(originalY)
+        sprite.setTexture(this.resolveSkinTextureKey('hai_open_2'), paiToFrame(code)).setY(originalY)
         playMajakSid(SID_EXPOSE, this.soundSkinOptions())
       })
     })
@@ -4043,16 +4051,18 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private createLegacyHoverCursor(tile: Phaser.GameObjects.Image) {
+    const cursorScale = this.usesHighDensityHaiTextures ? 2 : 1
     return this.clipToBoard(this.add.image(tile.x, tile.y - 5 * tile.scaleY, 'cursor_mouse')
       .setOrigin(0, 0)
-      .setScale(tile.scaleX, tile.scaleY)
+      .setScale(tile.scaleX * cursorScale, tile.scaleY * cursorScale)
       .setDepth(1001))
   }
 
   private createLegacyReceivedTileCursor(tile: Phaser.GameObjects.Image) {
+    const cursorScale = this.usesHighDensityHaiTextures ? 2 : 1
     return this.clipToBoard(this.add.image(tile.x, tile.y - 6 * tile.scaleY, 'cursor_keyboard')
       .setOrigin(0, 0)
-      .setScale(tile.scaleX, tile.scaleY)
+      .setScale(tile.scaleX * cursorScale, tile.scaleY * cursorScale)
       .setDepth(1000))
   }
 

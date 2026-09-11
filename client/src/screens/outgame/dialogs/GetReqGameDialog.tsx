@@ -120,24 +120,21 @@ export default function GetReqGameDialog({
   const avatarFallback = getAvatarFallback(inviterSex)
 
   return (
-    <div
-      className={`majak-invite-request-overlay majak-invite-request-overlay--${layoutMode} majak-popup-overlay`}
-      role="presentation"
-    >
-      <section className="majak-invite-request majak-popup-panel" role="dialog" aria-modal="true" aria-label="ゲームの申し込み">
-        <header className="majak-invite-request__header majak-popup-titlebar">
+    <div className={`majak-popup-overlay majak-popup-overlay--${layoutMode}`} role="presentation">
+      <section className="majak-popup-panel" role="dialog" aria-modal="true" aria-label="ゲームの申し込み">
+        <header className="majak-popup-titlebar">
           <h2>ゲームの申し込み</h2>
-          <button className="majak-popup-titlebar__close" type="button" onClick={onClose} aria-label="閉じる">×</button>
+          <button className="majak-popup-titlebar__close" type="button" onClick={() => void replyInvite(false)} aria-label="閉じる">×</button>
         </header>
-        <div className="majak-popup-body majak-invite-request__body">
-          <p className="majak-invite-request__kicker">対戦リクエスト</p>
-          <section className="majak-invite-request__message" aria-label="お誘いの言葉">
-            <span className="majak-invite-request__label">ルーム</span>
+        <div className="majak-popup-body">
+          <p className="majak-popup-kicker">対戦リクエスト</p>
+          <section className="majak-popup-message" aria-label="お誘いの言葉">
+            <span className="majak-popup-message__label">ルーム</span>
             <strong>{roomName || 'ルーム'}</strong>
             <p>{inviteMessage}</p>
           </section>
-          <section className="majak-invite-request__player" aria-label="相手の情報">
-            <div className="majak-invite-request__avatar">
+          <section className="majak-popup-profile" aria-label="相手の情報">
+            <div className="majak-popup-avatar">
             <img
               src={getAvatarUrl(avatarId ?? null)}
               alt={`${inviterName || inviterId}のアバター`}
@@ -145,7 +142,7 @@ export default function GetReqGameDialog({
               onError={event => { event.currentTarget.src = avatarFallback }}
             />
             </div>
-            <div className="majak-invite-request__player-copy">
+            <div className="majak-popup-profile__copy">
               <h3>{inviterName || inviterId}</h3>
               <dl>
                 <div><dt>性別</dt><dd>{getSexText(inviterSex) || '-'}</dd></div>
@@ -154,15 +151,15 @@ export default function GetReqGameDialog({
               </dl>
             </div>
           </section>
-          <section className="majak-invite-request__timeout" aria-label="制限時間">
+          <section className="majak-popup-countdown" aria-label="制限時間">
             <div><span>返答時間</span><strong>{Math.ceil(progress / 10)}秒</strong></div>
-            <div className="majak-invite-request__progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
+            <div className="majak-popup-countdown__progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
               <div style={{ width: `${progress}%` }} />
             </div>
           </section>
         </div>
-        <footer className="majak-invite-request__actions majak-popup-actions">
-          <button type="button" className="majak-invite-request__accept is-primary" onClick={() => void replyInvite(true)}>はい</button>
+        <footer className="majak-popup-actions">
+          <button type="button" className="is-primary" onClick={() => void replyInvite(true)}>はい</button>
           <button type="button" onClick={() => void replyInvite(false)}>いいえ</button>
         </footer>
       </section>

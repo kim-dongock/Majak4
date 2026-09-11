@@ -202,7 +202,7 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
               className="registration-command registration-command--primary"
               style={{
                 minWidth: isMobile ? 100 : 140, minHeight: isMobile ? 30 : 38,
-                fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 20px',
+                fontSize: 'var(--majak-popup-font-body)', padding: '0 20px',
                 background: termsChecked ? '#1769aa' : '#aaa',
                 color: '#fff', border: 'none', borderRadius: 3,
                 cursor: termsChecked ? 'pointer' : 'default',
@@ -252,14 +252,14 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
           <div className="registration-actions" style={{ marginTop: 'auto', paddingTop: isMobile ? 12 : 24 }}>
             <button type="button" onClick={() => setStep('terms')}
               className="registration-command registration-command--secondary"
-              style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 14px' }}>
+              style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: 'var(--majak-popup-font-body)', padding: '0 14px' }}>
               ← 戻る
             </button>
             <button type="button" disabled={!canProceedNickname} onClick={() => setStep('avatar')}
               className="registration-command registration-command--primary"
               style={{
                 minWidth: isMobile ? 100 : 140, minHeight: isMobile ? 30 : 38,
-                fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 20px',
+                fontSize: 'var(--majak-popup-font-body)', padding: '0 20px',
                 background: canProceedNickname ? '#1769aa' : '#aaa',
                 color: '#fff', border: 'none', borderRadius: 3,
                 cursor: canProceedNickname ? 'pointer' : 'default',
@@ -397,14 +397,14 @@ export default function RegistrationDlg({ idToken, onComplete, onAuthExpired }: 
         <div className="registration-actions" style={{ marginTop: isMobile ? 8 : 0 }}>
           <button type="button" onClick={() => setStep('nickname')} disabled={submitting}
             className="registration-command registration-command--secondary"
-            style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 14px' }}>
+            style={{ minWidth: isMobile ? 80 : 110, minHeight: isMobile ? 30 : 38, fontSize: 'var(--majak-popup-font-body)', padding: '0 14px' }}>
             ← 戻る
           </button>
           <button type="button" disabled={submitting || birthYear === ''} onClick={() => void submit()}
             className="registration-command registration-command--primary"
             style={{
               minWidth: isMobile ? 100 : 140, minHeight: isMobile ? 30 : 38,
-              fontSize: 'var(--majak-popup-font-emphasis)', padding: '0 20px',
+              fontSize: 'var(--majak-popup-font-body)', padding: '0 20px',
               background: birthYear === '' ? '#aaa' : '#1769aa', color: '#fff', border: 'none',
               borderRadius: 3, cursor: birthYear === '' ? 'default' : 'pointer',
             }}>

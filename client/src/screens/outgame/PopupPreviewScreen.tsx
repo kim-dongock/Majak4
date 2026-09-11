@@ -6,7 +6,6 @@ import BuyCustomItemDlg from './dialogs/BuyCustomItemDlg'
 import BuyExchangeItemDlg from './dialogs/BuyExchangeItemDlg'
 import BuyHanCoinItemDlg from './dialogs/BuyHanCoinItemDlg'
 import CfgDlg, { DEFAULT_CONFIG } from './dialogs/CfgDlg'
-import CircleOptDlg from './dialogs/CircleOptDlg'
 import CollectionDlg from './dialogs/CollectionDlg'
 import ConfirmItemDlg from './dialogs/ConfirmItemDlg'
 import CustomDlg from './dialogs/CustomDlg'
@@ -51,7 +50,7 @@ type PreviewId =
   | 'missionGuide' | 'tournamentRegist' | 'tournamentBrackets'
   | 'shop' | 'collection' | 'hanCoinReceipt' | 'exchangeReceipt' | 'customReceipt' | 'lotSlot' | 'lotResult'
   | 'levelup' | 'coin' | 'lead' | 'item' | 'ending' | 'askEnd'
-  | 'buyHanCoinItem' | 'buyExchangeItem' | 'buyCustomItem' | 'circleOptions' | 'confirmItem'
+  | 'buyHanCoinItem' | 'buyExchangeItem' | 'buyCustomItem' | 'confirmItem'
   | 'customInventory' | 'debugLogin' | 'eventDialogs' | 'legacyItemShop' | 'registration'
   | 'profileEdit'
   | 'shopTransaction' | 'paifuSave' | 'serialCode'
@@ -95,7 +94,6 @@ const PREVIEWS: PreviewEntry[] = [
   { id: 'buyHanCoinItem', title: 'BuyHanCoinItemDlg', group: 'Shop', status: 'Complete', summary: 'MP item purchase confirmation dialog.' },
   { id: 'buyExchangeItem', title: 'BuyExchangeItemDlg', group: 'Shop', status: 'Complete', summary: 'Dragon Orb exchange confirmation dialog.' },
   { id: 'buyCustomItem', title: 'BuyCustomItemDlg', group: 'Shop', status: 'Complete', summary: 'Custom item purchase confirmation dialog.' },
-  { id: 'circleOptions', title: 'CircleOptDlg', group: 'Lobby and rooms', status: 'Complete', summary: 'Circle room option configuration dialog.' },
   { id: 'confirmItem', title: 'ConfirmItemDlg', group: 'Shop', status: 'Complete', summary: 'Owned item selection and confirmation dialog.' },
   { id: 'customInventory', title: 'CustomDlg', group: 'Shop', status: 'Complete', summary: 'Custom inventory and equipment dialog.' },
   { id: 'debugLogin', title: 'DebugLoginDlg', group: 'Development', status: 'Complete', summary: 'Development-only account login dialog.' },
@@ -193,8 +191,6 @@ function renderPreview(id: PreviewId, onClose: () => void) {
       return <BuyExchangeItemDlg item={{ sellCode: 'preview-title', itemName: '特別称号', itemKind: '麻雀称号', itemGuid1: '限定称号を獲得できます。', itemGuid2: 'コレクションから装着できます。', costGem: 10, costMoney: 5000, limitDays: -1, quantity: 0 }} pix="preview-user" memberName="プレビュー雀士" userGem={24} userMoney={12000} onClose={onClose} />
     case 'buyCustomItem':
       return <BuyCustomItemDlg item={{ itemId: 11, itemName: '和風背景', itemType: '背景', itemDesc: '対局ロビーの背景を変更できます。', price: 200, shopNo: 1, gameMoney: 0 }} pix="preview-user" memberName="プレビュー雀士" hanCoin={500} onClose={onClose} />
-    case 'circleOptions':
-      return <CircleOptDlg circles={[{ circleId: 'circle-1', circleName: '雀友会' }, { circleId: 'circle-2', circleName: '東風クラブ' }, { circleId: 'circle-3', circleName: '麻雀研究会' }]} onOK={() => onClose()} onCancel={onClose} />
     case 'confirmItem':
       return <ConfirmItemDlg majItems={[{ itemCode: 'MJ20', buyDt: 1767225600, endDt: 2147483647, qty: 3, useFlag: 0 }]} onClose={onClose} />
     case 'customInventory':

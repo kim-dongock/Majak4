@@ -35,7 +35,6 @@ public static class GameConst
     public const string RatingTitleFormat    = "mjkt{0:D3}";
 
     // カスタムアイテムデフォルト値 (MajakDef.h)
-    public const int CustomBoardDefault   = 100000;
     public const int CustomHaiDefault     = 100003;
     public const int CustomCostumeDefault = 100011;
     public const int CustomEquipMax       = 10;

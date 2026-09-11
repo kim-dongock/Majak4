@@ -1,4 +1,4 @@
--- Remove purchasable custom board items while retaining the required default board (100000).
+-- Remove all obsolete custom board items now that board color is user-selected.
 -- Run once against the majak_game database. Purchase logs are intentionally retained for auditing.
 
 START TRANSACTION;
@@ -10,7 +10,7 @@ AS
 SELECT custom_id
 FROM custom_item_master
 WHERE kind BETWEEN 10 AND 19
-  AND custom_id <> 100000;
+;
 
 CREATE TEMPORARY TABLE removed_board_set_ids (
     set_id INT UNSIGNED NOT NULL PRIMARY KEY

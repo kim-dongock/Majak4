@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 
 export type OutgameLayoutMode = 'desktop' | 'mobileLandscape' | 'mobilePortrait'
 
@@ -6,6 +7,9 @@ const MOBILE_OUTGAME_QUERY = '(max-width: 768px), (orientation: landscape) and (
 
 function readOutgameLayoutMode(): OutgameLayoutMode {
   if (typeof window === 'undefined') return 'desktop'
+  if (Capacitor.isNativePlatform()) {
+    return window.matchMedia('(orientation: portrait)').matches ? 'mobilePortrait' : 'mobileLandscape'
+  }
   if (!window.matchMedia(MOBILE_OUTGAME_QUERY).matches) return 'desktop'
   return window.matchMedia('(orientation: portrait)').matches ? 'mobilePortrait' : 'mobileLandscape'
 }

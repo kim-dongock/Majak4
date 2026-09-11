@@ -1,17 +1,5 @@
 /**
- * CMJPlayerInfo 相当 — プレイヤー情報ウィンドウ (AP-09 §1-8)
- * レガシー: legacy/client/HgMajak2/MJPlayerInfo.h/cpp
- *
- * ウィンドウ: mj_sen_win_base.png 353×595px
- * タブ: COwnerCheckBox, 113×27×4f at (7,213), (120,213), (233,213)
- *   MAJAK3_TAB01=mj_sen_tab01, TAB02=mj_sen_tab02, TAB03=mj_sen_tab04
- * OKボタン: mj_sen_btn_ok.png 85×29×4f at (134,555)
- *
- * データフィールド (CMJPlayerInfo / CHgPlayerInfo):
- *   m_nTrickTitle, m_nMajakTitle: タイトル
- *   m_nRichiEffect: リーチ演出
- *   m_llLentMoney: コイン貸付
- *   レガシーのプロトコルキー: mjkk41e/46e/47e/54e/136e/137e
+ * プレイヤー情報ダイアログ
  */
 import { useEffect, useState } from 'react'
 import * as SignalR from '../../../api/signalr'
@@ -19,9 +7,6 @@ import { getAvatarUrl, getDefaultAvatarUrl } from '../../../utils/resources'
 import { gradeLevelName } from '../../../utils/grade'
 
 const IMG = '/assets/images/game'
-const DETAIL_RECORD_URL = 'http://redirect.hangame.co.jp/majak2/collection/dummy/'
-const DIALOG_W = 353
-const DIALOG_H = 595
 
 export interface PlayerInfo {
   pix: string
@@ -106,14 +91,11 @@ type DetailInfo = {
   majakTitle: number
 }
 
-/** タブ定義 — レガシー一般ユーザー情報は3タブのみ */
 const TABS = [
-  { img: 'mj_sen_tab01.png', label: '全体戦績', x: 7 },
-  { img: 'mj_sen_tab02.png', label: '交流広場', x: 120 },
-  { img: 'mj_sen_tab04.png', label: '段位戦',   x: 233 },
+  { label: '全体戦績' },
+  { label: '交流広場' },
+  { label: '段位戦' },
 ]
-
-const FONT = 'var(--majak-font-family-ui)'
 
 function padTitleId(id: number) {
   return String(Math.trunc(id)).padStart(3, '0')
@@ -222,89 +204,9 @@ function percent(numerator: number, denominator: number) {
 /** ====================================================================
  * CMJBmpButton 相当 — 4フレームスプライトボタン (AP-06 §2)
  * ==================================================================== */
-function SpriteButton({
-  src, frameW, frameH, x, y, onClick, title,
-}: {
-  src: string; frameW: number; frameH: number
-  x: number; y: number; onClick: () => void; title?: string
-}) {
-  const [fi, setFi] = useState(0)
-  return (
-    <button
-      title={title}
-      onClick={onClick}
-      onMouseEnter={() => setFi(2)}
-      onMouseLeave={() => setFi(0)}
-      onMouseDown={() => setFi(3)}
-      onMouseUp={() => setFi(2)}
-      style={{
-        position: 'absolute', left: x, top: y,
-        width: frameW, height: frameH,
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-fi * frameW}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none', padding: 0, cursor: 'pointer',
-        outline: 'none', imageRendering: 'pixelated',
-      }}
-    />
-  )
-}
-
-/** COwnerCheckBox bitmap tab: active = SetCheck(TRUE)+EnableWindow(FALSE) → frame3 */
-function TabButton({
-  src, x, active, onClick, title,
-}: {
-  src: string; x: number; active: boolean; onClick: () => void; title: string
-}) {
-  const [hover, setHover] = useState(false)
-  const frame = active ? 3 : hover ? 2 : 0
-  return (
-    <button
-      title={title}
-      aria-disabled={active}
-      onClick={active ? undefined : onClick}
-      onMouseEnter={() => !active && setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        position: 'absolute', left: x, top: 213,
-        width: 113, height: 27,
-        backgroundImage: `url(${src})`,
-        backgroundPosition: `${-frame * 113}px 0`,
-        backgroundRepeat: 'no-repeat',
-        border: 'none', padding: 0,
-        cursor: active ? 'default' : 'pointer',
-        outline: 'none', imageRendering: 'pixelated',
-      }}
-    />
-  )
-}
-
-function StatLine({ label, value, x, y, w = 140 }: { label: string; value: string; x: number; y: number; w?: number }) {
-  return (
-    <div style={{ position: 'absolute', left: x, top: y, width: w, height: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', lineHeight: '12px', color: '#000' }}>
-      <span style={{ flex: '0 1 auto', minWidth: 0, overflow: 'hidden', whiteSpace: 'nowrap' }}>{label}</span>
-      <span style={{ flex: '0 0 auto', whiteSpace: 'nowrap', textAlign: 'right' }}>{value}</span>
-    </div>
-  )
-}
-
-/** ====================================================================
- * CMJPlayerInfo 本体
- * ==================================================================== */
 export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
   const [activeTab, setActiveTab] = useState(0)
   const [detail, setDetail] = useState<DetailInfo | null>(null)
-  const [dialogScale, setDialogScale] = useState(1)
-
-  useEffect(() => {
-    const updateScale = () => {
-      const margin = 16
-      setDialogScale(Math.min(1, (window.innerWidth - margin) / DIALOG_W, (window.innerHeight - margin) / DIALOG_H))
-    }
-    updateScale()
-    window.addEventListener('resize', updateScale)
-    return () => window.removeEventListener('resize', updateScale)
-  }, [])
 
   useEffect(() => {
     const handler = (data: Record<string, unknown>) => {
@@ -334,10 +236,6 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
   const handleTabChange = (i: number) => {
     setActiveTab(i)
     onTabChange?.(i)
-  }
-
-  const handleDetailRecord = () => {
-    window.open(DETAIL_RECORD_URL, '_blank', 'noopener,noreferrer')
   }
 
   const fallbackRecord = emptyRecordFromPlayer(player)
@@ -475,152 +373,6 @@ export default function PlayerInfoWnd({ player, onClose, onTabChange }: Props) {
           </div>
         </footer>
       </section>
-    </div>
-  )
-
-  return (
-    /* モーダルオーバーレイ */
-    <div
-      style={{
-        position: dialogScale < 1 ? 'fixed' : 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.5)', zIndex: 150,
-      }}
-    >
-      <div style={{ width: DIALOG_W * dialogScale, height: DIALOG_H * dialogScale }}>
-      {/* CMJPlayerInfo ウィンドウ: 353×595px */}
-      <div style={{ position: 'relative', width: DIALOG_W, height: DIALOG_H, transform: `scale(${dialogScale})`, transformOrigin: 'top left' }}>
-
-        {/* ── 背景 mj_sen_win_base.png (353×595) ── */}
-        <img
-          src={`${IMG}/mj_sen_win_base.png`}
-          alt=""
-          draggable={false}
-          style={{ position: 'absolute', left: 0, top: 0, width: 353, height: 595 }}
-        />
-
-        {/* アバター: レガシー OnPaint pt_avatar(16,49) */}
-        <div
-          style={{
-            position: 'absolute', left: 16, top: 49,
-            width: 66, height: 150,
-            background: '#fff',
-            overflow: 'hidden',
-          }}
-        >
-          <img
-            src={getAvatarUrl(avatarId ?? null)}
-            alt={player.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            onError={e => {
-              (e.currentTarget as HTMLImageElement).src = getDefaultAvatarUrl(avatarSex)
-            }}
-          />
-        </div>
-
-        {trickTitle > 0 && (
-          <img
-            src={`${IMG}/mj_skill_${padTitleId(trickTitle)}.png`}
-            alt=""
-            draggable={false}
-            style={{ position: 'absolute', left: 85, top: 79, width: 100, height: 122, imageRendering: 'pixelated' }}
-          />
-        )}
-
-        {majakTitle > 0 && (
-          <>
-            <img
-              src={`${IMG}/mj_title_base.png`}
-              alt=""
-              draggable={false}
-              style={{ position: 'absolute', left: 85, top: 47, width: 100, height: 52, imageRendering: 'pixelated' }}
-            />
-            <img
-              src={`${IMG}/${titleImageName(majakTitle)}`}
-              alt=""
-              draggable={false}
-              style={{ position: 'absolute', left: 110, top: 54, width: 50, height: 38, imageRendering: 'pixelated' }}
-            />
-          </>
-        )}
-
-        {/* 基本情報: レガシー OnPaint pt_member/pt_gender/pt_region/pt_rating */}
-        <div style={{ position: 'absolute', left: 193, top: 53, width: 144, height: 12, fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', fontWeight: 'bold', color: 'rgb(0,114,188)', textAlign: 'center' }}>
-          {detail?.name ?? player.name}
-        </div>
-        <div style={{ position: 'absolute', left: 193, top: 74, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>性別</div>
-        <div style={{ position: 'absolute', left: 240, top: 74, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${sexText}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 90, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>地域</div>
-        <div style={{ position: 'absolute', left: 240, top: 90, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${player.location ?? '-'}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 106, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>資産称号</div>
-        <div style={{ position: 'absolute', left: 240, top: 106, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : ${player.slevel ?? '-'}`}</div>
-        <div style={{ position: 'absolute', left: 193, top: 122, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>戦績</div>
-        <div style={{ position: 'absolute', left: 240, top: 122, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', color: '#000' }}>{` : R${player.rating ?? '-'}`}</div>
-
-        {TABS.map((tab, i) => (
-          <TabButton
-            key={tab.img}
-            src={`${IMG}/${tab.img}`}
-            x={tab.x}
-            active={activeTab === i}
-            title={tab.label}
-            onClick={() => handleTabChange(i)}
-          />
-        ))}
-
-        {/* 戦績概要: CRect(15,251,337,265) DT_CENTER */}
-        <div style={{ position: 'absolute', left: 15, top: 251, width: 322, height: 14, fontFamily: FONT, fontSize: 'var(--majak-popup-font-emphasis)', lineHeight: '14px', color: '#000', textAlign: 'center' }}>
-          {`戦績 : ${matchCnt}戦 ${tabRecord.winCnt}勝 ${tabRecord.defeatCnt}敗 ${tabRecord.drawCnt}分`}
-        </div>
-
-        <StatLine label="平均順位" value={averageRank} x={21} y={276} />
-        <StatLine label="平均収支" value={averageSet} x={21} y={296} />
-        <StatLine label="1位" value={percent(tabRecord.grade1, rankCnt)} x={21} y={336} />
-        <StatLine label="2位" value={percent(tabRecord.grade2, rankCnt)} x={21} y={356} />
-        <StatLine label="3位" value={percent(tabRecord.grade3, rankCnt)} x={21} y={376} />
-        <StatLine label="4位" value={percent(tabRecord.grade4, rankCnt)} x={21} y={396} />
-        <StatLine label="飛び率" value={percent(tabRecord.tobiCnt, rankCnt)} x={21} y={436} />
-        <StatLine label="飛ばし率" value={percent(tabRecord.tobashiCnt, rankCnt)} x={21} y={456} />
-        {activeTab !== 2 && (
-          <StatLine label="平均チップ収支" value={tabRecord.tipMatchCnt > 0 ? `${(tabRecord.tipPoint / tabRecord.tipMatchCnt).toFixed(2)}` : '---.--'} x={21} y={476} />
-        )}
-
-        <StatLine label="和了率" value={percent(tabRecord.horaCnt, tabRecord.kyokuCnt)} x={185} y={276} />
-        <StatLine label="放銃率" value={percent(tabRecord.hojuCnt, tabRecord.kyokuCnt)} x={185} y={296} />
-        <StatLine label="平均和了点" value={tabRecord.horaCnt > 0 ? `${Math.trunc(tabRecord.horaPoint / tabRecord.horaCnt)}点` : '---点'} x={185} y={316} />
-        <StatLine label="平均放銃点" value={tabRecord.hojuCnt > 0 ? `${Math.trunc(tabRecord.hojuPoint / tabRecord.hojuCnt)}点` : '---点'} x={185} y={336} />
-        <StatLine label="立直率" value={percent(tabRecord.richiCnt, tabRecord.kyokuCnt)} x={185} y={376} />
-        <StatLine label="副露率" value={percent(tabRecord.furoCnt, tabRecord.kyokuCnt)} x={185} y={396} />
-        <StatLine label="平均ドラ枚数" value={tabRecord.horaCnt > 0 ? `${(tabRecord.doraCnt / tabRecord.horaCnt).toFixed(2)}枚` : '--.--枚'} x={185} y={436} />
-        <StatLine label="平均裏ドラ枚数" value={tabRecord.richiHoraCnt > 0 ? `${(tabRecord.uraDoraCnt / tabRecord.richiHoraCnt).toFixed(2)}枚` : '--.--枚'} x={185} y={456} />
-
-        <div style={{ position: 'absolute', left: 20, top: 522, width: 314, height: 23, fontFamily: FONT, fontSize: 'var(--majak-popup-font-body)', lineHeight: '12px', color: '#000', whiteSpace: 'pre-line' }}>
-          {activeTab === 0
-            ? '一般広場・ハイクラス・段位戦の合計戦績です。'
-            : activeTab === 1
-              ? '交流広場の戦績です。\n最近の対戦の戦績を含みます。'
-              : '段位戦だけの戦績です。'}
-        </div>
-
-        {/* 詳細戦績ボタン: legacy m_btnDatailRec at (79,533) */}
-        <SpriteButton
-          src={`${IMG}/mj_sen_btn_deteilrecord.png`}
-          frameW={31} frameH={15}
-          x={79} y={533}
-          onClick={handleDetailRecord}
-          title="詳細戦績"
-        />
-
-        {/* OKボタン: レガシー at (134,555) */}
-        <SpriteButton
-          src={`${IMG}/mj_sen_btn_ok.png`}
-          frameW={85} frameH={29}
-          x={134} y={555}
-          onClick={onClose}
-          title="閉じる"
-        />
-      </div>
-      </div>
     </div>
   )
 }

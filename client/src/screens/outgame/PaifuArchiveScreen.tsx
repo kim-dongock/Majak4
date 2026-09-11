@@ -35,6 +35,11 @@ function createDefaultFilter(): PaifuArchiveFilter {
   return { from: formatDateInputValue(from), to: formatDateInputValue(to) }
 }
 
+function rankClass(result: string | undefined): string {
+  const rank = result?.match(/^([1-4])位/)?.[1]
+  return rank ? `majak-paifu-archive__rank rank-${rank}` : 'majak-paifu-archive__rank'
+}
+
 export default function PaifuArchiveScreen() {
   const navigate = useNavigate()
   const [filter, setFilter] = useState<PaifuArchiveFilter>(createDefaultFilter)
@@ -97,7 +102,7 @@ export default function PaifuArchiveScreen() {
           {!isLoading && archives.map(archive => (
             <button key={archive.archiveId} type="button" className={archive.archiveId === selectedId ? 'is-selected' : undefined} onClick={() => setSelectedId(archive.archiveId)}>
               <time>{formatPlayedAt(archive.playedAt)}</time><strong>{archive.roomName || 'ゲーム情報なし'}</strong>
-              <div className="majak-paifu-archive__members">{archive.members.map((member, index) => <span key={`${member.name}-${index}`}>{index > 0 && ' / '}{member.name || '-'}{member.result && <small> {member.result}</small>}</span>)}</div>
+              <div className="majak-paifu-archive__members">{archive.members.map((member, index) => <span key={`${member.name}-${index}`}>{index > 0 && ' / '}{member.name || '-'}{member.result && <small className={rankClass(member.result)}> {member.result}</small>}</span>)}</div>
             </button>
           ))}
         </div>

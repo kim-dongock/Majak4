@@ -19,7 +19,8 @@ function readNoticeColor(data: Record<string, unknown>): string {
 
   const level = String(data.k83e ?? data.noticeLevel ?? '')
   if (level === 'v26e') return 'rgb(225,225,254)'
-  return level === 'v24e' ? 'rgb(254,254,254)' : 'rgb(254,225,225)'
+  if (level === 'v24e') return 'rgb(254,254,254)'
+  return level === 'v25e' ? 'var(--majak-notice-text-color)' : 'rgb(254,225,225)'
 }
 
 export function readNoticePayload(data: Record<string, unknown>): NoticeDisplay | null {

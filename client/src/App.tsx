@@ -13,6 +13,7 @@ import PaifuArchiveScreen from './screens/outgame/PaifuArchiveScreen'
 import PopupPreviewScreen from './screens/outgame/PopupPreviewScreen'
 import AnnouncementListScreen from './screens/outgame/AnnouncementListScreen'
 import MajakFrame from './components/MajakFrame'
+import MobileWebDownloadScreen, { isAppleTablet } from './components/MobileWebDownloadScreen'
 import MessageBoxHost from './components/MessageBoxHost'
 import GameReconnectLoading from './components/GameReconnectLoading'
 import RegistrationDlg from './screens/outgame/dialogs/RegistrationDlg'
@@ -442,8 +443,8 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   // ── レンダリング ─────────────────────────────────────────────────
 
-  if (layoutMode === 'mobilePortrait') {
-    return <PortraitOrientationNotice />
+  if (layoutMode === 'mobilePortrait' || (!Capacitor.isNativePlatform() && isAppleTablet())) {
+    return Capacitor.isNativePlatform() ? <PortraitOrientationNotice /> : <MobileWebDownloadScreen />
   }
 
   // キャッシュ確認前 (idle)
@@ -744,6 +745,10 @@ function PaifuArchiveRoute() {
 
 export default function App() {
   const initialRoute = readStoredRouterState()
+
+  if (!Capacitor.isNativePlatform() && isAppleTablet()) {
+    return <MobileWebDownloadScreen />
+  }
 
   if (import.meta.env.DEV && window.location.pathname === '/popup-preview') {
     return <PopupPreviewScreen />

@@ -248,9 +248,9 @@ export default function LotSlotDlg({
         role="dialog"
         aria-modal="true"
         aria-label={`${itemName} 抽選`}
-        className="majak-lottery-game-panel"
+        className="majak-popup-panel majak-lottery-game-panel"
       >
-        <header className="majak-lottery-game-panel__header">
+        <header className="majak-popup-titlebar majak-lottery-game-panel__header">
           <div>
             <strong>{itemName}</strong>
           </div>
@@ -260,7 +260,7 @@ export default function LotSlotDlg({
           </dl>
           <button type="button" className="majak-popup-titlebar__close majak-lottery-game-panel__close" onClick={() => { void handleClose() }} disabled={isSpinning || remaining > 0} aria-label="閉じる" title={remaining > 0 ? '残りの抽選後に閉じられます' : undefined}>×</button>
         </header>
-        <div className="majak-lottery-game-panel__stage" aria-label="抽選金額">
+        <div className="majak-popup-body majak-lottery-game-panel__stage" aria-label="抽選金額">
           <div className="majak-lottery-game-panel__reels">
             {digits.map((digit, index) => (
               <div key={index} className="majak-lottery-game-panel__reel">
@@ -274,7 +274,7 @@ export default function LotSlotDlg({
             <span>すべての抽選結果の合計を受け取れます。</span>
           </div>
         </div>
-        <footer className="majak-lottery-game-panel__actions">
+        <footer className="majak-popup-actions majak-lottery-game-panel__actions">
           <button type="button" className="is-draw" onClick={() => { void handleOnce() }} disabled={isSpinning || isDone || remaining <= 0}>1回抽選</button>
           <button type="button" className="is-result" onClick={handleResult} disabled={isSpinning || isDone}>{showResult ? '結果を見る' : '結果へ'}</button>
         </footer>

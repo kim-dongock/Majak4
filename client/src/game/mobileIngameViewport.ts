@@ -38,8 +38,8 @@ export function mobileVisibleWorldBounds(): MobileVisibleWorldBounds | null {
   if (!(shell instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) return null
   const shellRect = shell.getBoundingClientRect()
   const canvasRect = canvas.getBoundingClientRect()
-  const scaleX = canvasRect.width / canvas.width
-  const scaleY = canvasRect.height / canvas.height
+  const scaleX = canvasRect.width / canvas.clientWidth
+  const scaleY = canvasRect.height / canvas.clientHeight
   if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY) || scaleX <= 0 || scaleY <= 0) return null
   const left = (shellRect.left - canvasRect.left) / scaleX
   const top = (shellRect.top - canvasRect.top) / scaleY

@@ -20,9 +20,6 @@ public class ItemService
     // デフォルトアイテムリスト (HMajCommon.h s_nDefaultCustom 配列)
     private static readonly int[] DefaultCustomItems =
     {
-        GameConst.CustomBoardDefault,    // 100000 背景板
-        100001,
-        100002,
         GameConst.CustomHaiDefault,      // 100003 牌デザイン
         100004,
         100005,
@@ -30,7 +27,6 @@ public class ItemService
     };
 
     // カスタムアイテム KIND 定義 (MajakDef.h CUSTOMITEM_KIND)
-    public const int KindBoard   = 10;
     public const int KindHai     = 20;
     public const int KindCostume = 30;
 
@@ -121,7 +117,6 @@ public class ItemService
     }
 
     private static bool GetDefaultEquip(int customId) => customId is
-        GameConst.CustomBoardDefault or
         GameConst.CustomHaiDefault or
         GameConst.CustomCostumeDefault;
 

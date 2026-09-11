@@ -41,15 +41,15 @@ export default function ResponsiveShopTransactionDlg({
   children,
 }: Props) {
   return (
-    <div className="shop-transaction-overlay" role="dialog" aria-modal="true" aria-label={title}>
-      <section className="shop-transaction">
-        <header>
+    <div className="majak-popup-overlay" role="dialog" aria-modal="true" aria-label={title}>
+      <section className="majak-popup-panel shop-transaction">
+        <header className="majak-popup-titlebar">
           <div>
             <h2>{title}</h2>
           </div>
           <button className="majak-popup-titlebar__close" type="button" onClick={onCancel} aria-label="閉じる">×</button>
         </header>
-        <div className="shop-transaction__body">
+        <div className="majak-popup-body shop-transaction__body">
           <div className="shop-transaction__item">
             {imageUrl && <div className="shop-transaction__image"><img src={imageUrl} alt="" /></div>}
             <div>
@@ -72,7 +72,7 @@ export default function ResponsiveShopTransactionDlg({
           </dl>}
           {children}
         </div>
-        <footer>
+        <footer className="majak-popup-actions">
           {complete ? (
             <button type="button" className="shop-transaction__primary" onClick={onCancel}>閉じる</button>
           ) : <>
@@ -81,42 +81,6 @@ export default function ResponsiveShopTransactionDlg({
           </>}
         </footer>
       </section>
-      <style>{`
-        .shop-transaction-overlay { position: absolute; inset: 0; z-index: 400; display: grid; place-items: center; padding: 16px; overflow: hidden; background: rgba(8,16,20,.76); font-family: var(--majak-font-family-ui); box-sizing: border-box; }
-        .shop-transaction { width: min(560px, 100%); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; overflow: hidden; color: var(--majak-dialog-panel-text-color); background: var(--majak-popup-panel-color); border: 1px solid var(--majak-popup-panel-border-color); box-shadow: 0 18px 54px rgba(0,0,0,.42); font-family: var(--majak-font-family-ui); }
-        .shop-transaction :is(button, input, select, textarea, option) { font-family: inherit; }
-        .shop-transaction header { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; color: #fff; background: #174b43; }
-        .shop-transaction header h2 { margin: 0; font-size: var(--majak-popup-font-title); font-weight: 700; line-height: var(--majak-popup-leading-title); letter-spacing: 0; }
-        .shop-transaction__body { min-height: 0; flex: 1 1 auto; padding: 18px; overflow: auto; }
-        .shop-transaction__item { display: grid; grid-template-columns: 104px minmax(0,1fr); gap: 14px; align-items: center; }
-        .shop-transaction__item > div:only-child { grid-column: 1 / -1; }
-        .shop-transaction__image { height: 104px; display: grid; place-items: center; background: var(--majak-popup-surface-subtle); }
-        .shop-transaction__image img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .shop-transaction__item span { color: var(--majak-popup-command-color); font: 700 var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
-        .shop-transaction__item h3 { margin: 5px 0 8px; font-size: var(--majak-popup-font-emphasis); font-weight: 400; line-height: var(--majak-popup-leading-emphasis); }
-        .shop-transaction__item p { margin: 3px 0; color: var(--majak-dialog-panel-text-color); font: var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); }
-        .shop-transaction__details, .shop-transaction__balances { margin: 18px 0 0; font-family: var(--majak-font-family-ui); }
-        .shop-transaction__balances { background: var(--majak-popup-surface-subtle); }
-        .shop-transaction__details div, .shop-transaction__balances div { display: flex; justify-content: space-between; gap: 16px; padding: 10px 2px; border: 0; }
-        .shop-transaction__balances div { padding-inline: 10px; }
-        .shop-transaction dt { color: var(--majak-dialog-panel-text-color); font: var(--majak-popup-font-body)/var(--majak-popup-leading-body) var(--majak-font-family-ui); } .shop-transaction dd { margin: 0; color: var(--majak-dialog-panel-text-color); font: 700 var(--majak-popup-font-emphasis)/var(--majak-popup-leading-emphasis) var(--majak-font-family-ui); text-align: right; }
-        .shop-transaction select { min-width: 70px; padding: 3px; border: 1px solid var(--majak-popup-panel-border-color); color: var(--majak-dialog-panel-text-color); background: var(--majak-popup-panel-color); font: 700 var(--majak-popup-font-emphasis)/1 var(--majak-font-family-ui); }
-        .shop-transaction footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 18px; background: var(--majak-popup-panel-color); }
-        .shop-transaction footer button { width: var(--majak-popup-command-width); height: var(--majak-popup-command-height); padding: 0 15px; box-sizing: border-box; border: 0; border-radius: 3px; font: var(--majak-weight-strong) var(--majak-popup-command-font-size)/1 var(--majak-font-family-ui); cursor: pointer; white-space: nowrap; }
-        .shop-transaction__cancel { color: var(--majak-dialog-panel-text-color); background: var(--majak-popup-panel-color); border: 1px solid var(--majak-popup-panel-border-color); }
-        .shop-transaction__primary { color: var(--majak-dialog-header-text-color); background: var(--majak-popup-command-color); } .shop-transaction__primary:disabled { color: var(--majak-dialog-panel-text-color); background: color-mix(in srgb, var(--majak-popup-command-color) 18%, var(--majak-popup-panel-color)); cursor: not-allowed; }
-        @media (max-width: 700px), (max-height: 560px) {
-          .shop-transaction-overlay { padding: 16px; }
-          .shop-transaction { width: min(540px, 100%); max-height: calc(100dvh - 32px); }
-          .shop-transaction__body { min-height: 0; padding: 12px; }
-          .shop-transaction__details, .shop-transaction__balances { margin-top: 10px; }
-          .shop-transaction__details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-          .shop-transaction__balances { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-          .shop-transaction__details div, .shop-transaction__balances div { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 7px 5px; }
-          .shop-transaction dt, .shop-transaction dd { min-width: 0; text-align: left; white-space: nowrap; }
-          .shop-transaction footer { padding: 10px 12px; }
-        }
-      `}</style>
     </div>
   )
 }

@@ -199,6 +199,7 @@ export function applyMajakColorTheme(config: MJConfig): void {
   root.setProperty('--majak-frame-header-color', config.themeBaseColor)
   root.setProperty('--majak-frame-header-divider-color', toHex(border))
   root.setProperty('--majak-frame-label-color', toHex(panel))
+  root.setProperty('--majak-notice-text-color', toHex(mixColor(baseColor, { red: 255, green: 255, blue: 255 }, .72)))
   root.setProperty('--majak-user-summary-color', headerText)
   root.setProperty('--majak-user-summary-surface-color', toHex(title))
   root.setProperty('--majak-user-summary-border-color', toHex(border))
