@@ -4,7 +4,7 @@
  *
  * ── ゲーム座標系 ──────────────────────────────────────────────────────────
  * Phaser ワールド = 1019×735 (GAME_WIDTH × GAME_HEIGHT)
- * ゲームボード: x=5, y=31, w=789, h=704  (mj_board.png)
+ * ゲームボード: x=5, y=31, w=789, h=704
  * サイドバー:   x=794, y=31, w=225, h=704 (mj_sideBg.png)
  * ボード中心:   (399, 383)
  *
@@ -959,7 +959,6 @@ export default class GameScene extends Phaser.Scene {
   private paifuGraphObjects: Phaser.GameObjects.GameObject[] = []
   private boardMaskGraphics?: Phaser.GameObjects.Graphics
   private boardMask?: Phaser.Display.Masks.GeometryMask
-  private boardBackground?: Phaser.GameObjects.Image
   private themeBoardBackground?: Phaser.GameObjects.Rectangle
   private dragonOverlayBg?: Phaser.GameObjects.Image
   private centerInfoBg?: Phaser.GameObjects.Image
@@ -1209,14 +1208,13 @@ export default class GameScene extends Phaser.Scene {
     }
     this.createBoardMask()
 
-    /* ── ボード背景 mj_board.png (789×704) at (5,31) ── */
-    this.boardBackground = this.add.image(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, this.resolveSkinTextureKey('mj_board')).setDepth(-100)
-    if (this.themeBoardTint != null) {
-      this.boardBackground.setVisible(false)
-      this.themeBoardBackground = this.clipToBoard(this.add.rectangle(BOARD_X + BOARD_W / 2, BOARD_Y + BOARD_H / 2, BOARD_W, BOARD_H, this.themeBoardTint)
-        .setOrigin(0.5, 0.5)
-        .setDepth(-99))
-    }
+    this.themeBoardBackground = this.clipToBoard(this.add.rectangle(
+      BOARD_X + BOARD_W / 2,
+      BOARD_Y + BOARD_H / 2,
+      BOARD_W,
+      BOARD_H,
+      this.themeBoardTint ?? 0x176b2a,
+    ).setOrigin(0.5, 0.5).setDepth(-100))
     if (this.textures.exists('mj_taku_dragon_skin')) {
       this.dragonOverlayBg = this.clipToBoard(this.add.image(BOARD_X + DRAGON_OVERLAY.x, BOARD_Y + DRAGON_OVERLAY.y, 'mj_taku_dragon_skin')
         .setOrigin(0, 0)
@@ -1367,7 +1365,7 @@ export default class GameScene extends Phaser.Scene {
       : mobileCenterHudOffset(this.layoutMode)
     const centerX = BOARD_X + CENTER_INFO.x + CENTER_INFO.width / 2 + offset.x
     const centerY = BOARD_Y + CENTER_INFO.y + CENTER_INFO.height / 2 + offset.y
-    if (this.boardBackground) {
+    if (this.themeBoardBackground) {
       const visibleBounds = this.layoutMode === 'responsiveDesktop'
         ? responsiveDesktopVisibleWorldBounds()
         : isMobileIngameLayout(this.layoutMode) ? mobileVisibleWorldBounds() : null
@@ -1378,13 +1376,8 @@ export default class GameScene extends Phaser.Scene {
             (visibleBounds.bottom - visibleBounds.top) / BOARD_BACKGROUND_SAFE_HEIGHT,
           )
         : this.layoutMode === 'desktop' ? 1 : FLUID_BOARD_BACKGROUND_SCALE
-      this.boardBackground.setPosition(
-        isMobileIngameLayout(this.layoutMode) ? centerX : BOARD_X + BOARD_W / 2 + offset.x,
-        isMobileIngameLayout(this.layoutMode) ? centerY : BOARD_Y + BOARD_H / 2 + offset.y,
-      )
-      this.boardBackground.setScale(backgroundScale)
       this.themeBoardBackground
-        ?.setPosition(
+        .setPosition(
           isMobileIngameLayout(this.layoutMode) ? centerX : BOARD_X + BOARD_W / 2 + offset.x,
           isMobileIngameLayout(this.layoutMode) ? centerY : BOARD_Y + BOARD_H / 2 + offset.y,
         )
@@ -2868,7 +2861,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   private shouldPlayInitialDeal() {
-    return !this.isReplay
+    return !this.isMeldLayoutFixture
+      && !this.isReplay
       && !this.shouldSuppressLivePlayback()
       && !this.gameResyncInFlight
       && document.visibilityState === 'visible'
@@ -4125,10 +4119,11 @@ export default class GameScene extends Phaser.Scene {
       if (!sprite?.active || !sprite.visible) return
       const mask = assistTileMask(sourceCode, code)
       if (mask === 0) return
-      const texture = sprite.frame.realWidth === 45 ? 'mj_tonari_1' : 'mj_tonari_0'
+      const texture = sprite.displayWidth > sprite.displayHeight ? 'mj_tonari_1' : 'mj_tonari_0'
       this.assistHighlightSprites.push(this.clipToBoard(this.add.image(sprite.x, sprite.y, texture, mask - 1)
         .setOrigin(0, 0)
-        .setScale(sprite.scaleX, sprite.scaleY)
+        .setDisplaySize(sprite.displayWidth, sprite.displayHeight)
+        .setAlpha(0.55)
         .setBlendMode(Phaser.BlendModes.MULTIPLY)
         .setDepth(sprite.depth + 0.001)))
     }

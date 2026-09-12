@@ -553,9 +553,9 @@ export default class UIScene extends Phaser.Scene {
       const ttl = playerHudPoint(pos.ttl, odr)
       const trk = playerHudPoint(pos.trk, odr)
 
-      this.majakTitleSprites[odr] = this.add.image(ttl.x, ttl.y, this.resolveSkinTextureKey('mj_board'))
+      this.majakTitleSprites[odr] = this.add.image(ttl.x, ttl.y, this.resolveSkinTextureKey('mj_sideBg'))
         .setOrigin(0, 0).setDepth(2).setVisible(false)
-      this.trickTitleSprites[odr] = this.add.image(trk.x, trk.y, this.resolveSkinTextureKey('mj_board'))
+      this.trickTitleSprites[odr] = this.add.image(trk.x, trk.y, this.resolveSkinTextureKey('mj_sideBg'))
         .setOrigin(0, 0).setDepth(1).setVisible(false)
       const panelStyle = this.mobileHudPanelStyle()
       this.mobileHudPanels[odr] = this.add.rectangle(0, 0, 1, 1, panelStyle.fill, panelStyle.fillAlpha)

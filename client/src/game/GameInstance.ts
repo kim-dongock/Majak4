@@ -14,6 +14,7 @@ import { stopMajakBgm } from '../utils/majakSound'
 export const GAME_WIDTH = INGAME_WORLD.width
 export const GAME_HEIGHT = INGAME_WORLD.height
 export const GAME_OPTIONS_REGISTRY_KEY = 'majak:createGameOptions'
+const MOBILE_RENDER_DENSITY = 2
 
 /** createGame オプション */
 export interface CreateGameOptions {
@@ -130,6 +131,48 @@ function parkGameHost(): void {
   if (gameHost.parentElement !== parkingHost) parkingHost.appendChild(gameHost)
 }
 
+function configureMobileHighDensityRenderer(game: Phaser.Game): void {
+  if (game.renderer.type !== Phaser.WEBGL) return
+
+  const logicalWidth = game.scale.width
+  const logicalHeight = game.scale.height
+  const backingWidth = logicalWidth * MOBILE_RENDER_DENSITY
+  const backingHeight = logicalHeight * MOBILE_RENDER_DENSITY
+  const canvas = game.canvas
+
+  canvas.dataset.majakLogicalWidth = String(logicalWidth)
+  canvas.dataset.majakLogicalHeight = String(logicalHeight)
+  canvas.style.width = `${logicalWidth}px`
+  canvas.style.height = `${logicalHeight}px`
+
+  if (canvas.width !== backingWidth || canvas.height !== backingHeight) {
+    canvas.width = backingWidth
+    canvas.height = backingHeight
+  }
+  if (game.renderer.width !== backingWidth || game.renderer.height !== backingHeight) {
+    game.renderer.resize(backingWidth, backingHeight)
+  }
+
+  const scrollX = -logicalWidth * (MOBILE_RENDER_DENSITY - 1) / 2
+  const scrollY = -logicalHeight * (MOBILE_RENDER_DENSITY - 1) / 2
+  const canvasRect = canvas.getBoundingClientRect()
+  if (canvasRect.width > 0 && canvasRect.height > 0) {
+    game.scale.displayScale.set(
+      logicalWidth * MOBILE_RENDER_DENSITY / canvasRect.width,
+      logicalHeight * MOBILE_RENDER_DENSITY / canvasRect.height,
+    )
+  }
+  for (const scene of game.scene.getScenes(true)) {
+    for (const camera of scene.cameras.cameras) {
+      if (camera.width === backingWidth && camera.height === backingHeight &&
+        camera.zoom === MOBILE_RENDER_DENSITY && camera.scrollX === scrollX && camera.scrollY === scrollY) continue
+      camera.setViewport(0, 0, backingWidth, backingHeight)
+      camera.setZoom(MOBILE_RENDER_DENSITY)
+      camera.setScroll(scrollX, scrollY)
+    }
+  }
+}
+
 export function createGame(parent: HTMLElement, options: CreateGameOptions = {}): Phaser.Game {
   if (gameInstance && !sameResourceOptions(_gameOptions, options)) {
     destroyGame()
@@ -151,6 +194,7 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
   }
 
   const resizeToParent = options.layoutMode === 'responsiveDesktop'
+  const useSharpPixelRendering = options.layoutMode !== 'mobileLandscape'
   const initialWidth = resizeToParent ? Math.max(1, parent.clientWidth) : GAME_WIDTH
   const initialHeight = resizeToParent ? Math.max(1, parent.clientHeight) : GAME_HEIGHT
 
@@ -167,10 +211,11 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
       noAudio: true,
     },
     render: {
-      antialias: true,
-      antialiasGL: true,
-      pixelArt: false,
+      antialias: !useSharpPixelRendering,
+      antialiasGL: !useSharpPixelRendering,
+      pixelArt: useSharpPixelRendering,
       roundPixels: true,
+      clearBeforeRender: true,
     },
     scene: [PreloadScene, GameScene, UIScene],
     scale: {
@@ -180,8 +225,11 @@ export function createGame(parent: HTMLElement, options: CreateGameOptions = {})
     },
     callbacks: {
       postBoot: game => {
-        game.canvas.style.imageRendering = 'auto'
+        game.canvas.style.imageRendering = useSharpPixelRendering ? 'pixelated' : 'auto'
         game.registry.set(GAME_OPTIONS_REGISTRY_KEY, _gameOptions)
+        if (options.layoutMode === 'mobileLandscape') {
+          game.events.on(Phaser.Core.Events.POST_RENDER, () => configureMobileHighDensityRenderer(game))
+        }
       },
     },
   })

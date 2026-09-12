@@ -26,9 +26,8 @@
  */
 import Phaser from 'phaser'
 import { GAME_OPTIONS_REGISTRY_KEY, getGameOptions } from '../game/GameInstance'
-import { emitGameBoardSurroundColor, emitGameLoadProgress, GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY } from '../game/gameLoadProgress'
+import { emitGameLoadProgress } from '../game/gameLoadProgress'
 import { getLegacyBoardSkinId, getLegacyFullUiSkinId, getLegacyHaiSkinId } from '../utils/legacySkinPalette'
-import { imageEdgeColor } from '../utils/imagePalette'
 
 const IMG  = '/assets/images/game'
 const CUSTOM_BOARD_TENGOKU = 100002
@@ -78,8 +77,8 @@ export default class PreloadScene extends Phaser.Scene {
       : `${IMG}/${fallback}.png`
     const haiImage = (file: string, fallback: string) => haiSkinId != null
       ? `${IMG}/skin/${haiSkinId}/${file}_${haiSkinSuffix}.png`
-      : `${IMG}/${fallback}.png`
-    const commonHaiImage = (file: string) => `${IMG}/${file}.png`
+      : `${IMG}/game-hd/${fallback}.png`
+    const commonHaiImage = (file: string) => `${IMG}/game-hd/${file}.png`
     const haiSheet = (frameWidth: number, frameHeight: number) => ({
       frameWidth: frameWidth * haiTextureScale,
       frameHeight: frameHeight * haiTextureScale,
@@ -92,7 +91,6 @@ export default class PreloadScene extends Phaser.Scene {
     }
 
     /* ── ゲームボード / サイドバー ── */
-    this.load.image('mj_board', boardImage('mj_board', 'mj_board'))
     this.load.image('mj_sideBg', `${IMG}/mj_sideBg.png`)
     this.load.image('mj_h_bg', boardImage('mj_h_bg', 'mj_h_bg'))
     loadBgSkinImage('mj_sideBg')
@@ -324,17 +322,6 @@ export default class PreloadScene extends Phaser.Scene {
 
   create() {
     const durationMs = Math.round(performance.now() - this.preloadStartedAt)
-    try {
-      const boardSource = this.textures.get('mj_board').getSourceImage() as CanvasImageSource
-      const surroundColor = imageEdgeColor(boardSource)
-      if (surroundColor) {
-        this.registry.set(GAME_BOARD_SURROUND_COLOR_REGISTRY_KEY, surroundColor)
-        console.info('[PreloadScene] board surround color', { surroundColor })
-        emitGameBoardSurroundColor(surroundColor)
-      }
-    } catch (error) {
-      console.warn('[PreloadScene] board surround color extraction failed', error)
-    }
     console.info('[GameStartTiming] resource load completed', {
       phase: 'game-start',
       durationMs,

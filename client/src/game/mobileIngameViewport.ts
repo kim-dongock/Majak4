@@ -38,8 +38,10 @@ export function mobileVisibleWorldBounds(): MobileVisibleWorldBounds | null {
   if (!(shell instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) return null
   const shellRect = shell.getBoundingClientRect()
   const canvasRect = canvas.getBoundingClientRect()
-  const scaleX = canvasRect.width / canvas.clientWidth
-  const scaleY = canvasRect.height / canvas.clientHeight
+  const logicalWidth = Number(canvas.dataset.majakLogicalWidth) || canvas.width
+  const logicalHeight = Number(canvas.dataset.majakLogicalHeight) || canvas.height
+  const scaleX = canvasRect.width / logicalWidth
+  const scaleY = canvasRect.height / logicalHeight
   if (!Number.isFinite(scaleX) || !Number.isFinite(scaleY) || scaleX <= 0 || scaleY <= 0) return null
   const left = (shellRect.left - canvasRect.left) / scaleX
   const top = (shellRect.top - canvasRect.top) / scaleY
@@ -133,7 +135,7 @@ export function mobileVisibleWorldLayoutKey(mode: IngameLayoutMode): string {
   const bounds = mode === 'responsiveDesktop' ? responsiveDesktopVisibleWorldBounds() : mobileVisibleWorldBounds()
   if (!bounds) return 'mobile:none'
   return [bounds.left, bounds.top, bounds.right, bounds.bottom]
-    .map(value => Math.round(value))
+    .map(value => Math.round(value / 4) * 4)
     .join(':')
 }
 

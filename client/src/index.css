@@ -5026,7 +5026,13 @@ body:has(.majak-game-screen) {
 }
 
 .majak-mobile-ingame-shell canvas {
+  display: block;
   image-rendering: auto;
+}
+
+.majak-responsive-ingame-playfield canvas {
+  display: block;
+  image-rendering: pixelated;
 }
 
 .majak-mobile-ingame-tool-drawer {
