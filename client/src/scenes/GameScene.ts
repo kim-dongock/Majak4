@@ -172,7 +172,6 @@ const LEGACY_YAKUMAN_FINISH_SIZE = { width: 563, height: 435 }
 const LEGACY_TSUMO_EFFECT_THICKNESS = 164
 const MATCH_START_SEAT_REVEAL_DURATION_MS = 3100
 const LEGACY_WAREME_PRESENTATION_DURATION_MS = 3700
-const RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP = 64
 const RESPONSIVE_DESKTOP_TOP_HAND_OFFSET_X = 25
 const MATCH_START_SEAT_POSITIONS = [
   { x: 379, y: 506 },
@@ -1696,7 +1695,6 @@ export default class GameScene extends Phaser.Scene {
         })
         if (shouldAnimateRoundStart) {
           this.playRoundStartSounds(data, waremeStartDelay)
-          this.time.delayedCall(waremeStartDelay + 2000, () => this.redrawDeadWall(false))
           this.time.delayedCall(waremeStartDelay + LEGACY_WAREME_PRESENTATION_DURATION_MS, () => this.redrawDeadWall())
         }
         this.animateInitialDeal(oyaOrder, dealStartDelay, () => {
@@ -1780,6 +1778,18 @@ export default class GameScene extends Phaser.Scene {
         const keepTimeMs = Math.max(0, Number(data.keepTimeMs ?? 0))
         const timeBankMs = Math.max(0, Number(data.timeBankMs ?? 0))
         const timeBankEnabled = Boolean(data.timeBankEnabled)
+        console.info('[GameTimer] MJPID_ACTIONS received', {
+          seatOrder,
+          myOdr: this.myOdr,
+          playerMode,
+          actionSeq,
+          serverNow,
+          deadlineAt,
+          remainingMs,
+          timeLimit: data.timeLimit,
+          timeBankMs,
+          timeBankEnabled,
+        })
         if (playerMode === 'Kyo' && hasActionSeatOrder) {
           this.kyoResultPendingOrders.add(seatOrder)
           window.dispatchEvent(new CustomEvent(KYO_RESULT_PROGRESS_EVENT, {
@@ -3598,26 +3608,6 @@ export default class GameScene extends Phaser.Scene {
     this.deadWallSprites = []
   }
 
-  private responsiveDesktopMatchStartSeatPoint(loc: 0 | 1 | 2 | 3) {
-    const playBox = boardLocalPoint({ x: CENTER_INFO.x, y: CENTER_INFO.y })
-    const left = playBox.x
-    const top = playBox.y
-    const right = left + CENTER_INFO.width
-    const bottom = top + CENTER_INFO.height
-    const centerX = (left + right) / 2
-    const centerY = (top + bottom) / 2
-    const tileSize = loc % 2 === 0 ? { width: 37, height: 63 } : { width: 63, height: 37 }
-
-    if (loc === 0) return { x: centerX - tileSize.width / 2, y: bottom + RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP }
-    if (loc === 1) return { x: right + RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP, y: centerY - tileSize.height / 2 }
-    if (loc === 2) return { x: centerX - tileSize.width / 2, y: top - RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP - tileSize.height }
-    return { x: left - RESPONSIVE_DESKTOP_MATCH_START_SEAT_GAP - tileSize.width, y: centerY - tileSize.height / 2 }
-  }
-
-  private isResponsiveDesktopFullscreen() {
-    return this.layoutMode === 'responsiveDesktop' && typeof document !== 'undefined' && Boolean(document.fullscreenElement)
-  }
-
   private animateMatchStartSeatReveal() {
     const shouldReveal = this.pendingMatchStartSeatReveal && this.shouldPlayLegacyVisuals()
     this.pendingMatchStartSeatReveal = false
@@ -3625,7 +3615,6 @@ export default class GameScene extends Phaser.Scene {
 
     const scale = this.tileScale()
     const seatPoint = (loc: 0 | 1 | 2 | 3, offset = { x: 0, y: 0 }) => {
-      if (this.isResponsiveDesktopFullscreen()) return this.responsiveDesktopMatchStartSeatPoint(loc)
       if (isMobileIngameLayout(this.layoutMode)) {
         const point = mobileOuterHandPos(loc, 6, MOBILE_OTHER_HAND_FIXED_COUNT, false, scale)
         if (point) return { x: point.x + offset.x, y: point.y + offset.y }

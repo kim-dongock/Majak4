@@ -464,6 +464,8 @@ export default class UIScene extends Phaser.Scene {
   private inactiveTimerMaxMs = 0
   private timerEvent?: Phaser.Time.TimerEvent
   private pendingTimer?: { data: ActionPromptTimerData; endAt: number }
+  private pendingTimerWaitReason = ''
+  private timerRedrawCount = 0
   private flowTraceSerial = 0
   private players: PlayerHudState[] = []
   private myOdr = 0
@@ -480,6 +482,7 @@ export default class UIScene extends Phaser.Scene {
   private activeTurnOdr: number | null = null
   private waremeOdr: number | null = null
   private lastMobileHudLayoutKey = ''
+  private playerHudEntrancePlayed = false
   private readonly reachedOdr = new Set<number>()
   private replayGraphVisible = false
   private graphHiddenHudObjects: Array<Phaser.GameObjects.Image | Phaser.GameObjects.Text | Phaser.GameObjects.Rectangle> = []
@@ -505,6 +508,7 @@ export default class UIScene extends Phaser.Scene {
     this.activeTurnOdr = null
     this.waremeOdr = null
     this.lastMobileHudLayoutKey = ''
+    this.playerHudEntrancePlayed = false
     this.reachedOdr.clear()
     this.replayGraphVisible = false
     this.graphHiddenHudObjects = []
@@ -546,50 +550,55 @@ export default class UIScene extends Phaser.Scene {
 
     /* ── 各プレイヤーの UI ── */
     for (let odr = 0; odr < 4; odr++) {
-      const pos = odrBoxPos(odr)
-      const avt = playerHudPoint(pos.avt, odr)
-      const txt = playerHudPoint(pos.txt, odr)
-      const name = playerHudPoint(pos.name, odr)
-      const ttl = playerHudPoint(pos.ttl, odr)
-      const trk = playerHudPoint(pos.trk, odr)
+      const loc = this.odrToLoc(odr)
+      const pos = odrBoxPos(loc)
+      const avatarAnchor = playerHudPoint(pos.avt, loc)
+      const avatarSize = this.layoutMode === 'mobileLandscape'
+        ? this.mobileAvatarSize(this.isMobileAvatarExpanded(loc))
+        : HUD_METRICS.avatar
+      const avt = isMobileIngameLayout(this.layoutMode)
+        ? this.mobileAvatarPoint(loc, avatarAnchor, avatarSize)
+        : avatarAnchor
+      const txt = playerHudPoint(pos.txt, loc)
+      const name = playerHudPoint(pos.name, loc)
+      const ttl = playerHudPoint(pos.ttl, loc)
+      const trk = playerHudPoint(pos.trk, loc)
 
-      this.majakTitleSprites[odr] = this.add.image(ttl.x, ttl.y, this.resolveSkinTextureKey('mj_sideBg'))
+      this.majakTitleSprites[loc] = this.add.image(ttl.x, ttl.y, this.resolveSkinTextureKey('mj_sideBg'))
         .setOrigin(0, 0).setDepth(2).setVisible(false)
-      this.trickTitleSprites[odr] = this.add.image(trk.x, trk.y, this.resolveSkinTextureKey('mj_sideBg'))
+      this.trickTitleSprites[loc] = this.add.image(trk.x, trk.y, this.resolveSkinTextureKey('mj_sideBg'))
         .setOrigin(0, 0).setDepth(1).setVisible(false)
       const panelStyle = this.mobileHudPanelStyle()
-      this.mobileHudPanels[odr] = this.add.rectangle(0, 0, 1, 1, panelStyle.fill, panelStyle.fillAlpha)
+      this.mobileHudPanels[loc] = this.add.rectangle(0, 0, 1, 1, panelStyle.fill, panelStyle.fillAlpha)
         .setOrigin(0, 0).setDepth(7).setVisible(false)
-      this.desktopHudPanels[odr] = this.add.image(0, 0, this.desktopHudPanelTextureKey())
+      this.desktopHudPanels[loc] = this.add.image(0, 0, this.desktopHudPanelTextureKey())
         .setOrigin(0, 0).setDepth(0).setVisible(false)
-      this.desktopTurnStrips[odr] = this.add.image(0, 0, this.desktopTurnStripTextureKey())
+      this.desktopTurnStrips[loc] = this.add.image(0, 0, this.desktopTurnStripTextureKey())
         .setOrigin(0, 0).setDepth(8).setVisible(false)
-      this.avatarSprites[odr] = this.add.image(avt.x, avt.y, this.resolveSkinTextureKey('mj_aiAvtrL'))
-        .setOrigin(0, 0).setDepth(10).setDisplaySize(HUD_METRICS.avatar.width, HUD_METRICS.avatar.height).setVisible(false)
+      this.avatarSprites[loc] = this.add.image(avt.x, avt.y, this.resolveSkinTextureKey('mj_aiAvtrL'))
+        .setOrigin(0, 0).setDepth(10).setDisplaySize(avatarSize.width, avatarSize.height).setVisible(false)
         .setInteractive({ useHandCursor: true })
-        .on('pointerup', () => this.toggleMobileHudInfo(odr))
+        .on('pointerup', () => this.toggleMobileHudInfo(loc))
 
-      this.levelTexts[odr] = this.add.text(txt.x, txt.y, '', scoreStyle)
-        .setOrigin(0, 0).setDepth(10).setAlign('center')
+      this.levelTexts[loc] = this.add.text(txt.x, txt.y, '', scoreStyle)
+        .setOrigin(0, 0).setDepth(10).setAlign('center').setVisible(false)
 
-      this.scoreTexts[odr] = this.add.text(txt.x, txt.y + 15, '30000', scoreStyle)
-        .setOrigin(0, 0).setDepth(300).setAlign('center')
+      this.scoreTexts[loc] = this.add.text(txt.x, txt.y + 15, '30000', scoreStyle)
+        .setOrigin(0, 0).setDepth(300).setAlign('center').setVisible(false)
 
-      this.rankTexts[odr] = this.add.text(txt.x, txt.y + 30, '', scoreStyle)
-        .setOrigin(0, 0).setDepth(10).setAlign('center')
+      this.rankTexts[loc] = this.add.text(txt.x, txt.y + 30, '', scoreStyle)
+        .setOrigin(0, 0).setDepth(10).setAlign('center').setVisible(false)
 
-      this.diffTexts[odr] = this.add.text(txt.x, txt.y + 45, '', scoreStyle)
-        .setOrigin(0, 0).setDepth(10).setAlign('center')
+      this.diffTexts[loc] = this.add.text(txt.x, txt.y + 45, '', scoreStyle)
+        .setOrigin(0, 0).setDepth(10).setAlign('center').setVisible(false)
 
-      this.nameTexts[odr] = this.add.text(name.x, name.y, '', nameStyle)
-        .setOrigin(0, 0).setDepth(10).setAlign('center').setFixedSize(HUD_METRICS.nameWidth, HUD_METRICS.nameHeight)
+      this.nameTexts[loc] = this.add.text(name.x, name.y, '', nameStyle)
+        .setOrigin(0, 0).setDepth(10).setAlign('center').setFixedSize(HUD_METRICS.nameWidth, HUD_METRICS.nameHeight).setVisible(false)
 
       /* リーチ棒 (CMJTblDraw::PutRicStk) */
-      this.reachSprites[odr] = this.add.image(0, 0, this.resolveSkinTextureKey('mj_richbar_0'))
+      this.reachSprites[loc] = this.add.image(0, 0, this.resolveSkinTextureKey('mj_richbar_0'))
         .setOrigin(0, 0).setDepth(Z_REACH_STICK).setVisible(false)
     }
-    this.initializeDesktopHudPanels()
-
     this.hostMark = this.add.image(0, 0, this.resolveSkinTextureKey('mj_hostmark'))
       .setOrigin(0, 0).setDepth(11).setVisible(false)
 
@@ -669,6 +678,9 @@ export default class UIScene extends Phaser.Scene {
         this.showInactiveTimerBar()
       }
       this.updatePlayerTexts(data.players)
+      if (data.roundStart) {
+        this.game.events.once(Phaser.Core.Events.POST_STEP, () => this.playPlayerHudEntrance())
+      }
       if (data.kyoku) this.updateKyoku(data.kyoku)
       this.updateWindMarkers()
       const activeTurnOdr = data.activeTurnOdr
@@ -962,29 +974,15 @@ export default class UIScene extends Phaser.Scene {
   }
 
   private desktopAvatarSize(_player: PlayerHudState) {
-    return DESKTOP_PLAYER_AVATAR_SIZE
+    return this.layoutMode === 'responsiveDesktop' ? DESKTOP_PLAYER_AVATAR_SIZE : DESKTOP_HUD_METRICS.avatar
   }
 
   private desktopAvatarPoint(point: HudPoint, loc: number): HudPoint {
+    if (this.layoutMode !== 'responsiveDesktop') return point
     const isBottom = loc === 0 || loc === 1
     return {
       x: point.x - (DESKTOP_PLAYER_AVATAR_SIZE.width - DESKTOP_HUD_METRICS.avatar.width) / 2,
       y: point.y - (DESKTOP_PLAYER_AVATAR_SIZE.height - DESKTOP_HUD_METRICS.avatar.height) / 2 + (isBottom ? DESKTOP_AVATAR_OUTER_OFFSET_Y : -DESKTOP_AVATAR_OUTER_OFFSET_Y),
-    }
-  }
-
-  private initializeDesktopHudPanels() {
-    if (this.layoutMode !== 'responsiveDesktop') return
-    for (let loc = 0; loc < 4; loc++) {
-      const pos = odrBoxPos(loc)
-      const avatar = this.desktopAvatarPoint(playerHudPoint(pos.avt, loc), loc)
-      const text = playerHudPoint(pos.txt, loc)
-      const textBounds = avatarTextBounds(loc)
-      const textY = Math.max(
-        text.y + DESKTOP_HUD_INFO_Y_SHIFT + RESPONSIVE_DESKTOP_PLAYER_INFO_OFFSET_Y,
-        avatar.y + HUD_METRICS.nameHeight + 6,
-      )
-      this.updateDesktopHudPanel(loc, avatar, DESKTOP_PLAYER_AVATAR_SIZE, textBounds.left, textY, textBounds.width, 4, 15)
     }
   }
 
@@ -1272,7 +1270,7 @@ export default class UIScene extends Phaser.Scene {
         avatarSize = { width: avatarWidth, height: avatarHeight }
         avt = {
           x: desktopPanelName.left + inset,
-          y: contentTop + (contentHeight - avatarHeight) / 2 + (loc === 0 || loc === 1 ? DESKTOP_AVATAR_OUTER_OFFSET_Y : -DESKTOP_AVATAR_OUTER_OFFSET_Y),
+          y: contentTop + (contentHeight - avatarHeight) / 2,
         }
         textBounds = {
           left: avt.x + avatarSize.width + inset,
@@ -1335,6 +1333,58 @@ export default class UIScene extends Phaser.Scene {
       this.setDynamicImage(this.trickTitleSprites[loc], this.trickTitleKey(p.trickTitle), this.trickTitleUrl(p.trickTitle), isMobileIngameLayout(this.layoutMode) ? textBounds.left : trk.x, (isMobileIngameLayout(this.layoutMode) ? avt.y - 2 : trk.y) + desktopTitleOffsetY, trickTitleDepth, undefined, titleVisible)
     })
     this.updateHostMark()
+  }
+
+  private playPlayerHudEntrance() {
+    if (this.playerHudEntrancePlayed) return
+    this.playerHudEntrancePlayed = true
+
+    for (let loc = 0; loc < 4; loc++) {
+      const offsetX = loc === 0 || loc === 3 ? -96 : 96
+      const chromeObjects = [
+        this.mobileHudPanels[loc],
+        this.desktopHudPanels[loc],
+        this.desktopTurnStrips[loc],
+        this.nameTexts[loc],
+        this.levelTexts[loc],
+        this.scoreTexts[loc],
+        this.rankTexts[loc],
+        this.diffTexts[loc],
+      ].filter(object => Boolean(object) && object.visible)
+
+      chromeObjects.forEach(object => {
+        object.setAlpha(0)
+        this.tweens.add({
+          targets: object,
+          alpha: 1,
+          duration: 180,
+          delay: loc * 110,
+          ease: 'Sine.Out',
+        })
+      })
+
+      if (this.mobileAvatarLayer) {
+        this.mobileAvatarLayer.playEntrance(loc, offsetX, loc * 110)
+        continue
+      }
+
+      const avatar = this.avatarSprites[loc]
+      if (!avatar?.visible) continue
+      const finalX = avatar.x
+      const finalY = avatar.y
+      avatar
+        .setPosition(finalX + offsetX, finalY)
+        .setAlpha(0)
+      this.tweens.add({
+        targets: avatar,
+        x: finalX,
+        alpha: 1,
+        duration: 480,
+        delay: loc * 110,
+        ease: 'Cubic.Out',
+        onComplete: () => avatar.setPosition(finalX, finalY).setAlpha(1),
+      })
+    }
   }
 
   private updateHostMark() {
@@ -1631,17 +1681,25 @@ export default class UIScene extends Phaser.Scene {
   private setDynamicImage(sprite: Phaser.GameObjects.Image, key: string, url: string, x: number, y: number, depth: number, fallbackKey?: string, visible = true, displaySize?: { width: number; height: number }, fit: 'stretch' | 'contain' | 'cover' | 'costume' = 'stretch') {
     sprite.setPosition(x, y).setDepth(depth)
     const dynamicSize = displaySize ?? (this.avatarSprites.includes(sprite) ? HUD_METRICS.avatar : null)
+    sprite.setData('dynamicImagePosition', { x, y })
+    sprite.setData('dynamicImageDisplaySize', dynamicSize)
+    sprite.setData('dynamicImageFit', fit)
     const showTexture = (textureKey: string) => {
-      if (dynamicSize) {
+      const position = sprite.getData('dynamicImagePosition') as HudPoint | undefined
+      const currentX = position?.x ?? x
+      const currentY = position?.y ?? y
+      const currentSize = sprite.getData('dynamicImageDisplaySize') as { width: number; height: number } | null ?? dynamicSize
+      const currentFit = sprite.getData('dynamicImageFit') as typeof fit | undefined ?? fit
+      if (currentSize) {
         this.textures.get(textureKey).setFilter(Phaser.Textures.FilterMode.LINEAR)
       }
       sprite.setTexture(textureKey)
       sprite.setCrop()
-      if (dynamicSize && fit === 'cover') {
+      if (currentSize && currentFit === 'cover') {
         const source = this.textures.get(textureKey).getSourceImage() as { width?: number; height?: number }
         const sourceWidth = Number(source.width ?? 0)
         const sourceHeight = Number(source.height ?? 0)
-        const targetAspect = dynamicSize.width / dynamicSize.height
+        const targetAspect = currentSize.width / currentSize.height
         const sourceAspect = sourceWidth > 0 && sourceHeight > 0 ? sourceWidth / sourceHeight : targetAspect
         let cropX = 0
         let cropY = 0
@@ -1656,36 +1714,36 @@ export default class UIScene extends Phaser.Scene {
         }
         sprite
           .setCrop(cropX, cropY, cropWidth, cropHeight)
-          .setPosition(x, y)
-          .setDisplaySize(dynamicSize.width, dynamicSize.height)
-      } else if (dynamicSize && fit === 'costume') {
+          .setPosition(currentX, currentY)
+          .setDisplaySize(currentSize.width, currentSize.height)
+      } else if (currentSize && currentFit === 'costume') {
         const costumeId = Number(key.match(/mj_costume_[a-z]+_(\d{2})/)?.[1] ?? url.match(/\/skin\/(\d+)\//)?.[1])
         const bounds = COSTUME_AVATAR_BOUNDS[costumeId]
         if (!bounds) {
-          sprite.setPosition(x, y).setDisplaySize(dynamicSize.width, dynamicSize.height)
+          sprite.setPosition(currentX, currentY).setDisplaySize(currentSize.width, currentSize.height)
         } else {
-          const scale = Math.min(dynamicSize.width / bounds.width, dynamicSize.height / bounds.height)
+          const scale = Math.min(currentSize.width / bounds.width, currentSize.height / bounds.height)
           const contentWidth = bounds.width * scale
           const contentHeight = bounds.height * scale
           sprite
             .setCrop(bounds.x, bounds.y, bounds.width, bounds.height)
-            .setPosition(x + (dynamicSize.width - contentWidth) / 2 - bounds.x * scale, y + (dynamicSize.height - contentHeight) / 2 - bounds.y * scale)
+            .setPosition(currentX + (currentSize.width - contentWidth) / 2 - bounds.x * scale, currentY + (currentSize.height - contentHeight) / 2 - bounds.y * scale)
             .setDisplaySize(COSTUME_AVATAR_SOURCE_SIZE.width * scale, COSTUME_AVATAR_SOURCE_SIZE.height * scale)
         }
-      } else if (dynamicSize && fit === 'contain') {
+      } else if (currentSize && currentFit === 'contain') {
         const source = this.textures.get(textureKey).getSourceImage() as { width?: number; height?: number }
         const sourceWidth = Number(source.width ?? 0)
         const sourceHeight = Number(source.height ?? 0)
         const scale = sourceWidth > 0 && sourceHeight > 0
-          ? Math.min(dynamicSize.width / sourceWidth, dynamicSize.height / sourceHeight)
+          ? Math.min(currentSize.width / sourceWidth, currentSize.height / sourceHeight)
           : 1
-        const width = sourceWidth > 0 ? sourceWidth * scale : dynamicSize.width
-        const height = sourceHeight > 0 ? sourceHeight * scale : dynamicSize.height
+        const width = sourceWidth > 0 ? sourceWidth * scale : currentSize.width
+        const height = sourceHeight > 0 ? sourceHeight * scale : currentSize.height
         sprite
-          .setPosition(x + (dynamicSize.width - width) / 2, y + (dynamicSize.height - height) / 2)
+          .setPosition(currentX + (currentSize.width - width) / 2, currentY + (currentSize.height - height) / 2)
           .setDisplaySize(width, height)
-      } else if (dynamicSize) {
-        sprite.setPosition(x, y).setDisplaySize(dynamicSize.width, dynamicSize.height)
+      } else if (currentSize) {
+        sprite.setPosition(currentX, currentY).setDisplaySize(currentSize.width, currentSize.height)
       }
       sprite.setVisible(visible)
     }
@@ -2004,9 +2062,9 @@ export default class UIScene extends Phaser.Scene {
       : bounds ? bounds.bottom - MOBILE_TIMBAR_BOTTOM_INSET : BOARD_Y + Y_TIMBAR
     this.timerFrame?.setPosition(x + timerWidth / 2, y + H_TIMBAR / 2).setSize(timerWidth + 4, H_TIMBAR + 4).setDisplaySize(timerWidth + 4, H_TIMBAR + 4)
     this.timerBack?.setPosition(x, y).setSize(timerWidth, H_TIMBAR).setDisplaySize(timerWidth, H_TIMBAR)
-    this.timerBar?.setPosition(x, y).setSize(timerWidth, H_TIMBAR).setDisplaySize(timerWidth, H_TIMBAR)
-    this.timerTurnBar?.setPosition(x, y).setSize(timerWidth, H_TIMBAR).setDisplaySize(timerWidth, H_TIMBAR)
-    this.timerKeepBar?.setPosition(x, y).setSize(timerWidth, H_TIMBAR).setDisplaySize(timerWidth, H_TIMBAR)
+    this.timerBar?.setPosition(x, y)
+    this.timerTurnBar?.setPosition(x, y)
+    this.timerKeepBar?.setPosition(x, y)
   }
 
   private timerTrackWidth() {
@@ -2062,6 +2120,8 @@ export default class UIScene extends Phaser.Scene {
     this.stopTimer()
     if (limitMs <= 0) return
     this.pendingTimer = { data, endAt: performance.now() + limitMs }
+    this.pendingTimerWaitReason = ''
+    this.traceUiFlow('timer queued', { limitMs, endAt: this.pendingTimer.endAt })
   }
 
   private startPendingTimerIfReady() {
@@ -2074,6 +2134,7 @@ export default class UIScene extends Phaser.Scene {
     }
     if (!gameScene.isActionPresentationReady?.()) {
       this.hideTimerDisplay()
+      this.tracePendingTimerWait('presentation is not ready')
       return
     }
     const panelBounds = gameScene.getActionPanelBounds?.()
@@ -2082,9 +2143,24 @@ export default class UIScene extends Phaser.Scene {
       : null
     const hasTimerAnchor = (panelBounds?.width ?? 0) > 0 && (panelBounds?.height ?? 0) > 0
       || (localHandBounds?.width ?? 0) > 0 && (localHandBounds?.height ?? 0) > 0
-    if (!hasTimerAnchor) return
+    if (!hasTimerAnchor) {
+      this.tracePendingTimerWait('timer anchor is unavailable')
+      return
+    }
+    this.pendingTimerWaitReason = ''
     this.pendingTimer = undefined
     this.startTimer(pending.data, pending.endAt)
+  }
+
+  private tracePendingTimerWait(reason: string) {
+    if (this.pendingTimerWaitReason === reason) return
+    this.pendingTimerWaitReason = reason
+    this.traceUiFlow('timer waiting', { reason })
+    console.info('[GameTimer] waiting', {
+      reason,
+      timerMaxMs: this.timerMaxMs,
+      pendingEndAt: this.pendingTimer?.endAt,
+    })
   }
 
   private isActionPresentationReady() {
@@ -2122,11 +2198,14 @@ export default class UIScene extends Phaser.Scene {
     }
     this.timerMaxMs = Math.max(1, limitMs)
     this.timerEndAt = endAt
+    this.timerRedrawCount = 0
     this.traceUiFlow('timer start', { ...data, limitMs })
+    console.info('[GameTimer] start', { limitMs, endAt, baseTimeMs: this.timerBaseTimeMs, keepTimeMs: this.timerKeepTimeMs, timeBankMs: this.timerBankMs, timeBankEnabled: this.timerBankEnabled })
     this.updateTimerLayout()
     this.timerFrame.setVisible(true)
     this.timerBack.setVisible(true)
     const redrawTimer = () => {
+      this.timerRedrawCount++
       const remainMs = Math.max(0, this.timerEndAt - performance.now())
       const segments = calculateTimeBankSegments(
         remainMs,
@@ -2149,6 +2228,10 @@ export default class UIScene extends Phaser.Scene {
         .setFillStyle(colors.turn).setVisible(turnWidth > 0)
       this.timerBar.setPosition(x + keepWidth + turnWidth, y).setDisplaySize(bankWidth, H_TIMBAR)
         .setFillStyle(colors.bank).setVisible(bankWidth > 0)
+      if (this.timerRedrawCount === 1 || this.timerRedrawCount % 20 === 0) {
+        this.traceUiFlow('timer redraw', { remainMs: Math.round(remainMs), keepWidth, turnWidth, bankWidth })
+        console.info('[GameTimer] redraw', { redrawCount: this.timerRedrawCount, remainMs: Math.round(remainMs), keepWidth, turnWidth, bankWidth })
+      }
       if (remainMs <= 0) this.stopTimer()
     }
     redrawTimer()
@@ -2164,6 +2247,7 @@ export default class UIScene extends Phaser.Scene {
     this.pendingTimer = undefined
     this.timerEvent?.destroy()
     this.timerEvent = undefined
+    this.timerRedrawCount = 0
     this.timerMaxMs = 0
     this.timerEndAt = 0
     this.timerBaseTimeMs = 0

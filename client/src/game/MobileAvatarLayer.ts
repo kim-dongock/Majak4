@@ -59,6 +59,7 @@ interface MobileAvatarSlot {
   url: string
   pendingUrl: string
   fallbackUrl: string
+  entrance?: { offsetX: number; delayMs: number }
 }
 
 export default class MobileAvatarLayer {
@@ -157,6 +158,11 @@ export default class MobileAvatarLayer {
       slot.image.src = url
       slot.image.style.display = 'block'
       slot.frame.style.display = 'block'
+      if (slot.entrance) {
+        const entrance = slot.entrance
+        slot.entrance = undefined
+        this.runEntrance(slot.frame, entrance.offsetX, entrance.delayMs)
+      }
     }
     if (slot.url === state.url && slot.image.complete && slot.image.naturalWidth > 0) {
       slot.image.style.display = 'block'
@@ -179,6 +185,33 @@ export default class MobileAvatarLayer {
         if (slot.requestId === requestId) showLoadedImage(state.fallbackUrl)
       }).catch(() => {})
     })
+  }
+
+  playEntrance(loc: number, offsetX: number, delayMs: number): void {
+    const slot = this.slots[loc]
+    if (!slot) return
+    if (slot.frame.style.display === 'none') {
+      slot.entrance = { offsetX, delayMs }
+      return
+    }
+    this.runEntrance(slot.frame, offsetX, delayMs)
+  }
+
+  private runEntrance(frame: HTMLDivElement, offsetX: number, delayMs: number): void {
+    frame.getAnimations().forEach(animation => animation.cancel())
+    const animation = frame.animate([
+      { transform: `translateX(${offsetX}px)`, opacity: 0 },
+      { transform: 'translateX(0)', opacity: 1 },
+    ], {
+      duration: 480,
+      delay: delayMs,
+      easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+      fill: 'both',
+    })
+    animation.onfinish = () => {
+      frame.style.transform = ''
+      frame.style.opacity = ''
+    }
   }
 
   showCallAvatar(state: MobileCallAvatarState): () => void {
