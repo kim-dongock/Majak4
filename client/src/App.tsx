@@ -12,8 +12,8 @@ import MeldLayoutFixtureScreen from './screens/ingame/MeldLayoutFixtureScreen'
 import PaifuArchiveScreen from './screens/outgame/PaifuArchiveScreen'
 import PopupPreviewScreen from './screens/outgame/PopupPreviewScreen'
 import AnnouncementListScreen from './screens/outgame/AnnouncementListScreen'
+import TopPage from './screens/outgame/TopPage'
 import MajakFrame from './components/MajakFrame'
-import MobileWebDownloadScreen, { isAppleTablet } from './components/MobileWebDownloadScreen'
 import MessageBoxHost from './components/MessageBoxHost'
 import GameReconnectLoading from './components/GameReconnectLoading'
 import RegistrationDlg from './screens/outgame/dialogs/RegistrationDlg'
@@ -32,7 +32,6 @@ import { getPlayerContinueRoom } from './api/channel'
 import * as SignalR from './api/signalr'
 import { useAuthStore } from './store/authStore'
 import { useCustomSkinStore } from './store/customSkinStore'
-import { useOutgameLayoutMode } from './hooks/useOutgameLayoutMode'
 import { forceDuplicateConnectionLogout } from './utils/msgbox'
 import { signInWithNativeGoogle } from './utils/nativeGoogleAuth'
 import { applyMajakColorTheme, loadMajakConfig } from './screens/outgame/dialogs/CfgDlg'
@@ -50,11 +49,11 @@ type StoredRouterState = {
 function readStoredRouterState(): StoredRouterState {
   try {
     const raw = window.sessionStorage.getItem(ROUTER_STATE_STORAGE_KEY)
-    if (!raw) return { pathname: '/channel' }
+    if (!raw) return { pathname: '/' }
     const value = JSON.parse(raw) as StoredRouterState
     return typeof value.pathname === 'string' && value.pathname.startsWith('/')
       ? value
-      : { pathname: '/channel' }
+      : { pathname: '/' }
   } catch {
     return { pathname: '/channel' }
   }
@@ -260,24 +259,6 @@ function AppLoadingScreen() {
   )
 }
 
-function PortraitOrientationNotice() {
-  return (
-    <main className="majak-mobile-portrait-notice majak-screen-surface" aria-live="polite">
-      <img
-        className="majak-mobile-portrait-notice__logo"
-        src="/assets/images/common/ico_big_majak4.jpg"
-        alt="麻雀4"
-        draggable={false}
-      />
-      <div className="majak-mobile-portrait-notice__device" aria-hidden="true">
-        <span />
-      </div>
-      <h1>端末を横向きにしてください</h1>
-      <p>麻雀4は横向きの画面に対応しています。<br />端末を横向きにすると、そのままゲームを続けられます。</p>
-    </main>
-  )
-}
-
 // ── 認証ゲート ──────────────────────────────────────────────────────
 /**
  * Google OAuth 認証ゲート
@@ -290,10 +271,12 @@ function PortraitOrientationNotice() {
  */
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { status, player, setLoading, setPlayer, setError, requireLogin } = useAuthStore()
-  const layoutMode = useOutgameLayoutMode()
   const isHangeClient = isHangeClientHost()
+  const isNativePlatform = Capacitor.isNativePlatform()
   const [idToken, setIdToken] = useState<string | null>(null)
   const [refreshChecked, setRefreshChecked] = useState(false)
+  const [nativeLoginPending, setNativeLoginPending] = useState(false)
+  const [showSignIn, setShowSignIn] = useState(false)
   const [registrationRequest, setRegistrationRequest] = useState<{ idToken: string; player: MajakPlayer } | null>(null)
 
   useEffect(() => {
@@ -406,10 +389,25 @@ function AuthGate({ children }: { children: React.ReactNode }) {
         return
       }
       setPlayer(authenticatedPlayer)
+      setShowSignIn(false)
     } catch {
       setError('Google サインインに失敗しました。もう一度お試しください。')
     }
   }, [setError, setLoading, setPlayer])
+
+  const handleNativeGoogleLogin = useCallback(async () => {
+    if (nativeLoginPending) return
+    setNativeLoginPending(true)
+    try {
+      await handleGoogleCredential(await signInWithNativeGoogle())
+    } catch (error) {
+      if (!(error instanceof Error) || !/cancel/i.test(error.message)) {
+        setError('Google サインインに失敗しました。もう一度お試しください。')
+      }
+    } finally {
+      setNativeLoginPending(false)
+    }
+  }, [handleGoogleCredential, nativeLoginPending, setError])
 
   const handleRegistrationAuthExpired = useCallback(() => {
     setRegistrationRequest(null)
@@ -443,10 +441,6 @@ function AuthGate({ children }: { children: React.ReactNode }) {
 
   // ── レンダリング ─────────────────────────────────────────────────
 
-  if (layoutMode === 'mobilePortrait' || (!Capacitor.isNativePlatform() && isAppleTablet())) {
-    return Capacitor.isNativePlatform() ? <PortraitOrientationNotice /> : <MobileWebDownloadScreen />
-  }
-
   // キャッシュ確認前 (idle)
   if (status === 'idle') {
     return <AppLoadingScreen />
@@ -463,10 +457,42 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     )
   }
 
+  if (showSignIn) {
+    return (
+      <SignInScreen
+        isHangeClient={isHangeClient}
+        loginPending={nativeLoginPending}
+        showBack
+        onBack={() => setShowSignIn(false)}
+        onGoogleCredential={handleGoogleCredential}
+        onLoginError={() => setError('Google サインインに失敗しました。もう一度お試しください。')}
+        onHangeLogin={() => { clearLocalLogout(); window.location.assign(getHangeLoginUrl()) }}
+        onNativeGoogleLogin={() => { void handleNativeGoogleLogin() }}
+      />
+    )
+  }
+
   // サインイン待ち (refresh cookie が使えなかった場合、またはゲーム認証が失効した場合のみ表示)
   if ((status === 'loading' && !player && !idToken && refreshChecked) || status === 'login_required') {
-    if (isHangeClient) return <HangeSignInScreen />
-    return <GoogleSignInScreen onCredential={handleGoogleCredential} onError={() => setError('Google サインインに失敗しました。もう一度お試しください。')} />
+    if (isNativePlatform) {
+      return (
+        <SignInScreen
+          isHangeClient={isHangeClient}
+          loginPending={nativeLoginPending}
+          showBack={false}
+          onBack={() => {}}
+          onGoogleCredential={handleGoogleCredential}
+          onLoginError={() => setError('Google サインインに失敗しました。もう一度お試しください。')}
+          onHangeLogin={() => { clearLocalLogout(); window.location.assign(getHangeLoginUrl()) }}
+          onNativeGoogleLogin={() => { void handleNativeGoogleLogin() }}
+        />
+      )
+    }
+    return (
+      <PublicTopPage
+        onUnauthenticatedStart={() => setShowSignIn(true)}
+      />
+    )
   }
 
   // Google 認証中 / サーバー通信中
@@ -520,155 +546,46 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function HangeSignInScreen() {
-  const handleLogin = () => {
-    clearLocalLogout()
-    window.location.assign(getHangeLoginUrl())
-  }
-
+function PublicTopPage(props: React.ComponentProps<typeof TopPage>) {
   return (
-    <div className="majak-screen-surface" style={{
-      position: 'fixed', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--majak-font-family-ui)',
-    }}>
-      <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 12,
-        padding: '40px 48px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-      }}>
-        <img
-          src="/assets/images/common/ico_big_majak4.jpg"
-          alt="麻雀4"
-          draggable={false}
-          style={{ width: 80, height: 80, borderRadius: 8 }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-        />
-        <div style={{ color: '#fff', fontSize: 'var(--majak-font-22)', fontWeight: 700, letterSpacing: 2 }}>
-          麻雀4
-        </div>
-        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--majak-font-13)', textAlign: 'center' }}>
-          ハンゲIDでログインしてください
-        </div>
-        <button
-          type="button"
-          onClick={handleLogin}
-          style={{
-            width: 280, height: 40,
-            position: 'relative',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxSizing: 'border-box',
-            border: '1px solid #747775', borderRadius: 4,
-            background: '#fff', color: '#1f1f1f',
-            fontSize: 14, fontWeight: 500, cursor: 'pointer',
-          }}
-        >
-          <img
-            src="/assets/images/common/hange-favicon.ico"
-            alt=""
-            draggable={false}
-            style={{ position: 'absolute', left: 12, width: 18, height: 18 }}
-          />
-          ハンゲでログイン
-        </button>
-      </div>
-    </div>
+    <MemoryRouter initialEntries={[readStoredRouterState()]}>
+      <RouterStatePersistence />
+      <TopPage {...props} />
+    </MemoryRouter>
   )
 }
 
-// ── Google サインイン画面 ────────────────────────────────────────────
-function GoogleSignInScreen({
-  onCredential,
-  onError,
+function SignInScreen({
+  isHangeClient,
+  loginPending,
+  showBack,
+  onBack,
+  onGoogleCredential,
+  onLoginError,
+  onHangeLogin,
+  onNativeGoogleLogin,
 }: {
-  onCredential: (credential: string) => void
-  onError: () => void
+  isHangeClient: boolean
+  loginPending: boolean
+  showBack: boolean
+  onBack: () => void
+  onGoogleCredential: (credential: string) => void
+  onLoginError: () => void
+  onHangeLogin: () => void
+  onNativeGoogleLogin: () => void
 }) {
-  const isNativeApp = Capacitor.isNativePlatform()
-  const [nativeLoginPending, setNativeLoginPending] = useState(false)
   const googleRedirectUrl = new URL(authApiUrl('/auth/google-login-redirect'), window.location.origin).toString()
 
-  const handleNativeGoogleLogin = async () => {
-    if (nativeLoginPending) return
-    setNativeLoginPending(true)
-    try {
-      onCredential(await signInWithNativeGoogle())
-    } catch (error) {
-      if (error instanceof Error && /cancel/i.test(error.message)) return
-      onError()
-    } finally {
-      setNativeLoginPending(false)
-    }
-  }
-
   return (
-    <div className="majak-screen-surface" style={{
-      position: 'fixed', inset: 0,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--majak-font-family-ui)',
-    }}>
-      <div style={{
-        background: 'rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.15)',
-        borderRadius: 12,
-        padding: '40px 48px',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24,
-        boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-      }}>
-        <img
-          src="/assets/images/common/ico_big_majak4.jpg"
-          alt="麻雀4"
-          draggable={false}
-          style={{ width: 80, height: 80, borderRadius: 8 }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-        />
-        <div style={{ color: '#fff', fontSize: 'var(--majak-font-22)', fontWeight: 700, letterSpacing: 2 }}>
-          麻雀4
-        </div>
-        <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--majak-font-13)', textAlign: 'center' }}>
-          Google アカウントでサインインしてください
-        </div>
-        <div style={{ position: 'relative', width: 280, height: 40 }}>
-          {isNativeApp ? (
-            <button
-              type="button"
-              disabled={nativeLoginPending}
-              onClick={() => { void handleNativeGoogleLogin() }}
-              style={{
-                position: 'absolute', inset: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxSizing: 'border-box',
-                border: '1px solid #747775', borderRadius: 4,
-                background: '#fff', color: '#1f1f1f',
-                fontSize: 14, fontWeight: 500, cursor: nativeLoginPending ? 'default' : 'pointer',
-              }}
-            >
-              <img src="/assets/images/common/google-g.svg" alt="" draggable={false} style={{ position: 'absolute', left: 12, width: 18, height: 18 }} />
-              {nativeLoginPending ? 'ログイン中...' : 'Google でログイン'}
-            </button>
-          ) : (
-            <>
-              <GoogleLogin
-                onSuccess={response => {
-                  if (response.credential) onCredential(response.credential)
-                  else onError()
-                }}
-                onError={onError}
-                ux_mode="redirect"
-                login_uri={googleRedirectUrl}
-                useOneTap={false}
-                width="280"
-                containerProps={{ style: { position: 'absolute', inset: 0, width: '100%' } }}
-              />
-              <img src="/assets/images/common/google-g.svg" alt="" draggable={false} style={{ position: 'absolute', left: 12, top: 11, zIndex: 1, width: 18, height: 18, pointerEvents: 'none' }} />
-            </>
-          )}
-        </div>
+    <main className={`majak-sign-in majak-screen-surface${Capacitor.isNativePlatform() ? ' majak-sign-in--native' : ''}`}>
+      {showBack && <button type="button" className="majak-sign-in__back" onClick={onBack}>トップへ戻る</button>}
+      <div className="majak-sign-in__panel">
+        <img src="/assets/images/common/ico_big_majak4.jpg" alt="麻雀4" draggable={false} />
+        <p>MAHJONG 4</p>
+        <h1>ゲームをはじめよう</h1>
+        {isHangeClient ? <button type="button" className="majak-sign-in__provider" onClick={onHangeLogin}>ハンゲでログイン</button> : Capacitor.isNativePlatform() ? <button type="button" className="majak-sign-in__provider" disabled={loginPending} onClick={onNativeGoogleLogin}>{loginPending ? 'ログイン中...' : 'Google でログイン'}</button> : <div className="majak-sign-in__google"><GoogleLogin onSuccess={response => response.credential ? onGoogleCredential(response.credential) : onLoginError()} onError={onLoginError} ux_mode="redirect" login_uri={googleRedirectUrl} useOneTap={false} theme="filled_blue" size="large" text="signin_with" shape="rectangular" width="290" /></div>}
       </div>
-    </div>
+    </main>
   )
 }
 
@@ -744,11 +661,7 @@ function PaifuArchiveRoute() {
 }
 
 export default function App() {
-  const initialRoute = readStoredRouterState()
-
-  if (!Capacitor.isNativePlatform() && isAppleTablet()) {
-    return <MobileWebDownloadScreen />
-  }
+  const initialRoute = Capacitor.isNativePlatform() ? { pathname: '/' } : readStoredRouterState()
 
   if (import.meta.env.DEV && window.location.pathname === '/popup-preview') {
     return <PopupPreviewScreen />
@@ -769,7 +682,9 @@ export default function App() {
           <ContinueRoomBootstrap />
           <Routes>
             {/* アウトゲーム (CMajakFrame タイトルバー付き) */}
-            <Route path="/" element={<Navigate to="/channel" replace />} />
+            <Route path="/" element={<TopPage
+              onUnauthenticatedStart={() => {}}
+            />} />
             <Route path="/channel" element={<ChannelGroupRoute />} />
             <Route path="/announcements" element={<AnnouncementRoute />} />
             <Route path="/channel/select/:group" element={<LobbySelectRoute />} />
